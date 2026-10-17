@@ -1,0 +1,39 @@
+package views
+
+templ Home() {
+	@Layout("Bachtel Email Automation") {
+		<div class="space-y-3">
+			<p class="text-sm font-medium uppercase tracking-widest text-primary">Project starter</p>
+			<h1 class="text-4xl font-bold tracking-tight">Your app starts here.</h1>
+			<p class="max-w-2xl text-base-content/70">Go and templ serve the page. htmx handles server updates. Alpine handles local interactions. PocketBase stores the data.</p>
+		</div>
+		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="database-heading">
+			<div class="card-body gap-4">
+				<h2 id="database-heading" class="card-title">Database connection</h2>
+				<p>Run a read-only query against the embedded PocketBase database.</p>
+				<div id="database-status" role="status" aria-live="polite">
+					<p class="text-base-content/60">Ready to check.</p>
+				</div>
+				<div class="card-actions">
+					<a class="btn btn-primary" href="/status" hx-get="/status" hx-target="#database-status" hx-swap="innerHTML" hx-disabled-elt="this">Check connection</a>
+				</div>
+			</div>
+		</section>
+		<section class="card border border-base-300 bg-base-100" x-data="{ open: false }" aria-labelledby="details-heading">
+			<div class="card-body gap-4">
+				<h2 id="details-heading" class="card-title">Development tools</h2>
+				<button type="button" class="btn btn-outline self-start" x-on:click="open = !open" x-bind:aria-expanded="open" aria-expanded="false" aria-controls="development-details">Toggle details</button>
+				<div id="development-details" x-show="open" x-cloak class="space-y-3">
+					<p>Templates and compiled assets ship inside one Go executable. No CDN or Node.js server is needed at runtime.</p>
+					<a class="link link-primary" href="/_/">Open PocketBase dashboard</a>
+				</div>
+			</div>
+		</section>
+	}
+}
+
+templ DatabaseStatus(checkedAt string) {
+	<div class="alert alert-success">
+		<span>PocketBase is connected. Checked at <time datetime={ checkedAt }>{ checkedAt }</time>.</span>
+	</div>
+}
