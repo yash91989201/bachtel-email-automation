@@ -23,7 +23,7 @@ The system SHALL accept XLSX uploads and allow selection of one worksheet and he
 - **THEN** task validation fails and no candidate submission is scheduled
 
 ### Requirement: Campaign-level preflight
-The system SHALL validate every mapped source header, including the source header of the selected recipient mapping, against the selected worksheet header row before accepting sendable rows. Missing or ambiguous mapped headers SHALL block the task, while empty or invalid recipient values SHALL only exclude affected rows.
+The system SHALL validate every mapped source header, including the source header selected by the revision's recipient mapping, against the selected worksheet header row before accepting sendable rows. Missing or ambiguous mapped headers SHALL block the task, while empty or invalid recipient values SHALL only exclude affected rows.
 
 #### Scenario: Missing mapped column
 - **WHEN** a configured source header is absent
