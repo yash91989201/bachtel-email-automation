@@ -14,6 +14,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/ui"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
+	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 )
@@ -39,7 +40,7 @@ func newTestServer(t *testing.T, cfg config.Config) (*pocketbase.PocketBase, htt
 	if err := app.RunAppMigrations(); err != nil {
 		t.Fatal(err)
 	}
-	return app, wrapWithPocketBase(t, app, NewHandler(app, cfg))
+	return app, wrapWithPocketBase(t, app, NewHandler(app, cfg, microsoft.NewService(app, cfg)))
 }
 
 // wrapWithPocketBase mounts the UI handler behind the PocketBase router, as
@@ -155,7 +156,7 @@ func TestAnonymousRequests(t *testing.T) {
 	provisionOperator(t, app)
 
 	// Safe methods redirect to the login page without leaking private content.
-	for _, path := range []string{"/", "/status"} {
+	for _, path := range []string{"/", "/status", "/connection", "/connection/callback"} {
 		rec := do(t, handler, http.MethodGet, path, nil, nil)
 		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
 			t.Fatalf("GET %s: status=%d location=%q", path, rec.Code, rec.Header().Get("Location"))
@@ -168,12 +169,15 @@ func TestAnonymousRequests(t *testing.T) {
 		}
 	}
 
-	// Unsafe methods get a plain 401.
-	for _, path := range []string{"/logout"} {
+	// Unsafe methods get a plain 401 and change nothing.
+	for _, path := range []string{"/logout", "/connection/connect", "/connection/disconnect"} {
 		rec := do(t, handler, http.MethodPost, path, url.Values{}, nil)
 		if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "authentication required") {
 			t.Fatalf("POST %s anonymous: status=%d body=%q", path, rec.Code, rec.Body.String())
 		}
+	}
+	if count, err := app.CountRecords(microsoft.CollectionName); err != nil || count != 0 {
+		t.Fatalf("anonymous POSTs created %d connection records (err=%v)", count, err)
 	}
 
 	// A valid session reaches the dashboard; GET /login bounces to /.
@@ -383,6 +387,8 @@ func TestCSRFProtection(t *testing.T) {
 	}{
 		{http.MethodPost, "/login"},
 		{http.MethodPost, "/logout"},
+		{http.MethodPost, "/connection/connect"},
+		{http.MethodPost, "/connection/disconnect"},
 	}
 	for _, m := range mutations {
 		for name, mutate := range map[string]func(*http.Request){"origin": evilOrigin, "sec-fetch-site": crossSite} {
@@ -412,4 +418,68 @@ func TestCSRFProtection(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("safe GET with evil origin: status=%d", rec.Code)
 	}
+}
+
+func TestConnectionPage(t *testing.T) {
+	t.Run("missing settings alert", func(t *testing.T) {
+		cfg := testConfig("http://127.0.0.1:8090")
+		app, handler := newTestServer(t, cfg)
+		provisionOperator(t, app)
+		cookie := login(t, handler)
+
+		rec := do(t, handler, http.MethodGet, "/connection", nil, withCookie(cookie))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		body := rec.Body.String()
+		for _, name := range []string{"MS_TENANT_ID", "MS_CLIENT_ID", "MS_CLIENT_SECRET"} {
+			if !strings.Contains(body, name) {
+				t.Fatalf("missing setting %s not listed: %.400s", name, body)
+			}
+		}
+		if strings.Contains(body, "ClientSecret</code>") && strings.Contains(body, "value=") {
+			t.Fatal("page must not render secret values")
+		}
+	})
+
+	t.Run("stored credential never reaches the page", func(t *testing.T) {
+		cfg := testConfig("http://127.0.0.1:8090")
+		cfg.Microsoft.TenantID = "tenant-1234"
+		cfg.Microsoft.ClientID = "client-1234"
+		cfg.Microsoft.ClientSecret = "super-secret-value"
+		app, handler := newTestServer(t, cfg)
+		provisionOperator(t, app)
+		cookie := login(t, handler)
+
+		collection, err := app.FindCollectionByNameOrId(microsoft.CollectionName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		const garbage = "GARBAGE-CIPHERTEXT-9f3a"
+		record := core.NewRecord(collection)
+		record.Set("status", string(microsoft.StatusReconnectRequired))
+		record.Set("account_email", "hr@bachtelcorporation.com")
+		record.Set("credential", garbage)
+		if err := app.Save(record); err != nil {
+			t.Fatal(err)
+		}
+
+		rec := do(t, handler, http.MethodGet, "/connection", nil, withCookie(cookie))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d", rec.Code)
+		}
+		body := rec.Body.String()
+		if strings.Contains(body, garbage) {
+			t.Fatal("page renders stored credential value")
+		}
+		if strings.Contains(body, "super-secret-value") {
+			t.Fatal("page renders client secret")
+		}
+		if !strings.Contains(body, "Reconnect required") {
+			t.Fatalf("missing reconnect_required badge: %.400s", body)
+		}
+		if !strings.Contains(body, "/connection/connect") {
+			t.Fatal("reconnect must be actionable from the page")
+		}
+	})
 }

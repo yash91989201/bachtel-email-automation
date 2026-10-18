@@ -41,7 +41,7 @@ func Home() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-3\"><p class=\"text-sm font-medium uppercase tracking-widest text-primary\">Project starter</p><h1 class=\"text-4xl font-bold tracking-tight\">Your app starts here.</h1><p class=\"max-w-2xl text-base-content/70\">Go and templ serve the page. htmx handles server updates. Alpine handles local interactions. PocketBase stores the data.</p></div><section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-labelledby=\"database-heading\"><div class=\"card-body gap-4\"><h2 id=\"database-heading\" class=\"card-title\">Database connection</h2><p>Run a read-only query against the embedded PocketBase database.</p><div id=\"database-status\" role=\"status\" aria-live=\"polite\"><p class=\"text-base-content/60\">Ready to check.</p></div><div class=\"card-actions\"><a class=\"btn btn-primary\" href=\"/status\" hx-get=\"/status\" hx-target=\"#database-status\" hx-swap=\"innerHTML\" hx-disabled-elt=\"this\">Check connection</a></div></div></section><section class=\"card border border-base-300 bg-base-100\" x-data=\"{ open: false }\" aria-labelledby=\"details-heading\"><div class=\"card-body gap-4\"><h2 id=\"details-heading\" class=\"card-title\">Development tools</h2><button type=\"button\" class=\"btn btn-outline self-start\" x-on:click=\"open = !open\" x-bind:aria-expanded=\"open\" aria-expanded=\"false\" aria-controls=\"development-details\">Toggle details</button><div id=\"development-details\" x-show=\"open\" x-cloak class=\"space-y-3\"><p>Templates and compiled assets ship inside one Go executable. No CDN or Node.js server is needed at runtime.</p><a class=\"link link-primary\" href=\"/_/\">Open PocketBase dashboard</a></div></div></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-3\"><p class=\"text-sm font-medium uppercase tracking-widest text-primary\">Project starter</p><h1 class=\"text-4xl font-bold tracking-tight\">Your app starts here.</h1><p class=\"max-w-2xl text-base-content/70\">Go and templ serve the page. htmx handles server updates. Alpine handles local interactions. PocketBase stores the data.</p></div><section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-labelledby=\"database-heading\"><div class=\"card-body gap-4\"><h2 id=\"database-heading\" class=\"card-title\">Database connection</h2><p>Run a read-only query against the embedded PocketBase database.</p><div id=\"database-status\" role=\"status\" aria-live=\"polite\"><p class=\"text-base-content/60\">Ready to check.</p></div><div class=\"card-actions\"><a class=\"btn btn-primary\" href=\"/status\" hx-get=\"/status\" hx-target=\"#database-status\" hx-swap=\"innerHTML\" hx-disabled-elt=\"this\">Check connection</a></div></div></section><section class=\"card border border-base-300 bg-base-100\" aria-labelledby=\"connection-heading\"><div class=\"card-body gap-4\"><h2 id=\"connection-heading\" class=\"card-title\">Microsoft 365 connection</h2><p>Connect the HR mailbox to send email through Microsoft Graph.</p><div class=\"card-actions\"><a class=\"btn btn-primary\" href=\"/connection\">Open connection page</a></div></div></section><section class=\"card border border-base-300 bg-base-100\" x-data=\"{ open: false }\" aria-labelledby=\"details-heading\"><div class=\"card-body gap-4\"><h2 id=\"details-heading\" class=\"card-title\">Development tools</h2><button type=\"button\" class=\"btn btn-outline self-start\" x-on:click=\"open = !open\" x-bind:aria-expanded=\"open\" aria-expanded=\"false\" aria-controls=\"development-details\">Toggle details</button><div id=\"development-details\" x-show=\"open\" x-cloak class=\"space-y-3\"><p>Templates and compiled assets ship inside one Go executable. No CDN or Node.js server is needed at runtime.</p><a class=\"link link-primary\" href=\"/_/\">Open PocketBase dashboard</a></div></div></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -83,7 +83,7 @@ func DatabaseStatus(checkedAt string) templ.Component {
 		var templ_7745c5c3_Var4 string
 		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(checkedAt)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `home.templ`, Line: 37, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `home.templ`, Line: 46, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 		if templ_7745c5c3_Err != nil {
@@ -96,7 +96,7 @@ func DatabaseStatus(checkedAt string) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(checkedAt)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `home.templ`, Line: 37, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `home.templ`, Line: 46, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {

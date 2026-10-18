@@ -1,0 +1,110 @@
+package views
+
+import "github.com/yash91989201/bachtel-email-automation/internal/microsoft"
+
+// ConnectionData is the safe view model for the connection page. It never
+// carries tokens, ciphertext, verifiers, or the client secret.
+type ConnectionData struct {
+	Status              string
+	AccountEmail        string
+	SenderAddress       string
+	ConnectedAt         string
+	CredentialExpiresAt string
+	LastError           string
+	Notice              string
+	MissingSettings     []string
+}
+
+templ ConnectionPage(data ConnectionData) {
+	@Layout("Microsoft connection", true) {
+		<div class="space-y-3">
+			<p class="text-sm font-medium uppercase tracking-widest text-primary">Microsoft 365</p>
+			<h1 class="text-4xl font-bold tracking-tight">Mailbox connection</h1>
+			<p class="max-w-2xl text-base-content/70">Connect the HR mailbox so outgoing email is sent through Microsoft Graph.</p>
+		</div>
+		if len(data.MissingSettings) > 0 {
+			<div class="alert alert-warning" role="alert">
+				<div>
+					<p class="font-semibold">The Microsoft connection is not configured.</p>
+					<p>Set these settings and restart the server:</p>
+					<ul class="list-inside list-disc">
+						for _, name := range data.MissingSettings {
+							<li><code>{ name }</code></li>
+						}
+					</ul>
+				</div>
+			</div>
+		}
+		if data.Notice != "" {
+			<div class="alert alert-info" role="alert">{ data.Notice }</div>
+		}
+		if data.LastError != "" {
+			<div class="alert alert-error" role="alert">{ data.LastError }</div>
+		}
+		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="status-heading">
+			<div class="card-body gap-4">
+				<h2 id="status-heading" class="card-title">Status</h2>
+				<div class="flex items-center gap-3">
+					@statusBadge(data.Status)
+				</div>
+				<dl class="space-y-1 text-sm">
+					if data.AccountEmail != "" {
+						<div class="flex gap-2">
+							<dt class="font-semibold">Account:</dt>
+							<dd>{ data.AccountEmail }</dd>
+						</div>
+					}
+					<div class="flex gap-2">
+						<dt class="font-semibold">Sender address:</dt>
+						<dd>{ data.SenderAddress }</dd>
+					</div>
+					if data.ConnectedAt != "" {
+						<div class="flex gap-2">
+							<dt class="font-semibold">Connected:</dt>
+							<dd><time datetime={ data.ConnectedAt }>{ data.ConnectedAt }</time></dd>
+						</div>
+					}
+					if data.CredentialExpiresAt != "" {
+						<div class="flex gap-2">
+							<dt class="font-semibold">Credential expires:</dt>
+							<dd><time datetime={ data.CredentialExpiresAt }>{ data.CredentialExpiresAt }</time></dd>
+						</div>
+					}
+				</dl>
+				<div class="card-actions flex-wrap">
+					if data.Status != string(microsoft.StatusConnected) {
+						<form method="post" action="/connection/connect">
+							<button class="btn btn-primary" type="submit">
+								if data.Status == string(microsoft.StatusReconnectRequired) {
+									Reconnect
+								} else {
+									Connect
+								}
+							</button>
+						</form>
+					}
+					if data.Status != string(microsoft.StatusDisconnected) {
+						<form method="post" action="/connection/disconnect" class="flex items-center gap-2" x-data="{ confirm: false }">
+							<button class="btn btn-outline" type="submit" x-show="!confirm">Disconnect</button>
+							<div class="flex items-center gap-2" x-show="confirm" x-cloak>
+								<span class="text-sm">Disconnect the mailbox?</span>
+								<button class="btn btn-error btn-sm" type="submit">Yes, disconnect</button>
+								<button class="btn btn-ghost btn-sm" type="button" x-on:click="confirm = false">Cancel</button>
+							</div>
+						</form>
+					}
+				</div>
+			</div>
+		</section>
+	}
+}
+
+templ statusBadge(status string) {
+	if status == string(microsoft.StatusConnected) {
+		<span class="badge badge-success" data-status={ status }>Connected</span>
+	} else if status == string(microsoft.StatusReconnectRequired) {
+		<span class="badge badge-warning" data-status={ status }>Reconnect required</span>
+	} else {
+		<span class="badge badge-ghost" data-status={ status }>Disconnected</span>
+	}
+}

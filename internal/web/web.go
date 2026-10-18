@@ -12,6 +12,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
+	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
@@ -21,18 +22,20 @@ import (
 var assets embed.FS
 
 type server struct {
-	app    core.App
-	cfg    config.Config
-	logins *loginLimiter
+	app         core.App
+	cfg         config.Config
+	connections *microsoft.Service
+	logins      *loginLimiter
 }
 
 // NewHandler serves the application UI. PocketBase owns the server lifecycle,
 // its API, and the dashboard on the same listener.
-func NewHandler(app core.App, cfg config.Config) http.Handler {
+func NewHandler(app core.App, cfg config.Config, connections *microsoft.Service) http.Handler {
 	s := &server{
-		app:    app,
-		cfg:    cfg,
-		logins: newLoginLimiter(10, 5*time.Minute),
+		app:         app,
+		cfg:         cfg,
+		connections: connections,
+		logins:      newLoginLimiter(10, 5*time.Minute),
 	}
 
 	mux := http.NewServeMux()
@@ -51,6 +54,10 @@ func NewHandler(app core.App, cfg config.Config) http.Handler {
 	mux.HandleFunc("POST /logout", s.requireOperator(s.handleLogout))
 	mux.HandleFunc("GET /{$}", s.requireOperator(s.handleHome))
 	mux.HandleFunc("GET /status", s.requireOperator(s.handleStatus))
+	mux.HandleFunc("GET /connection", s.requireOperator(s.handleConnection))
+	mux.HandleFunc("POST /connection/connect", s.requireOperator(s.handleConnect))
+	mux.HandleFunc("GET /connection/callback", s.requireOperator(s.handleCallback))
+	mux.HandleFunc("POST /connection/disconnect", s.requireOperator(s.handleDisconnect))
 
 	// Cross-origin writes (forms) are rejected before any handler mutates
 	// state; no bespoke CSRF token protocol is needed.
