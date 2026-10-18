@@ -18,8 +18,27 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     go generate ./internal/web && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/bachtel ./cmd/server
 
+# Proves the packaged converter works with no host dependency: the same pinned
+# Pandoc as the runtime image, the built frontend assets, and the full Go test
+# suite (including the campaign authoring flow, which is skipped without a
+# converter). Not in the production chain - the runtime stage below stays the
+# final stage. Build it with `make verify-converter`.
+FROM golang:1.27.2-alpine AS converter-test
+RUN apk add --no-cache pandoc-cli=3.10-r0
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY . .
+COPY --from=assets /src/internal/web/static/ internal/web/static/
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    go vet ./... && \
+    go test ./...
+
 FROM alpine:3.24 AS runtime
-RUN apk add --no-cache ca-certificates tzdata && \
+# Pandoc is packaged because the app converts an operator-uploaded DOCX body
+# to HTML inside the container; no runtime Node and no Word are involved.
+# Pinned exactly: pandoc 3.10 (the "pandoc" name is provided by pandoc-cli).
+RUN apk add --no-cache ca-certificates tzdata pandoc-cli=3.10-r0 && \
     addgroup -S -g 10001 app && adduser -S -D -H -u 10001 -G app app && \
     mkdir -p /app/pb_data && chown app:app /app/pb_data
 WORKDIR /app

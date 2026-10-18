@@ -1,4 +1,4 @@
-.PHONY: setup generate assets dev build test fmt
+.PHONY: setup generate assets dev build test fmt verify-converter
 
 setup:
 	npm ci
@@ -22,6 +22,12 @@ build: generate assets
 test: generate assets
 	go test ./...
 	go vet ./...
+
+# Builds only the converter-test Docker stage: campaign + convert tests
+# against the same pinned Pandoc the runtime image packages. Needs a docker
+# binary; no other target depends on it.
+verify-converter:
+	docker build --target converter-test -t bachtel-converter-test .
 
 fmt:
 	gofmt -w cmd internal
