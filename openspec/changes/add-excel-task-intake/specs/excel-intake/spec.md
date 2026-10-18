@@ -22,8 +22,10 @@ The system SHALL accept XLSX uploads and allow selection of one worksheet and he
 - **WHEN** the selected data contains more than 1,000 non-empty candidate rows
 - **THEN** task validation fails and no candidate submission is scheduled
 
+## MODIFIED Requirements
+
 ### Requirement: Campaign-level preflight
-The system SHALL validate the recipient header and every mapped source header against the campaign configuration before accepting sendable rows. Missing or ambiguous required headers SHALL block the task, while row-level errors SHALL only exclude affected rows.
+The system SHALL validate every mapped source header, including the source header selected by the revision's recipient mapping, against the selected worksheet header row before accepting sendable rows. Missing or ambiguous mapped headers SHALL block the task, while empty or invalid recipient values SHALL only exclude affected rows.
 
 #### Scenario: Missing mapped column
 - **WHEN** a configured source header is absent
@@ -33,9 +35,16 @@ The system SHALL validate the recipient header and every mapped source header ag
 - **WHEN** two columns have the same label after surrounding whitespace is trimmed
 - **THEN** the app requests an unambiguous header selection or corrected upload before the task can start
 
-#### Scenario: Candidate missing a value
+#### Scenario: Candidate missing a required value
 - **WHEN** all mapped columns exist but a required field is empty in one row
 - **THEN** that row is excluded with a reason and other valid unique rows remain eligible
+
+#### Scenario: Empty recipient value
+- **WHEN** a row has an empty or invalid value in the selected recipient mapping's source column
+- **THEN** only that row is held with a recipient validation reason
+- **AND** other valid unique rows remain eligible
+
+## ADDED Requirements
 
 ### Requirement: Immediate duplicate detection
 The system SHALL detect duplicate recipient keys using trimmed lowercase email addresses across the complete selected input before creating candidate records. Every row in a duplicate group SHALL be excluded, including identical rows and rows with other validation errors.

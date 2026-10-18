@@ -46,14 +46,14 @@ The system SHALL preserve original uploaded values independently of replacement 
 - **AND** the original value remains available in the source artifact and comparison preview
 
 ### Requirement: Single recipient validation
-The system SHALL require a single non-empty valid recipient address, reject address lists, display-name wrappers and header-control characters, and use its trimmed lowercase form for campaign identity. It SHALL NOT claim to verify mailbox existence or delivery.
+The system SHALL obtain the recipient from the single mapping marked recipient, require a non-empty valid address, reject address lists, display-name wrappers and header-control characters, and use its trimmed lowercase form for delivery and campaign identity. It SHALL NOT claim to verify mailbox existence or delivery.
 
 #### Scenario: Multiple addresses in a cell
-- **WHEN** the recipient cell contains two comma-separated addresses
+- **WHEN** the selected recipient mapping's cell contains two comma-separated addresses
 - **THEN** the row is invalid and no candidate submission is created from it
 
 #### Scenario: Case and surrounding whitespace
-- **WHEN** the recipient cell contains surrounding spaces and mixed letter case
+- **WHEN** the selected recipient mapping's cell contains surrounding spaces and mixed letter case
 - **THEN** normalization produces the lowercase address used for matching
 
 ### Requirement: Safe data substitution
