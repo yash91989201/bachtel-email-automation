@@ -31,8 +31,19 @@ A configuration is ready only when both directions agree:
 - Every placeholder must have a mapping.
 
 Otherwise the configuration stays unready, and the error names the offending
-variables (`no mapping for variable(s): ...` or `configured variable(s)
-missing from the subject and body: ...`).
+variables and the remedy:
+
+- `no mapping for variable(s): ...` — add a mapping row for each name, or
+  rename the placeholder in the subject or body.
+- `configured variable(s) missing from the subject and body: ...` — remove each
+  mapping row, or add its placeholder to the subject or body.
+
+Both sides must use the same name. The mapping form's worked example is drawn
+from the campaign's own expected recipient header, so the example's variable
+name (for example `candidate_name` for the header `Candidate Name`) is the name
+its draft rows use. A document that spells the placeholder differently — for
+example `{{full_name}}` — needs a row whose Variable is `full_name`, or an edit
+to the placeholder.
 
 ## Mapping fields
 

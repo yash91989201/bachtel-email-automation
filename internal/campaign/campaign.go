@@ -184,6 +184,62 @@ func ValidateMappings(mappings []Mapping) error {
 	return nil
 }
 
+// DefaultMappings derives the draft mapping table for a campaign that has no
+// revision yet: one required text mapping per comma-separated expected
+// recipient header. The variable name is the header lowercased with every run
+// of non-alphanumeric characters replaced by one underscore. A header that
+// cannot form a variable name, and a name that repeats an earlier one, is
+// omitted, so the draft never contains a row ValidateMappings rejects.
+func DefaultMappings(recipientHeader string) []Mapping {
+	seen := make(map[string]struct{})
+	var mappings []Mapping
+	for _, header := range strings.Split(recipientHeader, ",") {
+		header = strings.TrimSpace(header)
+		if header == "" {
+			continue
+		}
+		variable := deriveVariableName(header)
+		if variable == "" {
+			continue
+		}
+		if _, ok := seen[variable]; ok {
+			continue
+		}
+		seen[variable] = struct{}{}
+		mappings = append(mappings, Mapping{
+			Variable: variable,
+			Header:   header,
+			Required: true,
+			Format:   FormatText,
+		})
+	}
+	return mappings
+}
+
+// deriveVariableName spells a header as a placeholder name, or "" when the
+// header cannot produce one. Only ASCII letters and digits survive, because
+// that is the alphabet a variable name is allowed to use.
+func deriveVariableName(header string) string {
+	var name strings.Builder
+	separator := false
+	for _, r := range strings.ToLower(header) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			if separator && name.Len() > 0 {
+				name.WriteByte('_')
+			}
+			separator = false
+			name.WriteRune(r)
+			continue
+		}
+		separator = true
+	}
+	derived := name.String()
+	if !variableNamePattern.MatchString(derived) {
+		return ""
+	}
+	return derived
+}
+
 // ValidateResultLabels checks the output column labels: at least one, none
 // empty, and no duplicates, so a task export always has unambiguous columns.
 func ValidateResultLabels(labels []string) error {

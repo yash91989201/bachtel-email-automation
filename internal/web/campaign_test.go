@@ -242,8 +242,26 @@ func TestCampaignRevisionValidationInline(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%.400s", rec.Code, rec.Body.String())
 		}
-		if body := rec.Body.String(); !strings.Contains(body, "no mapping for variable(s): candidate_name") {
-			t.Fatalf("inline variable message missing: %.600s", body)
+		if body := rec.Body.String(); !strings.Contains(body, "no mapping for variable(s): candidate_name") ||
+			!strings.Contains(body, "Add a mapping row for each name, or rename the placeholder in the subject or body.") {
+			t.Fatalf("inline variable message missing its remedy: %.600s", body)
+		}
+		if got := currentRevision(); got != "" {
+			t.Fatalf("current_configuration = %q, want empty", got)
+		}
+	})
+
+	t.Run("configured variable without a placeholder", func(t *testing.T) {
+		// The documented direction check: a row whose variable never appears in
+		// the content is rejected with the remedy that names the row.
+		rec := postRevision(t, handler, cookie, id, "Hello {{candidate_name}}",
+			validMappings+"\nrole | Job Title | required | text", docxUpload(t))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status=%d body=%.400s", rec.Code, rec.Body.String())
+		}
+		if body := rec.Body.String(); !strings.Contains(body, "configured variable(s) missing from the subject and body: role") ||
+			!strings.Contains(body, "Remove each mapping row, or add its placeholder to the subject or body.") {
+			t.Fatalf("inline unused message missing its remedy: %.600s", body)
 		}
 		if got := currentRevision(); got != "" {
 			t.Fatalf("current_configuration = %q, want empty", got)
@@ -416,5 +434,127 @@ func TestCampaignDetailApprovalAndHistory(t *testing.T) {
 	// preview are the only forms, none of them per stored revision.
 	if forms := strings.Count(body, "<form"); forms != 4 {
 		t.Fatalf("detail page has %d forms, want 4 (logout, revision, labels, preview)", forms)
+	}
+}
+
+// mappingTextarea returns the mapping form's textarea value as the page HTML
+// carries it.
+func mappingTextarea(t *testing.T, body string) string {
+	t.Helper()
+	_, rest, ok := strings.Cut(body, `name="mappings"`)
+	if !ok {
+		t.Fatalf("no mapping textarea in page: %.400s", body)
+	}
+	_, rest, ok = strings.Cut(rest, ">")
+	if !ok {
+		t.Fatalf("mapping textarea has no body: %.400s", body)
+	}
+	value, _, ok := strings.Cut(rest, "</textarea>")
+	if !ok {
+		t.Fatalf("mapping textarea is not closed: %.400s", body)
+	}
+	return value
+}
+
+// TestCampaignMappingDraft covers the pre-filled mapping table: a campaign
+// without a revision offers its expected headers as required text rows, a
+// revision-backed campaign offers none, and a failed submission keeps the
+// operator's own text.
+func TestCampaignMappingDraft(t *testing.T) {
+	app, handler, _ := newCampaignServer(t)
+	cookie := login(t, handler)
+
+	rec := do(t, handler, http.MethodPost, "/campaigns", url.Values{
+		"name":             {"Draft"},
+		"recipient_header": {"Candidate Name, Candidate Email, Expected Department/Division"},
+	}, withCookie(cookie))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
+	}
+	id := strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/")
+
+	draft := "candidate_name | Candidate Name | required | text\n" +
+		"candidate_email | Candidate Email | required | text\n" +
+		"expected_department_division | Expected Department/Division | required | text"
+
+	page := do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
+	if page.Code != http.StatusOK {
+		t.Fatalf("GET campaign: status=%d body=%.400s", page.Code, page.Body.String())
+	}
+	if got := mappingTextarea(t, page.Body.String()); got != draft {
+		t.Fatalf("mapping draft = %q, want %q", got, draft)
+	}
+	if got := currentConfigurationID(t, app, id); got != "" {
+		t.Fatalf("loading the page created revision %q", got)
+	}
+
+	// A rejected submission keeps the operator's own lines, not the draft.
+	submitted := "candidate_name - Applicant Full Name"
+	rec = postRevision(t, handler, cookie, id, "Hello {{candidate_name}}", submitted, docxUpload(t))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("failed revision: status=%d body=%.400s", rec.Code, rec.Body.String())
+	}
+	if got := mappingTextarea(t, rec.Body.String()); got != submitted {
+		t.Fatalf("mapping textarea after failure = %q, want the submitted %q", got, submitted)
+	}
+
+	// A campaign with a revision gets no draft: the operator's mappings live in
+	// the revision.
+	if rec := postRevision(t, handler, cookie, id, "Hello {{candidate_name}}", validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
+		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
+	}
+	page = do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
+	if page.Code != http.StatusOK {
+		t.Fatalf("GET revision campaign: status=%d body=%.400s", page.Code, page.Body.String())
+	}
+	if got := mappingTextarea(t, page.Body.String()); got != "" {
+		t.Fatalf("mapping textarea = %q, want empty once a revision exists", got)
+	}
+}
+
+// TestCampaignMappingHelpExample covers the worked example beside the mapping
+// form: it follows the campaign's own expected headers so the help never
+// teaches a variable name the draft does not use, and it falls back to a
+// generic name when no header can form one.
+func TestCampaignMappingHelpExample(t *testing.T) {
+	_, handler, _ := newCampaignServer(t)
+	cookie := login(t, handler)
+
+	tests := []struct {
+		name   string
+		header string
+		line   string
+	}{
+		{name: "campaign headers", header: "Candidate Name, Candidate Email", line: "candidate_name | Candidate Name | required | text"},
+		{name: "no usable header", header: "----, 2024 Region", line: "variable_name | Header | required | text"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rec := do(t, handler, http.MethodPost, "/campaigns", url.Values{
+				"name":             {test.name},
+				"recipient_header": {test.header},
+			}, withCookie(cookie))
+			if rec.Code != http.StatusSeeOther {
+				t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
+			}
+			id := strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/")
+
+			page := do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
+			if page.Code != http.StatusOK {
+				t.Fatalf("GET campaign: status=%d body=%.400s", page.Code, page.Body.String())
+			}
+			body := page.Body.String()
+			if !strings.Contains(body, test.line) {
+				t.Fatalf("example line %q missing: %.600s", test.line, body)
+			}
+			if !strings.Contains(body, "must match the") {
+				t.Fatalf("hint does not state the placeholder rule: %.600s", body)
+			}
+			// The shipped example name must not survive anywhere on the page: it
+			// is the name operators copied into their documents.
+			if strings.Contains(body, "full_name") {
+				t.Fatalf("page still shows the generic full_name example: %.600s", body)
+			}
+		})
 	}
 }

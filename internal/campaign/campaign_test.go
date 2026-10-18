@@ -1,6 +1,7 @@
 package campaign
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -220,5 +221,119 @@ func TestSanitizerUnwrapsUnsupportedElements(t *testing.T) {
 	}
 	if !strings.Contains(got, "kept") || !strings.Contains(got, "unwrapped") {
 		t.Fatalf("content was dropped instead of unwrapped: %q", got)
+	}
+}
+
+// TestDefaultMappings covers the draft table derived from the expected
+// recipient header: one required text row per header, underscore variable
+// names, and no row a draft must not invent.
+func TestDefaultMappings(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		header string
+		want   []string
+	}{
+		{
+			name:   "delivered header list",
+			header: "Candidate Name, Candidate Email, Expected Profile, Expected Department/Division, Expected Location",
+			want: []string{
+				"candidate_name | Candidate Name",
+				"candidate_email | Candidate Email",
+				"expected_profile | Expected Profile",
+				"expected_department_division | Expected Department/Division",
+				"expected_location | Expected Location",
+			},
+		},
+		{
+			name:   "surrounding and repeated separators",
+			header: " ,  Full Name ,, Applicant Email  , ",
+			want:   []string{"full_name | Full Name", "applicant_email | Applicant Email"},
+		},
+		{
+			name:   "duplicate headers kept once",
+			header: "Full Name, full  name, FULL NAME",
+			want:   []string{"full_name | Full Name"},
+		},
+		{
+			name:   "header without usable characters",
+			header: "----, 2024 Region, /",
+			want:   nil,
+		},
+		{
+			name:   "empty header field",
+			header: "",
+			want:   nil,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			mappings := DefaultMappings(test.header)
+			var got []string
+			for _, mapping := range mappings {
+				if !mapping.Required || mapping.Format != FormatText || mapping.Fallback != "" {
+					t.Fatalf("draft row %+v is not a required text mapping", mapping)
+				}
+				got = append(got, mapping.Variable+" | "+mapping.Header)
+			}
+			if strings.Join(got, "\n") != strings.Join(test.want, "\n") {
+				t.Fatalf("DefaultMappings(%q) = %q, want %q", test.header, got, test.want)
+			}
+			if len(mappings) > 0 {
+				if err := ValidateMappings(mappings); err != nil {
+					t.Fatalf("draft from %q does not validate: %v", test.header, err)
+				}
+			}
+		})
+	}
+}
+
+// TestUnknownVariableErrorNamesRemedy pins the operator-facing remedy in the
+// unmapped-placeholder error: the document and the mapping table may disagree,
+// so the message must say which side the operator can change.
+func TestUnknownVariableErrorNamesRemedy(t *testing.T) {
+	t.Parallel()
+	_, err := Compile("Hello {{full_name}}", "<p>Hi</p>", []Mapping{
+		{Variable: "candidate_name", Header: "Candidate Name", Required: true, Format: FormatText},
+	})
+	var unknown *UnknownVariableError
+	if !errors.As(err, &unknown) {
+		t.Fatalf("Compile error = %v, want UnknownVariableError", err)
+	}
+	message := err.Error()
+	for _, want := range []string{
+		"no mapping for variable(s): full_name",
+		"Add a mapping row for each name",
+		"rename the placeholder in the subject or body",
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("message %q does not contain %q", message, want)
+		}
+	}
+}
+
+// TestUnusedVariableErrorNamesRemedy pins the operator-facing remedy in the
+// unused-mapping error: a row whose variable never appears in the content is
+// the operator's to remove.
+func TestUnusedVariableErrorNamesRemedy(t *testing.T) {
+	t.Parallel()
+	_, err := Compile("Hello {{candidate_name}}", "<p>Hi</p>", []Mapping{
+		{Variable: "candidate_name", Header: "Candidate Name", Required: true, Format: FormatText},
+		{Variable: "candidate_email", Header: "Candidate Email", Required: true, Format: FormatText},
+	})
+	var unused *UnusedVariableError
+	if !errors.As(err, &unused) {
+		t.Fatalf("Compile error = %v, want UnusedVariableError", err)
+	}
+	message := err.Error()
+	for _, want := range []string{
+		"configured variable(s) missing from the subject and body: candidate_email",
+		"Remove each mapping row",
+		"add its placeholder to the subject or body",
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("message %q does not contain %q", message, want)
+		}
 	}
 }

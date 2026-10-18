@@ -40,18 +40,23 @@ const (
 	literalBraceAction = `{{"{{"}}`
 )
 
-// UnknownVariableError reports placeholders without a mapping.
+// UnknownVariableError reports placeholders without a mapping. The message
+// names the remedy too, because either side of the mismatch may be the wrong
+// one: the mapping table may be missing the row, or the document may use a
+// name the table spells differently.
 type UnknownVariableError struct{ Variables []string }
 
 func (e *UnknownVariableError) Error() string {
-	return fmt.Sprintf("no mapping for variable(s): %s", strings.Join(e.Variables, ", "))
+	return fmt.Sprintf("no mapping for variable(s): %s. Add a mapping row for each name, or rename the placeholder in the subject or body.", strings.Join(e.Variables, ", "))
 }
 
 // UnusedVariableError reports mappings that appear in neither subject nor body.
+// The message names the remedy too: the row is what the operator can drop, or
+// the placeholder is what the document can gain.
 type UnusedVariableError struct{ Variables []string }
 
 func (e *UnusedVariableError) Error() string {
-	return fmt.Sprintf("configured variable(s) missing from the subject and body: %s", strings.Join(e.Variables, ", "))
+	return fmt.Sprintf("configured variable(s) missing from the subject and body: %s. Remove each mapping row, or add its placeholder to the subject or body.", strings.Join(e.Variables, ", "))
 }
 
 // MissingRequiredError reports the required variables a single row did not

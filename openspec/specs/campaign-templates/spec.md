@@ -26,11 +26,12 @@ The system SHALL use the campaign subject field as the email subject and the upl
 - **THEN** that text remains body content and does not override the configured subject
 
 ### Requirement: Variable consistency validation
-The system SHALL recognize double-brace variables in subject and body, report configured variables absent from both, and report template variables without a mapping. Invalid configuration SHALL NOT become ready for sending.
+The system SHALL recognize double-brace variables in subject and body, report configured variables absent from both, and report template variables without a mapping. Each error SHALL name every offending variable and state its remedy: for an unmapped placeholder, add a mapping row for that name or rename the placeholder in the subject or body; for a configured variable absent from both, remove its mapping row or add its placeholder to the subject or body. Invalid configuration SHALL NOT become ready for sending.
 
 #### Scenario: Missing configured variable
 - **WHEN** the operator configures location but neither subject nor body contains its placeholder
 - **THEN** the configuration displays a location-specific error
+- **AND** the error states that the row is removed or the placeholder added
 
 #### Scenario: Unknown body or subject variable
 - **WHEN** either subject or body references a variable with no mapping
@@ -79,3 +80,36 @@ The system SHALL document that Word page layout, macros, attachments and embedde
 - **WHEN** conversion encounters an embedded image or page-layout feature outside the supported contract
 - **THEN** the operator sees a warning or actionable conversion error before approval
 - **AND** no attachment is added automatically
+
+### Requirement: Default mapping draft
+The system SHALL pre-fill the mapping table of a campaign that has no content revision yet with one required `text` mapping per comma-separated expected recipient header, and SHALL leave the table empty once a revision exists. The draft SHALL be editable text in the mapping form and SHALL NOT create, modify or approve any revision.
+
+#### Scenario: New campaign with expected headers
+- **WHEN** a campaign whose expected recipient header is `Candidate Name, Candidate Email, Expected Profile` has no content revision
+- **THEN** the mapping form is pre-filled with `candidate_name | Candidate Name | required | text`, `candidate_email | Candidate Email | required | text` and `expected_profile | Expected Profile | required | text`
+- **AND** no revision exists until the operator submits the form
+
+#### Scenario: Variable name derived from the header
+- **WHEN** an expected header is `Expected Department/Division`
+- **THEN** its drafted variable name is `expected_department_division`
+- **AND** a header that cannot form a variable name is omitted from the draft
+
+#### Scenario: Campaign already has a revision
+- **WHEN** the campaign has a content revision
+- **THEN** the mapping form starts empty and no draft is offered
+
+#### Scenario: Failed revision submission
+- **WHEN** the operator submits a mapping table that fails validation
+- **THEN** the form is re-rendered with the submitted mapping text unchanged
+
+### Requirement: Mapping help example follows the campaign
+The system SHALL present the mapping help's example row and example line with the campaign's own expected recipient header: the variable name and source header SHALL equal the first row the default draft derives for that campaign, and the format SHALL be the draft's `text`.
+
+#### Scenario: Example matches the draft
+- **WHEN** a campaign's expected recipient header starts with `Candidate Name`
+- **THEN** the example line shows `candidate_name | Candidate Name | required | text`
+- **AND** the example variable name is the name the draft uses for that header
+
+#### Scenario: Campaign without a usable header
+- **WHEN** no expected recipient header can form a variable name
+- **THEN** the example uses a generic `variable_name` placeholder instead of a campaign-specific name

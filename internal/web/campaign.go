@@ -136,6 +136,11 @@ func (s *server) handleCampaignRevision(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	subject := r.FormValue("subject")
+	// The operator's own mapping text always wins over the derived draft when
+	// the form is re-rendered with an error.
+	if raw := r.FormValue("mappings"); strings.TrimSpace(raw) != "" {
+		page.MappingDraft = raw
+	}
 	mappings, err := parseMappings(r.FormValue("mappings"))
 	if err != nil {
 		revisionError(err.Error())
@@ -279,6 +284,9 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 	data.Name = loaded.Name
 	data.RecipientHeader = loaded.RecipientHeader
 	data.ResultLabels = strings.Join(loaded.ResultLabels, ", ")
+	// The help's worked example follows this campaign's own headers, so it never
+	// teaches a variable name the draft spells differently.
+	data.ExampleVariable, data.ExampleHeader = exampleMapping(loaded.RecipientHeader)
 	if loaded.CurrentRevisionID != "" {
 		configuration, err := s.campaigns.LoadConfiguration(ctx, loaded.CurrentRevisionID)
 		if err != nil {
@@ -293,6 +301,10 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 		for _, variable := range configuration.Variables {
 			data.Variables = append(data.Variables, variable.Name)
 		}
+	} else {
+		// A campaign without a revision has no operator mappings yet: offer the
+		// expected recipient headers as the draft table.
+		data.MappingDraft = mappingDraftText(campaign.DefaultMappings(loaded.RecipientHeader))
 	}
 	history, err := s.campaigns.Revisions(ctx, data.ID)
 	if err != nil {
@@ -386,6 +398,33 @@ func parseMappings(raw string) ([]campaign.Mapping, error) {
 		})
 	}
 	return mappings, nil
+}
+
+// mappingDraftText renders a derived draft in the textarea syntax
+// parseMappings reads, one row per line, so the operator can edit the draft and
+// submit it unchanged.
+func mappingDraftText(mappings []campaign.Mapping) string {
+	lines := make([]string, 0, len(mappings))
+	for _, mapping := range mappings {
+		lines = append(lines, strings.Join([]string{
+			mapping.Variable,
+			mapping.Header,
+			"required",
+			string(mapping.Format),
+		}, " | "))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// exampleMapping is the worked example shown beside the mapping form: the first
+// row the campaign's own expected headers derive. A campaign whose headers
+// cannot form a variable name falls back to a generic placeholder, so the
+// example is never empty.
+func exampleMapping(recipientHeader string) (variable, header string) {
+	if drafted := campaign.DefaultMappings(recipientHeader); len(drafted) > 0 {
+		return drafted[0].Variable, drafted[0].Header
+	}
+	return "variable_name", "Header"
 }
 
 // campaignFormError returns the campaign package's fixed validation message

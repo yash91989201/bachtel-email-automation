@@ -124,6 +124,14 @@ type CampaignPageData struct {
 	Name            string
 	RecipientHeader string
 	ResultLabels    string
+	// MappingDraft pre-fills the revision form while the campaign has no
+	// content revision. Once a revision exists the form starts empty.
+	MappingDraft string
+	// ExampleVariable and ExampleHeader are the mapping help's worked example:
+	// the first name the draft derives from this campaign's expected headers, so
+	// the help never teaches a variable name the draft does not use.
+	ExampleVariable string
+	ExampleHeader   string
 
 	HasRevision    bool
 	Revision       int
@@ -153,7 +161,10 @@ templ CampaignPage(data CampaignPageData) {
 		<div class="space-y-3">
 			<p class="text-sm font-medium uppercase tracking-widest text-primary">Campaign</p>
 			<h1 class="text-4xl font-bold tracking-tight">{ data.Name }</h1>
-			<p class="max-w-2xl text-base-content/70">Expected recipient header <code>{ data.RecipientHeader }</code>. Nothing on this page sends email.</p>
+			<p class="max-w-2xl text-base-content/70">Nothing on this page sends email.</p>
+			<div class="card-actions">
+				<a class="btn btn-primary" href={"/campaigns/" + data.ID + "/tasks"}>Email tasks</a>
+			</div>
 		</div>
 		if data.RevisionError != "" {
 			<div class="alert alert-error" role="alert">{ data.RevisionError }</div>
@@ -214,8 +225,49 @@ templ CampaignPage(data CampaignPageData) {
 					<label class="label" for="revision-subject">Subject</label>
 					<input class="input input-bordered w-full" id="revision-subject" type="text" name="subject" maxlength="998" required/>
 					<label class="label" for="revision-mappings">Mapping table</label>
-					<textarea class="textarea textarea-bordered w-full" id="revision-mappings" name="mappings" rows="8" placeholder="full_name | Full Name | required | name"></textarea>
-					<p class="text-sm text-base-content/60">One mapping per line: <code>variable | source header | required|optional | format | fallback</code>. The format column is one of text, name, designation or email and defaults to text; a fallback applies to optional rows only.</p>
+					<div id="revision-mappings-help" class="space-y-4 text-sm">
+						<div class="rounded-box border border-base-300 bg-base-200/50 p-4">
+							<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">Expected recipient header</p>
+							<code class="break-words">{ data.RecipientHeader }</code>
+						</div>
+						<div class="overflow-x-auto rounded-box border border-base-300">
+							<table class="table table-sm">
+								<caption class="p-3 text-left font-medium">Column order <span class="font-normal text-base-content/60">— separate each column with <code>|</code></span></caption>
+								<thead class="bg-base-200/50">
+									<tr>
+										<th>Variable</th>
+										<th>Source header</th>
+										<th>Required / optional</th>
+										<th>Format</th>
+										<th>Fallback</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<td><code>{ data.ExampleVariable }</code></td>
+										<td><code>{ data.ExampleHeader }</code></td>
+										<td><code>required</code></td>
+										<td><code>text</code></td>
+										<td class="text-base-content/50">Leave blank</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+						<div class="flex flex-wrap items-center gap-2 text-base-content/70">
+							<span>Formats:</span>
+							<code class="badge badge-ghost badge-sm">text</code>
+							<code class="badge badge-ghost badge-sm">name</code>
+							<code class="badge badge-ghost badge-sm">designation</code>
+							<code class="badge badge-ghost badge-sm">email</code>
+							<span class="text-xs">Defaults to text. Fallback is only for optional rows.</span>
+						</div>
+						<div class="rounded-box border border-primary/20 bg-primary/5 p-4">
+							<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">Example line</p>
+							<code class="break-words">{ data.ExampleVariable + " | " + data.ExampleHeader + " | required | text" }</code>
+						</div>
+					</div>
+					<p id="revision-mappings-hint" class="text-sm text-base-content/60">Enter your mappings below, one per line. The variable names you use here must match the <code>{"{{...}}"}</code> placeholders in the subject and body.</p>
+					<textarea class="textarea textarea-bordered w-full font-mono" id="revision-mappings" name="mappings" rows="8" aria-describedby="revision-mappings-help revision-mappings-hint">{ data.MappingDraft }</textarea>
 					<div class="card-actions">
 						<button class="btn btn-primary" type="submit">Create revision</button>
 					</div>
