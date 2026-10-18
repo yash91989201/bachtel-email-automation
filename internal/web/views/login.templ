@@ -1,0 +1,24 @@
+package views
+
+templ LoginPage(errorMessage string) {
+	@Layout("Sign in", false) {
+		<div class="mx-auto max-w-sm space-y-6">
+			<div class="space-y-2 text-center">
+				<h1 class="text-3xl font-bold tracking-tight">Sign in</h1>
+				<p class="text-base-content/70">Operator access to Bachtel Email Automation.</p>
+			</div>
+			if errorMessage != "" {
+				<div class="alert alert-error" role="alert">{ errorMessage }</div>
+			}
+			<form method="post" action="/login" class="card border border-base-300 bg-base-100 shadow-sm">
+				<div class="card-body gap-4">
+					<label class="label" for="email">Email</label>
+					<input class="input w-full" id="email" type="email" name="email" autocomplete="username" required/>
+					<label class="label" for="password">Password</label>
+					<input class="input w-full" id="password" type="password" name="password" autocomplete="current-password" required/>
+					<button class="btn btn-primary" type="submit">Sign in</button>
+				</div>
+			</form>
+		</div>
+	}
+}

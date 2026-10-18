@@ -1,6 +1,6 @@
 package views
 
-templ Layout(title string) {
+templ Layout(title string, signedIn bool) {
 	<!DOCTYPE html>
 	<html lang="en" data-theme="light">
 		<head>
@@ -17,6 +17,15 @@ templ Layout(title string) {
 				<div class="navbar mx-auto max-w-4xl px-6">
 					<a class="text-lg font-semibold" href="/">Bachtel</a>
 					<span class="badge badge-outline ml-3">Email automation</span>
+					if signedIn {
+						<nav class="ml-auto flex items-center gap-4">
+							<a class="link" href="/">Dashboard</a>
+							<a class="link" href="/connection">Connection</a>
+							<form method="post" action="/logout">
+								<button class="btn btn-sm btn-outline" type="submit">Sign out</button>
+							</form>
+						</nav>
+					}
 				</div>
 			</header>
 			<main class="mx-auto max-w-4xl space-y-6 px-6 py-12">

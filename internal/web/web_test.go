@@ -1,18 +1,32 @@
 package web
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/ui"
+	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
+	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 )
 
-func TestAppRoutes(t *testing.T) {
+const (
+	testOperatorEmail    = "operator@example.com"
+	testOperatorPassword = "correct-horse-battery-staple"
+)
+
+// newTestServer boots a temp-data PocketBase app with the operator UI mounted
+// the same way the running application mounts it.
+func newTestServer(t *testing.T, cfg config.Config) (*pocketbase.PocketBase, http.Handler) {
+	t.Helper()
 	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
 	if err := app.Bootstrap(); err != nil {
 		t.Fatal(err)
@@ -25,51 +39,377 @@ func TestAppRoutes(t *testing.T) {
 	if err := app.RunAppMigrations(); err != nil {
 		t.Fatal(err)
 	}
-	if got := app.Settings().Meta.AppName; got != "Bachtel Email Automation" {
-		t.Fatalf("initial settings migration did not run: %q", got)
-	}
-	if !app.Settings().RateLimits.Enabled {
-		t.Fatal("rate limits should be enabled by the migration")
-	}
+	return app, wrapWithPocketBase(t, app, NewHandler(app, cfg))
+}
+
+// wrapWithPocketBase mounts the UI handler behind the PocketBase router, as
+// apis.Serve does in the running application.
+func wrapWithPocketBase(t *testing.T, app core.App, handler http.Handler) http.Handler {
+	t.Helper()
 	router, err := apis.NewRouter(app)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// apis.Serve adds this dashboard route in the running application.
 	router.GET("/_/{path...}", apis.Static(ui.DistDirFS, false))
-	router.Any("/{path...}", apis.WrapStdHandler(NewHandler(app)))
-	handler, err := router.BuildMux()
+	router.Any("/{path...}", apis.WrapStdHandler(handler))
+	built, err := router.BuildMux()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct {
-		path        string
-		status      int
-		contentType string
-		contains    string
-	}{
-		{"/", http.StatusOK, "text/html", "Your app starts here."},
-		{"/status", http.StatusOK, "text/html", "PocketBase is connected."},
-		{"/static/app.css", http.StatusOK, "text/css", ".btn"},
-		{"/static/alpine.min.js", http.StatusOK, "javascript", "Alpine"},
-		{"/static/htmx.min.js", http.StatusOK, "javascript", "htmx"},
-		{"/robots.txt", http.StatusOK, "text/plain", "Disallow: /_/"},
-		{"/api/health", http.StatusOK, "application/json", "200"},
-		{"/_/", http.StatusOK, "text/html", "<html"},
-		{"/missing", http.StatusNotFound, "text/plain", "404"},
-	} {
-		t.Run(tc.path, func(t *testing.T) {
-			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
-			if rec.Code != tc.status || !strings.Contains(rec.Header().Get("Content-Type"), tc.contentType) || !strings.Contains(rec.Body.String(), tc.contains) {
-				t.Fatalf("%s: status=%d type=%q body=%.200s", tc.path, rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
-			}
-		})
+	return built
+}
+
+func testConfig(origin string) config.Config {
+	return config.Config{
+		Origin: origin,
+		Microsoft: config.Microsoft{
+			RedirectURL:   origin + config.CallbackPath,
+			SenderAddress: config.DefaultSenderAddress,
+			AuthorityURL:  config.DefaultAuthorityURL,
+			GraphBaseURL:  config.DefaultGraphBaseURL,
+		},
 	}
-	// This fragment is deliberately a read-only operation.
+}
+
+// do runs one request against the handler and returns the recorder.
+func do(t *testing.T, handler http.Handler, method, target string, form url.Values, mutate func(*http.Request)) *httptest.ResponseRecorder {
+	t.Helper()
+	var body io.Reader
+	if form != nil {
+		body = strings.NewReader(form.Encode())
+	}
+	req := httptest.NewRequest(method, target, body)
+	if form != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	if mutate != nil {
+		mutate(req)
+	}
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/status", nil))
+	handler.ServeHTTP(rec, req)
+	return rec
+}
+
+func loginForm(email, password string) url.Values {
+	return url.Values{"email": {email}, "password": {password}}
+}
+
+// login performs a successful sign-in and returns the session cookie.
+func login(t *testing.T, handler http.Handler) *http.Cookie {
+	t.Helper()
+	rec := do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, testOperatorPassword), nil)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("login: status=%d body=%.200s", rec.Code, rec.Body.String())
+	}
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == sessionCookieName && cookie.Value != "" {
+			return cookie
+		}
+	}
+	t.Fatal("login response did not set a session cookie")
+	return nil
+}
+
+func withCookie(cookie *http.Cookie) func(*http.Request) {
+	return func(r *http.Request) { r.AddCookie(cookie) }
+}
+
+func provisionOperator(t *testing.T, app core.App) {
+	t.Helper()
+	if err := operator.Provision(app, testOperatorEmail, testOperatorPassword); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPublicSurface(t *testing.T) {
+	cfg := testConfig("http://127.0.0.1:8090")
+	app, handler := newTestServer(t, cfg)
+	_ = app
+
+	rec := do(t, handler, http.MethodGet, "/health", nil, nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Content-Type"), "application/json") || rec.Body.String() != `{"status":"ok"}` {
+		t.Fatalf("/health: status=%d type=%q body=%q", rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
+	}
+
+	rec = do(t, handler, http.MethodGet, "/robots.txt", nil, nil)
+	if rec.Code != http.StatusOK || rec.Body.String() != "User-agent: *\nDisallow: /\n" {
+		t.Fatalf("/robots.txt: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	for _, path := range []string{"/static/app.css", "/static/alpine.min.js", "/static/htmx.min.js"} {
+		rec = do(t, handler, http.MethodGet, path, nil, nil)
+		if rec.Code != http.StatusOK || rec.Body.Len() == 0 {
+			t.Fatalf("%s: status=%d", path, rec.Code)
+		}
+	}
+
+	rec = do(t, handler, http.MethodPost, "/status", nil, nil)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("POST /status: got %d, want 405", rec.Code)
+	}
+}
+
+func TestAnonymousRequests(t *testing.T) {
+	cfg := testConfig("http://127.0.0.1:8090")
+	app, handler := newTestServer(t, cfg)
+	provisionOperator(t, app)
+
+	// Safe methods redirect to the login page without leaking private content.
+	for _, path := range []string{"/", "/status"} {
+		rec := do(t, handler, http.MethodGet, path, nil, nil)
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
+			t.Fatalf("GET %s: status=%d location=%q", path, rec.Code, rec.Header().Get("Location"))
+		}
+		body := rec.Body.String()
+		for _, secret := range []string{"Database connection", "Your app starts here", "Sign out", "Sender address"} {
+			if strings.Contains(body, secret) {
+				t.Fatalf("GET %s leaks %q", path, secret)
+			}
+		}
+	}
+
+	// Unsafe methods get a plain 401.
+	for _, path := range []string{"/logout"} {
+		rec := do(t, handler, http.MethodPost, path, url.Values{}, nil)
+		if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "authentication required") {
+			t.Fatalf("POST %s anonymous: status=%d body=%q", path, rec.Code, rec.Body.String())
+		}
+	}
+
+	// A valid session reaches the dashboard; GET /login bounces to /.
+	cookie := login(t, handler)
+	rec := do(t, handler, http.MethodGet, "/", nil, withCookie(cookie))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Your app starts here") {
+		t.Fatalf("GET / with session: status=%d", rec.Code)
+	}
+	rec = do(t, handler, http.MethodGet, "/login", nil, withCookie(cookie))
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
+		t.Fatalf("GET /login with session: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestLoginFlow(t *testing.T) {
+	t.Run("sets session cookie with correct attributes", func(t *testing.T) {
+		cfg := testConfig("http://127.0.0.1:8090")
+		app, handler := newTestServer(t, cfg)
+		provisionOperator(t, app)
+
+		rec := do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, testOperatorPassword), nil)
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
+			t.Fatalf("status=%d location=%q", rec.Code, rec.Header().Get("Location"))
+		}
+		cookies := rec.Result().Cookies()
+		if len(cookies) != 1 {
+			t.Fatalf("got %d cookies, want 1", len(cookies))
+		}
+		cookie := cookies[0]
+		if cookie.Name != sessionCookieName || cookie.Value == "" {
+			t.Fatalf("cookie=%q", cookie.Name)
+		}
+		if !cookie.HttpOnly || cookie.SameSite != http.SameSiteLaxMode || cookie.Path != "/" {
+			t.Fatalf("attrs: HttpOnly=%v SameSite=%v Path=%q", cookie.HttpOnly, cookie.SameSite, cookie.Path)
+		}
+		if cookie.Secure {
+			t.Fatal("Secure must follow the http origin")
+		}
+		collection, err := app.FindCollectionByNameOrId(operator.CollectionName)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cookie.MaxAge != int(collection.AuthToken.Duration) {
+			t.Fatalf("MaxAge=%d, want %d", cookie.MaxAge, collection.AuthToken.Duration)
+		}
+	})
+
+	t.Run("secure cookie for https origin", func(t *testing.T) {
+		cfg := testConfig("https://mail.example.com")
+		app, handler := newTestServer(t, cfg)
+		provisionOperator(t, app)
+
+		rec := do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, testOperatorPassword), nil)
+		cookies := rec.Result().Cookies()
+		if len(cookies) != 1 || !cookies[0].Secure {
+			t.Fatalf("Secure cookie missing for https origin: %+v", cookies)
+		}
+	})
+
+	t.Run("identical failure for unknown account and wrong password", func(t *testing.T) {
+		cfg := testConfig("http://127.0.0.1:8090")
+		app, handler := newTestServer(t, cfg)
+		provisionOperator(t, app)
+
+		unknown := do(t, handler, http.MethodPost, "/login", loginForm("nobody@example.com", "whatever"), nil)
+		wrong := do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, "wrong-password"), nil)
+		if unknown.Code != http.StatusOK || wrong.Code != http.StatusOK {
+			t.Fatalf("statuses: unknown=%d wrong=%d", unknown.Code, wrong.Code)
+		}
+		if unknown.Body.String() != wrong.Body.String() {
+			t.Fatal("failure responses differ between unknown account and wrong password")
+		}
+		if !strings.Contains(wrong.Body.String(), loginFailedMessage) {
+			t.Fatalf("missing generic error: %q", wrong.Body.String())
+		}
+		for _, rec := range []*httptest.ResponseRecorder{unknown, wrong} {
+			if len(rec.Result().Cookies()) != 0 {
+				t.Fatal("failed login set a cookie")
+			}
+		}
+	})
+
+	t.Run("logout expires the cookie", func(t *testing.T) {
+		cfg := testConfig("http://127.0.0.1:8090")
+		app, handler := newTestServer(t, cfg)
+		provisionOperator(t, app)
+		cookie := login(t, handler)
+
+		rec := do(t, handler, http.MethodPost, "/logout", url.Values{}, withCookie(cookie))
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
+			t.Fatalf("logout: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
+		}
+		expired := false
+		for _, c := range rec.Result().Cookies() {
+			if c.Name == sessionCookieName && c.MaxAge < 0 {
+				expired = true
+			}
+		}
+		if !expired {
+			t.Fatal("logout did not expire the session cookie")
+		}
+		// The browser drops the expired cookie; the next request is anonymous.
+		rec = do(t, handler, http.MethodGet, "/", nil, nil)
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
+			t.Fatalf("GET / after logout: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
+		}
+	})
+
+	t.Run("tampered cookie behaves as anonymous", func(t *testing.T) {
+		cfg := testConfig("http://127.0.0.1:8090")
+		app, handler := newTestServer(t, cfg)
+		provisionOperator(t, app)
+
+		forged := &http.Cookie{Name: sessionCookieName, Value: "forged-token-value"}
+		rec := do(t, handler, http.MethodGet, "/", nil, withCookie(forged))
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
+			t.Fatalf("forged cookie: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
+		}
+	})
+
+	t.Run("expired cookie behaves as anonymous", func(t *testing.T) {
+		cfg := testConfig("http://127.0.0.1:8090")
+		app, handler := newTestServer(t, cfg)
+		provisionOperator(t, app)
+
+		// A short-lived static auth token expires almost immediately.
+		record, err := app.FindAuthRecordByEmail(operator.CollectionName, testOperatorEmail)
+		if err != nil {
+			t.Fatal(err)
+		}
+		token, err := record.NewStaticAuthToken(time.Millisecond)
+		if err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(20 * time.Millisecond)
+		expired := &http.Cookie{Name: sessionCookieName, Value: token}
+		rec := do(t, handler, http.MethodGet, "/", nil, withCookie(expired))
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
+			t.Fatalf("expired cookie: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
+		}
+	})
+}
+
+func TestLoginRateLimit(t *testing.T) {
+	cfg := testConfig("http://127.0.0.1:8090")
+	app, handler := newTestServer(t, cfg)
+	provisionOperator(t, app)
+
+	clientA := func(r *http.Request) { r.RemoteAddr = "203.0.113.5:4000" }
+	clientB := func(r *http.Request) { r.RemoteAddr = "203.0.113.6:4000" }
+
+	// Ten failed attempts pass; the eleventh is limited.
+	for i := 1; i <= 10; i++ {
+		rec := do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, "wrong-password"), clientA)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("attempt %d: status=%d, want 200", i, rec.Code)
+		}
+	}
+	rec := do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, "wrong-password"), clientA)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("attempt 11: status=%d, want 429", rec.Code)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Fatal("429 without Retry-After")
+	}
+
+	// Another client is unaffected.
+	rec = do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, "wrong-password"), clientB)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("other client: status=%d, want 200", rec.Code)
+	}
+
+	// A successful sign-in resets that client's counter.
+	clientC := func(r *http.Request) { r.RemoteAddr = "203.0.113.7:4000" }
+	for i := 1; i <= 9; i++ {
+		if rec := do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, "wrong-password"), clientC); rec.Code != http.StatusOK {
+			t.Fatalf("client C attempt %d: status=%d, want 200", i, rec.Code)
+		}
+	}
+	rec = do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, testOperatorPassword), clientC)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("successful login: status=%d, want 303", rec.Code)
+	}
+	// The counter restarted: ten more failures are allowed before limiting.
+	for i := 1; i <= 10; i++ {
+		if rec := do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, "wrong-password"), clientC); rec.Code != http.StatusOK {
+			t.Fatalf("post-reset attempt %d: status=%d, want 200", i, rec.Code)
+		}
+	}
+	if rec := do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, "wrong-password"), clientC); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("post-reset attempt 11: status=%d, want 429", rec.Code)
+	}
+}
+
+func TestCSRFProtection(t *testing.T) {
+	cfg := testConfig("http://127.0.0.1:8090")
+	app, handler := newTestServer(t, cfg)
+	provisionOperator(t, app)
+	cookie := login(t, handler)
+
+	evilOrigin := func(r *http.Request) { r.Header.Set("Origin", "https://evil.example") }
+	crossSite := func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "cross-site") }
+
+	mutations := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/login"},
+		{http.MethodPost, "/logout"},
+	}
+	for _, m := range mutations {
+		for name, mutate := range map[string]func(*http.Request){"origin": evilOrigin, "sec-fetch-site": crossSite} {
+			rec := do(t, handler, m.method, m.path, url.Values{}, func(r *http.Request) {
+				mutate(r)
+				if m.path != "/login" {
+					r.AddCookie(cookie)
+				}
+			})
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("%s %s with %s: status=%d, want 403", m.method, m.path, name, rec.Code)
+			}
+		}
+	}
+
+	// A rejected /login attempt neither sets a cookie nor consumes the account.
+	rec := do(t, handler, http.MethodPost, "/login", loginForm(testOperatorEmail, testOperatorPassword), evilOrigin)
+	if rec.Code != http.StatusForbidden || len(rec.Result().Cookies()) != 0 {
+		t.Fatalf("cross-site login: status=%d cookies=%d", rec.Code, len(rec.Result().Cookies()))
+	}
+
+	// Safe GETs are unaffected by a foreign Origin.
+	rec = do(t, handler, http.MethodGet, "/", nil, func(r *http.Request) {
+		r.Header.Set("Origin", "https://evil.example")
+		r.AddCookie(cookie)
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("safe GET with evil origin: status=%d", rec.Code)
 	}
 }

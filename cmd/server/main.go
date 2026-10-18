@@ -9,6 +9,7 @@ import (
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"github.com/pocketbase/pocketbase/tools/osutils"
 
+	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
 	"github.com/yash91989201/bachtel-email-automation/internal/web"
 )
@@ -22,10 +23,16 @@ func main() {
 		Dir:         "internal/migrations",
 		Automigrate: osutils.IsProbablyGoRun(),
 	})
+	// A malformed origin or callback URL fails startup.
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	app.RootCmd.AddCommand(provisionOperatorCommand(app))
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
 		// PocketBase keeps its API and dashboard routes; app handlers use net/http.
-		event.Router.Any("/{path...}", apis.WrapStdHandler(web.NewHandler(app)))
+		event.Router.Any("/{path...}", apis.WrapStdHandler(web.NewHandler(app, cfg)))
 		return event.Next()
 	})
 	if err := app.Start(); err != nil {
