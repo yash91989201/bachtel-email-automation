@@ -13,8 +13,8 @@ assets:
 
 # Local dev reads .env (copy .env.example) into the server process. Shell
 # syntax applies: no spaces around "=", no inline comments after a value.
-dev: generate assets
-	set -a; [ -f .env ] && . ./.env; set +a; go run ./cmd/server serve --http=127.0.0.1:8090 --dir=./pb_data
+dev:
+	set -a; [ -f .env ] && . ./.env; set +a; go run github.com/air-verse/air@v1.67.4 -c .air.toml
 
 build: generate assets
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/bachtel ./cmd/server

@@ -37,11 +37,14 @@ administrative surface that requires a superuser.
 On a fresh database, use the one-time installer link printed in the server
 console to create your first superuser. No credentials are seeded.
 
-`make dev` regenerates templates and assets, then starts the server. It also
+`make dev` uses [Air](https://github.com/air-verse/air) to regenerate templates
+and assets, rebuild, and restart the server when Go, `.templ`, CSS, or
+JavaScript sources change. The pinned Air version downloads automatically on
+the first run; no global installation is required. It also
 sources a local `.env` into the server process when one exists: copy
 `.env.example` to `.env` and fill it in instead of exporting variables by
-hand. Stop and rerun it after changes. It intentionally doesn't install an
-additional reload daemon. Generated CSS and JavaScript are ignored by Git;
+hand. Restart `make dev` after changing `.env` or `.air.toml`. Refresh the
+browser after a rebuild to see UI changes. Generated CSS and JavaScript are ignored by Git;
 `make setup` restores them on a fresh checkout. Generated `*_templ.go` files
 are committed; edit the `.templ` sources instead.
 
