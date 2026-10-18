@@ -57,9 +57,9 @@ func NewSanitizer() *bluemonday.Policy {
 
 // CreateCampaignInput is the operator input for a new campaign.
 type CreateCampaignInput struct {
-	Name            string
-	RecipientHeader string
-	ResultLabels    []string
+	Name          string
+	SourceHeaders []string
+	ResultLabels  []string
 }
 
 // CreateCampaign stores a campaign with its output settings. The first content
@@ -69,9 +69,14 @@ func (s *Service) CreateCampaign(ctx context.Context, input CreateCampaignInput)
 	if name == "" {
 		return nil, errors.New("a campaign name is required")
 	}
-	recipientHeader := strings.TrimSpace(input.RecipientHeader)
-	if recipientHeader == "" {
-		return nil, errors.New("the expected recipient header is required")
+	sourceHeaders := make([]string, 0, len(input.SourceHeaders))
+	for _, header := range input.SourceHeaders {
+		if header = strings.TrimSpace(header); header != "" {
+			sourceHeaders = append(sourceHeaders, header)
+		}
+	}
+	if len(sourceHeaders) == 0 {
+		return nil, errors.New("at least one source header is required for the mapping draft")
 	}
 	labels := NormalizeResultLabels(input.ResultLabels)
 	if err := ValidateResultLabels(labels); err != nil {
@@ -84,7 +89,7 @@ func (s *Service) CreateCampaign(ctx context.Context, input CreateCampaignInput)
 	}
 	record := core.NewRecord(collection)
 	record.Set("name", name)
-	record.Set("recipient_header", recipientHeader)
+	record.Set("source_headers", sourceHeaders)
 	record.Set("result_labels", labels)
 	if err := s.app.Save(record); err != nil {
 		return nil, err
@@ -306,9 +311,9 @@ func (s *Service) campaignFromRecord(record *core.Record) *Campaign {
 	campaign := &Campaign{
 		ID:                record.Id,
 		Name:              record.GetString("name"),
-		RecipientHeader:   record.GetString("recipient_header"),
 		CurrentRevisionID: record.GetString("current_configuration"),
 	}
+	_ = record.UnmarshalJSONField("source_headers", &campaign.SourceHeaders)
 	if err := record.UnmarshalJSONField("result_labels", &campaign.ResultLabels); err != nil || len(campaign.ResultLabels) == 0 {
 		campaign.ResultLabels = DefaultResultLabels
 	}

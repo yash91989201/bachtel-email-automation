@@ -15,7 +15,7 @@ func TestValidateMappings(t *testing.T) {
 		wantErr  string
 	}{
 		{name: "none", mappings: nil, wantErr: "at least one variable mapping"},
-		{name: "valid", mappings: []Mapping{valid}},
+		{name: "valid", mappings: []Mapping{valid, {Variable: "candidate_email", Header: "Email", Recipient: true}}},
 		{
 			name:     "duplicate variable",
 			mappings: []Mapping{valid, {Variable: "candidate_name", Header: "Other", Required: true, Format: FormatText}},
@@ -43,7 +43,7 @@ func TestValidateMappings(t *testing.T) {
 		},
 		{
 			name:     "optional with fallback",
-			mappings: []Mapping{{Variable: "location", Header: "Location", Fallback: "Remote", Format: FormatText}},
+			mappings: []Mapping{{Variable: "location", Header: "Location", Fallback: "Remote", Format: FormatText}, {Variable: "candidate_email", Header: "Email", Recipient: true}},
 		},
 	}
 	for _, test := range tests {
@@ -64,12 +64,12 @@ func TestValidateMappings(t *testing.T) {
 
 	t.Run("trims variable and header", func(t *testing.T) {
 		t.Parallel()
-		mappings := []Mapping{{Variable: " candidate_name ", Header: " Applicant Full Name ", Required: true, Format: FormatName}}
+		mappings := []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail}, {Variable: " candidate_name ", Header: " Applicant Full Name ", Required: true, Format: FormatName}}
 		if err := ValidateMappings(mappings); err != nil {
 			t.Fatal(err)
 		}
-		if mappings[0].Variable != "candidate_name" || mappings[0].Header != "Applicant Full Name" {
-			t.Fatalf("not trimmed: %+v", mappings[0])
+		if mappings[1].Variable != "candidate_name" || mappings[1].Header != "Applicant Full Name" {
+			t.Fatalf("not trimmed: %+v", mappings[1])
 		}
 	})
 }
@@ -269,10 +269,10 @@ func TestDefaultMappings(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			mappings := DefaultMappings(test.header)
+			mappings := DefaultMappings(strings.Split(test.header, ","))
 			var got []string
 			for _, mapping := range mappings {
-				if !mapping.Required || mapping.Format != FormatText || mapping.Fallback != "" {
+				if mapping.Recipient || !mapping.Required || mapping.Format != FormatText || mapping.Fallback != "" {
 					t.Fatalf("draft row %+v is not a required text mapping", mapping)
 				}
 				got = append(got, mapping.Variable+" | "+mapping.Header)
@@ -281,8 +281,8 @@ func TestDefaultMappings(t *testing.T) {
 				t.Fatalf("DefaultMappings(%q) = %q, want %q", test.header, got, test.want)
 			}
 			if len(mappings) > 0 {
-				if err := ValidateMappings(mappings); err != nil {
-					t.Fatalf("draft from %q does not validate: %v", test.header, err)
+				if err := ValidateMappings(mappings); err == nil {
+					t.Fatalf("draft from %q must require explicit recipient selection", test.header)
 				}
 			}
 		})
@@ -294,7 +294,7 @@ func TestDefaultMappings(t *testing.T) {
 // so the message must say which side the operator can change.
 func TestUnknownVariableErrorNamesRemedy(t *testing.T) {
 	t.Parallel()
-	_, err := Compile("Hello {{full_name}}", "<p>Hi</p>", []Mapping{
+	_, err := Compile("Hello {{full_name}}", "<p>Hi</p>", []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail},
 		{Variable: "candidate_name", Header: "Candidate Name", Required: true, Format: FormatText},
 	})
 	var unknown *UnknownVariableError
@@ -318,7 +318,7 @@ func TestUnknownVariableErrorNamesRemedy(t *testing.T) {
 // the operator's to remove.
 func TestUnusedVariableErrorNamesRemedy(t *testing.T) {
 	t.Parallel()
-	_, err := Compile("Hello {{candidate_name}}", "<p>Hi</p>", []Mapping{
+	_, err := Compile("Hello {{candidate_name}}", "<p>Hi</p>", []Mapping{{Variable: "recipient", Header: "Email", Recipient: true, Format: FormatEmail},
 		{Variable: "candidate_name", Header: "Candidate Name", Required: true, Format: FormatText},
 		{Variable: "candidate_email", Header: "Candidate Email", Required: true, Format: FormatText},
 	})
@@ -335,5 +335,27 @@ func TestUnusedVariableErrorNamesRemedy(t *testing.T) {
 		if !strings.Contains(message, want) {
 			t.Fatalf("message %q does not contain %q", message, want)
 		}
+	}
+}
+
+func TestRecipientMappingValidationAndHash(t *testing.T) {
+	t.Parallel()
+	for name, mappings := range map[string][]Mapping{
+		"missing":  {{Variable: "name", Header: "Name", Format: FormatText}},
+		"multiple": {{Variable: "to", Header: "Email", Recipient: true}, {Variable: "other", Header: "Other", Recipient: true}},
+		"format":   {{Variable: "to", Header: "Email", Recipient: true, Format: FormatText}},
+		"fallback": {{Variable: "to", Header: "Email", Recipient: true, Fallback: "other@example.com"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := ValidateMappings(mappings); err == nil {
+				t.Fatalf("accepted invalid recipient mappings: %+v", mappings)
+			}
+		})
+	}
+	mappings := []Mapping{{Variable: "to", Header: "Email", Required: true, Format: FormatEmail}}
+	before := ContentHash("Welcome", []byte("docx"), mappings, "pandoc")
+	mappings[0].Recipient = true
+	if after := ContentHash("Welcome", []byte("docx"), mappings, "pandoc"); after == before {
+		t.Fatal("recipient selection did not change content approval hash")
 	}
 }

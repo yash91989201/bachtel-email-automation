@@ -442,7 +442,7 @@ func (s *Service) validate(ctx context.Context, task *Task, sheet string, header
 	if err := workbook.Select(sheet, headerRow); err != nil {
 		return s.fail(task, workbookFailure(err))
 	}
-	if err := validateHeaders(workbook, target.RecipientHeader, configuration.Mappings); err != nil {
+	if err := validateHeaders(workbook, configuration.Mappings); err != nil {
 		return s.fail(task, err)
 	}
 
@@ -451,7 +451,7 @@ func (s *Service) validate(ctx context.Context, task *Task, sheet string, header
 		target:        target,
 		configuration: configuration,
 		workbook:      workbook,
-		admissions:    planRows(workbook, target.RecipientHeader, configuration.Mappings),
+		admissions:    planRows(workbook, configuration.Mappings),
 	})
 }
 
@@ -479,12 +479,15 @@ type admission struct {
 // trimmed/lowercase recipient keys across the whole input, so a row that is
 // both duplicated and otherwise invalid is still held as a duplicate instead of
 // letting its group member through.
-func planRows(workbook *Workbook, recipientHeader string, mappings []campaign.Mapping) []admission {
-	recipientOffset, _ := columnOffset(workbook.Headers, recipientHeader)
+func planRows(workbook *Workbook, mappings []campaign.Mapping) []admission {
+	recipientOffset := -1
 	offsets := make(map[string]int, len(mappings))
 	for _, mapping := range mappings {
 		offset, _ := columnOffset(workbook.Headers, mapping.Header)
 		offsets[mapping.Variable] = offset
+		if mapping.Recipient {
+			recipientOffset = offset
+		}
 	}
 
 	planned := make([]admission, 0, len(workbook.Rows))
@@ -836,11 +839,8 @@ func (s *Service) fail(task *Task, failure *ValidationError) error {
 // header row. The recipient header and every mapped source header must exist
 // exactly once after trimming; a missing or ambiguous header blocks the whole
 // task, because no row of it could be mapped unambiguously.
-func validateHeaders(workbook *Workbook, recipientHeader string, mappings []campaign.Mapping) *ValidationError {
-	wanted := make([]string, 0, len(mappings)+1)
-	if label := strings.TrimSpace(recipientHeader); label != "" {
-		wanted = append(wanted, label)
-	}
+func validateHeaders(workbook *Workbook, mappings []campaign.Mapping) *ValidationError {
+	wanted := make([]string, 0, len(mappings))
 	for _, mapping := range mappings {
 		wanted = append(wanted, strings.TrimSpace(mapping.Header))
 	}

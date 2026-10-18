@@ -27,7 +27,7 @@ func newCampaignRecord(t *testing.T, app core.App, name string) string {
 	}
 	record := core.NewRecord(collection)
 	record.Set("name", name)
-	record.Set("recipient_header", "Email")
+	record.Set("source_headers", []string{"Email"})
 	if err := app.Save(record); err != nil {
 		t.Fatal(err)
 	}

@@ -235,6 +235,7 @@ func (s *server) handleTaskPreview(w http.ResponseWriter, r *http.Request) {
 	data.SourceRow = preview.SourceRow
 	data.ContentHash = preview.ContentHash
 	data.Approved = preview.Approved
+	data.Recipient = preview.Rendered.Recipient
 	data.Subject = preview.Rendered.Subject
 	data.Body = preview.Rendered.Body
 	for _, value := range preview.Rendered.Values {

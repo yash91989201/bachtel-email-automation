@@ -26,8 +26,9 @@ and `{{first_name}}` are the same variable.
 
 A configuration is ready only when both directions agree:
 
-- Every configured variable must appear at least once in the subject or the
-  body. A subject-only variable is fine.
+- Every ordinary configured variable must appear at least once in the subject
+  or body. A subject-only variable is fine. The recipient mapping is exempt: it
+  supplies the sending address without adding it to the email content.
 - Every placeholder must have a mapping.
 
 Otherwise the configuration stays unready, and the error names the offending
@@ -39,7 +40,7 @@ variables and the remedy:
   mapping row, or add its placeholder to the subject or body.
 
 Both sides must use the same name. The mapping form's worked example is drawn
-from the campaign's own expected recipient header, so the example's variable
+from the campaign's source headers for the mapping draft, so the example's variable
 name (for example `candidate_name` for the header `Candidate Name`) is the name
 its draft rows use. A document that spells the placeholder differently — for
 example `{{full_name}}` — needs a row whose Variable is `full_name`, or an edit
@@ -51,9 +52,9 @@ Each mapping row has:
 
 | Field | Meaning |
 |---|---|
-| Variable | The placeholder name used in the subject/body. |
+| Variable | The placeholder name, or the name of the recipient value. |
 | Source header | The exact worksheet header to read. It need not equal the variable name. |
-| Required | Defaults to **required**. An optional variable may declare a fallback; a fallback on a required variable is rejected. |
+| Required / optional / recipient | Defaults to **required**. Exactly one row must be **recipient**, which implies a required email value with no fallback. An optional variable may declare a fallback. |
 | Fallback | Optional variables only. Used when the cell is empty after normalization; then an empty string. |
 | Formatting | One of `text`, `name`, `designation`, `email` (below). |
 
@@ -80,6 +81,24 @@ next to the normalized value in the preview.
 
 ## Recipients
 
+Select the sending address explicitly in the mapping textarea:
+
+```text
+candidate_email | Candidate Email | recipient | email
+```
+
+Exactly one row must be marked `recipient`. Its format defaults to `email` when
+omitted; another format or a fallback is rejected. The recipient must be present
+in the worksheet but needs no placeholder in the DOCX or subject. Add
+`{{candidate_email}}` only if the address should also appear in that content.
+The preview takes a sample value for every mapping and shows **To**, subject and
+body separately.
+
+The campaign's comma-separated source headers only generate draft mapping rows.
+The draft starts with required text rows; explicitly change the address row to
+`recipient` before saving. Intake uses the saved revision's mappings, independently
+of the draft headers.
+
 Each worksheet row must carry one single email address: no comma/semicolon
 lists, no `Name <addr>` wrappers, no control characters. The trimmed lowercase
 address is the campaign identity. The application validates the address
@@ -94,7 +113,7 @@ personalized-content hash, so a pending content approval is unaffected.
 ## Revisions
 
 Campaign content is immutable. Changing the subject, the document, the
-mappings, required flags, fallbacks or formatting creates a new revision that
+mappings, recipient selection, required flags, fallbacks or formatting creates a new revision that
 starts unapproved. Approval covers one exact content hash; stored
 personalized content and running task snapshots never change under you.
 
@@ -152,19 +171,22 @@ Body document text (as converted from the DOCX):
 
 Mapping table:
 
-| Variable | Source header | Required | Fallback | Formatting |
+| Variable | Source header | Mode | Fallback | Formatting |
 |---|---|---|---|---|
-| `first_name` | `First Name` | yes | — | `name` |
-| `job_title` | `Title` | yes | — | `designation` |
-| `team` | `Team` | no | `our team` | `text` |
+| `candidate_email` | `Email` | recipient | — | `email` |
+| `first_name` | `First Name` | required | — | `name` |
+| `job_title` | `Title` | required | — | `designation` |
+| `team` | `Team` | optional | `our team` | `text` |
 
 Sample worksheet values for one row:
 
-| First Name | Title | Team |
-|---|---|---|
-| `  ada   lovelace ` | `head of qa` | *(empty)* |
+| Email | First Name | Title | Team |
+|---|---|---|---|
+| `ada@example.com` | `  ada   lovelace ` | `head of qa` | *(empty)* |
 
 The resulting email for that row:
+
+To: `ada@example.com`
 
 Subject:
 

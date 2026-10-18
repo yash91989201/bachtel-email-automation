@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/pocketbase/pocketbase"
@@ -48,10 +49,10 @@ func TestCreateCampaignValidation(t *testing.T) {
 	ctx := context.Background()
 
 	for name, input := range map[string]campaign.CreateCampaignInput{
-		"missing name":         {RecipientHeader: "Email"},
+		"missing name":         {SourceHeaders: []string{"Email"}},
 		"missing recipient":    {Name: "Engineers"},
-		"duplicate labels":     {Name: "Engineers", RecipientHeader: "Email", ResultLabels: []string{"Status", "Status"}},
-		"whitespace only name": {Name: "  ", RecipientHeader: "Email"},
+		"duplicate labels":     {Name: "Engineers", SourceHeaders: []string{"Email"}, ResultLabels: []string{"Status", "Status"}},
+		"whitespace only name": {Name: "  ", SourceHeaders: []string{"Email"}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if created, err := service.CreateCampaign(ctx, input); err == nil {
@@ -67,13 +68,13 @@ func TestCreateCampaignDefaultsAndListing(t *testing.T) {
 	ctx := context.Background()
 
 	created, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{
-		Name:            " Software Engineers ",
-		RecipientHeader: " Email ",
+		Name:          " Software Engineers ",
+		SourceHeaders: []string{" Email "},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.Name != "Software Engineers" || created.RecipientHeader != "Email" {
+	if created.Name != "Software Engineers" || strings.Join(created.SourceHeaders, ",") != "Email" {
 		t.Fatalf("campaign = %+v, want trimmed values", created)
 	}
 	if len(created.ResultLabels) != len(campaign.DefaultResultLabels) {
@@ -81,9 +82,9 @@ func TestCreateCampaignDefaultsAndListing(t *testing.T) {
 	}
 	// A blank entry is dropped rather than becoming an empty column.
 	withBlank, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{
-		Name:            "Data",
-		RecipientHeader: "Email",
-		ResultLabels:    []string{"Status", "  "},
+		Name:          "Data",
+		SourceHeaders: []string{"Email"},
+		ResultLabels:  []string{"Status", "  "},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -121,11 +122,11 @@ func TestCreateRevisionRejectsUnsupportedUploads(t *testing.T) {
 	service := newService(t, newTestApp(t))
 	ctx := context.Background()
 
-	created, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{Name: "Engineers", RecipientHeader: "Email"})
+	created, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{Name: "Engineers", SourceHeaders: []string{"Email"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	mappings := []campaign.Mapping{{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: campaign.FormatName}}
+	mappings := []campaign.Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail}, {Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: campaign.FormatName}}
 
 	for name, input := range map[string]campaign.RevisionInput{
 		"no document": {
@@ -191,11 +192,11 @@ func TestResultLabelChangeKeepsContentApproval(t *testing.T) {
 	service := newService(t, app)
 	ctx := context.Background()
 
-	campaignRecord, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{Name: "Engineers", RecipientHeader: "Email"})
+	campaignRecord, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{Name: "Engineers", SourceHeaders: []string{"Email"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	mappings := []campaign.Mapping{{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: campaign.FormatName}}
+	mappings := []campaign.Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail}, {Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: campaign.FormatName}}
 	document := []byte("stored docx bytes")
 	hash := campaign.ContentHash("Hello {{candidate_name}}", document, mappings, "pandoc 3.10")
 
@@ -237,11 +238,11 @@ func TestRevisionsAreImmutableAndOrdered(t *testing.T) {
 	service := newService(t, app)
 	ctx := context.Background()
 
-	created, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{Name: "Engineers", RecipientHeader: "Email"})
+	created, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{Name: "Engineers", SourceHeaders: []string{"Email"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	mappings := []campaign.Mapping{{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: campaign.FormatName}}
+	mappings := []campaign.Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail}, {Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: campaign.FormatName}}
 	first := storeRevision(t, app, created.ID, 1, "First {{candidate_name}}", "<p>First {{candidate_name}}</p>", mappings, "hash-1")
 	second := storeRevision(t, app, created.ID, 2, "Second {{candidate_name}}", "<p>Second {{candidate_name}}</p>", mappings, "hash-2")
 

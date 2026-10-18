@@ -49,7 +49,7 @@ func (s *server) handleCampaignList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, c := range campaigns {
-		row := views.CampaignListRow{ID: c.ID, Name: c.Name, RecipientHeader: c.RecipientHeader}
+		row := views.CampaignListRow{ID: c.ID, Name: c.Name, SourceHeaders: strings.Join(c.SourceHeaders, ", ")}
 		if c.CurrentRevisionID != "" {
 			row.HasRevision = true
 			row.Revision = c.Revision
@@ -77,19 +77,19 @@ func (s *server) handleCampaignNew(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleCampaignCreate(w http.ResponseWriter, r *http.Request) {
 	input := campaign.CreateCampaignInput{
-		Name:            r.FormValue("name"),
-		RecipientHeader: r.FormValue("recipient_header"),
-		ResultLabels:    splitLabels(r.FormValue("result_labels")),
+		Name:          r.FormValue("name"),
+		SourceHeaders: splitLabels(r.FormValue("source_headers")),
+		ResultLabels:  splitLabels(r.FormValue("result_labels")),
 	}
 	// Validate with the campaign package before touching storage: its
 	// messages are fixed strings safe to show inline, while the service
 	// repeats the same checks and then only fails on storage problems.
 	if message := campaignFormError(input); message != "" {
 		data := views.CampaignFormData{
-			Error:           message,
-			Name:            input.Name,
-			RecipientHeader: input.RecipientHeader,
-			ResultLabels:    r.FormValue("result_labels"),
+			Error:         message,
+			Name:          input.Name,
+			SourceHeaders: strings.Join(input.SourceHeaders, ", "),
+			ResultLabels:  r.FormValue("result_labels"),
 		}
 		s.renderWithStatus(w, r, http.StatusBadRequest, views.CampaignForm(data))
 		return
@@ -246,9 +246,9 @@ func (s *server) handleCampaignPreview(w http.ResponseWriter, r *http.Request) {
 	data.ContentHash = configuration.ContentHash
 	data.Approved = configuration.ApprovalCurrent()
 
-	sample := make(map[string]string, len(configuration.Variables))
-	for _, variable := range configuration.Variables {
-		sample[variable.Name] = r.FormValue(variable.Name)
+	sample := make(map[string]string, len(configuration.Mappings))
+	for _, mapping := range configuration.Mappings {
+		sample[mapping.Variable] = r.FormValue(mapping.Variable)
 	}
 	rendered, err := configuration.Compiled.Render(sample)
 	if err != nil {
@@ -256,6 +256,7 @@ func (s *server) handleCampaignPreview(w http.ResponseWriter, r *http.Request) {
 		s.renderWithStatus(w, r, http.StatusOK, views.PreviewResult(data))
 		return
 	}
+	data.Recipient = rendered.Recipient
 	data.Subject = rendered.Subject
 	data.Body = rendered.Body
 	for _, value := range rendered.Values {
@@ -282,11 +283,11 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 	}
 	data.ID = loaded.ID
 	data.Name = loaded.Name
-	data.RecipientHeader = loaded.RecipientHeader
+	data.SourceHeaders = strings.Join(loaded.SourceHeaders, ", ")
 	data.ResultLabels = strings.Join(loaded.ResultLabels, ", ")
 	// The help's worked example follows this campaign's own headers, so it never
 	// teaches a variable name the draft spells differently.
-	data.ExampleVariable, data.ExampleHeader = exampleMapping(loaded.RecipientHeader)
+	data.ExampleVariable, data.ExampleHeader = exampleMapping(loaded.SourceHeaders)
 	if loaded.CurrentRevisionID != "" {
 		configuration, err := s.campaigns.LoadConfiguration(ctx, loaded.CurrentRevisionID)
 		if err != nil {
@@ -298,13 +299,13 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 		data.Converter = configuration.Converter
 		data.ContentHash = configuration.ContentHash
 		data.Approved = configuration.ApprovalCurrent()
-		for _, variable := range configuration.Variables {
-			data.Variables = append(data.Variables, variable.Name)
+		for _, mapping := range configuration.Mappings {
+			data.Variables = append(data.Variables, mapping.Variable)
 		}
 	} else {
 		// A campaign without a revision has no operator mappings yet: offer the
-		// expected recipient headers as the draft table.
-		data.MappingDraft = mappingDraftText(campaign.DefaultMappings(loaded.RecipientHeader))
+		// source headers as the draft table.
+		data.MappingDraft = mappingDraftText(campaign.DefaultMappings(loaded.SourceHeaders))
 	}
 	history, err := s.campaigns.Revisions(ctx, data.ID)
 	if err != nil {
@@ -350,10 +351,11 @@ func (s *server) renderWithStatus(w http.ResponseWriter, r *http.Request, status
 // parseMappings reads the revision form's mapping textarea. The contract is:
 // one mapping per line, fields split on "|", every field trimmed:
 //
-//	variable | source header | required|optional | format | fallback
+//	variable | source header | required|optional|recipient | format | fallback
 //
 // Column 3 defaults to "required". Column 4 must be one of text, name,
-// designation or email and defaults to "text". The fallback column is used
+// designation or email and defaults to "text", or "email" for a recipient.
+// Exactly one row must select the recipient. The fallback column is used
 // only for optional rows. Blank lines are ignored. Malformed lines name their
 // line number; campaign.ValidateMappings and campaign.Compile report the
 // remaining problems inline on the form.
@@ -369,32 +371,39 @@ func parseMappings(raw string) ([]campaign.Mapping, error) {
 			fields[j] = strings.TrimSpace(fields[j])
 		}
 		if len(fields) < 2 || len(fields) > 5 {
-			return nil, fmt.Errorf("mapping line %d: expected \"variable | source header | required|optional | format | fallback\"", i+1)
+			return nil, fmt.Errorf("mapping line %d: expected \"variable | source header | required|optional|recipient | format | fallback\"", i+1)
 		}
 		required := true
+		recipient := false
 		if len(fields) > 2 {
 			switch fields[2] {
 			case "", "required":
 			case "optional":
 				required = false
+			case "recipient":
+				recipient = true
 			default:
-				return nil, fmt.Errorf("mapping line %d: column 3 must be \"required\" or \"optional\"", i+1)
+				return nil, fmt.Errorf("mapping line %d: column 3 must be \"required\", \"optional\" or \"recipient\"", i+1)
 			}
 		}
 		format := campaign.FormatText
+		if recipient {
+			format = campaign.FormatEmail
+		}
 		if len(fields) > 3 && fields[3] != "" {
 			format = campaign.Format(fields[3])
 		}
 		var fallback string
-		if !required && len(fields) > 4 {
+		if len(fields) > 4 {
 			fallback = fields[4]
 		}
 		mappings = append(mappings, campaign.Mapping{
-			Variable: fields[0],
-			Header:   fields[1],
-			Required: required,
-			Format:   format,
-			Fallback: fallback,
+			Variable:  fields[0],
+			Header:    fields[1],
+			Required:  required,
+			Recipient: recipient,
+			Format:    format,
+			Fallback:  fallback,
 		})
 	}
 	return mappings, nil
@@ -402,7 +411,7 @@ func parseMappings(raw string) ([]campaign.Mapping, error) {
 
 // mappingDraftText renders a derived draft in the textarea syntax
 // parseMappings reads, one row per line, so the operator can edit the draft and
-// submit it unchanged.
+// mark its recipient row before submitting.
 func mappingDraftText(mappings []campaign.Mapping) string {
 	lines := make([]string, 0, len(mappings))
 	for _, mapping := range mappings {
@@ -420,8 +429,8 @@ func mappingDraftText(mappings []campaign.Mapping) string {
 // row the campaign's own expected headers derive. A campaign whose headers
 // cannot form a variable name falls back to a generic placeholder, so the
 // example is never empty.
-func exampleMapping(recipientHeader string) (variable, header string) {
-	if drafted := campaign.DefaultMappings(recipientHeader); len(drafted) > 0 {
+func exampleMapping(sourceHeaders []string) (variable, header string) {
+	if drafted := campaign.DefaultMappings(sourceHeaders); len(drafted) > 0 {
 		return drafted[0].Variable, drafted[0].Header
 	}
 	return "variable_name", "Header"
@@ -434,8 +443,8 @@ func campaignFormError(input campaign.CreateCampaignInput) string {
 	switch {
 	case strings.TrimSpace(input.Name) == "":
 		return "a campaign name is required"
-	case strings.TrimSpace(input.RecipientHeader) == "":
-		return "the expected recipient header is required"
+	case len(splitLabels(strings.Join(input.SourceHeaders, ","))) == 0:
+		return "at least one source header is required for the mapping draft"
 	}
 	if err := campaign.ValidateResultLabels(campaign.NormalizeResultLabels(input.ResultLabels)); err != nil {
 		return err.Error()
@@ -507,6 +516,9 @@ func (s *server) previewErrorMessage(err error) string {
 	var control *campaign.SubjectControlError
 	var unknown *campaign.UnknownVariableError
 	var unused *campaign.UnusedVariableError
+	if errors.Is(err, campaign.ErrRecipientInvalid) {
+		return err.Error()
+	}
 	if errors.As(err, &missing) || errors.As(err, &control) || errors.As(err, &unknown) || errors.As(err, &unused) {
 		return err.Error()
 	}

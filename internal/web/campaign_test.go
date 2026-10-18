@@ -20,7 +20,8 @@ import (
 
 // validMappings is one complete mapping line in the delivered textarea
 // contract: variable | source header | required|optional | format | fallback.
-const validMappings = "candidate_name | Applicant Full Name | required | name"
+const recipientMapping = "candidate_email | Email | recipient | email"
+const validMappings = "candidate_name | Applicant Full Name | required | name\n" + recipientMapping
 
 // stubPandoc writes a deterministic converter stand-in: it reports a version
 // and emits one fixed body containing a placeholder, so revision tests never
@@ -116,8 +117,8 @@ func postRevision(t *testing.T, handler http.Handler, cookie *http.Cookie, id, s
 func createCampaign(t *testing.T, handler http.Handler, cookie *http.Cookie, name string) string {
 	t.Helper()
 	rec := do(t, handler, http.MethodPost, "/campaigns", url.Values{
-		"name":             {name},
-		"recipient_header": {"Email"},
+		"name":           {name},
+		"source_headers": {"Email"},
 	}, withCookie(cookie))
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
@@ -238,7 +239,7 @@ func TestCampaignRevisionValidationInline(t *testing.T) {
 	t.Run("placeholder without a mapping", func(t *testing.T) {
 		// The stub converter runs, so Compile reports the unmapped subject
 		// placeholder with its own typed message.
-		rec := postRevision(t, handler, cookie, id, "Hello {{candidate_name}}", "role | Job Title", docxUpload(t))
+		rec := postRevision(t, handler, cookie, id, "Hello {{candidate_name}}", "role | Job Title\n"+recipientMapping, docxUpload(t))
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%.400s", rec.Code, rec.Body.String())
 		}
@@ -346,6 +347,7 @@ func TestCampaignPreview(t *testing.T) {
 
 	preview := func(values url.Values) *httptest.ResponseRecorder {
 		t.Helper()
+		values.Set("candidate_email", " YASH@EXAMPLE.COM ")
 		return do(t, handler, http.MethodPost, "/campaigns/"+id+"/preview", values, withCookie(cookie))
 	}
 
@@ -357,6 +359,8 @@ func TestCampaignPreview(t *testing.T) {
 		body := rec.Body.String()
 		for _, want := range []string{
 			"Preview result",
+			">To</p>",
+			"yash@example.com",
 			"Revision:",
 			"<dd>1</dd>",
 			hash,
@@ -465,8 +469,8 @@ func TestCampaignMappingDraft(t *testing.T) {
 	cookie := login(t, handler)
 
 	rec := do(t, handler, http.MethodPost, "/campaigns", url.Values{
-		"name":             {"Draft"},
-		"recipient_header": {"Candidate Name, Candidate Email, Expected Department/Division"},
+		"name":           {"Draft"},
+		"source_headers": {"Candidate Name, Candidate Email, Expected Department/Division"},
 	}, withCookie(cookie))
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
@@ -531,8 +535,8 @@ func TestCampaignMappingHelpExample(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			rec := do(t, handler, http.MethodPost, "/campaigns", url.Values{
-				"name":             {test.name},
-				"recipient_header": {test.header},
+				"name":           {test.name},
+				"source_headers": {test.header},
 			}, withCookie(cookie))
 			if rec.Code != http.StatusSeeOther {
 				t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
@@ -556,5 +560,43 @@ func TestCampaignMappingHelpExample(t *testing.T) {
 				t.Fatalf("page still shows the generic full_name example: %.600s", body)
 			}
 		})
+	}
+}
+
+func TestCampaignRecipientMapping(t *testing.T) {
+	app, handler, _ := newCampaignServer(t)
+	cookie := login(t, handler)
+	id := createCampaign(t, handler, cookie, "Recipient mapping")
+	name := "candidate_name | Applicant Full Name | required | name"
+	for label, raw := range map[string]string{
+		"missing recipient":  name,
+		"two recipients":     name + "\n" + recipientMapping + "\nother_email | Other Email | recipient",
+		"conflicting format": name + "\ncandidate_email | Email | recipient | name",
+		"recipient fallback": name + "\ncandidate_email | Email | recipient | email | fallback@example.com",
+	} {
+		t.Run(label, func(t *testing.T) {
+			rec := postRevision(t, handler, cookie, id, "Hello {{candidate_name}}", raw, docxUpload(t))
+			if rec.Code != http.StatusBadRequest || currentConfigurationID(t, app, id) != "" {
+				t.Fatalf("invalid recipient mapping: status=%d current=%q", rec.Code, currentConfigurationID(t, app, id))
+			}
+			if !strings.Contains(rec.Body.String(), "recipient") && !strings.Contains(rec.Body.String(), "fallback") {
+				t.Fatalf("missing actionable validation message: %.600s", rec.Body.String())
+			}
+		})
+	}
+	// Omitting the recipient's format defaults it to email; the DOCX uses only candidate_name.
+	rec := postRevision(t, handler, cookie, id, "Hello {{candidate_name}}", name+"\ncandidate_email | Email | recipient", docxUpload(t))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("recipient without body placeholder: status=%d body=%.600s", rec.Code, rec.Body.String())
+	}
+	page := do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
+	if !strings.Contains(page.Body.String(), `name="candidate_email"`) {
+		t.Fatal("sample input for recipient-only variable is missing")
+	}
+	rec = do(t, handler, http.MethodPost, "/campaigns/"+id+"/preview", url.Values{
+		"candidate_name": {"Ada"}, "candidate_email": {"Ada <ada@example.com>"},
+	}, withCookie(cookie))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), campaign.ErrRecipientInvalid.Error()) {
+		t.Fatalf("invalid recipient preview: status=%d body=%.600s", rec.Code, rec.Body.String())
 	}
 }

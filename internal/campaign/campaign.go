@@ -57,14 +57,15 @@ var Formats = []Format{FormatText, FormatName, FormatDesignation, FormatEmail}
 func (f Format) Valid() bool { return slices.Contains(Formats, f) }
 
 // Mapping binds one user-facing variable to a source column and its
-// replacement policy. Variables default to required; an optional variable may
-// declare a fallback.
+// replacement policy. Exactly one mapping selects the required recipient;
+// ordinary optional variables may declare a fallback.
 type Mapping struct {
-	Variable string `json:"variable"`
-	Header   string `json:"header"`
-	Required bool   `json:"required"`
-	Fallback string `json:"fallback"`
-	Format   Format `json:"format"`
+	Variable  string `json:"variable"`
+	Header    string `json:"header"`
+	Required  bool   `json:"required"`
+	Recipient bool   `json:"recipient"`
+	Fallback  string `json:"fallback"`
+	Format    Format `json:"format"`
 }
 
 // Variable describes one compiled placeholder and where it is used.
@@ -79,7 +80,7 @@ type Variable struct {
 type Campaign struct {
 	ID                string
 	Name              string
-	RecipientHeader   string
+	SourceHeaders     []string
 	ResultLabels      []string
 	CurrentRevisionID string
 	Revision          int
@@ -152,7 +153,8 @@ func ValidateVariableName(name string) error {
 }
 
 // ValidateMappings checks the mapping table: one row per variable, unique
-// variables, exact header names and a supported format. A fallback is only
+// variables, exactly one recipient, exact header names and a supported format.
+// Recipient mappings imply required email values. A fallback is only
 // meaningful for an optional variable, so declaring one on a required variable
 // is rejected instead of being silently ignored.
 func ValidateMappings(mappings []Mapping) error {
@@ -160,6 +162,7 @@ func ValidateMappings(mappings []Mapping) error {
 		return ErrNoMappings
 	}
 	seen := make(map[string]struct{}, len(mappings))
+	recipients := 0
 	for i, mapping := range mappings {
 		variable := strings.TrimSpace(mapping.Variable)
 		if err := ValidateVariableName(variable); err != nil {
@@ -172,28 +175,41 @@ func ValidateMappings(mappings []Mapping) error {
 		if strings.TrimSpace(mapping.Header) == "" {
 			return fmt.Errorf("variable %q needs a source header", variable)
 		}
+		if mapping.Recipient {
+			recipients++
+			mapping.Required = true
+			if mapping.Format == "" {
+				mapping.Format = FormatEmail
+			}
+			if mapping.Format != FormatEmail {
+				return fmt.Errorf("recipient variable %q must use email formatting", variable)
+			}
+		}
 		if !mapping.Format.Valid() {
 			return fmt.Errorf("variable %q has unsupported formatting %q", variable, mapping.Format)
 		}
 		if mapping.Required && strings.TrimSpace(mapping.Fallback) != "" {
 			return fmt.Errorf("variable %q is required, so it cannot have a fallback", mapping.Variable)
 		}
-		mappings[i].Variable = variable
-		mappings[i].Header = strings.TrimSpace(mapping.Header)
+		mapping.Variable = variable
+		mapping.Header = strings.TrimSpace(mapping.Header)
+		mappings[i] = mapping
+	}
+	if recipients != 1 {
+		return errors.New("mark exactly one mapping row as recipient to select the sending address")
 	}
 	return nil
 }
 
 // DefaultMappings derives the draft mapping table for a campaign that has no
-// revision yet: one required text mapping per comma-separated expected
-// recipient header. The variable name is the header lowercased with every run
+// revision yet: one required text mapping per source header. The variable name is the header lowercased with every run
 // of non-alphanumeric characters replaced by one underscore. A header that
 // cannot form a variable name, and a name that repeats an earlier one, is
-// omitted, so the draft never contains a row ValidateMappings rejects.
-func DefaultMappings(recipientHeader string) []Mapping {
+// omitted. The operator must explicitly mark one row as recipient.
+func DefaultMappings(sourceHeaders []string) []Mapping {
 	seen := make(map[string]struct{})
 	var mappings []Mapping
-	for _, header := range strings.Split(recipientHeader, ",") {
+	for _, header := range sourceHeaders {
 		header = strings.TrimSpace(header)
 		if header == "" {
 			continue

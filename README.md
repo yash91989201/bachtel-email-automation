@@ -161,8 +161,10 @@ original bytes privately and creates a **staging** task; the operator then
 chooses the worksheet and header row, and validation either publishes an
 immutable snapshot of the eligible rows or fails with an actionable reason.
 
-- Validation runs before any candidate exists: the recipient header and every
-  mapped source header must exist exactly once, duplicate recipient keys hold
+- Validation runs before any candidate exists: every mapped source header,
+  including the revision's explicit `recipient` row, must exist exactly once.
+  The recipient supplies the sending address without needing a DOCX placeholder.
+  Duplicate recipient keys hold
   every row of their group, and unusable addresses are excluded. Excluded rows
   live only in the stored workbook, a private validation manifest and a
   downloadable exclusion report — never as candidate records.

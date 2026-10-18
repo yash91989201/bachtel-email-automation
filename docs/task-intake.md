@@ -52,7 +52,7 @@ worksheet inventory. A staging task is never sendable.
   Only the selected worksheet is considered; other worksheets are ignored.
 - Header labels are matched after trimming surrounding whitespace and are
   **case sensitive**: `Email` and `email` are different columns.
-- The campaign's recipient header and every mapped source header must exist
+- Every source header mapped by the selected revision, including the recipient column, must exist
   **exactly once** among the header columns of the chosen header row. A missing
   header blocks the whole task, because no row could be mapped; a header label
   that appears on two columns is ambiguous and blocks the task as well. Add or
@@ -69,6 +69,8 @@ written. Correct the workbook or the selection and validate again.
 ## Recipient key matching
 
 A candidate is identified by **campaign plus trimmed lowercase email address**.
+The address comes from the revision's one `recipient` mapping. Campaign source
+headers are draft hints and do not select or validate the recipient.
 
 - Surrounding whitespace is trimmed and the address is lowercased, so
   `  Ana@Example.com ` and `ana@example.com` are the same recipient.

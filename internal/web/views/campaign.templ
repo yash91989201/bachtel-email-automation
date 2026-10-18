@@ -11,7 +11,7 @@ type CampaignListData struct {
 type CampaignListRow struct {
 	ID              string
 	Name            string
-	RecipientHeader string
+	SourceHeaders string
 	Revision        int
 	HasRevision     bool
 	Approved        bool
@@ -39,7 +39,7 @@ templ CampaignList(data CampaignListData) {
 			<section class="card border border-base-300 bg-base-100 shadow-sm">
 				<div class="card-body">
 					<h2 class="card-title">No campaigns yet</h2>
-					<p>Create a campaign to define its recipient column, subject, body document and result labels.</p>
+					<p>Create a campaign to define its source headers, subject, body document and result labels.</p>
 				</div>
 			</section>
 		} else {
@@ -49,7 +49,7 @@ templ CampaignList(data CampaignListData) {
 						<thead>
 							<tr>
 								<th>Name</th>
-								<th>Recipient header</th>
+								<th>Source headers</th>
 								<th>Current revision</th>
 								<th>Approval</th>
 								<th></th>
@@ -59,7 +59,7 @@ templ CampaignList(data CampaignListData) {
 							for _, row := range data.Campaigns {
 								<tr>
 									<td class="font-semibold">{ row.Name }</td>
-									<td><code>{ row.RecipientHeader }</code></td>
+									<td><code>{ row.SourceHeaders }</code></td>
 									<td>
 										if row.HasRevision {
 											Revision { row.Revision }
@@ -84,7 +84,7 @@ templ CampaignList(data CampaignListData) {
 type CampaignFormData struct {
 	Error           string
 	Name            string
-	RecipientHeader string
+	SourceHeaders string
 	ResultLabels    string
 }
 
@@ -93,7 +93,7 @@ templ CampaignForm(data CampaignFormData) {
 		<div class="space-y-3">
 			<p class="text-sm font-medium uppercase tracking-widest text-primary">Campaigns</p>
 			<h1 class="text-4xl font-bold tracking-tight">New campaign</h1>
-			<p class="max-w-2xl text-base-content/70">The name and the expected recipient column define the campaign. The subject and body document follow as the first content revision.</p>
+			<p class="max-w-2xl text-base-content/70">The name and the source headers for the mapping draft define the campaign. The subject and body document follow as the first content revision.</p>
 		</div>
 		if data.Error != "" {
 			<div class="alert alert-error" role="alert">{ data.Error }</div>
@@ -102,9 +102,9 @@ templ CampaignForm(data CampaignFormData) {
 			<div class="card-body gap-4">
 				<label class="label" for="campaign-name">Name</label>
 				<input class="input w-full" id="campaign-name" type="text" name="name" value={ data.Name } maxlength="200" required/>
-				<label class="label" for="campaign-recipient">Expected recipient header</label>
-				<input class="input w-full" id="campaign-recipient" type="text" name="recipient_header" value={ data.RecipientHeader } maxlength="255" required/>
-				<p class="text-sm text-base-content/60">The source worksheet column that holds the candidate email address, for example <code>Email</code>.</p>
+				<label class="label" for="campaign-headers">Source headers for mapping draft</label>
+				<input class="input w-full" id="campaign-headers" type="text" name="source_headers" value={ data.SourceHeaders } required/>
+				<p class="text-sm text-base-content/60">Comma-separated source worksheet headers, including the candidate email column. These generate the draft mapping table; mark one row as recipient when creating a revision.</p>
 				<label class="label" for="campaign-labels">Result column labels</label>
 				<input class="input w-full" id="campaign-labels" type="text" name="result_labels" value={ data.ResultLabels }/>
 				<p class="text-sm text-base-content/60">Comma-separated labels for the downloadable result columns. The defaults are pre-filled; changing them later never invalidates content approval.</p>
@@ -122,13 +122,13 @@ templ CampaignForm(data CampaignFormData) {
 type CampaignPageData struct {
 	ID              string
 	Name            string
-	RecipientHeader string
+	SourceHeaders string
 	ResultLabels    string
 	// MappingDraft pre-fills the revision form while the campaign has no
 	// content revision. Once a revision exists the form starts empty.
 	MappingDraft string
 	// ExampleVariable and ExampleHeader are the mapping help's worked example:
-	// the first name the draft derives from this campaign's expected headers, so
+	// the first name the draft derives from this campaign's source headers, so
 	// the help never teaches a variable name the draft does not use.
 	ExampleVariable string
 	ExampleHeader   string
@@ -227,8 +227,8 @@ templ CampaignPage(data CampaignPageData) {
 					<label class="label" for="revision-mappings">Mapping table</label>
 					<div id="revision-mappings-help" class="space-y-4 text-sm">
 						<div class="rounded-box border border-base-300 bg-base-200/50 p-4">
-							<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">Expected recipient header</p>
-							<code class="break-words">{ data.RecipientHeader }</code>
+							<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">Source headers for mapping draft</p>
+							<code class="break-words">{ data.SourceHeaders }</code>
 						</div>
 						<div class="overflow-x-auto rounded-box border border-base-300">
 							<table class="table table-sm">
@@ -237,7 +237,7 @@ templ CampaignPage(data CampaignPageData) {
 									<tr>
 										<th>Variable</th>
 										<th>Source header</th>
-										<th>Required / optional</th>
+										<th>Required / optional / recipient</th>
 										<th>Format</th>
 										<th>Fallback</th>
 									</tr>
@@ -259,14 +259,15 @@ templ CampaignPage(data CampaignPageData) {
 							<code class="badge badge-ghost badge-sm">name</code>
 							<code class="badge badge-ghost badge-sm">designation</code>
 							<code class="badge badge-ghost badge-sm">email</code>
-							<span class="text-xs">Defaults to text. Fallback is only for optional rows.</span>
+							<span class="text-xs">Defaults to text, or email for recipient rows. Fallback is only for optional rows.</span>
 						</div>
 						<div class="rounded-box border border-primary/20 bg-primary/5 p-4">
 							<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">Example line</p>
 							<code class="break-words">{ data.ExampleVariable + " | " + data.ExampleHeader + " | required | text" }</code>
 						</div>
 					</div>
-					<p id="revision-mappings-hint" class="text-sm text-base-content/60">Enter your mappings below, one per line. The variable names you use here must match the <code>{"{{...}}"}</code> placeholders in the subject and body.</p>
+					<p class="text-sm">Sending address example: <code>candidate_email | Candidate Email | recipient | email</code>. The recipient is required and cannot have a fallback.</p>
+					<p id="revision-mappings-hint" class="text-sm text-base-content/60">Enter your mappings below, one per line. Mark exactly one row as <code>recipient</code> to select the sending address. It needs no placeholder in the subject or body. Other rows must match the <code>{"{{...}}"}</code> placeholders.</p>
 					<textarea class="textarea textarea-bordered w-full font-mono" id="revision-mappings" name="mappings" rows="8" aria-describedby="revision-mappings-help revision-mappings-hint">{ data.MappingDraft }</textarea>
 					<div class="card-actions">
 						<button class="btn btn-primary" type="submit">Create revision</button>
@@ -339,6 +340,7 @@ type PreviewData struct {
 	Approved    bool
 
 	Error   string
+	Recipient string
 	Subject string
 	Body    string
 	Values  []PreviewValue
@@ -376,6 +378,10 @@ templ PreviewResult(data PreviewData) {
 			if data.Error != "" {
 				<div class="alert alert-error" role="alert">{ data.Error }</div>
 			} else {
+				<div class="space-y-1">
+					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">To</p>
+					<p class="font-semibold">{ data.Recipient }</p>
+				</div>
 				<div class="space-y-1">
 					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Subject</p>
 					<p class="font-semibold">{ data.Subject }</p>

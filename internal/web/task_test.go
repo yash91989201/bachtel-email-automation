@@ -317,6 +317,8 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 	preview := rec.Body.String()
 	for _, want := range []string{
 		"Application for Carol Danvers",
+		">To</p>",
+		"carol@example.com",
 		"Dear Carol Danvers",
 		"Carol Danvers",
 	} {

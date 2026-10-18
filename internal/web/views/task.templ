@@ -385,6 +385,7 @@ templ TaskPage(data TaskPageData) {
 // fixed operator-facing message shown instead of rendered content.
 type TaskPreviewData struct {
 	Error       string
+	Recipient string
 	Subject     string
 	Body        string
 	Values      []PreviewValue
@@ -414,6 +415,10 @@ templ TaskPreviewResult(data TaskPreviewData) {
 						<dd>@revisionState(true, data.Approved)</dd>
 					</div>
 				</dl>
+				<div class="space-y-1">
+					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">To</p>
+					<p class="font-semibold">{ data.Recipient }</p>
+				</div>
 				<div class="space-y-1">
 					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Subject</p>
 					<p class="font-semibold">{ data.Subject }</p>

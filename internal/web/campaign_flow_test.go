@@ -34,9 +34,9 @@ func TestAcceptanceCampaignAuthoringFlow(t *testing.T) {
 
 	// Create the campaign: output settings only, no candidate data.
 	rec := env.request(http.MethodPost, "/campaigns", cookies, url.Values{
-		"name":             {"Software Engineers"},
-		"recipient_header": {"Email"},
-		"result_labels":    {"Status, Submitted At"},
+		"name":           {"Software Engineers"},
+		"source_headers": {"Email"},
+		"result_labels":  {"Status, Submitted At"},
 	})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
@@ -51,6 +51,7 @@ func TestAcceptanceCampaignAuthoringFlow(t *testing.T) {
 	mappings := strings.Join([]string{
 		"candidate_name | Applicant Full Name | required | name |",
 		"location | Location | optional | text | Remote",
+		recipientMapping,
 		"",
 	}, "\n")
 	fields := map[string]string{"subject": subject, "mappings": mappings}
@@ -82,8 +83,9 @@ func TestAcceptanceCampaignAuthoringFlow(t *testing.T) {
 
 	// The sample preview renders through the same entry point sending consumes.
 	preview := env.request(http.MethodPost, detail+"/preview", cookies, url.Values{
-		"candidate_name": {"  ada   lovelace "},
-		"location":       {""},
+		"candidate_email": {"ADA@EXAMPLE.COM"},
+		"candidate_name":  {"  ada   lovelace "},
+		"location":        {""},
 	})
 	if preview.Code != http.StatusOK {
 		t.Fatalf("preview: status=%d body=%.400s", preview.Code, preview.Body.String())
@@ -107,8 +109,9 @@ func TestAcceptanceCampaignAuthoringFlow(t *testing.T) {
 
 	// An empty required value holds the row and names the variable inline.
 	missing := env.request(http.MethodPost, detail+"/preview", cookies, url.Values{
-		"candidate_name": {"   "},
-		"location":       {"London"},
+		"candidate_email": {"ADA@EXAMPLE.COM"},
+		"candidate_name":  {"   "},
+		"location":        {"London"},
 	})
 	if missing.Code != http.StatusOK || !strings.Contains(missing.Body.String(), "missing required value(s): candidate_name") {
 		t.Fatalf("missing required preview: status=%d body=%.400s", missing.Code, missing.Body.String())
@@ -118,7 +121,7 @@ func TestAcceptanceCampaignAuthoringFlow(t *testing.T) {
 	// keeps the configuration unready and reports the variable by name.
 	badMapping := env.requestMultipart(http.MethodPost, detail+"/revisions", cookies, map[string]string{
 		"subject":  "Application for {{candidate_name}} and {{level}}",
-		"mappings": "candidate_name | Applicant Full Name | required | name |",
+		"mappings": "candidate_name | Applicant Full Name | required | name |\n" + recipientMapping,
 	}, "body.docx", fixtureDocument(t))
 	if badMapping.Code != http.StatusBadRequest || !strings.Contains(badMapping.Body.String(), "level") {
 		t.Fatalf("unmapped variable: status=%d body=%.600s", badMapping.Code, badMapping.Body.String())

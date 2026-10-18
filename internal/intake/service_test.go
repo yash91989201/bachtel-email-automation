@@ -102,8 +102,8 @@ func newEnv(t *testing.T) *env {
 	ctx := context.Background()
 
 	created, err := campaigns.CreateCampaign(ctx, campaign.CreateCampaignInput{
-		Name:            testCampaign,
-		RecipientHeader: "Email",
+		Name:          testCampaign,
+		SourceHeaders: []string{"Email"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -112,7 +112,7 @@ func newEnv(t *testing.T) *env {
 		Subject:      "Application for {{candidate_name}}",
 		Document:     docxFixture(t),
 		DocumentName: "body.docx",
-		Mappings: []campaign.Mapping{{
+		Mappings: []campaign.Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail}, {
 			Variable: "candidate_name",
 			Header:   "Applicant Full Name",
 			Required: true,
@@ -384,7 +384,7 @@ func TestPreviewUsesPinnedRevisionAndRawSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value := rendered.Rendered.Values[0]
+	value := rendered.Rendered.Values[1]
 	if value.Raw != "  Dana   Scully  " || value.Normalized != "Dana Scully" {
 		t.Fatalf("value = %+v, want the raw cell beside the normalized replacement", value)
 	}
@@ -868,7 +868,7 @@ func TestRevalidatePinsTheCurrentRevisionAndLeavesStartedTasksAlone(t *testing.T
 		Subject:      "Interview for {{candidate_name}}",
 		Document:     docxFixture(t),
 		DocumentName: "body.docx",
-		Mappings: []campaign.Mapping{{
+		Mappings: []campaign.Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail}, {
 			Variable: "candidate_name",
 			Header:   "Applicant Full Name",
 			Required: true,
@@ -1078,5 +1078,59 @@ func TestThousandRowFixture(t *testing.T) {
 	}
 	if got := env.candidateCount(); got != wantEligible+1 {
 		t.Fatalf("candidate records after a second upload = %d, want %d", got, wantEligible+1)
+	}
+}
+
+func TestRecipientMappingDrivesIntakeAndIdentity(t *testing.T) {
+	t.Parallel()
+	env := newEnv(t)
+	ctx := context.Background()
+	// Draft hints are deliberately unrelated to the selected recipient column.
+	record, err := env.app.FindRecordById(campaign.CampaignsCollection, env.campaign)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Set("source_headers", []string{"Unused draft column"})
+	if err := env.app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = env.campaigns.CreateRevision(ctx, env.campaign, campaign.RevisionInput{
+		Subject: "Welcome {{candidate_name}}", Document: docxFixture(t), DocumentName: "body.docx",
+		Mappings: []campaign.Mapping{
+			{Variable: "candidate_email", Header: "Contact", Recipient: true},
+			{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: campaign.FormatName},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := env.validate(buildWorkbook(t, sheetSpec{name: "Candidates", rows: [][]string{
+		{"Contact", "Applicant Full Name", "Email"},
+		{" ADA@EXAMPLE.COM ", "Ada", "ignored@example.com"},
+		{"duplicate@example.com", "One", "different1@example.com"},
+		{" DUPLICATE@example.com ", "Two", "different2@example.com"},
+		{"not-email", "Invalid", "valid@example.com"},
+	}}))
+	rows := env.rows(task.ID)
+	if len(rows) != 1 || rows[0].Normalized["candidate_email"] != "ada@example.com" {
+		t.Fatalf("rows = %+v, want only the selected recipient admitted", rows)
+	}
+	candidate, err := env.app.FindRecordById(intake.CandidatesCollection, rows[0].CandidateID)
+	if err != nil || candidate.GetString("email_key") != "ada@example.com" {
+		t.Fatalf("candidate did not use the mapped recipient: %v", err)
+	}
+	preview, err := env.service.Preview(ctx, task.ID, rows[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Rendered.Recipient != "ada@example.com" || strings.Contains(preview.Rendered.Body, "ada@example.com") {
+		t.Fatalf("preview = %+v", preview.Rendered)
+	}
+	manifest, err := env.service.Manifest(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Groups) != 1 || len(manifest.Groups[0].Rows) != 2 {
+		t.Fatalf("duplicate groups = %+v", manifest.Groups)
 	}
 }
