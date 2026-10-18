@@ -5,8 +5,10 @@ PocketBase. One executable serves the UI, static assets, PocketBase API, and
 admin dashboard on one port. PocketBase runs in-process with SQLite; there is
 no separate database service or frontend server.
 
-This is the project foundation. Email workflows, domain collections, and user
-authentication for the custom UI have not been implemented.
+This repository provides the protected application foundation: a single
+operator account with session-based sign-in for the custom UI, plus the
+confidential Microsoft connection lifecycle for the fixed HR mailbox. Email
+workflows and domain collections have not been implemented yet.
 
 ## Run locally
 
@@ -19,33 +21,141 @@ make dev
 
 Open <http://127.0.0.1:8090>. The starter page demonstrates an htmx HTML
 fragment backed by a real database query and an Alpine disclosure panel.
-PocketBase's dashboard is at <http://127.0.0.1:8090/_/> and its health endpoint
-is <http://127.0.0.1:8090/api/health>.
+
+Health endpoints:
+
+- `GET /health` — public, minimal JSON `{"status":"ok"}` for platform probes;
+  it exposes no application state.
+- `GET /api/health` — PocketBase's own public health endpoint.
+
+The application UI requires the operator account: provision it (see below),
+then sign in at <http://127.0.0.1:8090/login>. Anonymous visitors can only
+reach the sign-in page, `/health`, and the public static assets. The
+PocketBase dashboard at <http://127.0.0.1:8090/_/> is a separate
+administrative surface that requires a superuser.
 
 On a fresh database, use the one-time installer link printed in the server
 console to create your first superuser. No credentials are seeded.
 
-`make dev` regenerates templates and assets, then starts the server. Stop and
-rerun it after changes. It intentionally doesn't install an additional reload
-daemon. Generated CSS and JavaScript are ignored by Git; `make setup` restores
-them on a fresh checkout. Generated `*_templ.go` files are committed; edit the
-`.templ` sources instead.
+`make dev` regenerates templates and assets, then starts the server. It also
+sources a local `.env` into the server process when one exists: copy
+`.env.example` to `.env` and fill it in instead of exporting variables by
+hand. Stop and rerun it after changes. It intentionally doesn't install an
+additional reload daemon. Generated CSS and JavaScript are ignored by Git;
+`make setup` restores them on a fresh checkout. Generated `*_templ.go` files
+are committed; edit the `.templ` sources instead.
+
+## Routes and access
+
+| Route | Access |
+|---|---|
+| `GET /health` | Public, minimal JSON `{"status":"ok"}` for platform probes |
+| `GET /login`, `POST /login` | Public sign-in form; login attempts are rate limited |
+| `POST /logout` | Operator session |
+| `GET /` | Operator session (dashboard) |
+| `GET /status` | Operator session (HTML fragment) |
+| `GET /connection`, `POST /connection/connect`, `GET /connection/callback`, `POST /connection/disconnect` | Operator session (the callback must match an in-flight authorization attempt) |
+| `GET /static/`, `GET /robots.txt` | Public assets; `robots.txt` disallows everything |
+| `GET /api/health` | Public PocketBase health probe |
+| other `/api/*` | PocketBase API; the application's private collections are locked down (see below) |
+| `/_/` | PocketBase admin dashboard (superuser only) |
+
+Custom UI routes and the private collections are unreachable anonymously.
+
+## Operator provisioning
+
+Provision the single operator account once, using the same `--dir` as the
+server so it writes to the same database:
+
+```sh
+./bin/bachtel provision-operator --email operator@example.com --dir=./pb_data
+# during development:
+go run ./cmd/server provision-operator --email operator@example.com --dir=./pb_data
+```
+
+The password is read from the terminal without echo, or piped on stdin:
+
+```sh
+echo "$PASSWORD" | ./bin/bachtel provision-operator --email operator@example.com --dir=./pb_data
+```
+
+No credentials are seeded anywhere. A second invocation fails with
+`an operator is already provisioned`.
+
+## Administrator versus operator access
+
+Two distinct roles:
+
+- **Administrator** — the PocketBase superuser, created from the one-time
+  installer link printed in the console on a fresh database. It owns the
+  admin dashboard (`/_/`), migrations, settings, and backups. This is an
+  administrative role, not a day-to-day account.
+- **Operator** — the application-level account created by
+  `provision-operator`. All application UI is used through this account.
+
+The `operators` collection is unreachable through the public PocketBase API:
+its record rules and auth rule are locked to administrators only, so
+anonymous visitors cannot list, read, or create operators. Sign-in therefore
+goes through `/login`, which adds rate limiting and cookie protection on top
+of PocketBase's password verification.
+
+## Configuration
+
+All application settings are read from the environment (documented with
+placeholders in `.env.example`; Compose maps them into the container, and
+`make dev` sources a local `.env`).
+Microsoft settings may be absent at startup: the server starts anyway and the
+connection reports an actionable configuration error instead.
+
+| Variable | Purpose |
+|---|---|
+| `APP_ORIGIN` | Public `https` origin, no trailing slash (e.g. `https://mail.example.com`). Drives cookie security, trusted-origin checks, and the default callback URL. |
+| `APP_ENCRYPTION_KEY` | **Secret.** Base64 encoding of exactly 32 bytes; encrypts stored Microsoft credentials at rest. Generate with `openssl rand -base64 32`. |
+| `MS_TENANT_ID` | Microsoft Entra tenant (directory) id. |
+| `MS_CLIENT_ID` | Application (client) id from the app registration. |
+| `MS_CLIENT_SECRET` | **Secret.** Client secret from the app registration. |
+| `MS_REDIRECT_URL` | Redirect URI sent to Microsoft. Defaults to `APP_ORIGIN` + `/connection/callback` and must match the app registration exactly. |
+| `MS_SENDER_ADDRESS` | The single mailbox allowed to connect. Defaults to `hr@bachtelcorporation.com`. |
+| `MS_AUTHORITY_URL`, `MS_GRAPH_BASE_URL` | Advanced overrides for simulated authorization/Graph servers; leave unset in production. |
+
+`APP_ENCRYPTION_KEY` is separate from PocketBase's own `--encryptionEnv`
+settings key and separate from `MS_CLIENT_SECRET`; each protects different
+material. Back it up independently of the database: losing it leaves the
+stored ciphertext intact but requires reconnecting the mailbox. A missing or
+wrong key does not crash the server — the connection reports an actionable
+error and no email can be sent.
+
+See [docs/microsoft-setup.md](docs/microsoft-setup.md) for the full first-time
+Microsoft setup.
 
 ## Layout
 
 ```text
 cmd/server/main.go              Application entrypoint and PocketBase setup
+cmd/server/provision.go         One-time operator provisioning command
 internal/
-  migrations/                  Go migrations compiled into the executable
+  config/                       Environment configuration (origin, Microsoft settings, encryption key)
+  microsoft/                    Microsoft connection service (OAuth flow, encrypted credentials)
+  operator/                     Single-operator provisioning
+  migrations/
+    1792233000_initial_settings.go      App name and PocketBase rate limiter
+    1792233010_operator_collection.go   Single-operator auth collection with locked rules
+    1792233020_microsoft_connection.go  Microsoft connection metadata collection
   web/
-    web.go                     net/http handlers and embedded asset filesystem
-    web_test.go                Routing, assets, migration, and DB integration check
-    views/                     templ layouts, pages, and HTML fragments
-    static/                    Embedded files and generated CSS/JS
-web/css/app.css                Tailwind and daisyUI source
+    web.go                      Route table, handler assembly, render helper
+                                (/health, /robots.txt, /static, GET /{$}, GET /status)
+    session.go                  Operator session cookie creation/validation and authorization middleware
+    login.go                    GET /login, POST /login, POST /logout
+    connection.go               GET /connection, connect, callback, and disconnect handlers
+    ratelimit.go                Fixed-window login rate limiter
+    web_test.go                 Route, auth, CSRF, rate-limit, and DB integration tests
+    views/                      templ layouts and pages (layout, home, login, connection)
+    static/                     Embedded files and generated CSS/JS
+docs/microsoft-setup.md         Microsoft app registration and first-time connection setup
+web/css/app.css                 Tailwind and daisyUI source
 scripts/copy-assets.mjs         Copy pinned Alpine/htmx distributions locally
 Dockerfile                     Frontend build, Go build, non-root runtime
-compose.yaml                   One service and a persistent data volume
+compose.yaml                   One service, application environment, persistent data volume
 ```
 
 `cmd` and `internal` follow [Go's server layout guidance](https://go.dev/doc/modules/layout#server-project).
@@ -97,11 +207,12 @@ write explicit down functions for future reversible schema changes.
 
 Custom handlers use `net/http`, adapted through PocketBase's official
 `apis.WrapStdHandler`. PocketBase retains its `/api/` and `/_/` routes, server
-lifecycle, and shutdown handling. The custom starter routes are public and
-read-only. Before adding private or write operations, add authentication,
-authorization, input validation, and CSRF protection to those routes. Server-side
-PocketBase record access bypasses collection API rules, so custom handlers must
-enforce their own access checks.
+lifecycle, and shutdown handling. Custom UI routes require the operator
+session; among the custom routes only `GET /health`, `/static/`, and
+`robots.txt` are public. Login, session cookies, authorization, origin/CSRF
+protection and rate limiting live in shared middleware under `internal/web`.
+Server-side PocketBase record access bypasses collection API rules, so custom
+handlers must enforce the operator boundary themselves.
 
 ## Docker
 
@@ -117,11 +228,14 @@ uploads, backups, and local settings in the named `pb_data` volume at
 `/app/pb_data`. Templates, assets, and migrations are already in the binary;
 source folders are not mounted into the runtime container.
 
-Copy `.env.example` to `.env` to override the published host or port.
-These variables configure Compose only; the Go process uses PocketBase CLI
-flags. The default host is loopback. For a remote host, place an HTTPS reverse
+Copy `.env.example` to `.env` to override the published host or port and to
+supply the application configuration (`APP_ORIGIN`, `APP_ENCRYPTION_KEY`, and
+the `MS_*` variables from the configuration table). `compose.yaml` maps those
+values into the container; the Go process also takes PocketBase CLI flags.
+The default host is loopback. For a remote host, place an HTTPS reverse
 proxy in front and configure trusted proxy headers in PocketBase settings.
-Set `APP_HOST=0.0.0.0` only when direct external access is intended.
+Set `APP_HOST=0.0.0.0` only when direct external access is intended. The
+container health check probes the public `GET /api/health` endpoint.
 
 ```sh
 docker compose down           # stop; retain data
