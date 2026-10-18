@@ -8,10 +8,10 @@
     "watch:css": "tailwindcss -i web/css/app.css -o internal/web/static/app.css --watch"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "4.3.0",
+    "@tailwindcss/cli": "4.3.3",
     "alpinejs": "3.17.4",
     "daisyui": "5.7.50",
     "htmx.org": "2.0.11",
-    "tailwindcss": "4.3.0"
+    "tailwindcss": "4.3.3"
   }
 }
