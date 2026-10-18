@@ -12,7 +12,10 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
+
+	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 )
 
 // Environment variable names.
@@ -46,6 +49,14 @@ const (
 	// EnvPandocPath overrides the DOCX converter executable. It defaults to
 	// "pandoc" on PATH, which is what the application image packages.
 	EnvPandocPath = "PANDOC_PATH"
+	// EnvIntakeMaxUploadBytes bounds one uploaded task workbook, in bytes.
+	EnvIntakeMaxUploadBytes = "INTAKE_MAX_UPLOAD_BYTES"
+	// EnvIntakeUnzipSizeLimit bounds the total expanded size of an uploaded
+	// workbook archive, in bytes.
+	EnvIntakeUnzipSizeLimit = "INTAKE_UNZIP_SIZE_LIMIT"
+	// EnvIntakeUnzipXMLSizeLimit bounds one expanded XML part of an uploaded
+	// workbook archive, in bytes.
+	EnvIntakeUnzipXMLSizeLimit = "INTAKE_UNZIP_XML_SIZE_LIMIT"
 )
 
 const (
@@ -74,6 +85,9 @@ var (
 	// ErrEncryptionKeyInvalid reports an EnvEncryptionKey that is not base64
 	// for exactly 32 bytes.
 	ErrEncryptionKeyInvalid = errors.New("APP_ENCRYPTION_KEY must be base64 for exactly 32 bytes")
+	// ErrIntakeLimitInvalid reports an unparseable or out-of-range intake
+	// resource limit.
+	ErrIntakeLimitInvalid = errors.New("intake resource limits must be whole byte counts: INTAKE_MAX_UPLOAD_BYTES must be positive and no larger than the supported ceiling, and INTAKE_UNZIP_XML_SIZE_LIMIT must not exceed INTAKE_UNZIP_SIZE_LIMIT")
 )
 
 // Config is the application configuration.
@@ -86,6 +100,9 @@ type Config struct {
 	// PandocPath is the DOCX converter executable. Empty means "pandoc" on
 	// PATH; a missing converter is reported where a body document is needed.
 	PandocPath string
+	// Intake bounds one uploaded task workbook: upload size and expanded
+	// archive limits. Values are always resolved, never zero.
+	Intake intake.Limits
 }
 
 // Microsoft holds the Microsoft Entra application and mailbox settings.
@@ -127,11 +144,47 @@ func Load() (Config, error) {
 		return Config{}, ErrRedirectInsecure
 	}
 
+	intakeLimits, err := loadIntakeLimits()
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Origin:     origin,
 		Microsoft:  microsoft,
 		PandocPath: strings.TrimSpace(os.Getenv(EnvPandocPath)),
+		Intake:     intakeLimits,
 	}, nil
+}
+
+// loadIntakeLimits reads the workbook resource limits. Empty values keep the
+// documented defaults; a malformed value fails startup instead of silently
+// running with a bound the operator did not choose.
+func loadIntakeLimits() (intake.Limits, error) {
+	limits := intake.DefaultLimits()
+	for _, setting := range []struct {
+		name  string
+		field *int64
+	}{
+		{EnvIntakeMaxUploadBytes, &limits.MaxUploadBytes},
+		{EnvIntakeUnzipSizeLimit, &limits.UnzipSizeLimit},
+		{EnvIntakeUnzipXMLSizeLimit, &limits.UnzipXMLSizeLimit},
+	} {
+		raw := strings.TrimSpace(os.Getenv(setting.name))
+		if raw == "" {
+			continue
+		}
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value <= 0 {
+			return intake.Limits{}, fmt.Errorf("%s: %w", setting.name, ErrIntakeLimitInvalid)
+		}
+		*setting.field = value
+	}
+	resolved, err := intake.NormalizeLimits(limits)
+	if err != nil {
+		return intake.Limits{}, fmt.Errorf("%w: %v", ErrIntakeLimitInvalid, err)
+	}
+	return resolved, nil
 }
 
 // SecureCookies reports whether browser cookies must be restricted to secure
