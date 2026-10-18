@@ -128,6 +128,25 @@ error and no email can be sent.
 See [docs/microsoft-setup.md](docs/microsoft-setup.md) for the full first-time
 Microsoft setup.
 
+## DOCX converter
+
+Campaign bodies are uploaded as DOCX files and converted to HTML with Pandoc
+at authoring time.
+
+- **Deployment:** the application image packages a pinned Pandoc, so a
+  deployed container needs no extra setup.
+- **Local development:** install Pandoc 3.x so it is on `PATH`
+  (Arch: `sudo pacman -S pandoc`; Debian/Ubuntu: `sudo apt install pandoc`),
+  or set `PANDOC_PATH` to a Pandoc executable. When no converter is
+  available, authoring reports an actionable error instead of failing
+  silently.
+- Supported document features and conversion limits are documented in
+  [docs/campaign-templates.md](docs/campaign-templates.md).
+- `make verify-converter` builds the Dockerfile's `converter-test` stage and
+  runs the converter tests against the same pinned Pandoc the runtime image
+  packages. It is the one target that needs a `docker` binary; no other
+  target depends on Docker.
+
 ## Layout
 
 ```text
@@ -135,22 +154,27 @@ cmd/server/main.go              Application entrypoint and PocketBase setup
 cmd/server/provision.go         One-time operator provisioning command
 internal/
   config/                       Environment configuration (origin, Microsoft settings, encryption key)
+  campaign/                     Campaign revisions, mapping validation, normalization and the single render path
+  convert/                      Sandboxed DOCX-to-HTML conversion (pinned Pandoc) and document inspection
   microsoft/                    Microsoft connection service (OAuth flow, encrypted credentials)
   operator/                     Single-operator provisioning
   migrations/
     1792233000_initial_settings.go      App name and PocketBase rate limiter
     1792233010_operator_collection.go   Single-operator auth collection with locked rules
     1792233020_microsoft_connection.go  Microsoft connection metadata collection
+    1792233040_campaign_collections.go  Campaigns and immutable configuration revisions
   web/
     web.go                      Route table, handler assembly, render helper
                                 (/health, /robots.txt, /static, GET /{$}, GET /status)
     session.go                  Operator session cookie creation/validation and authorization middleware
     login.go                    GET /login, POST /login, POST /logout
     connection.go               GET /connection, connect, callback, and disconnect handlers
+    campaign.go                 /campaigns pages: create, revision upload, labels, sample preview
     ratelimit.go                Fixed-window login rate limiter
     web_test.go                 Route, auth, CSRF, rate-limit, and DB integration tests
-    views/                      templ layouts and pages (layout, home, login, connection)
+    views/                      templ layouts and pages (layout, home, login, connection, campaign)
     static/                     Embedded files and generated CSS/JS
+docs/campaign-templates.md      Placeholder syntax, mapping/formatting rules, DOCX support and limits
 docs/microsoft-setup.md         Microsoft app registration and first-time connection setup
 web/css/app.css                 Tailwind and daisyUI source
 scripts/copy-assets.mjs         Copy pinned Alpine/htmx distributions locally
