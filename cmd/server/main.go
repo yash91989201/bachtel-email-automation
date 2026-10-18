@@ -22,6 +22,7 @@ func main() {
 		Dir:         "internal/migrations",
 		Automigrate: osutils.IsProbablyGoRun(),
 	})
+	app.RootCmd.AddCommand(provisionOperatorCommand(app))
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
 		// PocketBase keeps its API and dashboard routes; app handlers use net/http.
 		event.Router.Any("/{path...}", apis.WrapStdHandler(web.NewHandler(app)))

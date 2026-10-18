@@ -1,3 +1,5 @@
+// Package migrations holds the PocketBase Go migrations compiled into the
+// executable. They run automatically before the server starts.
 package migrations
 
 import (
