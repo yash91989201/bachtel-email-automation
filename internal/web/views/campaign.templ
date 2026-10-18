@@ -68,7 +68,7 @@ templ CampaignList(data CampaignListData) {
 										}
 									</td>
 									<td>@revisionState(row.HasRevision, row.Approved)</td>
-									<td><a class="link link-primary" href={"/campaigns/" + row.ID}>Open</a></td>
+									<td><a class="link link-primary" href={ "/campaigns/" + row.ID }>Open</a></td>
 								</tr>
 							}
 						</tbody>
@@ -125,13 +125,13 @@ type CampaignPageData struct {
 	RecipientHeader string
 	ResultLabels    string
 
-	HasRevision    bool
-	Revision       int
-	Subject        string
-	Converter      string
-	ContentHash    string
-	Approved       bool
-	Warnings       []string
+	HasRevision bool
+	Revision    int
+	Subject     string
+	Converter   string
+	ContentHash string
+	Approved    bool
+	Warnings    []string
 
 	Variables []string
 
@@ -208,7 +208,7 @@ templ CampaignPage(data CampaignPageData) {
 			<div class="card-body gap-4">
 				<h2 id="upload-heading" class="card-title">New revision</h2>
 				<p>Upload the DOCX body document with its subject and mapping table. Revisions are immutable: a valid upload becomes the current revision, and the history below is never edited.</p>
-				<form method="post" action={"/campaigns/" + data.ID + "/revisions"} enctype="multipart/form-data" class="space-y-4">
+				<form method="post" action={ "/campaigns/" + data.ID + "/revisions" } enctype="multipart/form-data" class="space-y-4">
 					<label class="label" for="revision-document">Body document (DOCX)</label>
 					<input class="file-input file-input-bordered w-full" id="revision-document" type="file" name="document" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required/>
 					<label class="label" for="revision-subject">Subject</label>
@@ -225,7 +225,7 @@ templ CampaignPage(data CampaignPageData) {
 		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="labels-heading">
 			<div class="card-body gap-4">
 				<h2 id="labels-heading" class="card-title">Result column labels</h2>
-				<form method="post" action={"/campaigns/" + data.ID + "/labels"} class="space-y-4">
+				<form method="post" action={ "/campaigns/" + data.ID + "/labels" } class="space-y-4">
 					<label class="label" for="labels-input">Labels</label>
 					<input class="input input-bordered w-full" id="labels-input" type="text" name="result_labels" value={ data.ResultLabels } required/>
 					<p class="text-sm text-base-content/60">Comma-separated labels for the downloadable result columns. Changing them never invalidates content approval.</p>
@@ -240,10 +240,10 @@ templ CampaignPage(data CampaignPageData) {
 				<div class="card-body gap-4">
 					<h2 id="preview-heading" class="card-title">Sample preview</h2>
 					<p>Fill one sample value per variable to render the email exactly as a candidate row would. Nothing is sent and nothing is stored.</p>
-					<form method="post" action={"/campaigns/" + data.ID + "/preview"} hx-post={"/campaigns/" + data.ID + "/preview"} hx-target="#preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
+					<form method="post" action={ "/campaigns/" + data.ID + "/preview" } hx-post={ "/campaigns/" + data.ID + "/preview" } hx-target="#preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
 						for _, variable := range data.Variables {
-							<label class="label" for={"sample-" + variable}>Sample value for { variable }</label>
-							<input class="input input-bordered w-full" id={"sample-" + variable} type="text" name={ variable }/>
+							<label class="label" for={ "sample-" + variable }>Sample value for { variable }</label>
+							<input class="input input-bordered w-full" id={ "sample-" + variable } type="text" name={ variable }/>
 						}
 						<div class="card-actions">
 							<button class="btn btn-primary" type="submit">Render preview</button>
