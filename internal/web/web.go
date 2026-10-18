@@ -11,6 +11,7 @@ import (
 
 	"github.com/a-h/templ"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
@@ -25,6 +26,7 @@ type server struct {
 	app         core.App
 	cfg         config.Config
 	connections *microsoft.Service
+	campaigns   *campaign.Service
 	logins      *loginLimiter
 }
 
@@ -35,6 +37,7 @@ func NewHandler(app core.App, cfg config.Config, connections *microsoft.Service)
 		app:         app,
 		cfg:         cfg,
 		connections: connections,
+		campaigns:   campaign.NewService(app, cfg.PandocPath),
 		logins:      newLoginLimiter(10, 5*time.Minute),
 	}
 
@@ -58,6 +61,7 @@ func NewHandler(app core.App, cfg config.Config, connections *microsoft.Service)
 	mux.HandleFunc("POST /connection/connect", s.requireOperator(s.handleConnect))
 	mux.HandleFunc("GET /connection/callback", s.requireOperator(s.handleCallback))
 	mux.HandleFunc("POST /connection/disconnect", s.requireOperator(s.handleDisconnect))
+	s.registerCampaignRoutes(mux)
 
 	// Cross-origin writes (forms) are rejected before any handler mutates
 	// state; no bespoke CSRF token protocol is needed.

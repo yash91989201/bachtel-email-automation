@@ -1,0 +1,370 @@
+package views
+
+// CampaignListData is the safe view model for the campaign list. The
+// converter message is a fixed operator-facing instruction, never a path.
+type CampaignListData struct {
+	Campaigns      []CampaignListRow
+	ConverterError string
+}
+
+// CampaignListRow summarizes one campaign for the list page.
+type CampaignListRow struct {
+	ID              string
+	Name            string
+	RecipientHeader string
+	Revision        int
+	HasRevision     bool
+	Approved        bool
+}
+
+templ CampaignList(data CampaignListData) {
+	@Layout("Campaigns", true) {
+		<div class="space-y-3">
+			<p class="text-sm font-medium uppercase tracking-widest text-primary">Campaigns</p>
+			<h1 class="text-4xl font-bold tracking-tight">Email campaigns</h1>
+			<p class="max-w-2xl text-base-content/70">Each campaign owns one approved content revision and the result labels for downloaded candidate data. Nothing on this page sends email.</p>
+			<div class="card-actions">
+				<a class="btn btn-primary" href="/campaigns/new">New campaign</a>
+			</div>
+		</div>
+		if data.ConverterError != "" {
+			<div class="alert alert-warning" role="alert">
+				<div>
+					<p class="font-semibold">Body document conversion is unavailable</p>
+					<p>{ data.ConverterError }</p>
+				</div>
+			</div>
+		}
+		if len(data.Campaigns) == 0 {
+			<section class="card border border-base-300 bg-base-100 shadow-sm">
+				<div class="card-body">
+					<h2 class="card-title">No campaigns yet</h2>
+					<p>Create a campaign to define its recipient column, subject, body document and result labels.</p>
+				</div>
+			</section>
+		} else {
+			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-label="Campaigns">
+				<div class="card-body">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>Name</th>
+								<th>Recipient header</th>
+								<th>Current revision</th>
+								<th>Approval</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, row := range data.Campaigns {
+								<tr>
+									<td class="font-semibold">{ row.Name }</td>
+									<td><code>{ row.RecipientHeader }</code></td>
+									<td>
+										if row.HasRevision {
+											Revision { row.Revision }
+										} else {
+											No revision yet
+										}
+									</td>
+									<td>@revisionState(row.HasRevision, row.Approved)</td>
+									<td><a class="link link-primary" href={"/campaigns/" + row.ID}>Open</a></td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</section>
+		}
+	}
+}
+
+// CampaignFormData is the view model for the campaign creation form. The
+// error is a fixed validation message, never a raw storage failure.
+type CampaignFormData struct {
+	Error           string
+	Name            string
+	RecipientHeader string
+	ResultLabels    string
+}
+
+templ CampaignForm(data CampaignFormData) {
+	@Layout("New campaign", true) {
+		<div class="space-y-3">
+			<p class="text-sm font-medium uppercase tracking-widest text-primary">Campaigns</p>
+			<h1 class="text-4xl font-bold tracking-tight">New campaign</h1>
+			<p class="max-w-2xl text-base-content/70">The name and the expected recipient column define the campaign. The subject and body document follow as the first content revision.</p>
+		</div>
+		if data.Error != "" {
+			<div class="alert alert-error" role="alert">{ data.Error }</div>
+		}
+		<form method="post" action="/campaigns" class="card border border-base-300 bg-base-100 shadow-sm">
+			<div class="card-body gap-4">
+				<label class="label" for="campaign-name">Name</label>
+				<input class="input w-full" id="campaign-name" type="text" name="name" value={ data.Name } maxlength="200" required/>
+				<label class="label" for="campaign-recipient">Expected recipient header</label>
+				<input class="input w-full" id="campaign-recipient" type="text" name="recipient_header" value={ data.RecipientHeader } maxlength="255" required/>
+				<p class="text-sm text-base-content/60">The source worksheet column that holds the candidate email address, for example <code>Email</code>.</p>
+				<label class="label" for="campaign-labels">Result column labels</label>
+				<input class="input w-full" id="campaign-labels" type="text" name="result_labels" value={ data.ResultLabels }/>
+				<p class="text-sm text-base-content/60">Comma-separated labels for the downloadable result columns. The defaults are pre-filled; changing them later never invalidates content approval.</p>
+				<div class="card-actions">
+					<button class="btn btn-primary" type="submit">Create campaign</button>
+					<a class="btn btn-ghost" href="/campaigns">Cancel</a>
+				</div>
+			</div>
+		</form>
+	}
+}
+
+// CampaignPageData is the safe view model for one campaign page. It never
+// carries uploaded documents or storage diagnostics.
+type CampaignPageData struct {
+	ID              string
+	Name            string
+	RecipientHeader string
+	ResultLabels    string
+
+	HasRevision    bool
+	Revision       int
+	Subject        string
+	Converter      string
+	ContentHash    string
+	Approved       bool
+	Warnings       []string
+
+	Variables []string
+
+	RevisionError string
+	LabelsError   string
+
+	History []RevisionRow
+}
+
+// RevisionRow is one immutable revision-history entry.
+type RevisionRow struct {
+	Revision    int
+	ContentHash string
+	Approved    bool
+}
+
+templ CampaignPage(data CampaignPageData) {
+	@Layout(data.Name, true) {
+		<div class="space-y-3">
+			<p class="text-sm font-medium uppercase tracking-widest text-primary">Campaign</p>
+			<h1 class="text-4xl font-bold tracking-tight">{ data.Name }</h1>
+			<p class="max-w-2xl text-base-content/70">Expected recipient header <code>{ data.RecipientHeader }</code>. Nothing on this page sends email.</p>
+		</div>
+		if data.RevisionError != "" {
+			<div class="alert alert-error" role="alert">{ data.RevisionError }</div>
+		}
+		if data.LabelsError != "" {
+			<div class="alert alert-error" role="alert">{ data.LabelsError }</div>
+		}
+		if len(data.Warnings) > 0 {
+			<div class="alert alert-warning" role="alert">
+				<div>
+					<p class="font-semibold">The last conversion dropped unsupported content:</p>
+					<ul class="list-inside list-disc">
+						for _, warning := range data.Warnings {
+							<li>{ warning }</li>
+						}
+					</ul>
+				</div>
+			</div>
+		}
+		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="revision-heading">
+			<div class="card-body gap-4">
+				<h2 id="revision-heading" class="card-title">Current revision</h2>
+				if data.HasRevision {
+					<dl class="space-y-1 text-sm">
+						<div class="flex gap-2">
+							<dt class="font-semibold">Revision:</dt>
+							<dd>{ data.Revision }</dd>
+						</div>
+						<div class="flex gap-2">
+							<dt class="font-semibold">Subject:</dt>
+							<dd>{ data.Subject }</dd>
+						</div>
+						<div class="flex gap-2">
+							<dt class="font-semibold">Converter:</dt>
+							<dd>{ data.Converter }</dd>
+						</div>
+						<div class="flex gap-2">
+							<dt class="font-semibold">Content hash:</dt>
+							<dd><code class="break-all">{ data.ContentHash }</code></dd>
+						</div>
+						<div class="flex gap-2">
+							<dt class="font-semibold">Approval:</dt>
+							<dd>@revisionState(true, data.Approved)</dd>
+						</div>
+					</dl>
+				} else {
+					<p class="text-base-content/70">No content revision yet. Upload a body document below to create the first one.</p>
+				}
+			</div>
+		</section>
+		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="upload-heading">
+			<div class="card-body gap-4">
+				<h2 id="upload-heading" class="card-title">New revision</h2>
+				<p>Upload the DOCX body document with its subject and mapping table. Revisions are immutable: a valid upload becomes the current revision, and the history below is never edited.</p>
+				<form method="post" action={"/campaigns/" + data.ID + "/revisions"} enctype="multipart/form-data" class="space-y-4">
+					<label class="label" for="revision-document">Body document (DOCX)</label>
+					<input class="file-input file-input-bordered w-full" id="revision-document" type="file" name="document" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required/>
+					<label class="label" for="revision-subject">Subject</label>
+					<input class="input input-bordered w-full" id="revision-subject" type="text" name="subject" maxlength="998" required/>
+					<label class="label" for="revision-mappings">Mapping table</label>
+					<textarea class="textarea textarea-bordered w-full" id="revision-mappings" name="mappings" rows="8" placeholder="full_name | Full Name | required | name"></textarea>
+					<p class="text-sm text-base-content/60">One mapping per line: <code>variable | source header | required|optional | format | fallback</code>. The format column is one of text, name, designation or email and defaults to text; a fallback applies to optional rows only.</p>
+					<div class="card-actions">
+						<button class="btn btn-primary" type="submit">Create revision</button>
+					</div>
+				</form>
+			</div>
+		</section>
+		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="labels-heading">
+			<div class="card-body gap-4">
+				<h2 id="labels-heading" class="card-title">Result column labels</h2>
+				<form method="post" action={"/campaigns/" + data.ID + "/labels"} class="space-y-4">
+					<label class="label" for="labels-input">Labels</label>
+					<input class="input input-bordered w-full" id="labels-input" type="text" name="result_labels" value={ data.ResultLabels } required/>
+					<p class="text-sm text-base-content/60">Comma-separated labels for the downloadable result columns. Changing them never invalidates content approval.</p>
+					<div class="card-actions">
+						<button class="btn btn-primary" type="submit">Save labels</button>
+					</div>
+				</form>
+			</div>
+		</section>
+		if data.HasRevision {
+			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="preview-heading">
+				<div class="card-body gap-4">
+					<h2 id="preview-heading" class="card-title">Sample preview</h2>
+					<p>Fill one sample value per variable to render the email exactly as a candidate row would. Nothing is sent and nothing is stored.</p>
+					<form method="post" action={"/campaigns/" + data.ID + "/preview"} hx-post={"/campaigns/" + data.ID + "/preview"} hx-target="#preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
+						for _, variable := range data.Variables {
+							<label class="label" for={"sample-" + variable}>Sample value for { variable }</label>
+							<input class="input input-bordered w-full" id={"sample-" + variable} type="text" name={ variable }/>
+						}
+						<div class="card-actions">
+							<button class="btn btn-primary" type="submit">Render preview</button>
+						</div>
+					</form>
+					<div id="preview-result" role="status" aria-live="polite">
+						<p class="text-base-content/60">Submit sample values to render the preview here.</p>
+					</div>
+				</div>
+			</section>
+		}
+		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="history-heading">
+			<div class="card-body gap-4">
+				<h2 id="history-heading" class="card-title">Revision history</h2>
+				<p>Revisions are immutable. Older revisions stay for audit and have no edit controls.</p>
+				if len(data.History) == 0 {
+					<p class="text-base-content/60">No revisions yet.</p>
+				} else {
+					<ol class="space-y-2">
+						for _, entry := range data.History {
+							<li class="flex flex-wrap items-center gap-2 text-sm">
+								<span class="font-semibold">Revision { entry.Revision }</span>
+								<code class="break-all">{ entry.ContentHash }</code>
+								@revisionState(true, entry.Approved)
+							</li>
+						}
+					</ol>
+				}
+			</div>
+		</section>
+	}
+}
+
+// PreviewData is the view model for the sample preview partial. The error is
+// a fixed campaign render message that names the offending variable; it is
+// shown instead of a rendered email, never as a server error page.
+type PreviewData struct {
+	HasRevision bool
+	Revision    int
+	ContentHash string
+	Approved    bool
+
+	Error   string
+	Subject string
+	Body    string
+	Values  []PreviewValue
+}
+
+// PreviewValue is one mapped sample value as it was submitted, next to the
+// normalized replacement actually used.
+type PreviewValue struct {
+	Variable   string
+	Header     string
+	Raw        string
+	Normalized string
+}
+
+templ PreviewResult(data PreviewData) {
+	<div class="card border border-base-300 bg-base-100 shadow-sm">
+		<div class="card-body gap-4">
+			<h3 class="card-title">Preview result</h3>
+			if data.HasRevision {
+				<dl class="space-y-1 text-sm">
+					<div class="flex gap-2">
+						<dt class="font-semibold">Revision:</dt>
+						<dd>{ data.Revision }</dd>
+					</div>
+					<div class="flex gap-2">
+						<dt class="font-semibold">Content hash:</dt>
+						<dd><code class="break-all">{ data.ContentHash }</code></dd>
+					</div>
+					<div class="flex gap-2">
+						<dt class="font-semibold">Approval:</dt>
+						<dd>@revisionState(true, data.Approved)</dd>
+					</div>
+				</dl>
+			}
+			if data.Error != "" {
+				<div class="alert alert-error" role="alert">{ data.Error }</div>
+			} else {
+				<div class="space-y-1">
+					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Subject</p>
+					<p class="font-semibold">{ data.Subject }</p>
+				</div>
+				<div class="space-y-1">
+					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Body</p>
+					<div class="rounded-box border border-base-300 p-4">@templ.Raw(data.Body)</div>
+				</div>
+				<table class="table table-sm">
+					<thead>
+						<tr>
+							<th>Variable</th>
+							<th>Source header</th>
+							<th>Raw value</th>
+							<th>Used value</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, value := range data.Values {
+							<tr>
+								<td>{ value.Variable }</td>
+								<td><code>{ value.Header }</code></td>
+								<td><code>{ value.Raw }</code></td>
+								<td><code>{ value.Normalized }</code></td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		</div>
+	</div>
+}
+
+// revisionState is the shared approval badge: a missing revision is neither
+// approved nor unapproved, an approval is bound to the shown content hash.
+templ revisionState(hasRevision, approved bool) {
+	if !hasRevision {
+		<span class="badge badge-ghost">No revision</span>
+	} else if approved {
+		<span class="badge badge-success">Approved</span>
+	} else {
+		<span class="badge badge-warning">Not approved</span>
+	}
+}

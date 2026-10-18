@@ -43,6 +43,9 @@ const (
 	// EnvGraphBaseURL overrides the Microsoft Graph API base URL, used by
 	// simulated Graph servers in tests.
 	EnvGraphBaseURL = "MS_GRAPH_BASE_URL"
+	// EnvPandocPath overrides the DOCX converter executable. It defaults to
+	// "pandoc" on PATH, which is what the application image packages.
+	EnvPandocPath = "PANDOC_PATH"
 )
 
 const (
@@ -80,6 +83,9 @@ type Config struct {
 	// Microsoft holds the Microsoft connection settings. Incomplete settings
 	// disable the connection without preventing the server from starting.
 	Microsoft Microsoft
+	// PandocPath is the DOCX converter executable. Empty means "pandoc" on
+	// PATH; a missing converter is reported where a body document is needed.
+	PandocPath string
 }
 
 // Microsoft holds the Microsoft Entra application and mailbox settings.
@@ -121,7 +127,11 @@ func Load() (Config, error) {
 		return Config{}, ErrRedirectInsecure
 	}
 
-	return Config{Origin: origin, Microsoft: microsoft}, nil
+	return Config{
+		Origin:     origin,
+		Microsoft:  microsoft,
+		PandocPath: strings.TrimSpace(os.Getenv(EnvPandocPath)),
+	}, nil
 }
 
 // SecureCookies reports whether browser cookies must be restricted to secure

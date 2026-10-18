@@ -20,6 +20,7 @@ templ Layout(title string, signedIn bool) {
 					if signedIn {
 						<nav class="ml-auto flex items-center gap-4">
 							<a class="link" href="/">Dashboard</a>
+							<a class="link" href="/campaigns">Campaigns</a>
 							<a class="link" href="/connection">Connection</a>
 							<form method="post" action="/logout">
 								<button class="btn btn-sm btn-outline" type="submit">Sign out</button>
