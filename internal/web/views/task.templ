@@ -60,7 +60,7 @@ templ TaskList(data TaskListData) {
 									<td>{ row.HeaderRow }</td>
 									<td>{ row.Total }</td>
 									<td>{ row.Eligible }</td>
-									<td><a class="link link-primary" href={"/campaigns/" + data.CampaignID + "/tasks/" + row.ID}>Open</a></td>
+									<td><a class="link link-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + row.ID }>Open</a></td>
 								</tr>
 							}
 						</tbody>
@@ -386,7 +386,7 @@ templ TaskPage(data TaskPageData) {
 // fixed operator-facing message shown instead of rendered content.
 type TaskPreviewData struct {
 	Error       string
-	Recipient string
+	Recipient   string
 	Subject     string
 	Body        string
 	Values      []PreviewValue

@@ -36,7 +36,9 @@ func bootApp(t *testing.T, dir string) *pocketbase.PocketBase {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_ = app.ClearBootstrap()
+		if err := app.ClearBootstrap(); err != nil {
+			t.Error(err)
+		}
 	})
 	if _, err := app.FindCollectionByNameOrId(CollectionName); err != nil {
 		collection := core.NewBaseCollection(CollectionName)
@@ -83,6 +85,7 @@ func testEnv(t *testing.T, authorityURL, graphBaseURL string) config.Config {
 
 // mockMicrosoft stands in for the Microsoft token endpoint and Graph /me.
 type mockMicrosoft struct {
+	t                *testing.T
 	mu               sync.Mutex
 	refreshTokens    int
 	omitRefreshToken bool
@@ -96,7 +99,7 @@ type mockMicrosoft struct {
 
 func newMockMicrosoft(t *testing.T) *mockMicrosoft {
 	t.Helper()
-	m := &mockMicrosoft{}
+	m := &mockMicrosoft{t: t}
 	m.srv = httptest.NewServer(http.HandlerFunc(m.serve))
 	t.Cleanup(m.srv.Close)
 	return m
@@ -118,7 +121,9 @@ func (m *mockMicrosoft) serve(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprint(w, `{"access_token":"at-c1","refresh_token":"rt-c1","token_type":"Bearer","expires_in":3600}`)
+			if _, err := fmt.Fprint(w, `{"access_token":"at-c1","refresh_token":"rt-c1","token_type":"Bearer","expires_in":3600}`); err != nil {
+				m.t.Errorf("write mock response: %v", err)
+			}
 		case "refresh_token":
 			m.refreshTokens++
 			if m.rejectRefresh {
@@ -128,9 +133,13 @@ func (m *mockMicrosoft) serve(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			n := m.refreshTokens
 			if m.omitRefreshToken {
-				fmt.Fprintf(w, `{"access_token":"at-r%d","token_type":"Bearer","expires_in":3600}`, n)
+				if _, err := fmt.Fprintf(w, `{"access_token":"at-r%d","token_type":"Bearer","expires_in":3600}`, n); err != nil {
+					m.t.Errorf("write mock response: %v", err)
+				}
 			} else {
-				fmt.Fprintf(w, `{"access_token":"at-r%d","refresh_token":"rt-r%d","token_type":"Bearer","expires_in":3600}`, n, n)
+				if _, err := fmt.Fprintf(w, `{"access_token":"at-r%d","refresh_token":"rt-r%d","token_type":"Bearer","expires_in":3600}`, n, n); err != nil {
+					m.t.Errorf("write mock response: %v", err)
+				}
 			}
 		default:
 			http.Error(w, `{"error":"unsupported_grant_type"}`, http.StatusBadRequest)
@@ -140,7 +149,9 @@ func (m *mockMicrosoft) serve(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":{"code":"InvalidAuthenticationToken"}}`, http.StatusUnauthorized)
 			return
 		}
-		fmt.Fprintf(w, `{"id":%q,"mail":%q,"userPrincipalName":%q}`, m.meID, m.meMail, m.meUPN)
+		if _, err := fmt.Fprintf(w, `{"id":%q,"mail":%q,"userPrincipalName":%q}`, m.meID, m.meMail, m.meUPN); err != nil {
+			m.t.Errorf("write mock response: %v", err)
+		}
 	default:
 		http.NotFound(w, r)
 	}
@@ -666,11 +677,9 @@ func TestRefresh(t *testing.T) {
 		results := make([]string, goroutines)
 		errs := make([]error, goroutines)
 		for i := range goroutines {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				results[i], errs[i] = svc.AccessToken(ctx)
-			}()
+			})
 		}
 		wg.Wait()
 		for i := range goroutines {

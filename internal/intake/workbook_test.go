@@ -225,16 +225,16 @@ func TestFormulaCellUsesCachedValueWithoutEvaluation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := writer.SetRow("A1", []interface{}{"Email", "Name"}); err != nil {
+		if err := writer.SetRow("A1", []any{"Email", "Name"}); err != nil {
 			t.Fatal(err)
 		}
-		if err := writer.SetRow("A2", []interface{}{
+		if err := writer.SetRow("A2", []any{
 			excelize.Cell{Formula: "1+1", Value: "cached value"},
 			"n",
 		}); err != nil {
 			t.Fatal(err)
 		}
-		if err := writer.SetRow("A3", []interface{}{
+		if err := writer.SetRow("A3", []any{
 			excelize.Cell{Formula: "TRIM(B3)"},
 			"keep",
 		}); err != nil {
@@ -393,7 +393,7 @@ func TestWorksheetBounds(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := writer.SetRow(cell, []interface{}{fmt.Sprintf("row%d", row)}); err != nil {
+				if err := writer.SetRow(cell, []any{fmt.Sprintf("row%d", row)}); err != nil {
 					t.Fatal(err)
 				}
 			}

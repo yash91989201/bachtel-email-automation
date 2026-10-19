@@ -313,7 +313,10 @@ func (s *Service) campaignFromRecord(record *core.Record) *Campaign {
 		Name:              record.GetString("name"),
 		CurrentRevisionID: record.GetString("current_configuration"),
 	}
-	_ = record.UnmarshalJSONField("source_headers", &campaign.SourceHeaders)
+	if err := record.UnmarshalJSONField("source_headers", &campaign.SourceHeaders); err != nil {
+		s.app.Logger().Warn("decode campaign source headers", "campaign", record.Id, "error", err)
+		campaign.SourceHeaders = nil
+	}
 	if err := record.UnmarshalJSONField("result_labels", &campaign.ResultLabels); err != nil || len(campaign.ResultLabels) == 0 {
 		campaign.ResultLabels = DefaultResultLabels
 	}

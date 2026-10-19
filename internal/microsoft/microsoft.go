@@ -412,7 +412,11 @@ func (s *Service) graphIdentity(ctx context.Context, accessToken string) (id, ad
 	if err != nil {
 		return "", "", fmt.Errorf("the Microsoft identity check failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			s.app.Logger().Warn("close Microsoft identity response", "error", err)
+		}
+	}()
 	if resp.StatusCode != http.StatusOK {
 		return "", "", fmt.Errorf("the Microsoft identity check returned status %d", resp.StatusCode)
 	}

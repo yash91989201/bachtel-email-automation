@@ -433,7 +433,11 @@ func TestExclusionReportDownloadsEveryHeldRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("report is not a readable workbook: %v", err)
 	}
-	defer func() { _ = file.Close() }()
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	sheets := file.GetSheetList()
 	if len(sheets) != 1 || sheets[0] != "Excluded" {
 		t.Fatalf("report worksheets = %v, want one Excluded sheet", sheets)
@@ -827,16 +831,14 @@ func TestConcurrentClaimsAdmitOneOwner(t *testing.T) {
 	results := make([]bool, racers)
 	errs := make([]error, racers)
 	for i := range racers {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			outcomes, err := env.service.Claim(ctx, task.ID, []string{candidateID})
 			if err != nil {
 				errs[i] = err
 				return
 			}
 			results[i] = outcomes[candidateID].Claimed
-		}()
+		})
 	}
 	wait.Wait()
 	winners := 0
@@ -956,7 +958,11 @@ func TestSourceBytesAndRowCoordinatesArePreserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer fsys.Close()
+	defer func() {
+		if err := fsys.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	reader, err := fsys.GetReader(record.BaseFilesPath() + "/" + record.GetString("source"))
 	if err != nil {
 		t.Fatal(err)
@@ -965,7 +971,9 @@ func TestSourceBytesAndRowCoordinatesArePreserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = reader.Close()
+	if err := reader.Close(); err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Equal(stored, data) {
 		t.Fatal("the stored workbook differs from the upload")
 	}
@@ -977,7 +985,11 @@ func TestSourceBytesAndRowCoordinatesArePreserved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = file.Close() }()
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	rows, err := file.GetRows("Candidates")
 	if err != nil {
 		t.Fatal(err)
@@ -1061,7 +1073,11 @@ func TestThousandRowFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = file.Close() }()
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	report, err := file.GetRows("Excluded")
 	if err != nil {
 		t.Fatal(err)

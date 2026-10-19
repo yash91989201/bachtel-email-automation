@@ -297,8 +297,7 @@ func TestUnknownVariableErrorNamesRemedy(t *testing.T) {
 	_, err := Compile("Hello {{full_name}}", "<p>Hi</p>", []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail},
 		{Variable: "candidate_name", Header: "Candidate Name", Required: true, Format: FormatText},
 	})
-	var unknown *UnknownVariableError
-	if !errors.As(err, &unknown) {
+	if _, ok := errors.AsType[*UnknownVariableError](err); !ok {
 		t.Fatalf("Compile error = %v, want UnknownVariableError", err)
 	}
 	message := err.Error()
@@ -322,8 +321,7 @@ func TestUnusedVariableErrorNamesRemedy(t *testing.T) {
 		{Variable: "candidate_name", Header: "Candidate Name", Required: true, Format: FormatText},
 		{Variable: "candidate_email", Header: "Candidate Email", Required: true, Format: FormatText},
 	})
-	var unused *UnusedVariableError
-	if !errors.As(err, &unused) {
+	if _, ok := errors.AsType[*UnusedVariableError](err); !ok {
 		t.Fatalf("Compile error = %v, want UnusedVariableError", err)
 	}
 	message := err.Error()

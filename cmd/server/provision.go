@@ -41,12 +41,16 @@ func provisionOperatorCommand(app core.App) *cobra.Command {
 			if err := operator.Provision(app, email, password); err != nil {
 				return err
 			}
-			fmt.Fprintf(command.OutOrStdout(), "Operator %s provisioned. Sign in at /login.\n", strings.ToLower(strings.TrimSpace(email)))
+			if _, err := fmt.Fprintf(command.OutOrStdout(), "Operator %s provisioned. Sign in at /login.\n", strings.ToLower(strings.TrimSpace(email))); err != nil {
+				return fmt.Errorf("operator was provisioned but confirmation could not be written: %w", err)
+			}
 			return nil
 		},
 	}
 	command.Flags().StringVar(&email, "email", "", "operator email address (required)")
-	_ = command.MarkFlagRequired("email")
+	if err := command.MarkFlagRequired("email"); err != nil {
+		panic(err) // The flag is registered above; failure is a programming error.
+	}
 	return command
 }
 
@@ -55,10 +59,12 @@ func provisionOperatorCommand(app core.App) *cobra.Command {
 func readPassword(command *cobra.Command) (string, error) {
 	in := command.InOrStdin()
 	if file, ok := in.(*os.File); ok && term.IsTerminal(int(file.Fd())) {
-		fmt.Fprint(command.ErrOrStderr(), "Password: ")
-		password, err := term.ReadPassword(int(file.Fd()))
-		fmt.Fprintln(command.ErrOrStderr())
-		if err != nil {
+		if _, err := fmt.Fprint(command.ErrOrStderr(), "Password: "); err != nil {
+			return "", fmt.Errorf("write password prompt: %w", err)
+		}
+		password, readErr := term.ReadPassword(int(file.Fd()))
+		_, writeErr := fmt.Fprintln(command.ErrOrStderr())
+		if err := errors.Join(readErr, writeErr); err != nil {
 			return "", err
 		}
 		return string(password), nil
