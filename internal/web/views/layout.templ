@@ -1,37 +1,44 @@
 package views
 
-templ Layout(title string, signedIn bool) {
+templ Layout(title string, signedIn bool, active string) {
 	<!DOCTYPE html>
 	<html lang="en" data-theme="light">
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<meta name="htmx-config" content='{"selfRequestsOnly":true,"allowScriptTags":false,"includeIndicatorStyles":false}'/>
-			<title>{ title }</title>
+			<title>{ title } · Bachtel</title>
 			<link rel="stylesheet" href="/static/app.css"/>
 			<script defer src="/static/htmx.min.js"></script>
 			<script defer src="/static/alpine.min.js"></script>
 		</head>
-		<body class="min-h-screen bg-base-200 text-base-content">
-			<header class="border-b border-base-300 bg-base-100">
-				<div class="navbar mx-auto max-w-4xl px-6">
-					<a class="text-lg font-semibold" href="/">Bachtel</a>
-					<span class="badge badge-outline ml-3">Email automation</span>
-					if signedIn {
-						<nav class="ml-auto flex items-center gap-4">
-							<a class="link" href="/">Dashboard</a>
-							<a class="link" href="/campaigns">Campaigns</a>
-							<a class="link" href="/connection">Connection</a>
-							<form method="post" action="/logout">
-								<button class="btn btn-sm btn-outline" type="submit">Sign out</button>
-							</form>
-						</nav>
-					}
-				</div>
+		<body class="app-body">
+			<a class="skip-link" href="#main-content">Skip to content</a>
+			<header class="app-header">
+				<a class="brand" href="/" aria-label="Bachtel home"><span class="brand-mark" aria-hidden="true">b.</span><span>Bachtel<span class="brand-caption">Email workspace</span></span></a>
+				if signedIn {
+					<nav class="app-nav" aria-label="Main navigation">
+						@navLink("/", "Overview", active == "overview")
+						@navLink("/campaigns", "Campaigns", active == "campaigns")
+						@navLink("/connection", "Mailbox", active == "mailbox")
+					</nav>
+					<form method="post" action="/logout" class="signout-form"><button class="btn btn-ghost btn-sm" type="submit">Sign out <span aria-hidden="true">↗</span></button></form>
+				} else {
+					<span class="operator-label">Operator workspace</span>
+				}
 			</header>
-			<main class="mx-auto max-w-4xl space-y-6 px-6 py-12">
+			<main id="main-content" class="app-main" tabindex="-1">
 				{ children... }
 			</main>
+			<footer class="app-footer"><span>Bachtel Corporation</span><span>Email operations workspace</span></footer>
 		</body>
 	</html>
+}
+
+templ navLink(url string, label string, current bool) {
+	if current {
+		<a href={ templ.SafeURL(url) } aria-current="page">{ label }</a>
+	} else {
+		<a href={ templ.SafeURL(url) }>{ label }</a>
+	}
 }

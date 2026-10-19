@@ -162,7 +162,7 @@ func TestAnonymousRequests(t *testing.T) {
 			t.Fatalf("GET %s: status=%d location=%q", path, rec.Code, rec.Header().Get("Location"))
 		}
 		body := rec.Body.String()
-		for _, secret := range []string{"Database connection", "Your app starts here", "Sign out", "Sender address"} {
+		for _, secret := range []string{"Database connection", "Email operations, organized.", "Sign out", "Sender address"} {
 			if strings.Contains(body, secret) {
 				t.Fatalf("GET %s leaks %q", path, secret)
 			}
@@ -183,7 +183,7 @@ func TestAnonymousRequests(t *testing.T) {
 	// A valid session reaches the dashboard; GET /login bounces to /.
 	cookie := login(t, handler)
 	rec := do(t, handler, http.MethodGet, "/", nil, withCookie(cookie))
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Your app starts here") {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Email operations, organized.") {
 		t.Fatalf("GET / with session: status=%d", rec.Code)
 	}
 	rec = do(t, handler, http.MethodGet, "/login", nil, withCookie(cookie))

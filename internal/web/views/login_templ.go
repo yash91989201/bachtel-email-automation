@@ -41,7 +41,7 @@ func LoginPage(errorMessage string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"mx-auto max-w-sm space-y-6\"><div class=\"space-y-2 text-center\"><h1 class=\"text-3xl font-bold tracking-tight\">Sign in</h1><p class=\"text-base-content/70\">Operator access to Bachtel Email Automation.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"login-layout space-y-6\"><div class=\"space-y-2 text-center\"><p class=\"eyebrow\">Welcome back</p><h1>Sign in to your workspace</h1><p class=\"text-base-content/70\">Manage campaigns and email operations securely.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -53,7 +53,7 @@ func LoginPage(errorMessage string) templ.Component {
 				var templ_7745c5c3_Var3 string
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(errorMessage)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `login.templ`, Line: 11, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `login.templ`, Line: 12, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
@@ -70,7 +70,7 @@ func LoginPage(errorMessage string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Layout("Sign in", false).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout("Sign in", false, "").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

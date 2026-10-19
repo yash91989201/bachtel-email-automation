@@ -1,11 +1,12 @@
 package views
 
 templ LoginPage(errorMessage string) {
-	@Layout("Sign in", false) {
-		<div class="mx-auto max-w-sm space-y-6">
+	@Layout("Sign in", false, "") {
+		<div class="login-layout space-y-6">
 			<div class="space-y-2 text-center">
-				<h1 class="text-3xl font-bold tracking-tight">Sign in</h1>
-				<p class="text-base-content/70">Operator access to Bachtel Email Automation.</p>
+				<p class="eyebrow">Welcome back</p>
+				<h1>Sign in to your workspace</h1>
+				<p class="text-base-content/70">Manage campaigns and email operations securely.</p>
 			</div>
 			if errorMessage != "" {
 				<div class="alert alert-error" role="alert">{ errorMessage }</div>

@@ -16,11 +16,13 @@ type ConnectionData struct {
 }
 
 templ ConnectionPage(data ConnectionData) {
-	@Layout("Microsoft connection", true) {
-		<div class="space-y-3">
-			<p class="text-sm font-medium uppercase tracking-widest text-primary">Microsoft 365</p>
-			<h1 class="text-4xl font-bold tracking-tight">Mailbox connection</h1>
-			<p class="max-w-2xl text-base-content/70">Connect the HR mailbox so outgoing email is sent through Microsoft Graph.</p>
+	@Layout("Microsoft connection", true, "mailbox") {
+		<div class="page-header">
+			<div>
+				<p class="text-sm font-medium uppercase tracking-widest text-primary">Microsoft 365</p>
+				<h1 class="text-4xl font-bold tracking-tight">Mailbox connection</h1>
+				<p class="page-description">Connect the HR mailbox used for all outgoing email. Check the sender and connection status here.</p>
+			</div>
 		</div>
 		if len(data.MissingSettings) > 0 {
 			<div class="alert alert-warning" role="alert">
@@ -43,11 +45,11 @@ templ ConnectionPage(data ConnectionData) {
 		}
 		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="status-heading">
 			<div class="card-body gap-4">
-				<h2 id="status-heading" class="card-title">Status</h2>
+				<h2 id="status-heading" class="card-title">Sending mailbox</h2>
 				<div class="flex items-center gap-3">
 					@statusBadge(data.Status)
 				</div>
-				<dl class="space-y-1 text-sm">
+				<dl class="connection-details text-sm">
 					if data.AccountEmail != "" {
 						<div class="flex gap-2">
 							<dt class="font-semibold">Account:</dt>
@@ -84,9 +86,9 @@ templ ConnectionPage(data ConnectionData) {
 						</form>
 					}
 					if data.Status != string(microsoft.StatusDisconnected) {
-						<form method="post" action="/connection/disconnect" class="flex items-center gap-2" x-data="{ confirm: false }">
-							<button class="btn btn-outline" type="submit" x-show="!confirm">Disconnect</button>
-							<div class="flex items-center gap-2" x-show="confirm" x-cloak>
+						<form method="post" action="/connection/disconnect" class="flex flex-wrap items-center gap-2" x-data="{ confirm: false }">
+							<button class="btn btn-outline" type="button" x-on:click="confirm = true" x-bind:aria-expanded="confirm" aria-expanded="false" x-show="!confirm">Disconnect</button>
+							<div class="flex flex-wrap items-center gap-2" x-show="confirm" x-cloak>
 								<span class="text-sm">Disconnect the mailbox?</span>
 								<button class="btn btn-error btn-sm" type="submit">Yes, disconnect</button>
 								<button class="btn btn-ghost btn-sm" type="button" x-on:click="confirm = false">Cancel</button>

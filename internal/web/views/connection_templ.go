@@ -56,7 +56,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-3\"><p class=\"text-sm font-medium uppercase tracking-widest text-primary\">Microsoft 365</p><h1 class=\"text-4xl font-bold tracking-tight\">Mailbox connection</h1><p class=\"max-w-2xl text-base-content/70\">Connect the HR mailbox so outgoing email is sent through Microsoft Graph.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-header\"><div><p class=\"text-sm font-medium uppercase tracking-widest text-primary\">Microsoft 365</p><h1 class=\"text-4xl font-bold tracking-tight\">Mailbox connection</h1><p class=\"page-description\">Connect the HR mailbox used for all outgoing email. Check the sender and connection status here.</p></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -73,7 +73,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 					var templ_7745c5c3_Var3 string
 					templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 32, Col: 23}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 34, Col: 23}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 					if templ_7745c5c3_Err != nil {
@@ -101,7 +101,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(data.Notice)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 39, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 41, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -124,7 +124,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(data.LastError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 42, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 44, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -135,7 +135,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, " <section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-labelledby=\"status-heading\"><div class=\"card-body gap-4\"><h2 id=\"status-heading\" class=\"card-title\">Status</h2><div class=\"flex items-center gap-3\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, " <section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-labelledby=\"status-heading\"><div class=\"card-body gap-4\"><h2 id=\"status-heading\" class=\"card-title\">Sending mailbox</h2><div class=\"flex items-center gap-3\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -143,7 +143,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div><dl class=\"space-y-1 text-sm\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div><dl class=\"connection-details text-sm\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -155,7 +155,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(data.AccountEmail)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 54, Col: 30}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 56, Col: 30}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 				if templ_7745c5c3_Err != nil {
@@ -173,7 +173,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(data.SenderAddress)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 59, Col: 30}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 61, Col: 30}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -191,7 +191,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ConnectedAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 64, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 66, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 				if templ_7745c5c3_Err != nil {
@@ -204,7 +204,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(data.ConnectedAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 64, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 66, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -223,7 +223,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.CredentialExpiresAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 70, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 72, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 				if templ_7745c5c3_Err != nil {
@@ -236,7 +236,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(data.CredentialExpiresAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 70, Col: 81}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 72, Col: 81}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {
@@ -273,7 +273,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 				}
 			}
 			if data.Status != string(microsoft.StatusDisconnected) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<form method=\"post\" action=\"/connection/disconnect\" class=\"flex items-center gap-2\" x-data=\"{ confirm: false }\"><button class=\"btn btn-outline\" type=\"submit\" x-show=\"!confirm\">Disconnect</button><div class=\"flex items-center gap-2\" x-show=\"confirm\" x-cloak><span class=\"text-sm\">Disconnect the mailbox?</span> <button class=\"btn btn-error btn-sm\" type=\"submit\">Yes, disconnect</button> <button class=\"btn btn-ghost btn-sm\" type=\"button\" x-on:click=\"confirm = false\">Cancel</button></div></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<form method=\"post\" action=\"/connection/disconnect\" class=\"flex flex-wrap items-center gap-2\" x-data=\"{ confirm: false }\"><button class=\"btn btn-outline\" type=\"button\" x-on:click=\"confirm = true\" x-bind:aria-expanded=\"confirm\" aria-expanded=\"false\" x-show=\"!confirm\">Disconnect</button><div class=\"flex flex-wrap items-center gap-2\" x-show=\"confirm\" x-cloak><span class=\"text-sm\">Disconnect the mailbox?</span> <button class=\"btn btn-error btn-sm\" type=\"submit\">Yes, disconnect</button> <button class=\"btn btn-ghost btn-sm\" type=\"button\" x-on:click=\"confirm = false\">Cancel</button></div></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -284,7 +284,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Layout("Microsoft connection", true).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout("Microsoft connection", true, "mailbox").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -321,7 +321,7 @@ func statusBadge(status string) templ.Component {
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(status)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 104, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 106, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {
@@ -339,7 +339,7 @@ func statusBadge(status string) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(status)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 106, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 108, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 			if templ_7745c5c3_Err != nil {
@@ -357,7 +357,7 @@ func statusBadge(status string) templ.Component {
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(status)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 108, Col: 54}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `connection.templ`, Line: 110, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 			if templ_7745c5c3_Err != nil {

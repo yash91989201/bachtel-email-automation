@@ -258,7 +258,7 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 		"Sheet1",
 		`name="sheet"`,
 		`name="header_row"`,
-		"The default selection is worksheet",
+		"Current default:",
 	} {
 		if !strings.Contains(staging, want) {
 			t.Errorf("staging page missing %q: %.600s", want, staging)
@@ -280,7 +280,7 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 		"duplicate recipient address in this upload",
 		"not a single usable email address",
 		"missing required value(s): candidate_name",
-		"Candidate sending stays gated until change 5 release verification passes.",
+		"Candidate sending requires completed production release verification.",
 		`hx-post="/campaigns/` + id + `/tasks/` + taskID + `/preview"`,
 		`hx-target="#task-preview-result"`,
 	} {
@@ -548,32 +548,43 @@ func TestExclusionReportDownload(t *testing.T) {
 // all held still offers the download, states that nothing sends email, and
 // offers no start or send control.
 func TestAllHeldTaskOffersDownloadOnly(t *testing.T) {
-	_, handler := newTaskServer(t)
-	cookie := login(t, handler)
-	id := createCampaign(t, handler, cookie, "Engineers")
-	if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
-		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
-	}
-	taskID := stageTask(t, handler, cookie, id, taskWorkbook(t, "Sheet1", [][]string{
-		{"Email", "Applicant Full Name"},
-		{"held@example.com", "Held One"},
-		{" HELD@example.com ", "Held Two"},
-		{"not-an-address", "Held Three"},
-	}))
-
-	body := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
-	for _, want := range []string{
-		`href="/campaigns/` + id + `/tasks/` + taskID + `/excluded.xlsx"`,
-		"Candidate sending stays gated until change 5 release verification passes.",
+	for name, rows := range map[string][][]string{
+		"duplicates and invalid addresses": {
+			{"Email", "Applicant Full Name"},
+			{"held@example.com", "Held One"},
+			{" HELD@example.com ", "Held Two"},
+			{"not-an-address", "Held Three"},
+		},
+		"admitted rows missing required values": {
+			{"Email", "Applicant Full Name"},
+			{"valid@example.com", ""},
+		},
 	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("all-held page missing %q: %.600s", want, body)
-		}
+		t.Run(name, func(t *testing.T) {
+			_, handler := newTaskServer(t)
+			cookie := login(t, handler)
+			id := createCampaign(t, handler, cookie, "Engineers")
+			if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
+				t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
+			}
+			taskID := stageTask(t, handler, cookie, id, taskWorkbook(t, "Sheet1", rows))
+
+			body := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
+			for _, want := range []string{
+				`href="/campaigns/` + id + `/tasks/` + taskID + `/excluded.xlsx"`,
+				"Candidate sending requires completed production release verification.",
+				"No eligible recipients.",
+			} {
+				if !strings.Contains(body, want) {
+					t.Errorf("all-held page missing %q: %.600s", want, body)
+				}
+			}
+			if strings.Contains(body, `/sending"`) || strings.Contains(body, `name="schedule_date"`) || strings.Contains(body, `name="confirmed"`) {
+				t.Errorf("all-held page offers a start/send control: %.600s", body)
+			}
+			assertCount(t, body, "Eligible", 0)
+		})
 	}
-	if strings.Contains(body, "Send") || strings.Contains(body, ">Start") {
-		t.Errorf("all-held page offers a start/send control: %.600s", body)
-	}
-	assertCount(t, body, "Eligible", 0)
 }
 
 // TestTaskRevalidation covers behaviour 7: a second revision marks the task

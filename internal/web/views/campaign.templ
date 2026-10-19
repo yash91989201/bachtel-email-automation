@@ -1,5 +1,7 @@
 package views
 
+import "strconv"
+
 // CampaignListData is the safe view model for the campaign list. The
 // converter message is a fixed operator-facing instruction, never a path.
 type CampaignListData struct {
@@ -18,14 +20,13 @@ type CampaignListRow struct {
 }
 
 templ CampaignList(data CampaignListData) {
-	@Layout("Campaigns", true) {
-		<div class="space-y-3">
-			<p class="text-sm font-medium uppercase tracking-widest text-primary">Campaigns</p>
-			<h1 class="text-4xl font-bold tracking-tight">Email campaigns</h1>
-			<p class="max-w-2xl text-base-content/70">Each campaign owns one approved content revision and the result labels for downloaded candidate data. Nothing on this page sends email.</p>
-			<div class="card-actions">
-				<a class="btn btn-primary" href="/campaigns/new">New campaign</a>
-			</div>
+	@Layout("Campaigns", true, "campaigns") {
+		<div class="page-header">
+			<div>
+				<p class="eyebrow">Campaigns</p>
+				<h1 class="text-4xl font-bold tracking-tight">Email campaigns</h1>
+				<p class="page-description">Manage templates, recipient workbooks and submission history for each campaign.</p>
+			</div><a class="btn btn-primary" href="/campaigns/new">New campaign <span aria-hidden="true">+</span></a>
 		</div>
 		if data.ConverterError != "" {
 			<div class="alert alert-warning" role="alert">
@@ -45,34 +46,36 @@ templ CampaignList(data CampaignListData) {
 		} else {
 			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-label="Campaigns">
 				<div class="card-body">
-					<table class="table">
-						<thead>
-							<tr>
-								<th>Name</th>
-								<th>Source headers</th>
-								<th>Current revision</th>
-								<th>Approval</th>
-								<th></th>
-							</tr>
-						</thead>
-						<tbody>
-							for _, row := range data.Campaigns {
+					<div class="table-scroll">
+						<table class="table">
+							<thead>
 								<tr>
-									<td class="font-semibold">{ row.Name }</td>
-									<td><code>{ row.SourceHeaders }</code></td>
-									<td>
-										if row.HasRevision {
-											Revision { row.Revision }
-										} else {
-											No revision yet
-										}
-									</td>
-									<td>@revisionState(row.HasRevision, row.Approved)</td>
-									<td><a class="link link-primary" href={ "/campaigns/" + row.ID }>Open</a></td>
+									<th>Name</th>
+									<th>Source headers</th>
+									<th>Current revision</th>
+									<th>Approval</th>
+									<th><span class="sr-only">Actions</span></th>
 								</tr>
-							}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								for _, row := range data.Campaigns {
+									<tr>
+										<td class="font-semibold"><a class="link link-primary" href={ "/campaigns/" + row.ID }>{ row.Name }</a></td>
+										<td><code>{ row.SourceHeaders }</code></td>
+										<td>
+											if row.HasRevision {
+												Revision { row.Revision }
+											} else {
+												No revision yet
+											}
+										</td>
+										<td>@revisionState(row.HasRevision, row.Approved)</td>
+										<td><a class="btn btn-outline btn-sm" href={ "/campaigns/" + row.ID }>Open campaign</a></td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
 				</div>
 			</section>
 		}
@@ -89,25 +92,34 @@ type CampaignFormData struct {
 }
 
 templ CampaignForm(data CampaignFormData) {
-	@Layout("New campaign", true) {
-		<div class="space-y-3">
-			<p class="text-sm font-medium uppercase tracking-widest text-primary">Campaigns</p>
-			<h1 class="text-4xl font-bold tracking-tight">New campaign</h1>
-			<p class="max-w-2xl text-base-content/70">The name and the source headers for the mapping draft define the campaign. The subject and body document follow as the first content revision.</p>
+	@Layout("New campaign", true, "campaigns") {
+		<div class="page-header">
+			<div>
+				<p class="eyebrow">Campaigns</p>
+				<h1 class="text-4xl font-bold tracking-tight">New campaign</h1>
+				<p class="page-description">Start with a name and your Excel column headers. You’ll add the email template next.</p>
+			</div>
 		</div>
 		if data.Error != "" {
 			<div class="alert alert-error" role="alert">{ data.Error }</div>
 		}
-		<form method="post" action="/campaigns" class="card border border-base-300 bg-base-100 shadow-sm">
+		<form method="post" action="/campaigns" class="card form-card">
 			<div class="card-body gap-4">
-				<label class="label" for="campaign-name">Name</label>
-				<input class="input w-full" id="campaign-name" type="text" name="name" value={ data.Name } maxlength="200" required/>
-				<label class="label" for="campaign-headers">Source headers for mapping draft</label>
-				<input class="input w-full" id="campaign-headers" type="text" name="source_headers" value={ data.SourceHeaders } required/>
-				<p class="text-sm text-base-content/60">Comma-separated source worksheet headers, including the candidate email column. These generate the draft mapping table; mark one row as recipient when creating a revision.</p>
-				<label class="label" for="campaign-labels">Result column labels</label>
-				<input class="input w-full" id="campaign-labels" type="text" name="result_labels" value={ data.ResultLabels }/>
-				<p class="text-sm text-base-content/60">Comma-separated labels for the downloadable result columns. The defaults are pre-filled; changing them later never invalidates content approval.</p>
+				<h2 class="card-title">Campaign details</h2>
+				<div class="space-y-2">
+					<label class="label" for="campaign-name">Campaign name</label>
+					<input class="input w-full" id="campaign-name" type="text" name="name" value={ data.Name } maxlength="200" required/>
+				</div>
+				<div class="space-y-2">
+					<label class="label" for="campaign-headers">Source headers for mapping draft</label>
+					<input class="input w-full" id="campaign-headers" type="text" name="source_headers" value={ data.SourceHeaders } required/>
+					<p class="text-sm text-base-content/60">Example: <code>Candidate Name, Candidate Email, Department</code>. Use comma-separated source worksheet headers, including the candidate email column. These generate the draft mapping table; mark one row as recipient when creating a revision.</p>
+				</div>
+				<div class="space-y-2">
+					<label class="label" for="campaign-labels">Result column labels</label>
+					<input class="input w-full" id="campaign-labels" type="text" name="result_labels" value={ data.ResultLabels }/>
+					<p class="text-sm text-base-content/60">Comma-separated labels for the downloadable result columns. The defaults are pre-filled; changing them later never invalidates content approval.</p>
+				</div>
 				<div class="card-actions">
 					<button class="btn btn-primary" type="submit">Create campaign</button>
 					<a class="btn btn-ghost" href="/campaigns">Cancel</a>
@@ -183,14 +195,9 @@ type RevisionRow struct {
 }
 
 templ CampaignPage(data CampaignPageData) {
-	@Layout(data.Name, true) {
-		<div class="space-y-3">
-			<p class="text-sm font-medium uppercase tracking-widest text-primary">Campaign</p>
-			<h1 class="text-4xl font-bold tracking-tight">{ data.Name }</h1>
-			<p class="max-w-2xl text-base-content/70">Nothing on this page sends email.</p>
-			<div class="card-actions">
-				<a class="btn btn-primary" href={ "/campaigns/" + data.ID + "/tasks" }>Email tasks</a>
-			</div>
+	@Layout(data.Name, true, "campaigns") {
+		<div class="page-header">
+			<div><a class="link text-sm text-base-content/60" href="/campaigns">← All campaigns</a><p class="eyebrow mt-4">Campaign workspace</p><h1>{ data.Name }</h1><p class="page-description">Prepare your email content, then open email tasks to upload recipients, test and send.</p></div>
 		</div>
 		if data.RevisionError != "" {
 			<div class="alert alert-error" role="alert">{ data.RevisionError }</div>
@@ -213,247 +220,300 @@ templ CampaignPage(data CampaignPageData) {
 				</div>
 			</div>
 		}
-		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="revision-heading">
-			<div class="card-body gap-4">
-				<h2 id="revision-heading" class="card-title">Current revision</h2>
-				if data.HasRevision {
-					<dl class="space-y-1 text-sm">
-						<div class="flex gap-2">
-							<dt class="font-semibold">Revision:</dt>
-							<dd>{ data.Revision }</dd>
-						</div>
-						<div class="flex gap-2">
-							<dt class="font-semibold">Subject:</dt>
-							<dd>{ data.Subject }</dd>
-						</div>
-						<div class="flex gap-2">
-							<dt class="font-semibold">Converter:</dt>
-							<dd>{ data.Converter }</dd>
-						</div>
-						<div class="flex gap-2">
-							<dt class="font-semibold">Content hash:</dt>
-							<dd><code class="break-all">{ data.ContentHash }</code></dd>
-						</div>
-						<div class="flex gap-2">
-							<dt class="font-semibold">Approval:</dt>
-							<dd>@revisionState(true, data.Approved)</dd>
-						</div>
-					</dl>
-				} else {
-					<p class="text-base-content/70">No content revision yet. Upload a body document below to create the first one.</p>
-				}
-			</div>
-		</section>
-		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="upload-heading">
-			<div class="card-body gap-4">
-				<h2 id="upload-heading" class="card-title">New revision</h2>
-				<p>Upload the DOCX body document with its subject and mapping table. Revisions are immutable: a valid upload becomes the current revision, and the history below is never edited.</p>
-				<form method="post" action={ "/campaigns/" + data.ID + "/revisions" } enctype="multipart/form-data" class="space-y-4">
-					<label class="label" for="revision-document">Body document (DOCX)</label>
-					<input class="file-input file-input-bordered w-full" id="revision-document" type="file" name="document" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required/>
-					<label class="label" for="revision-subject">Subject</label>
-					<input class="input input-bordered w-full" id="revision-subject" type="text" name="subject" maxlength="998" required/>
-					<label class="label" for="revision-mappings">Mapping table</label>
-					<div id="revision-mappings-help" class="space-y-4 text-sm">
-						<div class="rounded-box border border-base-300 bg-base-200/50 p-4">
-							<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">Source headers for mapping draft</p>
-							<code class="break-words">{ data.SourceHeaders }</code>
-						</div>
-						<div class="overflow-x-auto rounded-box border border-base-300">
-							<table class="table table-sm">
-								<caption class="p-3 text-left font-medium">Column order <span class="font-normal text-base-content/60">— separate each column with <code>|</code></span></caption>
-								<thead class="bg-base-200/50">
-									<tr>
-										<th>Variable</th>
-										<th>Source header</th>
-										<th>Required / optional / recipient</th>
-										<th>Format</th>
-										<th>Fallback</th>
-									</tr>
-								</thead>
-								<tbody>
-									<tr>
-										<td><code>{ data.ExampleVariable }</code></td>
-										<td><code>{ data.ExampleHeader }</code></td>
-										<td><code>required</code></td>
-										<td><code>text</code></td>
-										<td class="text-base-content/50">Leave blank</td>
-									</tr>
-								</tbody>
-							</table>
-						</div>
-						<div class="flex flex-wrap items-center gap-2 text-base-content/70">
-							<span>Formats:</span>
-							<code class="badge badge-ghost badge-sm">text</code>
-							<code class="badge badge-ghost badge-sm">name</code>
-							<code class="badge badge-ghost badge-sm">designation</code>
-							<code class="badge badge-ghost badge-sm">email</code>
-							<span class="text-xs">Defaults to text, or email for recipient rows. Fallback is only for optional rows.</span>
-						</div>
-						<div class="rounded-box border border-primary/20 bg-primary/5 p-4">
-							<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">Example line</p>
-							<code class="break-words">{ data.ExampleVariable + " | " + data.ExampleHeader + " | required | text" }</code>
-						</div>
-					</div>
-					<p class="text-sm">Sending address example: <code>candidate_email | Candidate Email | recipient | email</code>. The recipient is required and cannot have a fallback.</p>
-					<p id="revision-mappings-hint" class="text-sm text-base-content/60">Enter your mappings below, one per line. Mark exactly one row as <code>recipient</code> to select the sending address. It needs no placeholder in the subject or body. Other rows must match the <code>{ "{{...}}" }</code> placeholders.</p>
-					<textarea class="textarea textarea-bordered w-full font-mono" id="revision-mappings" name="mappings" rows="8" aria-describedby="revision-mappings-help revision-mappings-hint">{ data.MappingDraft }</textarea>
-					<div class="card-actions">
-						<button class="btn btn-primary" type="submit">Create revision</button>
-					</div>
-				</form>
-			</div>
-		</section>
-		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="labels-heading">
-			<div class="card-body gap-4">
-				<h2 id="labels-heading" class="card-title">Result column labels</h2>
-				<form method="post" action={ "/campaigns/" + data.ID + "/labels" } class="space-y-4">
-					<label class="label" for="labels-input">Labels</label>
-					<input class="input input-bordered w-full" id="labels-input" type="text" name="result_labels" value={ data.ResultLabels } required/>
-					<p class="text-sm text-base-content/60">Comma-separated labels for the downloadable result columns. Changing them never invalidates content approval.</p>
-					<div class="card-actions">
-						<button class="btn btn-primary" type="submit">Save labels</button>
-					</div>
-				</form>
-			</div>
-		</section>
-		if data.HasRevision {
-			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="preview-heading">
-				<div class="card-body gap-4">
-					<h2 id="preview-heading" class="card-title">Sample preview</h2>
-					<p>Fill one sample value per variable to render the email exactly as a candidate row would. Nothing is sent and nothing is stored.</p>
-					<form method="post" action={ "/campaigns/" + data.ID + "/preview" } hx-post={ "/campaigns/" + data.ID + "/preview" } hx-target="#preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
-						for _, variable := range data.Variables {
-							<label class="label" for={ "sample-" + variable }>Sample value for { variable }</label>
-							<input class="input input-bordered w-full" id={ "sample-" + variable } type="text" name={ variable }/>
-						}
-						<div class="card-actions">
-							<button class="btn btn-primary" type="submit">Render preview</button>
-						</div>
-					</form>
-					<div id="preview-result" role="status" aria-live="polite">
-						<p class="text-base-content/60">Submit sample values to render the preview here.</p>
-					</div>
+		<div class="campaign-workspace" x-data={ "{ tab: '" + campaignInitialTab(data) + "' }" } data-has-error={ strconv.FormatBool(data.RevisionError != "" || data.LabelsError != "" || data.DeleteError != "") } data-has-preview={ strconv.FormatBool(data.HasRevision) } x-init="if ($el.dataset.hasError !== 'true') { const selected = location.hash.slice(1); if (['template', 'preview', 'history', 'settings'].includes(selected) && (selected !== 'preview' || $el.dataset.hasPreview === 'true')) tab = selected; }">
+			<aside class="workspace-sidebar" aria-label="Campaign navigation">
+				<a class="btn btn-primary workspace-task-link" href={ "/campaigns/" + data.ID + "/tasks" }>Email tasks <span aria-hidden="true">→</span></a>
+				<p class="workspace-nav-heading">Content & preparation</p>
+				<div role="tablist" aria-label="Campaign sections" aria-orientation="vertical" x-on:keydown="if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes($event.key)) { $event.preventDefault(); const items = Array.from($el.querySelectorAll('[role=tab]')); const index = items.indexOf($event.target); const next = $event.key === 'Home' ? 0 : $event.key === 'End' ? items.length - 1 : (index + (['ArrowDown', 'ArrowRight'].includes($event.key) ? 1 : -1) + items.length) % items.length; items[next].focus(); items[next].click(); }">
+					@workspaceSidebarTab("campaign", "template", "Template", "Subject, document & mappings", campaignInitialTab(data))
+					if data.HasRevision {
+						@workspaceSidebarTab("campaign", "preview", "Sample preview", "Check personalized content", campaignInitialTab(data))
+					}
+					<p class="workspace-nav-heading">Records & management</p>
+					@workspaceSidebarTab("campaign", "history", "History & downloads", "Reports & recorded emails", campaignInitialTab(data))
+					@workspaceSidebarTab("campaign", "settings", "Settings", "Result labels & deletion", campaignInitialTab(data))
 				</div>
-			</section>
-		}
-		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="history-heading">
-			<div class="card-body gap-4">
-				<h2 id="history-heading" class="card-title">Revision history</h2>
-				<p>Revisions are immutable. Older revisions stay for audit and have no edit controls.</p>
-				if len(data.History) == 0 {
-					<p class="text-base-content/60">No revisions yet.</p>
-				} else {
-					<ol class="space-y-2">
-						for _, entry := range data.History {
-							<li class="flex flex-wrap items-center gap-2 text-sm">
-								<span class="font-semibold">Revision { entry.Revision }</span>
-								<code class="break-all">{ entry.ContentHash }</code>
-								@revisionState(true, entry.Approved)
-							</li>
-						}
-					</ol>
-				}
-			</div>
-		</section>
-		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="exports-heading">
-			<div class="card-body gap-4">
-				<h2 id="exports-heading" class="card-title">History and downloads</h2>
-				<p>The report is an Excel workbook with an as-of summary, one row per candidate and every attempt with its kind kept explicit. The package contains the same report, one static HTML file per recorded attempt and a CSV index. Test submissions never count toward candidate totals. Generation only reads recorded history; it never sends or retries an email.</p>
-				<form method="post" action={ "/campaigns/" + data.ID + "/exports" }>
-					<button class="btn btn-primary" type="submit">Generate or refresh downloads</button>
-				</form>
-				<div class="grid gap-4 md:grid-cols-2">
-					<div class="rounded-box border border-base-300 p-4">
-						<h3 class="font-semibold">Campaign report (XLSX)</h3>
-						if data.ReportReady {
-							<p class="text-sm text-base-content/60">As of { data.ReportAsOf }</p>
-							<a class="btn btn-outline btn-sm" href={ "/campaigns/" + data.ID + "/exports/report.xlsx" }>Download report</a>
-						} else if data.ReportState == "generating" {
-							<p>Generating now. Reload this page shortly.</p>
-						} else if data.ReportState == "failed" {
-							if data.ReportError != "" {
-								<p class="text-error">{ data.ReportError }</p>
-							}
-						} else {
-							<p>Not generated yet.</p>
-						}
-					</div>
-					<div class="rounded-box border border-base-300 p-4">
-						<h3 class="font-semibold">Campaign package (ZIP)</h3>
-						if data.PackageReady {
-							<p class="text-sm text-base-content/60">As of { data.PackageAsOf }</p>
-							<a class="btn btn-outline btn-sm" href={ "/campaigns/" + data.ID + "/exports/package.zip" }>Download package</a>
-						} else if data.PackageState == "generating" {
-							<p>Generating now. Reload this page shortly.</p>
-						} else if data.PackageState == "failed" {
-							if data.PackageError != "" {
-								<p class="text-error">{ data.PackageError }</p>
-							}
-						} else {
-							<p>Not generated yet.</p>
-						}
-					</div>
-				</div>
-				<form method="post" action={ "/campaigns/" + data.ID + "/exports/delete" }>
-					<button class="btn btn-ghost btn-sm" type="submit">Remove generated downloads</button>
-				</form>
-				<p class="text-sm text-base-content/60">Removing generated downloads deletes only those files. Campaign records, uploads, candidate eligibility and attempt history stay unchanged, and the downloads can be generated again.</p>
-				<div class="overflow-x-auto">
-					<table class="table table-sm">
-						<caption class="p-2 text-left text-sm text-base-content/60">Most recent 100 attempts. Every attempt keeps its own row, including retries and manual resolutions.</caption>
-						<thead>
-							<tr>
-								<th>Attempt</th>
-								<th>Kind</th>
-								<th>Recipient</th>
-								<th>State</th>
-								<th>Finished</th>
-								<th></th>
-							</tr>
-						</thead>
-						<tbody>
-							if len(data.Attempts) == 0 {
-								<tr><td colspan="6">No attempts recorded yet.</td></tr>
+			</aside>
+			<div class="workspace-content">
+				@workspaceTabPanel("campaign", "template", campaignInitialTab(data)) {
+					<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="revision-heading">
+						<div class="card-body gap-4">
+							<h2 id="revision-heading" class="card-title">Current revision</h2>
+							if data.HasRevision {
+								<dl class="space-y-1 text-sm">
+									<div class="flex gap-2">
+										<dt class="font-semibold">Revision:</dt>
+										<dd>{ data.Revision }</dd>
+									</div>
+									<div class="flex gap-2">
+										<dt class="font-semibold">Subject:</dt>
+										<dd>{ data.Subject }</dd>
+									</div>
+									<div class="flex gap-2">
+										<dt class="font-semibold">Approval:</dt>
+										<dd>@revisionState(true, data.Approved)</dd>
+									</div>
+								</dl>
+								<details class="text-sm">
+									<summary class="cursor-pointer text-base-content/60">Conversion details</summary>
+									<dl class="mt-3 space-y-2">
+										<div class="flex gap-2">
+											<dt class="font-semibold">Converter:</dt>
+											<dd>{ data.Converter }</dd>
+										</div>
+										<div class="flex gap-2">
+											<dt class="font-semibold">Content hash:</dt>
+											<dd><code class="break-all">{ data.ContentHash }</code></dd>
+										</div>
+									</dl>
+								</details>
 							} else {
-								for _, attempt := range data.Attempts {
-									<tr>
-										<td><code>{ attempt.ID }</code></td>
-										<td>
-											if attempt.Test {
-												<span class="badge badge-warning badge-sm">Test</span>
-											} else {
-												<span class="badge badge-ghost badge-sm">Candidate</span>
-											}
-										</td>
-										<td>{ attempt.Recipient }</td>
-										<td>{ attempt.State }</td>
-										<td>{ attempt.FinishedAt }</td>
-										<td><a class="link link-primary" href={ "/campaigns/" + data.ID + "/attempts/" + attempt.ID + "/email.html" }>HTML</a></td>
-									</tr>
-								}
+								<p class="text-base-content/70">No content revision yet. Upload a body document below to create the first one.</p>
 							}
-						</tbody>
-					</table>
-				</div>
+						</div>
+					</section>
+					<details class="disclosure" open?={ !data.HasRevision || data.RevisionError != "" }>
+						<summary id="upload-heading">Create a new content revision</summary>
+						<div class="disclosure-body space-y-4">
+							<p>Upload the DOCX body document with its subject and mapping table. Revisions are immutable: a valid upload becomes the current revision, and the history below is never edited.</p>
+							<form method="post" action={ "/campaigns/" + data.ID + "/revisions" } enctype="multipart/form-data" class="space-y-4">
+								<div class="field-grid">
+									<div class="space-y-2">
+										<label class="label" for="revision-document">Body document (DOCX)</label>
+										<input class="file-input file-input-bordered w-full" id="revision-document" type="file" name="document" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required/>
+									</div>
+									<div class="space-y-2">
+										<label class="label" for="revision-subject">Subject</label>
+										<input class="input input-bordered w-full" id="revision-subject" type="text" name="subject" maxlength="998" required/>
+									</div>
+								</div>
+								<h3 class="font-semibold">Personalization & recipient mapping</h3>
+								<p class="text-sm text-base-content/70">Place <code>{ "{{" + data.ExampleVariable + "}}" }</code> in the subject or Word document wherever its value should appear. Use the same variable name in your mapping below.</p>
+								<div class="mapping-workspace">
+									<div class="space-y-4">
+										<label class="label" for="revision-mappings">Mapping table</label>
+										<p class="text-sm">Sending address example: <code>candidate_email | Candidate Email | recipient | email</code>. The recipient is required and cannot have a fallback.</p>
+										<p id="revision-mappings-hint" class="text-sm text-base-content/60">Enter your mappings below, one per line. Mark exactly one row as <code>recipient</code> to select the sending address. It needs no placeholder in the subject or body. Other rows must match the <code>{ "{{...}}" }</code> placeholders.</p>
+										<textarea class="textarea textarea-bordered w-full font-mono" id="revision-mappings" name="mappings" rows="8" aria-describedby="revision-mappings-help revision-mappings-hint">{ data.MappingDraft }</textarea>
+									</div>
+									<aside aria-label="Mapping reference">
+										<div id="revision-mappings-help" class="space-y-4 text-sm">
+											<div class="rounded-box border border-base-300 bg-base-200/50 p-4">
+												<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">Source headers for mapping draft</p>
+												<code class="break-words">{ data.SourceHeaders }</code>
+											</div>
+											<div class="overflow-x-auto rounded-box border border-base-300">
+												<table class="table table-sm">
+													<caption class="p-3 text-left font-medium">Column order <span class="font-normal text-base-content/60">— separate each column with <code>|</code></span></caption>
+													<thead class="bg-base-200/50"><tr><th>Column</th><th>What to enter</th></tr></thead>
+													<tbody>
+														<tr><td>1 · Variable</td><td><code>{ data.ExampleVariable }</code></td></tr>
+														<tr><td>2 · Source header</td><td><code>{ data.ExampleHeader }</code></td></tr>
+														<tr><td>3 · Role</td><td><code>required</code>, <code>optional</code> or <code>recipient</code></td></tr>
+														<tr><td>4 · Format</td><td><code>text</code>, <code>name</code>, <code>designation</code> or <code>email</code></td></tr>
+														<tr><td>5 · Fallback</td><td>Optional rows only; leave blank otherwise.</td></tr>
+													</tbody>
+												</table>
+											</div>
+											<div class="flex flex-wrap items-center gap-2 text-base-content/70">
+												<span>Formats:</span>
+												<code class="badge badge-ghost badge-sm">text</code>
+												<code class="badge badge-ghost badge-sm">name</code>
+												<code class="badge badge-ghost badge-sm">designation</code>
+												<code class="badge badge-ghost badge-sm">email</code>
+												<span class="text-xs">Defaults to text, or email for recipient rows. Fallback is only for optional rows.</span>
+											</div>
+											<div class="rounded-box border border-primary/20 bg-primary/5 p-4">
+												<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">Example line</p>
+												<code class="break-words">{ data.ExampleVariable + " | " + data.ExampleHeader + " | required | text" }</code>
+											</div>
+										</div>
+									</aside>
+								</div>
+								<div class="card-actions">
+									<button class="btn btn-primary" type="submit">Create revision</button>
+								</div>
+							</form>
+						</div>
+					</details>
+				}
+				if data.HasRevision {
+					@workspaceTabPanel("campaign", "preview", campaignInitialTab(data)) {
+						if data.HasRevision {
+							<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="preview-heading">
+								<div class="card-body gap-4">
+									<h2 id="preview-heading" class="card-title">Sample preview</h2>
+									<p>Fill one sample value per variable to render the email exactly as a candidate row would. Nothing is sent and nothing is stored.</p>
+									<form method="post" action={ "/campaigns/" + data.ID + "/preview" } hx-post={ "/campaigns/" + data.ID + "/preview" } hx-target="#preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
+										<div class="field-grid">
+											for _, variable := range data.Variables {
+												<div class="space-y-2">
+													<label class="label" for={ "sample-" + variable }>Sample value for { variable }</label>
+													<input class="input input-bordered w-full" id={ "sample-" + variable } type="text" name={ variable }/>
+												</div>
+											}
+										</div>
+										<div class="card-actions">
+											<button class="btn btn-primary" type="submit">Render preview</button>
+										</div>
+									</form>
+									<div id="preview-result" role="status" aria-live="polite">
+										<p class="text-base-content/60">Submit sample values to render the preview here.</p>
+									</div>
+								</div>
+							</section>
+						}
+					}
+				}
+				@workspaceTabPanel("campaign", "history", campaignInitialTab(data)) {
+					<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="exports-heading">
+						<div class="card-body gap-4">
+							<h2 id="exports-heading" class="card-title">History and downloads</h2>
+							<p>Download a candidate summary and complete attempt history. Each export records its as-of time. Generating downloads never sends or retries email, and tests stay separate from candidate totals.</p>
+							<form method="post" action={ "/campaigns/" + data.ID + "/exports#history" }>
+								<button class="btn btn-primary" type="submit">Generate or refresh downloads</button>
+							</form>
+							<div class="grid gap-4 md:grid-cols-2">
+								<div class="rounded-box border border-base-300 p-4">
+									<h3 class="font-semibold">Campaign report (XLSX)</h3>
+									<p class="text-sm text-base-content/60">Candidate summary and a separate history of every attempt.</p>
+									if data.ReportReady {
+										<p class="text-sm text-base-content/60">As of { data.ReportAsOf }</p>
+										<a class="btn btn-outline btn-sm" href={ "/campaigns/" + data.ID + "/exports/report.xlsx" }>Download report</a>
+									} else if data.ReportState == "generating" {
+										<p>Generating now. Reload this page shortly.</p>
+									} else if data.ReportState == "failed" {
+										if data.ReportError != "" {
+											<p class="text-error">{ data.ReportError }</p>
+										}
+									} else {
+										<p>Not generated yet.</p>
+									}
+								</div>
+								<div class="rounded-box border border-base-300 p-4">
+									<h3 class="font-semibold">Campaign package (ZIP)</h3>
+									<p class="text-sm text-base-content/60">The report, recorded HTML emails and a CSV index.</p>
+									if data.PackageReady {
+										<p class="text-sm text-base-content/60">As of { data.PackageAsOf }</p>
+										<a class="btn btn-outline btn-sm" href={ "/campaigns/" + data.ID + "/exports/package.zip" }>Download package</a>
+									} else if data.PackageState == "generating" {
+										<p>Generating now. Reload this page shortly.</p>
+									} else if data.PackageState == "failed" {
+										if data.PackageError != "" {
+											<p class="text-error">{ data.PackageError }</p>
+										}
+									} else {
+										<p>Not generated yet.</p>
+									}
+								</div>
+							</div>
+							<form method="post" action={ "/campaigns/" + data.ID + "/exports/delete#history" }>
+								<button class="btn btn-ghost btn-sm" type="submit">Remove generated downloads</button>
+							</form>
+							<p class="text-sm text-base-content/60">Removing generated downloads deletes only those files. Campaign records, uploads, candidate eligibility and attempt history stay unchanged, and the downloads can be generated again.</p>
+							<div class="overflow-x-auto">
+								<table class="table table-sm">
+									<caption class="p-2 text-left text-sm text-base-content/60">Most recent 100 attempts. Every attempt keeps its own row, including retries and manual resolutions.</caption>
+									<thead>
+										<tr>
+											<th>Attempt</th>
+											<th>Kind</th>
+											<th>Recipient</th>
+											<th>State</th>
+											<th>Finished</th>
+											<th><span class="sr-only">Actions</span></th>
+										</tr>
+									</thead>
+									<tbody>
+										if len(data.Attempts) == 0 {
+											<tr><td colspan="6">No attempts recorded yet.</td></tr>
+										} else {
+											for _, attempt := range data.Attempts {
+												<tr>
+													<td><code>{ attempt.ID }</code></td>
+													<td>
+														if attempt.Test {
+															<span class="badge badge-warning badge-sm">Test</span>
+														} else {
+															<span class="badge badge-ghost badge-sm">Candidate</span>
+														}
+													</td>
+													<td>{ attempt.Recipient }</td>
+													<td>{ attempt.State }</td>
+													<td>{ attempt.FinishedAt }</td>
+													<td><a class="link link-primary" href={ "/campaigns/" + data.ID + "/attempts/" + attempt.ID + "/email.html" }>HTML</a></td>
+												</tr>
+											}
+										}
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</section>
+					<details class="disclosure">
+						<summary id="history-heading">Revision history</summary>
+						<div class="disclosure-body space-y-4">
+							<p>Revisions are immutable. Older revisions stay for audit and have no edit controls.</p>
+							if len(data.History) == 0 {
+								<p class="text-base-content/60">No revisions yet.</p>
+							} else {
+								<ol class="space-y-2">
+									for _, entry := range data.History {
+										<li class="flex flex-wrap items-center gap-2 text-sm">
+											<span class="font-semibold">Revision { entry.Revision }</span>
+											<code class="break-all">{ entry.ContentHash }</code>
+											@revisionState(true, entry.Approved)
+										</li>
+									}
+								</ol>
+							}
+						</div>
+					</details>
+				}
+				@workspaceTabPanel("campaign", "settings", campaignInitialTab(data)) {
+					<div id="campaign-settings" class="space-y-4">
+						<h2 class="section-heading">Campaign settings</h2>
+						<details class="disclosure" open?={ data.LabelsError != "" }>
+							<summary id="labels-heading">Result column labels</summary>
+							<div class="disclosure-body space-y-4">
+								<form method="post" action={ "/campaigns/" + data.ID + "/labels#settings" } class="space-y-4">
+									<label class="label" for="labels-input">Labels</label>
+									<input class="input input-bordered w-full" id="labels-input" type="text" name="result_labels" value={ data.ResultLabels } required/>
+									<p class="text-sm text-base-content/60">Comma-separated labels for the downloadable result columns. Changing them never invalidates content approval.</p>
+									<div class="card-actions">
+										<button class="btn btn-primary" type="submit">Save labels</button>
+									</div>
+								</form>
+							</div>
+						</details>
+						<details class="disclosure danger-disclosure" open?={ data.DeleteError != "" }>
+							<summary id="delete-heading">Delete campaign & all history</summary>
+							<div class="disclosure-body space-y-4">
+								<p>Deleting this campaign removes its revisions and uploaded documents, tasks and retained workbooks, candidate identities, attempts, approvals, manual resolutions and generated downloads. Deleting it also removes its duplicate-prevention history, so a future campaign can send to the same recipients again. There is no automatic expiry: nothing is removed until you confirm here.</p>
+								<p>Deleting live records never rewrites backups that already exist. Any backup retains its own copy until you remove that backup separately.</p>
+								<p>Deletion is refused while a task is running or stopping, while a candidate is reserved or in flight, or while an attempt is queued or in flight.</p>
+								<form method="post" action={ "/campaigns/" + data.ID + "/delete#settings" } class="space-y-3">
+									<label class="label cursor-pointer justify-start gap-3">
+										<input class="checkbox checkbox-error" type="checkbox" name="confirm" value="delete"/>
+										<span>I understand that this deletes the campaign's records, files and duplicate-prevention history.</span>
+									</label>
+									<button class="btn btn-error" type="submit">Delete campaign</button>
+								</form>
+							</div>
+						</details>
+					</div>
+				}
 			</div>
-		</section>
-		<section class="card border border-error bg-base-100 shadow-sm" aria-labelledby="delete-heading">
-			<div class="card-body gap-4">
-				<h2 id="delete-heading" class="card-title">Delete campaign</h2>
-				<p>Deleting this campaign removes its revisions and uploaded documents, tasks and retained workbooks, candidate identities, attempts, approvals, manual resolutions and generated downloads. Deleting it also removes its duplicate-prevention history, so a future campaign can send to the same recipients again. There is no automatic expiry: nothing is removed until you confirm here.</p>
-				<p>Deleting live records never rewrites backups that already exist. Any backup retains its own copy until you remove that backup separately.</p>
-				<p>Deletion is refused while a task is running or stopping, while a candidate is reserved or in flight, or while an attempt is queued or in flight.</p>
-				<form method="post" action={ "/campaigns/" + data.ID + "/delete" } class="space-y-3">
-					<label class="label cursor-pointer justify-start gap-3">
-						<input class="checkbox checkbox-error" type="checkbox" name="confirm" value="delete"/>
-						<span>I understand that this deletes the campaign's records, files and duplicate-prevention history.</span>
-					</label>
-					<button class="btn btn-error" type="submit">Delete campaign</button>
-				</form>
-			</div>
-		</section>
+		</div>
 	}
+}
+
+// Validation errors take priority over a previously selected tab.
+func campaignInitialTab(data CampaignPageData) string {
+	if data.LabelsError != "" || data.DeleteError != "" {
+		return "settings"
+	}
+	return "template"
 }
 
 // PreviewData is the view model for the sample preview partial. The error is
@@ -514,28 +574,30 @@ templ PreviewResult(data PreviewData) {
 				</div>
 				<div class="space-y-1">
 					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Body</p>
-					<div class="rounded-box border border-base-300 p-4">@templ.Raw(data.Body)</div>
+					<div class="email-body rounded-box border border-base-300 p-4">@templ.Raw(data.Body)</div>
 				</div>
-				<table class="table table-sm">
-					<thead>
-						<tr>
-							<th>Variable</th>
-							<th>Source header</th>
-							<th>Raw value</th>
-							<th>Used value</th>
-						</tr>
-					</thead>
-					<tbody>
-						for _, value := range data.Values {
+				<div class="table-scroll">
+					<table class="table table-sm">
+						<thead>
 							<tr>
-								<td>{ value.Variable }</td>
-								<td><code>{ value.Header }</code></td>
-								<td><code>{ value.Raw }</code></td>
-								<td><code>{ value.Normalized }</code></td>
+								<th>Variable</th>
+								<th>Source header</th>
+								<th>Raw value</th>
+								<th>Used value</th>
 							</tr>
-						}
-					</tbody>
-				</table>
+						</thead>
+						<tbody>
+							for _, value := range data.Values {
+								<tr>
+									<td>{ value.Variable }</td>
+									<td><code>{ value.Header }</code></td>
+									<td><code>{ value.Raw }</code></td>
+									<td><code>{ value.Normalized }</code></td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
 			}
 		</div>
 	</div>

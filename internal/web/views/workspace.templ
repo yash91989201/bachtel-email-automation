@@ -1,0 +1,21 @@
+package views
+
+import "strconv"
+
+templ workspaceSidebarTab(scope, id, label, description, initial string) {
+	<button type="button" class="workspace-tab" role="tab" id={ scope + "-tab-" + id } data-tab={ id } aria-controls={ scope + "-panel-" + id } aria-selected={ strconv.FormatBool(initial == id) } x-bind:aria-selected="tab === $el.dataset.tab" x-bind:tabindex="tab === $el.dataset.tab ? 0 : -1" x-on:click="tab = $el.dataset.tab; history.replaceState(null, '', '#' + tab)">
+		<span>{ label }</span><small>{ description }</small>
+	</button>
+}
+
+templ workspaceTabPanel(scope, id, initial string) {
+	<div class="workspace-panel space-y-6" role="tabpanel" id={ scope + "-panel-" + id } data-panel={ id } aria-labelledby={ scope + "-tab-" + id } tabindex="0" hidden?={ id != initial } x-bind:hidden="tab !== $el.dataset.panel">
+		{ children... }
+	</div>
+}
+
+templ workspaceTabList(label string) {
+	<div role="tablist" aria-label={ label } aria-orientation="vertical" x-on:keydown="if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes($event.key)) { $event.preventDefault(); const items = Array.from($el.querySelectorAll('[role=tab]')); const index = items.indexOf($event.target); const next = $event.key === 'Home' ? 0 : $event.key === 'End' ? items.length - 1 : (index + (['ArrowDown', 'ArrowRight'].includes($event.key) ? 1 : -1) + items.length) % items.length; items[next].focus(); items[next].click(); }">
+		{ children... }
+	</div>
+}

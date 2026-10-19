@@ -28,14 +28,32 @@ func sendingControlKey(data SendingData) string {
 	return fmt.Sprintf("%s-%t-%t-%d-%d-%d-%d-%d-%d-%d-%d-%d-%s", data.Status, data.Enabled, data.Approved, data.Remaining, data.Submitted, data.Failed, data.Held, data.InFlight, data.Reserved, data.Invalid, data.Duplicate, data.Ineligible, data.ScheduleState)
 }
 
+func sendingNeedsRecovery(row SendingRow) bool {
+	return row.State == "definite_failure" || row.State == "failed" || row.State == "auth_failure" || row.State == "correction_required" || row.State == "manually_submitted" || row.State == "review_required"
+}
+
+func sendingHasRecovery(rows []SendingRow) bool {
+	for _, row := range rows {
+		if sendingNeedsRecovery(row) {
+			return true
+		}
+	}
+	return false
+}
+
 templ SendingPage(data SendingData) {
-	@Layout("Sending", true) {
-		<h1 class="text-4xl font-bold">Sending and recovery</h1>
-		<a class="link" href={ data.TaskURL }>Back to task snapshot and exclusions</a>
-		<p>Fixed sender: <strong>{ data.Sender }</strong>. SUBMITTED means Microsoft accepted the request; it does not confirm delivery.</p>
-		<p>Closing the browser or logging out does not stop server work. Reconnecting Microsoft or sending a diagnostic test never resumes candidates.</p>
+	@Layout("Sending", true, "campaigns") {
+		<header class="page-header">
+			<div>
+				<p class="eyebrow">Task workflow · Step 4</p>
+				<h1>Test, approve and manage sending</h1>
+				<p class="page-description">Test your email, approve the received formatting, then send or schedule recipients.</p>
+				<p class="text-sm text-base-content/70">Fixed sender: <strong>{ data.Sender }</strong></p>
+			</div>
+			<div class="action-bar"><a class="btn btn-ghost" href={ data.TaskURL }>Back to task snapshot and exclusions</a></div>
+		</header>
 		if !data.Enabled {
-			<div class="alert alert-warning">Candidate sending is gated until change 5 production release verification passes. Diagnostic test emails remain available.</div>
+			<div class="alert alert-warning">Candidate sending is disabled until production release verification is complete. Diagnostic test emails remain available.</div>
 		}
 		if data.RestoreReview {
 			<div class="alert alert-error" role="alert">Restore review is active. Sending, scheduling, retries and resends are disabled until submissions made after the restored backup are reconciled and the server is restarted without APP_RESTORE_REVIEW.</div>
@@ -43,113 +61,177 @@ templ SendingPage(data SendingData) {
 		if data.Error!="" {
 			<div class="alert alert-error" role="alert">{ data.Error }</div>
 		}
-		@SendingProgress(data)
-		<section class="card border p-5 space-y-3">
-			<h2 class="text-xl font-bold">Result artifacts</h2>
-			<form method="post" action={ data.Base + "/artifacts" }>
-				<input type="hidden" name="action_id" value={ data.ActionID + "artifacts" }/>
-				<input type="hidden" name="expected_count" value="0"/>
-				<input type="hidden" name="confirmed" value="yes"/>
-				<button class="btn" type="submit">Request result generation for terminal task</button>
-			</form>
-			<p>This request generates the task results workbook from retained records. It never submits or retries email, and a generation failure never changes eligibility.</p>
-			if data.ResultsReady {
-				<a class="btn btn-primary" href={ data.TaskURL + "/results.xlsx" }>Download results workbook</a>
-			} else if data.ResultsState == "generating" {
-				<p>Generating the results workbook now.</p>
-			} else if data.ResultsState == "failed" {
-				<p class="text-error">The last generation failed; request generation again to retry. No incomplete file is offered.</p>
-			}
-			<h2 class="text-xl font-bold">Mailbox pacing</h2>
-			<p>Default 25 starts per minute; maximum 30 and four in flight across candidates, tests and retries. Microsoft throttling may reduce throughput. Other Outlook clients consume mailbox capacity outside this app's observations.</p>
-			<form method="post" action={ data.Base + "/rate" }>
-				<input type="hidden" name="action_id" value={ data.ActionID + "rate" }/>
-				<label>Starts per minute <input class="input input-bordered" name="rate" type="number" min="1" max="30" step="1" value={ strconv.Itoa(data.Rate) } required/></label>
-				<button class="btn" type="submit">Update pacing</button>
-			</form>
-		</section>
+		<div class="campaign-workspace" x-data="{tab:'test', guidanceOpen:false}" x-init="const requested = location.hash.slice(1); if (Array.from($el.querySelectorAll('[role=tab]')).some(item => item.dataset.tab === requested)) tab = requested">
+			<aside class="workspace-sidebar" aria-label="Sending navigation">
+				@workspaceTabList("Sending workflow") {
+					<p class="workspace-nav-heading">Preparation & sending</p>
+					@workspaceSidebarTab("sending", "test", "Test & approval", "Check received formatting", "test")
+					@workspaceSidebarTab("sending", "send", "Send & schedule", "Start, stop & schedule", "test")
+					<p class="workspace-nav-heading">Records & recovery</p>
+					@workspaceSidebarTab("sending", "recovery", "Recovery", "Review failures & uncertainty", "test")
+					@workspaceSidebarTab("sending", "recent", "Recent outcomes", "Submission attempt history", "test")
+					@workspaceSidebarTab("sending", "results", "Results workbook", "Generate & download results", "test")
+					<p class="workspace-nav-heading">Mailbox settings</p>
+					@workspaceSidebarTab("sending", "pacing", "Mailbox pacing", "Shared mailbox rate", "test")
+				}
+			</aside>
+			<div class="workspace-content">
+				@SendingProgress(data)
+				@workspaceTabPanel("sending", "results", "test") {
+					<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="artifacts-heading">
+						<div class="card-body gap-4">
+							<h2 class="section-heading" id="artifacts-heading">Result workbook</h2>
+							<form method="post" action={ data.Base + "/artifacts#results" }>
+								<input type="hidden" name="action_id" value={ data.ActionID + "artifacts" }/>
+								<input type="hidden" name="expected_count" value="0"/>
+								<input type="hidden" name="confirmed" value="yes"/>
+								<button class="btn" type="submit">Generate results workbook</button>
+							</form>
+							<p class="section-description">Generate the workbook from retained records. This never submits or retries email, and a generation failure never changes eligibility.</p>
+							if data.ResultsReady {
+								<a class="btn btn-primary" href={ data.TaskURL + "/results.xlsx" }>Download results workbook</a>
+							} else if data.ResultsState == "generating" {
+								<p>Generating the results workbook now.</p>
+							} else if data.ResultsState == "failed" {
+								<p class="text-error">The last generation failed; request generation again to retry. No incomplete file is offered.</p>
+							}
+						</div>
+					</section>
+				}
+				@workspaceTabPanel("sending", "pacing", "test") {
+					<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="pacing-heading">
+						<div class="card-body gap-4">
+							<h2 class="section-heading" id="pacing-heading">Mailbox pacing</h2>
+							<p class="section-description">Default 25 starts per minute; maximum 30 and four in flight across candidates, tests and retries. Microsoft throttling may reduce throughput. Other Outlook clients consume mailbox capacity outside this app's observations.</p>
+							<form method="post" action={ data.Base + "/rate#pacing" } class="field-grid">
+								<input type="hidden" name="action_id" value={ data.ActionID + "rate" }/>
+								<label class="label">Starts per minute <input class="input input-bordered" name="rate" type="number" min="1" max="30" step="1" value={ strconv.Itoa(data.Rate) } required/></label>
+								<div class="action-bar"><button class="btn btn-primary" type="submit">Update pacing</button></div>
+							</form>
+						</div>
+					</section>
+				}
+			</div>
+		</div>
 	}
 }
 
 templ SendingDiagnostics(data SendingData) {
-	<section class="card border p-5 space-y-3">
-		<h2 class="text-xl font-bold">1. Send a formatting test</h2>
-		<p>Select a valid sample row and explicitly enter the test address. Tests use a separate attempt and never submit a candidate.</p>
-		<form id="sending-diagnostic-test" hx-preserve method="post" action={ data.Base + "/test" } class="space-y-3">
-			<input type="hidden" name="action_id" value={ data.ActionID + "test" }/>
-			<label class="block">
-				Sample row
-				<select class="select select-bordered" name="member_id" required>
-					for _,row:=range data.Rows {
-						if row.SampleEligible {
-							<option value={ row.ID }>Worksheet row { row.Number }</option>
+	<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="sending-test-heading">
+		<div class="card-body gap-4">
+			<p class="eyebrow">Step 1 · Test</p>
+			<h2 class="section-heading" id="sending-test-heading">Send a formatting test</h2>
+			<p class="section-description">Choose a valid sample row and enter the test address. Tests use a separate attempt and never submit a candidate.</p>
+			<form id="sending-diagnostic-test" hx-preserve method="post" action={ data.Base + "/test#test" } class="space-y-3">
+				<input type="hidden" name="action_id" value={ data.ActionID + "test" }/>
+				<label class="label">
+					Sample row
+					<select class="select select-bordered w-full" name="member_id" required>
+						for _,row:=range data.Rows {
+							if row.SampleEligible {
+								<option value={ row.ID }>Worksheet row { row.Number }</option>
+							}
 						}
-					}
-				</select>
-			</label>
-			<label class="block">Test recipient <input class="input input-bordered" type="email" name="test_address" required/></label>
-			<button class="btn btn-primary" type="submit">Send diagnostic test</button>
-		</form>
+					</select>
+				</label>
+				<label class="label">Test recipient <input class="input input-bordered w-full" type="email" name="test_address" required/></label>
+				<div class="action-bar"><button class="btn btn-primary" type="submit">Send diagnostic test</button></div>
+			</form>
+		</div>
 	</section>
-	<section class="card border p-5 space-y-3">
-		<h2 class="text-xl font-bold">2. Approve received formatting</h2>
-		<p>Exact configuration content hash: <code class="break-all">{ data.Hash }</code></p>
-		if data.Approved {
-			<p class="text-success">Received formatting approved for this hash.</p>
-		}
-		<form id={ "sending-approval-" + data.Hash + "-" + data.LatestTest + "-" + strconv.FormatBool(data.Approved) } hx-preserve method="post" action={ data.Base + "/approve" } class="space-y-3">
-			<input type="hidden" name="action_id" value={ data.ActionID + "approve" }/>
-			<input type="hidden" name="content_hash" value={ data.Hash }/>
-			<label class="block">
-				Successful diagnostic test
-				<select class="select select-bordered" name="attempt_id" required>
-					<option value="">Choose a submitted test for this configuration</option>
-					if data.LatestTest!="" {
-						<option value={ data.LatestTest }>Latest successful test for this exact content: { data.LatestTest }</option>
-					}
-					for _,outcome:=range data.Recent {
-						if outcome.Kind=="test" && outcome.State=="submitted" {
-							<option value={ outcome.ID }>{ outcome.Recipient } · { outcome.Time } · { outcome.ID }</option>
+	<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="sending-approval-heading">
+		<div class="card-body gap-4">
+			<p class="eyebrow">Step 2 · Approve</p>
+			<h2 class="section-heading" id="sending-approval-heading">Approve the received formatting</h2>
+			<p>Exact configuration content hash: <code class="break-all">{ data.Hash }</code></p>
+			if data.Approved {
+				<p class="text-success">Received formatting approved for this hash.</p>
+			}
+			<form id={ "sending-approval-" + data.Hash + "-" + data.LatestTest + "-" + strconv.FormatBool(data.Approved) } hx-preserve method="post" action={ data.Base + "/approve#test" } class="space-y-3">
+				<input type="hidden" name="action_id" value={ data.ActionID + "approve" }/>
+				<input type="hidden" name="content_hash" value={ data.Hash }/>
+				<label class="label">
+					Successful diagnostic test
+					<select class="select select-bordered w-full" name="attempt_id" required>
+						<option value="">Choose a submitted test for this configuration</option>
+						if data.LatestTest!="" {
+							<option value={ data.LatestTest }>Latest successful test for this exact content: { data.LatestTest }</option>
 						}
-					}
-				</select>
-			</label>
-			<label class="block"><input type="checkbox" name="received_checked" value="yes" required/> I received this test and checked its subject, personalized values and HTML formatting.</label>
-			<button class="btn" type="submit">Approve this exact content</button>
-		</form>
+						for _,outcome:=range data.Recent {
+							if outcome.Kind=="test" && outcome.State=="submitted" {
+								<option value={ outcome.ID }>{ outcome.Recipient } · { outcome.Time } · { outcome.ID }</option>
+							}
+						}
+					</select>
+				</label>
+				<label class="label"><input type="checkbox" name="received_checked" value="yes" required/> I received this test and checked its subject, personalized values and HTML formatting.</label>
+				<div class="action-bar"><button class="btn btn-primary" type="submit">Approve this exact content</button></div>
+			</form>
+		</div>
 	</section>
 }
 
 templ SendingProgress(data SendingData) {
-	<section id="sending-progress" class="card border p-5 space-y-4" hx-get={ data.Base + "/progress" } hx-trigger="every 2s" hx-swap="outerHTML" aria-live="polite">
-		<h2 class="text-xl font-bold">Durable progress: { data.Status }</h2>
-		if data.Reason!="" {
-			<div class="alert alert-warning">{ data.Reason }</div>
+	<section id="sending-progress" class="space-y-4" hx-get={ data.Base + "/progress" } hx-trigger="every 2s" hx-swap="outerHTML">
+		<div class="subtle-panel" aria-live="polite">
+			<h2 class="section-heading">Progress · { data.Status }</h2>
+			if data.Reason!="" {
+				<div class="alert alert-warning">{ data.Reason }</div>
+			}
+			<dl class="metric-grid">
+				<div class="metric"><dt>Safe remaining</dt><dd>{ data.Remaining }</dd></div>
+				<div class="metric"><dt>Submitted</dt><dd>{ data.Submitted }</dd></div>
+				<div class="metric"><dt>Definite failures</dt><dd>{ data.Failed }</dd></div>
+				<div class="metric"><dt>Held for review</dt><dd>{ data.Held }</dd></div>
+				<div class="metric"><dt>In flight</dt><dd>{ data.InFlight }</dd></div>
+				<div class="metric"><dt>Reserved</dt><dd>{ data.Reserved }</dd></div>
+			</dl>
+			<details class="snapshot-details" x-bind:open="guidanceOpen">
+				<summary x-on:click.prevent="guidanceOpen = !guidanceOpen">Exclusions, mailbox status & sending guidance</summary>
+				<div class="space-y-2 text-sm">
+					<p>Exclusions: invalid { data.Invalid }, duplicate { data.Duplicate }, ineligible { data.Ineligible }. Counts refresh before each action; changed exclusions require another confirmation.</p>
+					if data.ArtifactNeeded {
+						<p>Result generation requested. The background worker builds the workbook; artifact failures never requeue email.</p>
+					}
+					<p>Current pacing: { data.Rate } starts per minute. Mailbox cooldown: { data.Cooldown }</p>
+					<p>SUBMITTED means Microsoft accepted the request; it does not confirm delivery. Closing the browser or logging out does not stop server work. Reconnecting Microsoft or sending a diagnostic test never resumes candidates.</p>
+					<p><a class="link" href={ data.Base } x-bind:href="$el.getAttribute('href').split('#')[0] + '#' + tab">Refresh successful test choices and all action counts</a></p>
+				</div>
+			</details>
+		</div>
+		@workspaceTabPanel("sending", "test", "test") {
+			@SendingDiagnostics(data)
 		}
-		<p>Safe remaining: { data.Remaining } · Submitted: { data.Submitted } · Definite failures: { data.Failed } · Held for review: { data.Held } · In flight: { data.InFlight } · Reserved: { data.Reserved }</p>
-		<p>Exclusions: invalid { data.Invalid }, duplicate { data.Duplicate }, ineligible { data.Ineligible }. Counts are refreshed before each action; changed exclusions require another confirmation.</p>
-		if data.ArtifactNeeded {
-			<p>Result generation requested. The background worker builds the workbook; artifact failures never requeue email.</p>
+		@workspaceTabPanel("sending", "send", "test") {
+			@SendingControls(data)
+			@sendingSchedule(data)
 		}
-		@SendingDiagnostics(data)
-		@SendingControls(data)
-		@sendingSchedule(data)
-		<p>Current pacing: { data.Rate } starts per minute. Mailbox cooldown until: { data.Cooldown }</p>
-		<p><a class="link" href={ data.Base }>Refresh successful test choices and all action counts</a></p>
-		<h3 class="font-bold">Recent outcomes (+05:30)</h3>
-		<table class="table table-sm">
-			<thead><tr><th>Time</th><th>Kind / recipient</th><th>Outcome</th><th>Reason</th></tr></thead>
-			<tbody>
-				for _,outcome:=range data.Recent {
-					<tr><td>{ outcome.Time }</td><td>{ outcome.Kind } · { outcome.Recipient }</td><td>{ outcome.State }</td><td>{ outcome.Reason }</td></tr>
-				}
-			</tbody>
-		</table>
+		@workspaceTabPanel("sending", "recovery", "test") {
+			@SendingRecovery(data)
+		}
+		@workspaceTabPanel("sending", "recent", "test") {
+			<section class="subtle-panel" aria-labelledby="recent-outcomes-heading">
+				<h3 class="section-heading" id="recent-outcomes-heading">Recent outcomes · +05:30</h3>
+				<div class="table-scroll">
+					<table class="table table-sm">
+						<thead><tr><th>Time</th><th>Kind / recipient</th><th>Outcome</th><th>Reason</th></tr></thead>
+						<tbody>
+							if len(data.Recent) == 0 {
+								<tr><td colspan="4">No submission attempts yet.</td></tr>
+							}
+							for _,outcome:=range data.Recent {
+								<tr><td>{ outcome.Time }</td><td>{ outcome.Kind } · { outcome.Recipient }</td><td>{ outcome.State }</td><td>{ outcome.Reason }</td></tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</section>
+		}
 	</section>
 }
 
 templ sendingAction(data SendingData, kind string, label string, count int) {
-	<form id={ "sending-action-" + kind + "-" + strconv.Itoa(count) + "-" + sendingControlKey(data) } hx-preserve method="post" action={ data.Base + "/" + kind } class="space-y-2">
+	<form id={ "sending-action-" + kind + "-" + strconv.Itoa(count) + "-" + sendingControlKey(data) } hx-preserve method="post" action={ data.Base + "/" + kind + "#send" } class="space-y-2">
 		<input type="hidden" name="action_id" value={ data.ActionID + kind }/>
 		<input type="hidden" name="expected_count" value={ strconv.Itoa(count) }/>
 		<label class="block"><input type="checkbox" name="confirmed" value="yes" required/> Confirm { count } recipients</label>
@@ -158,42 +240,44 @@ templ sendingAction(data SendingData, kind string, label string, count int) {
 }
 
 templ sendingSchedule(data SendingData) {
-	<section class="card border p-5 space-y-3">
-		<h3 class="font-bold">Scheduled start</h3>
-		if data.ScheduleAt != "" {
-			<p>Stored start: { data.ScheduleAt } · state { data.ScheduleState }.</p>
-		} else {
-			<p>No stored start · state { data.ScheduleState }.</p>
-		}
-		<p>Enabling is this task's explicit start authorization. Only candidates free at that moment start, and a time that passed while the server was down pauses for review.</p>
-		<form id={ "sending-schedule-" + sendingControlKey(data) } hx-preserve method="post" action={ data.Base + "/schedule" } class="space-y-3">
-			<input type="hidden" name="action_id" value={ data.ActionID + "schedule" }/>
-			<input type="hidden" name="expected_count" value={ strconv.Itoa(data.Remaining) }/>
-			<label class="block">Start date <input class="input input-bordered" type="date" name="schedule_date" min={ data.ScheduleMinDate } required/></label>
-			<label class="block">
-				Hour
-				<select class="select select-bordered" name="schedule_hour" required>
-					<option value="">Hour</option>
-					for hour := 1; hour <= 12; hour++ {
-						<option value={ strconv.Itoa(hour) }>{ strconv.Itoa(hour) }</option>
-					}
-				</select>
-			</label>
-			<label class="block">Minute <input class="input input-bordered" type="number" name="schedule_minute" min="0" max="59" step="1" required/></label>
-			<label class="block">
-				AM or PM
-				<select class="select select-bordered" name="schedule_meridiem" required>
-					<option value="AM">AM</option>
-					<option value="PM">PM</option>
-				</select>
-			</label>
-			<label class="block"><input type="checkbox" name="confirmed" value="yes" required/> I confirm the fresh counts for this scheduled start.</label>
-			<button class="btn btn-primary" type="submit" name="schedule_action" value="enable" disabled?={ !data.Enabled || !data.Approved || data.Remaining==0 }>Schedule start</button>
-		</form>
-		<form id={ "sending-schedule-clear-" + data.ScheduleState } hx-preserve method="post" action={ data.Base + "/schedule" }>
-			<input type="hidden" name="action_id" value={ data.ActionID + "scheduleclear" }/>
-			<button class="btn" type="submit" name="schedule_action" value="clear" disabled?={ data.ScheduleState != "scheduled" && data.ScheduleState != "missed" }>Clear scheduled start</button>
-		</form>
+	<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="schedule-heading">
+		<div class="card-body gap-4">
+			<h3 class="section-heading" id="schedule-heading">Scheduled start</h3>
+			if data.ScheduleAt != "" {
+				<p>Stored start: { data.ScheduleAt } · state { data.ScheduleState }.</p>
+			} else {
+				<p>No stored start · state { data.ScheduleState }.</p>
+			}
+			<p class="section-description">Enabling is this task's explicit start authorization. Only candidates free at that moment start, and a time that passed while the server was down pauses for review.</p>
+			<form id={ "sending-schedule-" + sendingControlKey(data) } hx-preserve method="post" action={ data.Base + "/schedule#send" } class="field-grid">
+				<input type="hidden" name="action_id" value={ data.ActionID + "schedule" }/>
+				<input type="hidden" name="expected_count" value={ strconv.Itoa(data.Remaining) }/>
+				<label class="label">Start date <input class="input input-bordered w-full" type="date" name="schedule_date" min={ data.ScheduleMinDate } required/></label>
+				<label class="label">
+					Hour
+					<select class="select select-bordered w-full" name="schedule_hour" required>
+						<option value="">Hour</option>
+						for hour := 1; hour <= 12; hour++ {
+							<option value={ strconv.Itoa(hour) }>{ strconv.Itoa(hour) }</option>
+						}
+					</select>
+				</label>
+				<label class="label">Minute <input class="input input-bordered w-full" type="number" name="schedule_minute" min="0" max="59" step="1" required/></label>
+				<label class="label">
+					AM or PM
+					<select class="select select-bordered w-full" name="schedule_meridiem" required>
+						<option value="AM">AM</option>
+						<option value="PM">PM</option>
+					</select>
+				</label>
+				<label class="label"><input type="checkbox" name="confirmed" value="yes" required/> I confirm the fresh counts for this scheduled start.</label>
+				<div class="action-bar"><button class="btn btn-primary" type="submit" name="schedule_action" value="enable" disabled?={ !data.Enabled || !data.Approved || data.Remaining==0 }>Schedule start</button></div>
+			</form>
+			<form id={ "sending-schedule-clear-" + data.ScheduleState } hx-preserve method="post" action={ data.Base + "/schedule#send" }>
+				<input type="hidden" name="action_id" value={ data.ActionID + "scheduleclear" }/>
+				<button class="btn" type="submit" name="schedule_action" value="clear" disabled?={ data.ScheduleState != "scheduled" && data.ScheduleState != "missed" }>Clear scheduled start</button>
+			</form>
+		</div>
 	</section>
 }
 
@@ -204,55 +288,70 @@ templ sendingRowFields(row SendingRow) {
 }
 
 templ SendingControls(data SendingData) {
-	<section class="card border p-5 space-y-4">
-		<p>Confirm these fresh counts. If progress changes them before submission, reload this page and confirm again.</p>
-		<div class="flex flex-wrap gap-4">
-			@sendingAction(data, "start", "Start", data.Remaining)
-			@sendingAction(data, "resume", "Resume safe remainder", data.Remaining)
-			@sendingAction(data, "retry_all", "Retry all definite failures", data.RetryableFailed)
-			<form id={ "sending-stop-" + data.Status } hx-preserve method="post" action={ data.Base + "/stop" }>
-				<input type="hidden" name="action_id" value={ data.ActionID + "stop" }/>
-				<input type="hidden" name="expected_count" value="0"/>
-				<input type="hidden" name="confirmed" value="yes"/>
-				<button class="btn btn-warning" type="submit">Stop future launches and drain</button>
-			</form>
+	<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="controls-heading">
+		<div class="card-body gap-4">
+			<p class="eyebrow">Step 3 · Start or recover</p>
+			<h2 class="section-heading" id="controls-heading">Candidate actions</h2>
+			<p class="section-description">Confirm the fresh counts for each action. If progress changes them before submission, reload and confirm again.</p>
+			<div class="sending-actions">
+				@sendingAction(data, "start", "Start", data.Remaining)
+				@sendingAction(data, "resume", "Resume safe remainder", data.Remaining)
+				@sendingAction(data, "retry_all", "Retry all definite failures", data.RetryableFailed)
+				<form id={ "sending-stop-" + data.Status } hx-preserve method="post" action={ data.Base + "/stop#send" }>
+					<input type="hidden" name="action_id" value={ data.ActionID + "stop" }/>
+					<input type="hidden" name="expected_count" value="0"/>
+					<input type="hidden" name="confirmed" value="yes"/>
+					<button class="btn btn-warning" type="submit">Stop sending</button>
+				</form>
+			</div>
 		</div>
-		<h3 class="font-bold">Individual recovery</h3>
-		for _,row:=range data.Rows {
-			if row.State=="definite_failure" || row.State=="failed" || row.State=="auth_failure" || row.State=="correction_required" || row.State=="manually_submitted" || row.State=="review_required" {
-				<div class="border rounded p-3 space-y-2">
-					<p>Worksheet row { row.Number }: { row.State } · { row.Reason }</p>
-					if row.Attempt.ID!="" {
-						<p>Prior attempt { row.Attempt.ID }: { row.Attempt.Recipient } · { row.Attempt.State } · { row.Attempt.Time } · { row.Attempt.Reason }</p>
-					}
-					if row.State=="manually_submitted" {
-						<p>Marked already submitted by { row.ResolutionActor } at { row.ResolvedAt }. Basis: { row.ResolutionBasis }</p>
-						<p>This operator resolution does not establish a Microsoft acceptance timestamp.</p>
-					} else if row.State=="correction_required" {
-						<p>Correct the recipient or required values in the source workbook and upload a corrected task. This unchanged snapshot cannot be retried.</p>
-					} else if row.State=="review_required" {
-						<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resend" } class="space-y-2">
-							@sendingRowFields(row)
-							<label class="block"><input type="checkbox" name="duplicate_risk" value="yes" required/> The earlier request may have been accepted. Sending again can create a duplicate.</label>
-							<label class="block"><input type="checkbox" name="confirmed" value="yes" required/> Confirm sending this 1 recipient again.</label>
-							<button class="btn btn-warning" type="submit" disabled?={ !data.Enabled }>Send again — duplicate risk</button>
-						</form>
-						<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resolve" } class="space-y-2">
-							@sendingRowFields(row)
-							<label class="block">Basis for resolution <input class="input input-bordered" name="basis" required maxlength="2000"/></label>
-							<label class="block"><input type="checkbox" name="confirmed" value="yes" required/> I verified this recipient was already submitted.</label>
-							<button class="btn" type="submit">Mark as already submitted</button>
-							<p>Records the operator, basis and resolution time. Does not invent a Microsoft acceptance timestamp.</p>
-						</form>
-					} else {
-						<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/retry" }>
-							@sendingRowFields(row)
-							<label><input type="checkbox" name="confirmed" value="yes" required/> Retry this 1 definite failure using its unchanged snapshot.</label>
-							<button class="btn" type="submit" disabled?={ !data.Enabled }>Retry</button>
-						</form>
-					}
-				</div>
+	</section>
+}
+
+templ SendingRecovery(data SendingData) {
+	<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="recovery-heading">
+		<div class="card-body gap-4">
+			<h2 class="section-heading" id="recovery-heading">Individual recovery</h2>
+			if !sendingHasRecovery(data.Rows) {
+				<p>No rows currently need individual recovery.</p>
 			}
-		}
+			for _,row:=range data.Rows {
+				if sendingNeedsRecovery(row) {
+					<div class="subtle-panel space-y-2">
+						<h3 class="font-semibold">Recovery · worksheet row { row.Number }</h3>
+						<p>{ row.State } · { row.Reason }</p>
+						if row.Attempt.ID!="" {
+							<p>Prior attempt { row.Attempt.ID }: { row.Attempt.Recipient } · { row.Attempt.State } · { row.Attempt.Time } · { row.Attempt.Reason }</p>
+						}
+						if row.State=="manually_submitted" {
+							<p>Marked already submitted by { row.ResolutionActor } at { row.ResolvedAt }. Basis: { row.ResolutionBasis }</p>
+							<p>This operator resolution does not establish a Microsoft acceptance timestamp.</p>
+						} else if row.State=="correction_required" {
+							<p>Correct the recipient or required values in the source workbook and upload a corrected task. This unchanged snapshot cannot be retried.</p>
+						} else if row.State=="review_required" {
+							<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resend#recovery" } class="space-y-2">
+								@sendingRowFields(row)
+								<label class="label"><input type="checkbox" name="duplicate_risk" value="yes" required/> The earlier request may have been accepted. Sending again can create a duplicate.</label>
+								<label class="label"><input type="checkbox" name="confirmed" value="yes" required/> Confirm sending this 1 recipient again.</label>
+								<button class="btn btn-warning" type="submit" disabled?={ !data.Enabled }>Send again — duplicate risk</button>
+							</form>
+							<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resolve#recovery" } class="space-y-2">
+								@sendingRowFields(row)
+								<label class="label">Basis for resolution <input class="input input-bordered w-full" name="basis" required maxlength="2000"/></label>
+								<label class="label"><input type="checkbox" name="confirmed" value="yes" required/> I verified this recipient was already submitted.</label>
+								<button class="btn" type="submit">Mark as already submitted</button>
+								<p>Records the operator, basis and resolution time. Does not invent a Microsoft acceptance timestamp.</p>
+							</form>
+						} else {
+							<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/retry#recovery" }>
+								@sendingRowFields(row)
+								<label class="label"><input type="checkbox" name="confirmed" value="yes" required/> Retry this 1 definite failure using its unchanged snapshot.</label>
+								<button class="btn" type="submit" disabled?={ !data.Enabled }>Retry</button>
+							</form>
+						}
+					</div>
+				}
+			}
+		</div>
 	</section>
 }
