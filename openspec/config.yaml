@@ -1,32 +1,43 @@
 schema: spec-driven
 
-# Project context (optional)
-# Add only constraints that should guide OpenSpec artifacts and workflows.
-# Include constraints an agent cannot infer by reading the code.
-# Keep general project documentation and discoverable codebase facts out.
-# Example:
-#   context: |
-#     Designs and tasks must cover Windows, macOS, and Linux
-#     Write all artifacts in Spanish
+context: |
+  Preserve the operator-controlled sending boundary: a validated task does not
+  send automatically, test approval is not production authorization, and retries,
+  uncertain resends, and manual outcome resolution require explicit operator
+  actions. Candidate sending remains gated until the delivery change's release
+  verification is complete.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always state what is out of scope
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Treat persisted attempts and recovery state as the audit record. Missing or
+  uncertain evidence must not be interpreted as proof that an email was not
+  submitted. Keep real email out of automated checks; any real test email requires
+  an explicitly designated operator test recipient and approval.
 
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+  Refine the proposal, behavior specs, design, and tasks as implementation reveals
+  new facts. Surface conflicts with approved behavior before changing it, and check
+  change status and prerequisites instead of assuming that planned or archived
+  work is implemented and verified.
+
+rules:
+  proposal:
+    - State user-visible behavior, affected capabilities, dependencies, and out-of-scope work.
+    - Identify any release gate or prerequisite that constrains when the change can be enabled.
+  specs:
+    - Specify observable behavior and acceptance scenarios; keep implementation mechanisms in design.
+    - Include refusal, failure, recovery, and authorization cases where they affect operator outcomes.
+  design:
+    - Record technical decisions and trade-offs that satisfy the approved behavior and existing project boundaries.
+    - Distinguish verified current behavior from proposed behavior; do not treat a plan as implementation evidence.
+  tasks:
+    - Keep tasks focused and verifiable, with relevant failure-path coverage and project-required checks.
+    - Leave tasks incomplete until the behavior is implemented and the stated verification has passed.
+
+operations:
+  apply:
+    guidance:
+      - Check OpenSpec status, implementation state, and prerequisite changes before starting; preserve the established change order and release gate.
+      - Update the change artifacts when implementation clarifies behavior or technical decisions, then run the repository-required verification for the files changed.
+      - Use isolated test data and simulated email providers; do not load local environment secrets or use real mailbox credentials in automated checks.
+  archive:
+    guidance:
+      - Archive only after the change is implemented and its required verification is complete; OpenSpec validation alone is not implementation verification.
+      - Run strict OpenSpec validation after artifact changes and report any skipped application or release checks accurately.
