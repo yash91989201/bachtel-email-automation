@@ -280,7 +280,7 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 		"duplicate recipient address in this upload",
 		"not a single usable email address",
 		"missing required value(s): candidate_name",
-		"This build does not send email: starting and retries belong to a later change.",
+		"Candidate sending stays gated until change 5 release verification passes.",
 		`hx-post="/campaigns/` + id + `/tasks/` + taskID + `/preview"`,
 		`hx-target="#task-preview-result"`,
 	} {
@@ -468,7 +468,7 @@ func TestTaskSelectionErrors(t *testing.T) {
 // TestExclusionReportDownload covers behaviour 5: the download is session
 // gated and serves one Excluded worksheet holding every held row.
 func TestExclusionReportDownload(t *testing.T) {
-	_, handler := newTaskServer(t)
+	app, handler := newTaskServer(t)
 	cookie := login(t, handler)
 	id := createCampaign(t, handler, cookie, "Engineers")
 	if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
@@ -494,6 +494,22 @@ func TestExclusionReportDownload(t *testing.T) {
 	}
 	if cache := rec.Header().Get("Cache-Control"); cache != "no-store" {
 		t.Fatalf("cache control = %q", cache)
+	}
+
+	// Sending changes the task state, but its validated exclusion artifact stays private and available.
+	for _, status := range []string{"running", "stopping", "paused", "completed"} {
+		taskRecord, err := app.FindRecordById(intake.TasksCollection, taskID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		taskRecord.Set("status", status)
+		if err := app.Save(taskRecord); err != nil {
+			t.Fatal(err)
+		}
+		download := do(t, handler, http.MethodGet, path, nil, withCookie(cookie))
+		if download.Code != http.StatusOK || !bytes.Equal(download.Body.Bytes(), rec.Body.Bytes()) {
+			t.Fatalf("%s exclusion report: status=%d", status, download.Code)
+		}
 	}
 
 	file, err := excelize.OpenReader(bytes.NewReader(rec.Body.Bytes()))
@@ -548,7 +564,7 @@ func TestAllHeldTaskOffersDownloadOnly(t *testing.T) {
 	body := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
 	for _, want := range []string{
 		`href="/campaigns/` + id + `/tasks/` + taskID + `/excluded.xlsx"`,
-		"This build does not send email: starting and retries belong to a later change.",
+		"Candidate sending stays gated until change 5 release verification passes.",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("all-held page missing %q: %.600s", want, body)

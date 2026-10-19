@@ -1,0 +1,97 @@
+package main
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/apis"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/hook"
+	"github.com/yash91989201/bachtel-email-automation/internal/config"
+	"github.com/yash91989201/bachtel-email-automation/internal/database"
+	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
+	"github.com/yash91989201/bachtel-email-automation/internal/sending"
+	"golang.org/x/sys/unix"
+)
+
+func TestServerOwnsDispatcherUntilDrainBeforeDatabaseClose(t *testing.T) {
+	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir(), DBConnect: database.Open})
+	if err := app.Bootstrap(); err != nil {
+		t.Fatal(err)
+	}
+	defer app.ClearBootstrap()
+	if err := app.RunAppMigrations(); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{Origin: "http://127.0.0.1:8090"}
+	connections := microsoft.NewService(app, cfg)
+	bindSending(app, cfg, connections)
+	router, err := apis.NewRouter(app)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := &core.ServeEvent{Router: router}
+	event.App = app
+	if err := app.OnServe().Trigger(event); err != nil {
+		t.Fatal(err)
+	}
+	child := exec.Command(os.Args[0], "-test.run=^TestDispatcherOwnershipChild$")
+	child.Env = append(os.Environ(), "BACHTEL_LOCK_PROBE="+filepath.Join(app.DataDir(), ".sending.lock"))
+	if output, err := child.CombinedOutput(); err != nil {
+		t.Fatalf("ownership probe in a second process: %v: %s", err, output)
+	}
+	other := sending.NewDispatcher(sending.NewStore(app, sending.Options{}), sending.NewGraph(connections, sending.GraphOptions{}), sending.WorkerOptions{DataDir: app.DataDir()})
+	if err := other.Start(); err == nil {
+		t.Fatal("second dispatcher acquired the running server's store")
+	}
+	checked := false
+	app.OnTerminate().Bind(&hook.Handler[*core.TerminateEvent]{
+		Priority: -9999,
+		Func: func(event *core.TerminateEvent) error {
+			// This runs at PocketBase's HTTP shutdown priority, before its
+			// database finalizer. The dispatcher must have released ownership.
+			if _, err := app.DB().NewQuery("SELECT 1").Execute(); err != nil {
+				t.Fatal("database closed before dispatcher drain", err)
+			}
+			if err := other.Start(); err != nil {
+				t.Fatal("dispatcher ownership was not released during drain", err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if err := other.Shutdown(ctx); err != nil {
+				t.Fatal(err)
+			}
+			checked = true
+			return event.Next()
+		},
+	})
+	termination := &core.TerminateEvent{}
+	termination.App = app
+	if err := app.OnTerminate().Trigger(termination); err != nil {
+		t.Fatal(err)
+	}
+	if !checked {
+		t.Fatal("shutdown verification did not run")
+	}
+}
+
+func TestDispatcherOwnershipChild(t *testing.T) {
+	path := os.Getenv("BACHTEL_LOCK_PROBE")
+	if path == "" {
+		t.Skip("subprocess ownership probe")
+	}
+	file, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB); err == nil {
+		unix.Flock(int(file.Fd()), unix.LOCK_UN)
+		t.Fatal("a second process acquired the active dispatcher's lock")
+	}
+}

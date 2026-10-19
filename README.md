@@ -5,10 +5,11 @@ PocketBase. One executable serves the UI, static assets, PocketBase API, and
 admin dashboard on one port. PocketBase runs in-process with SQLite; there is
 no separate database service or frontend server.
 
-This repository provides the protected application foundation: a single
-operator account with session-based sign-in for the custom UI, plus the
-confidential Microsoft connection lifecycle for the fixed HR mailbox. Email
-workflows and domain collections have not been implemented yet.
+The application includes operator sign-in, a Microsoft connection for the fixed
+HR mailbox, campaign templates, Excel intake, and durable background sending
+and recovery controls. Candidate sending remains gated in the production
+entrypoint until change 5 completes export and release verification. Explicit
+diagnostic test emails are available through the connected mailbox.
 
 ## Run locally
 
@@ -171,10 +172,10 @@ immutable snapshot of the eligible rows or fails with an actionable reason.
 - Candidates are identified by campaign plus trimmed lowercase email address,
   with generated internal ids, so a corrected upload creates a new task over the
   same identities and an earlier task keeps its snapshot.
-- A validated task is **ready**, not running: this application does not send
-  candidate email yet. Starting, retries and sending attempts belong to the
-  dispatch change, which rechecks eligibility through the same preflight and
-  reservation operations intake defines.
+- A validated task is **ready**, not running. Its sending page provides explicit
+  test, received-format approval, start, stop and recovery actions. Candidate
+  actions recheck and claim eligibility transactionally; production candidate
+  dispatch remains gated pending change 5.
 - The upload screen shows the workbook constraints (supported format, size,
   expanded-archive limits and the 1,000-row task bound) and reports every
   rejection inline.
@@ -182,6 +183,23 @@ immutable snapshot of the eligible rows or fails with an actionable reason.
 Workbook support, header matching, recipient-key rules, resource limits,
 duplicate handling and the private artifacts are documented in
 [docs/task-intake.md](docs/task-intake.md).
+
+## Background sending and recovery
+
+Open a validated task and choose **Sending and recovery**. Send a diagnostic
+test to an explicitly entered test address, verify the received email, and
+approve that exact content hash. A successful Graph response alone does not
+approve a campaign. Starting or resuming a task requires a fresh recipient
+count and confirmation; browser closure and logout do not stop accepted work.
+
+All sends share a default rate of 25 starts per minute (integer settings 1–30),
+four in-flight requests, persisted pacing and provider cooldowns. **SUBMITTED**
+means Microsoft accepted the request, not that it was delivered. Uncertain
+attempts are held for review and never automatically resent. Stop drains
+requests already started; restart requires explicit resume of safe work.
+
+See [docs/background-sending.md](docs/background-sending.md) for the states,
+approval workflow, retry and review actions, shutdown behavior and release gate.
 
 ## Layout
 

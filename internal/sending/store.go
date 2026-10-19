@@ -1,0 +1,410 @@
+package sending
+
+import (
+	"context"
+	"errors"
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/types"
+	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
+	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"time"
+)
+
+func records(app core.App, collection, filter, sort string, params dbx.Params) ([]*core.Record, error) {
+	return app.FindRecordsByFilter(collection, filter, sort, 0, 0, params)
+}
+func stamp(r *core.Record, field string) time.Time       { return r.GetDateTime(field).Time().UTC() }
+func nowField(r *core.Record, field string, t time.Time) { r.Set(field, t.UTC()) }
+func stateRecord(app core.App) (*core.Record, error) {
+	return app.FindFirstRecordByFilter(DispatcherCollection, "key='mailbox'")
+}
+func settings(r *core.Record) Settings {
+	v := Settings{Rate: r.GetInt("rate"), NextEligible: stamp(r, "next_eligible"), CooldownUntil: stamp(r, "cooldown_until"), Reason: r.GetString("reason")}
+	_ = r.UnmarshalJSONField("starts", &v.Starts)
+	return v
+}
+func (s *Store) DispatcherState(ctx context.Context) (Settings, error) {
+	r, e := stateRecord(s.app)
+	if e != nil {
+		return Settings{}, e
+	}
+	v := settings(r)
+	if v.Rate < 1 || v.Rate > 30 || r.GetFloat("rate") != float64(v.Rate) {
+		return v, errors.New("stored sending rate must be an integer from 1 through 30")
+	}
+	return v, nil
+}
+func (s *Store) SetRate(ctx context.Context, rate int) error {
+	if rate < 1 || rate > 30 {
+		return errors.New("sending rate must be an integer from 1 through 30")
+	}
+	return s.app.RunInTransaction(func(app core.App) error {
+		r, e := stateRecord(app)
+		if e != nil {
+			return e
+		}
+		r.Set("rate", rate)
+		return app.Save(r)
+	})
+}
+func (s *Store) SetCooldown(ctx context.Context, until time.Time, reason string) error {
+	return s.app.RunInTransaction(func(app core.App) error {
+		r, e := stateRecord(app)
+		if e != nil {
+			return e
+		}
+		if until.After(stamp(r, "cooldown_until")) {
+			nowField(r, "cooldown_until", until)
+		}
+		r.Set("reason", reason)
+		return app.Save(r)
+	})
+}
+func attemptFrom(r *core.Record) *Attempt {
+	return &Attempt{ID: r.Id, Work: Work{ID: r.Id, Kind: r.GetString("kind"), TaskID: r.GetString("task"), MemberID: r.GetString("member"), CandidateID: r.GetString("candidate"), ConfigurationID: r.GetString("configuration"), ContentHash: r.GetString("content_hash"), Recipient: r.GetString("recipient"), Subject: r.GetString("subject"), Body: r.GetString("body"), RetryCount: r.GetInt("retry_count")}, State: r.GetString("state"), Reason: r.GetString("reason"), StartedAt: stamp(r, "started_at"), FinishedAt: stamp(r, "finished_at")}
+}
+func workFrom(app core.App, task, member *core.Record) (*Work, error) {
+	c, e := app.FindRecordById(intake.CandidatesCollection, member.GetString("candidate"))
+	if e != nil {
+		return nil, e
+	}
+	cfg, e := app.FindRecordById(campaign.ConfigurationsCollection, task.GetString("configuration"))
+	if e != nil {
+		return nil, e
+	}
+	var mappings []campaign.Mapping
+	_ = cfg.UnmarshalJSONField("mappings", &mappings)
+	compiled, e := campaign.Compile(cfg.GetString("subject"), cfg.GetString("body_html"), mappings)
+	if e != nil {
+		return nil, e
+	}
+	raw := map[string]string{}
+	_ = member.UnmarshalJSONField("raw", &raw)
+	rendered, e := compiled.Render(raw)
+	if e != nil {
+		return nil, e
+	}
+	return &Work{ID: member.Id, Kind: KindCandidate, TaskID: task.Id, MemberID: member.Id, CandidateID: c.Id, ConfigurationID: cfg.Id, ContentHash: cfg.GetString("content_hash"), Recipient: c.GetString("email_key"), Subject: rendered.Subject, Body: rendered.Body, RetryCount: member.GetInt("retry_count")}, nil
+}
+func (s *Store) NextWork(ctx context.Context) (*Work, error) {
+	// Select one due row in SQLite; loading every remaining snapshot on each
+	// opportunity makes a thousand-recipient task do quadratic allocation work.
+	now := s.options.Now().UTC().Format(types.DefaultDateLayout)
+	tests, e := s.app.FindRecordsByFilter(AttemptsCollection, "kind='test' && state='queued' && (retry_at='' || retry_at <= {:now})", "created", 1, 0, dbx.Params{"now": now})
+	if e != nil {
+		return nil, e
+	}
+	for _, r := range tests {
+		if !stamp(r, "retry_at").After(s.options.Now()) {
+			return &attemptFrom(r).Work, nil
+		}
+	}
+	if !s.options.AllowCandidateSending {
+		return nil, nil
+	}
+	tasks, e := records(s.app, intake.TasksCollection, "status='running'", "created", nil)
+	if e != nil {
+		return nil, e
+	}
+	s.cursorMu.Lock()
+	lastTask := s.lastTask
+	s.cursorMu.Unlock()
+	start := 0
+	for i, t := range tasks {
+		if t.Id == lastTask {
+			start = i + 1
+			break
+		}
+	}
+	for n := 0; n < len(tasks); n++ {
+		task := tasks[(start+n)%len(tasks)]
+		members, e := s.app.FindRecordsByFilter(intake.TaskCandidatesCollection, "task={:task} && dispatch_state='reserved' && (retry_at='' || retry_at <= {:now})", "source_row", 1, 0, dbx.Params{"task": task.Id, "now": now})
+		if e != nil {
+			return nil, e
+		}
+		for _, m := range members {
+			if stamp(m, "retry_at").After(s.options.Now()) {
+				continue
+			}
+			w, e := workFrom(s.app, task, m)
+			if e != nil {
+				return nil, e
+			}
+			return w, nil
+		}
+	}
+	return nil, nil
+}
+func (s *Store) BeginAttempt(ctx context.Context, w *Work, startedAt, nextEligible time.Time) (*Attempt, error) {
+	var out *Attempt
+	err := s.app.RunInTransaction(func(app core.App) error {
+		var r *core.Record
+		if w.Kind == KindTest {
+			var e error
+			r, e = app.FindRecordById(AttemptsCollection, w.ID)
+			if e != nil {
+				return e
+			}
+			if r.GetString("state") != AttemptQueued && r.GetString("state") != AttemptRetryable {
+				return ErrNoWork
+			}
+		} else {
+			if !s.options.AllowCandidateSending {
+				return ErrReleaseGate
+			}
+			task, e := app.FindRecordById(intake.TasksCollection, w.TaskID)
+			if e != nil {
+				return e
+			}
+			m, e := app.FindRecordById(intake.TaskCandidatesCollection, w.MemberID)
+			if e != nil {
+				return e
+			}
+			c, e := app.FindRecordById(intake.CandidatesCollection, w.CandidateID)
+			if e != nil {
+				return e
+			}
+			if task.GetString("status") != "running" || m.GetString("dispatch_state") != "reserved" || c.GetString("claim_task") != task.Id || c.GetString("submission_state") != intake.SubmissionNone {
+				return ErrNoWork
+			}
+			fresh, e := workFrom(app, task, m)
+			if e != nil {
+				return e
+			}
+			w = fresh
+			collection, e := app.FindCollectionByNameOrId(AttemptsCollection)
+			if e != nil {
+				return e
+			}
+			r = core.NewRecord(collection)
+			putWork(r, w)
+			m.Set("dispatch_state", AttemptInFlight)
+			if e = app.Save(m); e != nil {
+				return e
+			}
+		}
+		r.Set("state", AttemptInFlight)
+		nowField(r, "started_at", startedAt)
+		if e := app.Save(r); e != nil {
+			return e
+		}
+		p, e := stateRecord(app)
+		if e != nil {
+			return e
+		}
+		v := settings(p)
+		var starts []time.Time
+		for _, t := range v.Starts {
+			if t.After(startedAt.Add(-time.Minute)) {
+				starts = append(starts, t)
+			}
+		}
+		starts = append(starts, startedAt.UTC())
+		p.Set("starts", starts)
+		nowField(p, "next_eligible", nextEligible)
+		if e = app.Save(p); e != nil {
+			return e
+		}
+		out = attemptFrom(r)
+		return nil
+	})
+	if err == nil && out != nil && out.Kind == KindCandidate {
+		s.cursorMu.Lock()
+		s.lastTask = out.TaskID
+		s.cursorMu.Unlock()
+	}
+	return out, err
+}
+func putWork(r *core.Record, w *Work) {
+	r.Set("task", w.TaskID)
+	r.Set("member", w.MemberID)
+	r.Set("candidate", w.CandidateID)
+	r.Set("configuration", w.ConfigurationID)
+	r.Set("content_hash", w.ContentHash)
+	r.Set("kind", w.Kind)
+	r.Set("recipient", w.Recipient)
+	r.Set("subject", w.Subject)
+	r.Set("body", w.Body)
+	r.Set("retry_count", w.RetryCount)
+}
+func (s *Store) RecordActualStart(ctx context.Context, id string, startedAt, nextEligible time.Time) error {
+	return s.app.RunInTransaction(func(app core.App) error {
+		r, e := app.FindRecordById(AttemptsCollection, id)
+		if e != nil {
+			return e
+		}
+		old := stamp(r, "started_at")
+		p, e := stateRecord(app)
+		if e != nil {
+			return e
+		}
+		v := settings(p)
+		for i, t := range v.Starts {
+			if t.Equal(old) {
+				v.Starts[i] = startedAt.UTC()
+				break
+			}
+		}
+		p.Set("starts", v.Starts)
+		nowField(p, "next_eligible", nextEligible)
+		if e = app.Save(p); e != nil {
+			return e
+		}
+		nowField(r, "started_at", startedAt)
+		return app.Save(r)
+	})
+}
+func (s *Store) CompleteAttempt(ctx context.Context, id string, outcome Outcome) error {
+	return s.app.RunInTransaction(func(app core.App) error {
+		r, e := app.FindRecordById(AttemptsCollection, id)
+		if e != nil {
+			return e
+		}
+		if r.GetString("state") != AttemptInFlight {
+			return ErrNoWork
+		}
+		state := outcome.State
+		if state != AttemptSubmitted && state != AttemptFailed && state != AttemptReview && state != AttemptRetryable && state != AttemptAuth {
+			return errors.New("unknown attempt outcome")
+		}
+		r.Set("state", state)
+		r.Set("reason", outcome.Reason)
+		nowField(r, "finished_at", s.options.Now())
+		nowField(r, "retry_at", outcome.RetryAt)
+		retry := r.GetInt("retry_count") + 1
+		if state == AttemptRetryable {
+			r.Set("retry_count", retry)
+			if retry > 3 {
+				state = AttemptFailed
+				r.Set("state", state)
+			}
+		}
+		if e = app.Save(r); e != nil {
+			return e
+		}
+		if r.GetString("kind") == KindTest && state == AttemptRetryable {
+			collection, e := app.FindCollectionByNameOrId(AttemptsCollection)
+			if e != nil {
+				return e
+			}
+			next := core.NewRecord(collection)
+			w := attemptFrom(r).Work
+			w.RetryCount = retry
+			putWork(next, &w)
+			next.Set("state", AttemptQueued)
+			nowField(next, "retry_at", outcome.RetryAt)
+			if e = app.Save(next); e != nil {
+				return e
+			}
+		}
+		if r.GetString("kind") == KindCandidate {
+			m, e := app.FindRecordById(intake.TaskCandidatesCollection, r.GetString("member"))
+			if e != nil {
+				return e
+			}
+			c, e := app.FindRecordById(intake.CandidatesCollection, r.GetString("candidate"))
+			if e != nil {
+				return e
+			}
+			m.Set("dispatch_state", state)
+			if outcome.RequiresCorrection && state == AttemptFailed {
+				m.Set("dispatch_state", "correction_required")
+			}
+			switch state {
+			case AttemptSubmitted:
+				c.Set("submission_state", intake.SubmissionSubmitted)
+				c.Set("claim_task", "")
+			case AttemptReview:
+				c.Set("submission_state", intake.SubmissionUncertain)
+				c.Set("claim_task", "")
+			case AttemptRetryable:
+				m.Set("dispatch_state", "reserved")
+				m.Set("retry_count", retry)
+				nowField(m, "retry_at", outcome.RetryAt)
+			default:
+				c.Set("claim_task", "")
+			}
+			if e = app.Save(c); e != nil {
+				return e
+			}
+			if e = app.Save(m); e != nil {
+				return e
+			}
+			if outcome.State == AttemptRetryable && retry > 3 {
+				if e = pauseTask(app, r.GetString("task"), "safe retry limit reached"); e != nil {
+					return e
+				}
+			}
+		}
+		if outcome.PauseMailbox || state == AttemptAuth {
+			return pauseAll(app, outcome.Reason)
+		}
+		return nil
+	})
+}
+func pauseTask(app core.App, id, reason string) error {
+	r, e := app.FindRecordById(intake.TasksCollection, id)
+	if e != nil {
+		return e
+	}
+	r.Set("status", "paused")
+	r.Set("pause_reason", reason)
+	if e = releaseReservations(app, id); e != nil {
+		return e
+	}
+	return app.Save(r)
+}
+func pauseAll(app core.App, reason string) error {
+	tasks, e := records(app, intake.TasksCollection, "status='running' || status='waiting'", "", nil)
+	if e != nil {
+		return e
+	}
+	for _, r := range tasks {
+		if e = pauseTask(app, r.Id, reason); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+func (s *Store) PauseMailbox(ctx context.Context, reason string) error {
+	return s.app.RunInTransaction(func(app core.App) error { return pauseAll(app, reason) })
+}
+func (s *Store) PauseTask(ctx context.Context, id, reason string) error {
+	return s.app.RunInTransaction(func(app core.App) error { return pauseTask(app, id, reason) })
+}
+
+// releaseReservations releases only work which has no in-flight intent.
+func releaseReservations(app core.App, taskID string) error {
+	members, e := records(app, intake.TaskCandidatesCollection, "task={:t} && dispatch_state='reserved'", "", dbx.Params{"t": taskID})
+	if e != nil {
+		return e
+	}
+	for _, m := range members {
+		c, e := app.FindRecordById(intake.CandidatesCollection, m.GetString("candidate"))
+		if e != nil {
+			return e
+		}
+		if c.GetString("claim_task") != taskID || c.GetString("submission_state") != intake.SubmissionNone {
+			continue
+		}
+		// A persisted intent always wins over an inconsistent reservation marker.
+		intents, e := records(app, AttemptsCollection, "member={:m} && state='in_flight'", "", dbx.Params{"m": m.Id})
+		if e != nil {
+			return e
+		}
+		if len(intents) > 0 {
+			continue
+		}
+		c.Set("claim_task", "")
+		c.Set("claimed_at", "")
+		m.Set("dispatch_state", "")
+		if e = app.Save(c); e != nil {
+			return e
+		}
+		if e = app.Save(m); e != nil {
+			return e
+		}
+	}
+	return nil
+}

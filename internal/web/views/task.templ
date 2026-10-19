@@ -188,7 +188,7 @@ templ TaskPage(data TaskPageData) {
 		<div class="space-y-3">
 			<p class="text-sm font-medium uppercase tracking-widest text-primary">Task</p>
 			<h1 class="text-4xl font-bold tracking-tight">Task for { data.CampaignName }</h1>
-			<p class="max-w-2xl text-base-content/70">Status <code>{ data.Status }</code>. Nothing on this page sends email.</p>
+			<p class="max-w-2xl text-base-content/70">Status <code>{ data.Status }</code>. Use sending controls to test, approve, start or recover background work.</p>
 			<div class="card-actions">
 				<a class="btn btn-ghost" href={ "/campaigns/" + data.CampaignID + "/tasks" }>Back to task list</a>
 			</div>
@@ -376,7 +376,8 @@ templ TaskPage(data TaskPageData) {
 					</div>
 				</div>
 			</section>
-			<p class="text-sm text-base-content/70">This build does not send email: starting and retries belong to a later change.</p>
+			<a class="btn btn-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending" }>Test, approve and manage sending</a>
+			<p class="text-sm text-base-content/70">Candidate sending stays gated until change 5 release verification passes. Tests, approval, progress and recovery controls are available on the sending page.</p>
 		}
 	}
 }
