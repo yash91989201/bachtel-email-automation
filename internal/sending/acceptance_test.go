@@ -98,14 +98,18 @@ func newAcceptanceFixture(t *testing.T, allowed bool) *acceptanceFixture {
 func (f *acceptanceFixture) task(t *testing.T, count int) string {
 	t.Helper()
 	book := excelize.NewFile()
-	defer book.Close()
+	defer func() {
+		if err := book.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if err := book.SetSheetName("Sheet1", "Candidates"); err != nil {
 		t.Fatal(err)
 	}
 	if err := book.SetSheetRow("Candidates", "A1", &[]string{"Email", "Name"}); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < count; i++ {
+	for i := range count {
 		row := []string{fmt.Sprintf("candidate%04d@example.invalid", i), fmt.Sprintf("Candidate %04d", i)}
 		if err := book.SetSheetRow("Candidates", fmt.Sprintf("A%d", i+2), &row); err != nil {
 			t.Fatal(err)

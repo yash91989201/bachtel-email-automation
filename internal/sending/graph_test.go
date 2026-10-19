@@ -94,7 +94,9 @@ func TestGraphClassifiesResponsesWithoutLeakingDiagnostics(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls++
 				w.WriteHeader(test.status)
-				_, _ = io.WriteString(w, test.body)
+				if _, err := io.WriteString(w, test.body); err != nil {
+					t.Errorf("write response body: %v", err)
+				}
 			}))
 			defer server.Close()
 			result := NewGraph(graphTokenSource{token: "private-token"}, GraphOptions{BaseURL: server.URL}).Send(context.Background(), graphMessage())
@@ -142,10 +144,23 @@ func TestGraphTimeoutAndDisconnectAreUncertain(t *testing.T) {
 			var calls atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls.Add(1)
-				_, _ = io.Copy(io.Discard, r.Body)
+				if _, err := io.Copy(io.Discard, r.Body); err != nil {
+					t.Errorf("read request body: %v", err)
+				}
 				if disconnect {
-					conn, _, _ := w.(http.Hijacker).Hijack()
-					_ = conn.Close()
+					hijacker, ok := w.(http.Hijacker)
+					if !ok {
+						t.Error("test server does not support hijacking")
+						return
+					}
+					conn, _, err := hijacker.Hijack()
+					if err != nil {
+						t.Errorf("hijack test connection: %v", err)
+						return
+					}
+					if err := conn.Close(); err != nil {
+						t.Errorf("close test connection: %v", err)
+					}
 					return
 				}
 				<-r.Context().Done()
@@ -240,5 +255,20 @@ func TestGraphTimeoutIsBounded(t *testing.T) {
 	}
 	if client.Timeout != time.Hour || client.CheckRedirect != nil {
 		t.Fatal("caller client was mutated")
+	}
+}
+
+type closeErrorBody struct{}
+
+func (closeErrorBody) Read([]byte) (int, error) { return 0, io.EOF }
+func (closeErrorBody) Close() error             { return errors.New("simulated close failure") }
+
+func TestGraph202RemainsSubmittedWhenResponseCloseFails(t *testing.T) {
+	client := &http.Client{Transport: graphRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusAccepted, Body: closeErrorBody{}, Header: make(http.Header)}, nil
+	})}
+	got := NewGraph(graphTokenSource{token: "token"}, GraphOptions{HTTPClient: client}).Send(context.Background(), graphMessage())
+	if got.Kind != OutcomeSubmitted {
+		t.Fatalf("202 acceptance changed after body close failure: %+v", got)
 	}
 }

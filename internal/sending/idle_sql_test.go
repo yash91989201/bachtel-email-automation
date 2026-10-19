@@ -41,7 +41,10 @@ func TestIdleDispatcherExecutesNoRecurringSQLAndWakesForTest(t *testing.T) {
 	}
 	var saved []savedLogger
 	for _, builder := range []dbx.Builder{f.app.ConcurrentDB(), f.app.NonconcurrentDB()} {
-		db := builder.(*dbx.DB)
+		db, ok := builder.(*dbx.DB)
+		if !ok {
+			t.Fatalf("database builder has type %T", builder)
+		}
 		query, exec := db.QueryLogFunc, db.ExecLogFunc
 		saved = append(saved, savedLogger{db: db, query: query, exec: exec})
 		db.QueryLogFunc = func(ctx context.Context, elapsed time.Duration, sql string, rows *sql.Rows, err error) {

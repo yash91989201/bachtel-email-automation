@@ -153,7 +153,10 @@ func (g *Graph) send(ctx context.Context, message Message, token string) SendRes
 		} `json:"emailAddress"`
 	}, 1)
 	payload.Message.ToRecipients[0].EmailAddress.Address = message.Recipient
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return SendResult{Kind: OutcomeDefiniteFailure, Error: "The message could not be prepared for submission.", PauseMailbox: true}
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, g.url, bytes.NewReader(body))
 	if err != nil {
 		return SendResult{Kind: OutcomeDefiniteFailure, Error: "The mail service endpoint is invalid.", PauseMailbox: true}
@@ -174,7 +177,12 @@ func (g *Graph) send(ctx context.Context, message Message, token string) SendRes
 		}
 		return SendResult{Kind: OutcomeUncertain, Error: "The submission outcome is unknown; review is required.", PauseMailbox: true}
 	}
-	defer response.Body.Close()
+	defer func() {
+		// Once Graph returns 202, cleanup failure cannot undo its acceptance.
+		if err := response.Body.Close(); err != nil {
+			return
+		}
+	}()
 	switch response.StatusCode {
 	case http.StatusAccepted:
 		return SendResult{Kind: OutcomeSubmitted}

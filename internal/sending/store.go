@@ -3,6 +3,7 @@ package sending
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/types"
@@ -19,17 +20,22 @@ func nowField(r *core.Record, field string, t time.Time) { r.Set(field, t.UTC())
 func stateRecord(app core.App) (*core.Record, error) {
 	return app.FindFirstRecordByFilter(DispatcherCollection, "key='mailbox'")
 }
-func settings(r *core.Record) Settings {
+func settings(r *core.Record) (Settings, error) {
 	v := Settings{Rate: r.GetInt("rate"), NextEligible: stamp(r, "next_eligible"), CooldownUntil: stamp(r, "cooldown_until"), Reason: r.GetString("reason")}
-	_ = r.UnmarshalJSONField("starts", &v.Starts)
-	return v
+	if err := r.UnmarshalJSONField("starts", &v.Starts); err != nil {
+		return Settings{}, fmt.Errorf("decode sending pacing history: %w", err)
+	}
+	return v, nil
 }
 func (s *Store) DispatcherState(ctx context.Context) (Settings, error) {
 	r, e := stateRecord(s.app)
 	if e != nil {
 		return Settings{}, e
 	}
-	v := settings(r)
+	v, e := settings(r)
+	if e != nil {
+		return Settings{}, e
+	}
 	if v.Rate < 1 || v.Rate > 30 || r.GetFloat("rate") != float64(v.Rate) {
 		return v, errors.New("stored sending rate must be an integer from 1 through 30")
 	}
@@ -74,13 +80,17 @@ func workFrom(app core.App, task, member *core.Record) (*Work, error) {
 		return nil, e
 	}
 	var mappings []campaign.Mapping
-	_ = cfg.UnmarshalJSONField("mappings", &mappings)
+	if e = cfg.UnmarshalJSONField("mappings", &mappings); e != nil {
+		return nil, fmt.Errorf("decode campaign mappings: %w", e)
+	}
 	compiled, e := campaign.Compile(cfg.GetString("subject"), cfg.GetString("body_html"), mappings)
 	if e != nil {
 		return nil, e
 	}
 	raw := map[string]string{}
-	_ = member.UnmarshalJSONField("raw", &raw)
+	if e = member.UnmarshalJSONField("raw", &raw); e != nil {
+		return nil, fmt.Errorf("decode candidate snapshot: %w", e)
+	}
 	rendered, e := compiled.Render(raw)
 	if e != nil {
 		return nil, e
@@ -117,7 +127,7 @@ func (s *Store) NextWork(ctx context.Context) (*Work, error) {
 			break
 		}
 	}
-	for n := 0; n < len(tasks); n++ {
+	for n := range tasks {
 		task := tasks[(start+n)%len(tasks)]
 		members, e := s.app.FindRecordsByFilter(intake.TaskCandidatesCollection, "task={:task} && dispatch_state='reserved' && (retry_at='' || retry_at <= {:now})", "source_row", 1, 0, dbx.Params{"task": task.Id, "now": now})
 		if e != nil {
@@ -238,7 +248,10 @@ func (s *Store) BeginAttempt(ctx context.Context, w *Work, startedAt, nextEligib
 		if e != nil {
 			return e
 		}
-		v := settings(p)
+		v, e := settings(p)
+		if e != nil {
+			return e
+		}
 		var starts []time.Time
 		for _, t := range v.Starts {
 			if t.After(startedAt.Add(-time.Minute)) {
@@ -284,7 +297,10 @@ func (s *Store) RecordActualStart(ctx context.Context, id string, startedAt, nex
 		if e != nil {
 			return e
 		}
-		v := settings(p)
+		v, e := settings(p)
+		if e != nil {
+			return e
+		}
 		for i, t := range v.Starts {
 			if t.Equal(old) {
 				v.Starts[i] = startedAt.UTC()

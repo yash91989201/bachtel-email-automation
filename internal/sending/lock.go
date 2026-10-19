@@ -1,6 +1,7 @@
 package sending
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,8 +23,7 @@ func acquireOwnership(dir string) (*ownershipLock, error) {
 		return nil, err
 	}
 	if err = unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-		f.Close()
-		return nil, fmt.Errorf("another dispatcher owns this data directory: %w", err)
+		return nil, errors.Join(fmt.Errorf("another dispatcher owns this data directory: %w", err), f.Close())
 	}
 	return &ownershipLock{file: f}, nil
 }

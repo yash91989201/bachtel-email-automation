@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
@@ -29,7 +30,9 @@ func (s *Store) Preview(ctx context.Context, id string) (*Progress, error) {
 	}
 	p := &Progress{TaskID: id, Status: t.GetString("status"), Reason: t.GetString("pause_reason"), ContentHash: t.GetString("content_hash"), Approved: isApproved, ProductionEnabled: s.options.AllowCandidateSending, ArtifactNeeded: t.GetBool("result_generation_needed")}
 	var counts intake.Counts
-	_ = t.UnmarshalJSONField("counts", &counts)
+	if e = t.UnmarshalJSONField("counts", &counts); e != nil {
+		return nil, fmt.Errorf("decode task counts: %w", e)
+	}
 	p.Invalid = counts.Invalid
 	p.Duplicate = counts.Duplicate
 	p.Ineligible = counts.Ineligible
@@ -431,7 +434,9 @@ func (s *Store) QueueTest(ctx context.Context, in TestRequest) (*Attempt, error)
 			}
 		}
 		var mappings []campaign.Mapping
-		_ = cfg.UnmarshalJSONField("mappings", &mappings)
+		if e = cfg.UnmarshalJSONField("mappings", &mappings); e != nil {
+			return fmt.Errorf("decode campaign mappings: %w", e)
+		}
 		compiled, e := campaign.Compile(cfg.GetString("subject"), cfg.GetString("body_html"), mappings)
 		if e != nil {
 			return e

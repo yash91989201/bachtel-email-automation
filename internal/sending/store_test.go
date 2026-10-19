@@ -57,11 +57,11 @@ func storeBegin(t *testing.T, f *acceptanceFixture) *sending.Attempt {
 }
 func storeApprove(t *testing.T, f *acceptanceFixture, task string) *sending.Attempt {
 	t.Helper()
-	a, e := f.store.QueueTest(storeCtx, sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
+	_, e := f.store.QueueTest(storeCtx, sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
 	if e != nil {
 		t.Fatal(e)
 	}
-	a = storeBegin(t, f)
+	a := storeBegin(t, f)
 	if e = f.store.CompleteAttempt(storeCtx, a.ID, sending.Outcome{State: sending.AttemptSubmitted}); e != nil {
 		t.Fatal(e)
 	}
@@ -117,6 +117,42 @@ func TestStoreApprovalExactHashAndExplicitAction(t *testing.T) {
 	}
 	if !storePreview(t, f, task).Approved {
 		t.Fatal("approval missing")
+	}
+}
+
+func TestCorruptPersistedPacingHistoryStopsDispatch(t *testing.T) {
+	f := newAcceptanceFixture(t, true)
+	if _, err := f.app.DB().NewQuery("UPDATE dispatcher_state SET starts='not-json' WHERE key='mailbox'").Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.store.DispatcherState(storeCtx); err == nil {
+		t.Fatal("corrupt pacing history was accepted")
+	}
+}
+
+func TestCorruptConfigurationAndCandidateSnapshotsStopWorkSelection(t *testing.T) {
+	for _, field := range []string{"mappings", "raw"} {
+		t.Run(field, func(t *testing.T) {
+			f := newAcceptanceFixture(t, true)
+			task := f.task(t, 1)
+			storeApprove(t, f, task)
+			storeAct(t, f, task, "start", "start-"+field, 1)
+			tr := storeRecord(t, f, intake.TasksCollection, task)
+			if field == "mappings" {
+				_, err := f.app.DB().NewQuery("UPDATE campaign_configurations SET mappings='{' WHERE id={:id}").Bind(dbx.Params{"id": tr.GetString("configuration")}).Execute()
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				_, err := f.app.DB().NewQuery("UPDATE task_candidates SET raw='{' WHERE task={:task}").Bind(dbx.Params{"task": task}).Execute()
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := f.store.NextWork(storeCtx); err == nil {
+				t.Fatalf("corrupt %s snapshot was silently accepted", field)
+			}
+		})
 	}
 }
 
@@ -325,7 +361,7 @@ func TestStoreSafeRetriesAreBoundedAndAppendHistory(t *testing.T) {
 	storeApprove(t, f, task)
 	storeAct(t, f, task, "start", "start", 2)
 	var first string
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		a := storeBegin(t, f)
 		if first == "" {
 			first = a.MemberID

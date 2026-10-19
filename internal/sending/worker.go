@@ -47,6 +47,7 @@ type Dispatcher struct {
 	inflight                  int
 	lastStart                 time.Time
 	limiter                   *rate.Limiter
+	lifecycleErr              error
 }
 
 func NewDispatcher(store DispatchStore, sender Sender, options WorkerOptions) *Dispatcher {
@@ -74,8 +75,7 @@ func (d *Dispatcher) Start() error {
 		return err
 	}
 	if err = d.store.Recover(context.Background()); err != nil {
-		lock.Close()
-		return err
+		return errors.Join(err, lock.Close())
 	}
 	d.lock = lock
 	d.ctx, d.cancel = context.WithCancel(context.Background())
@@ -140,7 +140,9 @@ func (d *Dispatcher) Shutdown(ctx context.Context) error {
 	d.notify()
 	select {
 	case <-d.done:
-		return nil
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return d.lifecycleErr
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -151,8 +153,7 @@ func (d *Dispatcher) run() {
 	for {
 		d.mu.Lock()
 		if d.stopping && d.inflight == 0 {
-			_ = d.store.SettleTasks(context.Background())
-			_ = d.lock.Close()
+			d.lifecycleErr = errors.Join(d.lifecycleErr, d.store.SettleTasks(context.Background()), d.lock.Close())
 			d.mu.Unlock()
 			return
 		}
@@ -196,7 +197,7 @@ func timer(after func(time.Duration) <-chan time.Time, delay time.Duration) <-ch
 func (d *Dispatcher) pause(reason string) {
 	d.paused = true
 	d.fatalStorage = true
-	_ = d.store.PauseMailbox(context.Background(), reason)
+	d.lifecycleErr = errors.Join(d.lifecycleErr, d.store.PauseMailbox(context.Background(), reason))
 }
 
 func (d *Dispatcher) launch() (time.Duration, error) {

@@ -106,7 +106,7 @@ func (s workerSender) Send(ctx context.Context, m Message) SendResult { return s
 
 func newWorkerFixture(n int) *workerFixture {
 	f := &workerFixture{now: time.Now().UTC(), settings: Settings{Rate: 30}}
-	for i := 0; i < n; i++ {
+	for i := range n {
 		f.queue = append(f.queue, &Work{Kind: KindTest, Recipient: fmt.Sprintf("%d@example.com", i), Subject: "frozen", Body: "<p>body</p>"})
 	}
 	return f
@@ -131,6 +131,39 @@ func TestWorkerIdleWaitsForWakeWithoutPollingStore(t *testing.T) {
 	}
 	d.notify()
 	eventually(t, func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.intents == 1 })
+}
+
+type settleFailureStore struct {
+	DispatchStore
+	err error
+}
+
+func (s settleFailureStore) SettleTasks(context.Context) error { return s.err }
+
+func TestWorkerShutdownReportsSettlementFailureAndReleasesOwnership(t *testing.T) {
+	f := newWorkerFixture(0)
+	dir := t.TempDir()
+	want := errors.New("settlement persistence failed")
+	d := NewDispatcher(settleFailureStore{DispatchStore: f, err: want}, workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted}
+	}), WorkerOptions{DataDir: dir})
+	if err := d.Start(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := d.Shutdown(ctx); !errors.Is(err, want) {
+		t.Fatalf("Shutdown error = %v, want %v", err, want)
+	}
+	second := NewDispatcher(newWorkerFixture(0), workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted}
+	}), WorkerOptions{DataDir: dir})
+	if err := second.Start(); err != nil {
+		t.Fatalf("ownership remained held after failed settlement: %v", err)
+	}
+	if err := second.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestWorkerFutureRetryTimerStartsWithoutWake(t *testing.T) {
@@ -202,7 +235,7 @@ func TestWorkerFourSlotsAndShutdownDrainsIndependentRequests(t *testing.T) {
 		<-release
 		return SendResult{Kind: OutcomeSubmitted}
 	}))
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		select {
 		case <-entered:
 		case <-time.After(time.Second):
@@ -386,7 +419,7 @@ func TestWorkerShutdownDrainsRequestsUnderBoundedDeadline(t *testing.T) {
 	if err := d.Start(); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		select {
 		case <-entered:
 		case <-time.After(time.Second):
@@ -453,7 +486,7 @@ func TestWorkerGraphPOSTStartsStaySpacedAfterDelayedAuthorization(t *testing.T) 
 	f.mu.Unlock()
 	close(release)
 	var previous time.Time
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		select {
 		case at := <-posts:
 			if at.Before(releasedAt) {

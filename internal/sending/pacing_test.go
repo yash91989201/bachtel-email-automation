@@ -8,7 +8,7 @@ import (
 func TestPacingLoweringRateRetainsRollingHistory(t *testing.T) {
 	now := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
 	s := Settings{Rate: 30}
-	for n := 0; n < 30; n++ {
+	for n := range 30 {
 		s.Starts = append(s.Starts, now.Add(time.Duration(n)*2*time.Second))
 	}
 	// Lowering to one must wait until the newest actual start leaves the window.
@@ -39,7 +39,7 @@ func TestPacingNoRollingMinuteExceedsRate(t *testing.T) {
 	for _, n := range []int{1, 25, 30} {
 		now := time.Now().UTC()
 		s := Settings{Rate: n}
-		for i := 0; i < 1000; i++ {
+		for i := range 1000 {
 			start := nextStart(now, s)
 			count := 0
 			for _, old := range s.Starts {
@@ -71,7 +71,9 @@ func TestOwnershipExclusiveAndReleased(t *testing.T) {
 		t.Fatal(err)
 	}
 	if b, err := acquireOwnership(dir); err == nil {
-		b.Close()
+		if err := b.Close(); err != nil {
+			t.Fatal(err)
+		}
 		t.Fatal("overlapping owner accepted")
 	}
 	if err := a.Close(); err != nil {
@@ -81,5 +83,9 @@ func TestOwnershipExclusiveAndReleased(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer b.Close()
+	defer func() {
+		if err := b.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 }

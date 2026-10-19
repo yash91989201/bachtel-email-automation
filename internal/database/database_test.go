@@ -12,12 +12,18 @@ func TestEveryPooledConnectionUsesDurableCommits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	ctx := context.Background()
 	var conns []*sql.Conn
 	defer func() {
 		for _, conn := range conns {
-			conn.Close()
+			if err := conn.Close(); err != nil {
+				t.Error(err)
+			}
 		}
 	}()
 	for range 4 {

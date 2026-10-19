@@ -122,7 +122,7 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 		switch kind {
 		case "test":
 			if s.connections == nil {
-				err = errors.New("Microsoft connection is unavailable")
+				err = errors.New("microsoft connection is unavailable")
 				break
 			}
 			if _, err = s.connections.AccessToken(r.Context()); err != nil {

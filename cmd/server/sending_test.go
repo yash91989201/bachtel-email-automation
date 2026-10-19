@@ -24,7 +24,11 @@ func TestServerOwnsDispatcherUntilDrainBeforeDatabaseClose(t *testing.T) {
 	if err := app.Bootstrap(); err != nil {
 		t.Fatal(err)
 	}
-	defer app.ClearBootstrap()
+	t.Cleanup(func() {
+		if err := app.ClearBootstrap(); err != nil {
+			t.Error(err)
+		}
+	})
 	if err := app.RunAppMigrations(); err != nil {
 		t.Fatal(err)
 	}
@@ -89,9 +93,15 @@ func TestDispatcherOwnershipChild(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX|unix.LOCK_NB); err == nil {
-		unix.Flock(int(file.Fd()), unix.LOCK_UN)
+		if err := unix.Flock(int(file.Fd()), unix.LOCK_UN); err != nil {
+			t.Fatal(err)
+		}
 		t.Fatal("a second process acquired the active dispatcher's lock")
 	}
 }

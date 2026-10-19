@@ -35,24 +35,39 @@ type browserControl struct {
 	Done      bool   `json:"done"`
 }
 
-func readBrowserControl(path string) browserControl {
+func readBrowserControl(path string) (browserControl, error) {
 	var c browserControl
-	data, _ := os.ReadFile(path)
-	_ = json.Unmarshal(data, &c)
-	return c
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return c, err
+	}
+	if err = json.Unmarshal(data, &c); err != nil {
+		return c, err
+	}
+	return c, nil
 }
 
 type browserMailbox struct{ path string }
 
 func (m browserMailbox) Send(ctx context.Context, message sending.Message) sending.SendResult {
-	for readBrowserControl(m.path).Hold {
+	for {
+		c, err := readBrowserControl(m.path)
+		if err != nil {
+			return sending.SendResult{Kind: sending.OutcomeUncertain, Error: "simulated control state unavailable", PauseMailbox: true}
+		}
+		if !c.Hold {
+			break
+		}
 		select {
 		case <-ctx.Done():
 			return sending.SendResult{Kind: sending.OutcomeUncertain, Error: "simulated held request timed out", PauseMailbox: true}
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
-	c := readBrowserControl(m.path)
+	c, err := readBrowserControl(m.path)
+	if err != nil {
+		return sending.SendResult{Kind: sending.OutcomeUncertain, Error: "simulated control state unavailable", PauseMailbox: true}
+	}
 	if message.Recipient == c.Uncertain {
 		return sending.SendResult{Kind: sending.OutcomeUncertain, Error: "simulated disconnect after transmission", PauseMailbox: true}
 	}
@@ -104,9 +119,13 @@ func TestAcceptanceBrowserHarness(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/token"):
-			fmt.Fprint(w, `{"access_token":"simulated-access","refresh_token":"simulated-refresh","token_type":"Bearer","expires_in":86400}`)
+			if _, err := fmt.Fprint(w, `{"access_token":"simulated-access","refresh_token":"simulated-refresh","token_type":"Bearer","expires_in":86400}`); err != nil {
+				return
+			}
 		case strings.HasSuffix(r.URL.Path, "/me"):
-			fmt.Fprint(w, `{"id":"simulated-mailbox","mail":"hr@bachtelcorporation.com","userPrincipalName":"hr@bachtelcorporation.com"}`)
+			if _, err := fmt.Fprint(w, `{"id":"simulated-mailbox","mail":"hr@bachtelcorporation.com","userPrincipalName":"hr@bachtelcorporation.com"}`); err != nil {
+				return
+			}
 		default:
 			http.NotFound(w, r)
 		}
@@ -146,14 +165,22 @@ func TestAcceptanceBrowserHarness(t *testing.T) {
 	gated := httptest.NewServer(web.NewHandlerWithDispatcher(f.app, cfg, connection, sending.NewStore(f.app, sending.Options{}), proxy))
 	defer gated.Close()
 	metadata := map[string]any{"url": server.URL, "task_url": server.URL + "/campaigns/" + f.campaignID + "/tasks/" + task + "/sending", "overlap_task_url": server.URL + "/campaigns/" + f.campaignID + "/tasks/" + overlap + "/sending", "gated_url": gated.URL, "gated_task_url": gated.URL + "/campaigns/" + f.campaignID + "/tasks/" + task + "/sending", "email": email, "password": password, "control": control, "data_dir": f.app.DataDir()}
-	data, _ := json.MarshalIndent(metadata, "", "  ")
+	data, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, "harness.json"), data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	fmt.Printf("BROWSER_HARNESS %s\n", data)
+	if _, err := fmt.Printf("BROWSER_HARNESS %s\n", data); err != nil {
+		t.Fatal(err)
+	}
 	restart := 0
 	for {
-		c := readBrowserControl(control)
+		c, err := readBrowserControl(control)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if c.Done {
 			return
 		}
@@ -171,7 +198,9 @@ func TestAcceptanceBrowserHarness(t *testing.T) {
 			start()
 			proxy.mu.Unlock()
 			restart = c.Restart
-			fmt.Printf("BROWSER_HARNESS_RESTARTED %d\n", restart)
+			if _, err := fmt.Printf("BROWSER_HARNESS_RESTARTED %d\n", restart); err != nil {
+				t.Fatal(err)
+			}
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

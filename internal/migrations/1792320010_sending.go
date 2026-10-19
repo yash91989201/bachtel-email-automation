@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"fmt"
 	"github.com/pocketbase/pocketbase/core"
 	m "github.com/pocketbase/pocketbase/migrations"
 )
@@ -27,7 +28,12 @@ func init() {
 		if e != nil {
 			return e
 		}
-		configs.Fields.GetByName("body_html").(*core.TextField).Max = 2 * 1024 * 1024
+		bodyField := configs.Fields.GetByName("body_html")
+		body, ok := bodyField.(*core.TextField)
+		if !ok {
+			return fmt.Errorf("campaign body_html field has type %T", bodyField)
+		}
+		body.Max = 2 * 1024 * 1024
 		if e = app.Save(configs); e != nil {
 			return e
 		}
@@ -59,7 +65,7 @@ func init() {
 			return e
 		}
 		state := core.NewBaseCollection("dispatcher_state")
-		state.Fields.Add(&core.TextField{Name: "key", Required: true, Max: 32}, &core.NumberField{Name: "rate", Required: true, OnlyInt: true, Min: floatPtr(1), Max: floatPtr(30)}, &core.JSONField{Name: "starts", MaxSize: 32768}, &core.DateField{Name: "next_eligible"}, &core.DateField{Name: "cooldown_until"}, &core.TextField{Name: "reason", Max: 500})
+		state.Fields.Add(&core.TextField{Name: "key", Required: true, Max: 32}, &core.NumberField{Name: "rate", Required: true, OnlyInt: true, Min: new(1.0), Max: new(30.0)}, &core.JSONField{Name: "starts", MaxSize: 32768}, &core.DateField{Name: "next_eligible"}, &core.DateField{Name: "cooldown_until"}, &core.TextField{Name: "reason", Max: 500})
 		state.AddIndex("idx_dispatcher_key", true, "key", "")
 		if e = app.Save(state); e != nil {
 			return e
@@ -70,5 +76,3 @@ func init() {
 		return app.Save(record)
 	}, func(app core.App) error { return nil })
 }
-
-func floatPtr(v float64) *float64 { return &v }
