@@ -14,7 +14,11 @@ func TestExpandMicrosoftCredentialOnExistingDatabase(t *testing.T) {
 	if err := app.Bootstrap(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = app.ClearBootstrap() })
+	t.Cleanup(func() {
+		if err := app.ClearBootstrap(); err != nil {
+			t.Error(err)
+		}
+	})
 
 	// Apply the original migrations first, just as on an existing deployment.
 	const upgrade = "1792233030_expand_microsoft_credential.go"
@@ -31,7 +35,7 @@ func TestExpandMicrosoftCredentialOnExistingDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if collection.Fields.GetByName("credential").(*core.TextField).Max != 0 {
+	if field, ok := collection.Fields.GetByName("credential").(*core.TextField); !ok || field.Max != 0 {
 		t.Fatal("original schema no longer reproduces the default 5000-character limit")
 	}
 	record := core.NewRecord(collection)
@@ -48,7 +52,7 @@ func TestExpandMicrosoftCredentialOnExistingDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if collection.Fields.GetByName("credential").(*core.TextField).Max != 1<<20 {
+	if field, ok := collection.Fields.GetByName("credential").(*core.TextField); !ok || field.Max != 1<<20 {
 		t.Fatal("credential capacity was not expanded")
 	}
 	if collection.ListRule != nil || collection.ViewRule != nil || collection.CreateRule != nil || collection.UpdateRule != nil || collection.DeleteRule != nil {

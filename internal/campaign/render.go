@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	htmltemplate "html/template"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -211,9 +212,7 @@ func Compile(subject, bodyHTML string, mappings []Mapping) (*Template, error) {
 // VarKeys returns the canonical internal key for every configured variable.
 func (t *Template) VarKeys() map[string]string {
 	keys := make(map[string]string, len(t.keys))
-	for name, key := range t.keys {
-		keys[name] = key
-	}
+	maps.Copy(keys, t.keys)
 	return keys
 }
 
@@ -502,8 +501,7 @@ func (s *rewriteState) rewriteBlock(block *html.Node) error {
 	joined := text.String()
 	matches := tokenPattern.FindAllStringSubmatchIndex(joined, -1)
 	// Edits run from the end of the join backwards so earlier offsets stay valid.
-	for i := len(matches) - 1; i >= 0; i-- {
-		match := matches[i]
+	for _, match := range slices.Backward(matches) {
 		name := strings.TrimSpace(joined[match[2]:match[3]])
 		if err := ValidateVariableName(name); err != nil {
 			return fmt.Errorf("malformed placeholder %q: variables are letters, digits and underscores", joined[match[0]:match[1]])
@@ -539,10 +537,7 @@ func replaceSpan(chunks []chunk, start, end int, replacement string) error {
 		return errors.New("placeholder could not be located in the paragraph text")
 	}
 	firstOffset := start - chunks[first].offset
-	lastEnd := end - chunks[last].offset
-	if lastEnd > chunks[last].length {
-		lastEnd = chunks[last].length
-	}
+	lastEnd := min(end-chunks[last].offset, chunks[last].length)
 	if first == last {
 		data := chunks[first].node.Data
 		chunks[first].node.Data = data[:firstOffset] + replacement + data[lastEnd:]

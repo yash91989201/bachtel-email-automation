@@ -70,8 +70,7 @@ func OpenWorkbook(data []byte, limits Limits) (*Workbook, error) {
 	w := &Workbook{file: file, digest: WorkbookDigest(data), limits: normalized}
 	names := file.GetSheetList()
 	if len(names) == 0 {
-		_ = file.Close()
-		return nil, ErrCorruptWorkbook
+		return nil, errors.Join(ErrCorruptWorkbook, file.Close())
 	}
 	w.Sheets = make([]SheetInfo, 0, len(names))
 	for _, name := range names {
@@ -97,8 +96,7 @@ func OpenWorkbook(data []byte, limits Limits) (*Workbook, error) {
 	// either way so the selection form starts from it.
 	w.Sheet, w.HeaderRow = defaultSheet, HeaderRowDefault
 	if err := w.Select(defaultSheet, HeaderRowDefault); err != nil && !selectionFailure(err) {
-		_ = w.Close()
-		return nil, err
+		return nil, errors.Join(err, w.Close())
 	}
 	return w, nil
 }
@@ -285,12 +283,10 @@ func (w *Workbook) Close() error {
 // lines up with the workbook the operator uploaded. Rows with no recorded
 // values are padded, and a report without excluded rows still carries its
 // header.
-func ExclusionReport(headers []string, rows []ReportRow) ([]byte, error) {
+func ExclusionReport(headers []string, rows []ReportRow) (data []byte, err error) {
 	const sheet = "Excluded"
 	file := excelize.NewFile()
-	defer func() {
-		_ = file.Close()
-	}()
+	defer func() { err = errors.Join(err, file.Close()) }()
 	if err := file.SetSheetName("Sheet1", sheet); err != nil {
 		return nil, fmt.Errorf("build exclusion report: %w", err)
 	}

@@ -87,6 +87,9 @@ func (s *server) requireOperator(next http.HandlerFunc) http.HandlerFunc {
 // recordFromContext returns the operator record stored by requireOperator.
 // Handlers behind requireOperator can rely on it being present.
 func recordFromContext(r *http.Request) *core.Record {
-	record, _ := r.Context().Value(recordContextKey{}).(*core.Record)
+	record, ok := r.Context().Value(recordContextKey{}).(*core.Record)
+	if !ok {
+		return nil
+	}
 	return record
 }

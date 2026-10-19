@@ -54,7 +54,9 @@ func NewHandler(app core.App, cfg config.Config, connections *microsoft.Service)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
+		if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+			s.app.Logger().Warn("write health response", "error", err)
+		}
 	})
 	mux.HandleFunc("GET /login", s.handleLoginPage)
 	mux.HandleFunc("POST /login", s.handleLoginSubmit)
@@ -101,5 +103,7 @@ func (s *server) render(w http.ResponseWriter, r *http.Request, component templ.
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(buf.Bytes())
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		s.app.Logger().Warn("write page response", "error", err)
+	}
 }
