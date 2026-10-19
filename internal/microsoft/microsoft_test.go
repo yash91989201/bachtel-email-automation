@@ -8,11 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -775,6 +777,9 @@ func TestRefresh(t *testing.T) {
 		if err == nil || token != "" {
 			t.Fatalf("got token %q err %v, want error and empty token", token, err)
 		}
+		if !strings.Contains(err.Error(), "simulated disk failure") {
+			t.Fatalf("expected bounded persistence failure, got %v", err)
+		}
 		if n := mock.refreshCount(); n != 1 {
 			t.Fatalf("%d refresh requests, want 1", n)
 		}
@@ -825,3 +830,100 @@ func (g stubGuard) InFlight(context.Context) (int, error) { return g.n, g.err }
 type failingSaveApp struct{ core.App }
 
 func (a failingSaveApp) Save(core.Model) error { return errors.New("simulated disk failure") }
+
+func (a failingSaveApp) SaveWithContext(ctx context.Context, _ core.Model) error {
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > tokenAccessTimeout {
+		return errors.New("refresh persistence lacks bounded context")
+	}
+	return errors.New("simulated disk failure")
+}
+
+type refreshRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f refreshRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestRefreshWaitHonorsCancellationWithoutLeakingSerialization(t *testing.T) {
+	mock := newMockMicrosoft(t)
+	mock.meID, mock.meUPN = "aid-1", "hr@bachtelcorporation.com"
+	app := bootApp(t, t.TempDir())
+	svc := NewService(app, testEnv(t, mock.srv.URL, mock.srv.URL))
+	connectNow(t, svc, testOperator)
+	expired := oauth2.Token{AccessToken: "old", RefreshToken: "refresh-old", TokenType: "Bearer", Expiry: time.Now().Add(-time.Hour)}
+	overwriteCredential(t, app, svc, expired)
+
+	entered := make(chan struct{}, 2)
+	release := make(chan struct{})
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	var calls atomic.Int32
+	client := &http.Client{Transport: refreshRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		calls.Add(1)
+		entered <- struct{}{}
+		deadline, ok := r.Context().Deadline()
+		if !ok || time.Until(deadline) > tokenAccessTimeout {
+			t.Error("refresh HTTP request has no bounded token deadline")
+		}
+		select {
+		case <-release:
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"access_token":"renewed","refresh_token":"rotated","token_type":"Bearer","expires_in":3600}`))}, nil
+		case <-r.Context().Done():
+			return nil, r.Context().Err()
+		}
+	})}
+	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, client)
+	type result struct {
+		token string
+		err   error
+	}
+	first := make(chan result, 1)
+	go func() { token, err := svc.AccessToken(ctx); first <- result{token, err} }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("first refresh did not start")
+	}
+
+	waitCtx, cancel := context.WithCancel(ctx)
+	second := make(chan error, 1)
+	go func() { _, err := svc.AccessToken(waitCtx); second <- err }()
+	select {
+	case err := <-second:
+		t.Fatalf("waiter returned before cancellation or refresh completion: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case err := <-second:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("waiter error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("canceled waiter blocked behind refresh")
+	}
+	if calls.Load() != 1 {
+		t.Fatal("waiter launched a competing refresh")
+	}
+	close(release)
+	select {
+	case got := <-first:
+		if got.err != nil || got.token != "renewed" {
+			t.Fatalf("first refresh = %+v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("first refresh failed to finish")
+	}
+	if token, err := svc.AccessToken(ctx); err != nil || token != "renewed" || calls.Load() != 1 {
+		t.Fatalf("cached refresh token=%q error=%v requests=%d", token, err, calls.Load())
+	}
+	// A later expired credential still refreshes: canceling the waiter neither
+	// held the semaphore nor released the first caller's slot prematurely.
+	overwriteCredential(t, app, svc, expired)
+	if token, err := svc.AccessToken(ctx); err != nil || token != "renewed" || calls.Load() != 2 {
+		t.Fatalf("later refresh token=%q error=%v requests=%d", token, err, calls.Load())
+	}
+}

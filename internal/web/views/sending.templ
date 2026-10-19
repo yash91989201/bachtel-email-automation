@@ -1,0 +1,205 @@
+package views
+
+import "strconv"
+import "fmt"
+
+type SendingData struct {
+	Base, TaskURL, Sender, Hash, Status, Reason, ActionID, Error, LatestTest, Cooldown               string
+	Approved, Enabled, ArtifactNeeded                                                                bool
+	Rate                                                                                             int
+	RetryableFailed                                                                                  int
+	Eligible, Remaining, Submitted, Failed, Held, InFlight, Reserved, Invalid, Duplicate, Ineligible int
+	Rows                                                                                             []SendingRow
+	Recent                                                                                           []SendingOutcome
+}
+type SendingRow struct {
+	ResolutionActor, ResolutionBasis, ResolvedAt string
+	SampleEligible                               bool
+	ID, State, Reason, ActionID                  string
+	Number                                       int
+	Attempt                                      SendingOutcome
+}
+type SendingOutcome struct{ ID, Kind, Recipient, State, Reason, Time string }
+
+// A changed control identity discards stale confirmations during polling.
+func sendingControlKey(data SendingData) string {
+	return fmt.Sprintf("%s-%t-%t-%d-%d-%d-%d-%d-%d-%d-%d-%d", data.Status, data.Enabled, data.Approved, data.Remaining, data.Submitted, data.Failed, data.Held, data.InFlight, data.Reserved, data.Invalid, data.Duplicate, data.Ineligible)
+}
+
+templ SendingPage(data SendingData) {
+	@Layout("Sending", true) {
+		<h1 class="text-4xl font-bold">Sending and recovery</h1>
+		<a class="link" href={ data.TaskURL }>Back to task snapshot and exclusions</a>
+		<p>Fixed sender: <strong>{ data.Sender }</strong>. SUBMITTED means Microsoft accepted the request; it does not confirm delivery.</p>
+		<p>Closing the browser or logging out does not stop server work. Reconnecting Microsoft or sending a diagnostic test never resumes candidates.</p>
+		if !data.Enabled {
+			<div class="alert alert-warning">Candidate sending is gated until change 5 production release verification passes. Diagnostic test emails remain available.</div>
+		}
+		if data.Error!="" {
+			<div class="alert alert-error" role="alert">{ data.Error }</div>
+		}
+		@SendingProgress(data)
+		<section class="card border p-5 space-y-3">
+			<h2 class="text-xl font-bold">Result artifacts</h2>
+			<form method="post" action={ data.Base + "/artifacts" }>
+				<input type="hidden" name="action_id" value={ data.ActionID + "artifacts" }/>
+				<input type="hidden" name="expected_count" value="0"/>
+				<input type="hidden" name="confirmed" value="yes"/>
+				<button class="btn" type="submit">Request result generation for terminal task</button>
+			</form>
+			<p>This request only marks results for change 5; it never submits or retries email.</p>
+			<h2 class="text-xl font-bold">Mailbox pacing</h2>
+			<p>Default 25 starts per minute; maximum 30 and four in flight across candidates, tests and retries. Microsoft throttling may reduce throughput. Other Outlook clients consume mailbox capacity outside this app's observations.</p>
+			<form method="post" action={ data.Base + "/rate" }>
+				<input type="hidden" name="action_id" value={ data.ActionID + "rate" }/>
+				<label>Starts per minute <input class="input input-bordered" name="rate" type="number" min="1" max="30" step="1" value={ strconv.Itoa(data.Rate) } required/></label>
+				<button class="btn" type="submit">Update pacing</button>
+			</form>
+		</section>
+	}
+}
+
+templ SendingDiagnostics(data SendingData) {
+	<section class="card border p-5 space-y-3">
+		<h2 class="text-xl font-bold">1. Send a formatting test</h2>
+		<p>Select a valid sample row and explicitly enter the test address. Tests use a separate attempt and never submit a candidate.</p>
+		<form id="sending-diagnostic-test" hx-preserve method="post" action={ data.Base + "/test" } class="space-y-3">
+			<input type="hidden" name="action_id" value={ data.ActionID + "test" }/>
+			<label class="block">
+				Sample row
+				<select class="select select-bordered" name="member_id" required>
+					for _,row:=range data.Rows {
+						if row.SampleEligible {
+							<option value={ row.ID }>Worksheet row { row.Number }</option>
+						}
+					}
+				</select>
+			</label>
+			<label class="block">Test recipient <input class="input input-bordered" type="email" name="test_address" required/></label>
+			<button class="btn btn-primary" type="submit">Send diagnostic test</button>
+		</form>
+	</section>
+	<section class="card border p-5 space-y-3">
+		<h2 class="text-xl font-bold">2. Approve received formatting</h2>
+		<p>Exact configuration content hash: <code class="break-all">{ data.Hash }</code></p>
+		if data.Approved {
+			<p class="text-success">Received formatting approved for this hash.</p>
+		}
+		<form id={ "sending-approval-" + data.Hash + "-" + data.LatestTest + "-" + strconv.FormatBool(data.Approved) } hx-preserve method="post" action={ data.Base + "/approve" } class="space-y-3">
+			<input type="hidden" name="action_id" value={ data.ActionID + "approve" }/>
+			<input type="hidden" name="content_hash" value={ data.Hash }/>
+			<label class="block">
+				Successful diagnostic test
+				<select class="select select-bordered" name="attempt_id" required>
+					<option value="">Choose a submitted test for this configuration</option>
+					if data.LatestTest!="" {
+						<option value={ data.LatestTest }>Latest successful test for this exact content: { data.LatestTest }</option>
+					}
+					for _,outcome:=range data.Recent {
+						if outcome.Kind=="test" && outcome.State=="submitted" {
+							<option value={ outcome.ID }>{ outcome.Recipient } · { outcome.Time } · { outcome.ID }</option>
+						}
+					}
+				</select>
+			</label>
+			<label class="block"><input type="checkbox" name="received_checked" value="yes" required/> I received this test and checked its subject, personalized values and HTML formatting.</label>
+			<button class="btn" type="submit">Approve this exact content</button>
+		</form>
+	</section>
+}
+
+templ SendingProgress(data SendingData) {
+	<section id="sending-progress" class="card border p-5 space-y-4" hx-get={ data.Base + "/progress" } hx-trigger="every 2s" hx-swap="outerHTML" aria-live="polite">
+		<h2 class="text-xl font-bold">Durable progress: { data.Status }</h2>
+		if data.Reason!="" {
+			<div class="alert alert-warning">{ data.Reason }</div>
+		}
+		<p>Safe remaining: { data.Remaining } · Submitted: { data.Submitted } · Definite failures: { data.Failed } · Held for review: { data.Held } · In flight: { data.InFlight } · Reserved: { data.Reserved }</p>
+		<p>Exclusions: invalid { data.Invalid }, duplicate { data.Duplicate }, ineligible { data.Ineligible }. Counts are refreshed before each action; changed exclusions require another confirmation.</p>
+		if data.ArtifactNeeded {
+			<p>Result generation requested. Downloads become available in change 5; artifact failures never requeue email.</p>
+		}
+		@SendingDiagnostics(data)
+		@SendingControls(data)
+		<p>Current pacing: { data.Rate } starts per minute. Mailbox cooldown until: { data.Cooldown }</p>
+		<p><a class="link" href={ data.Base }>Refresh successful test choices and all action counts</a></p>
+		<h3 class="font-bold">Recent outcomes (+05:30)</h3>
+		<table class="table table-sm">
+			<thead><tr><th>Time</th><th>Kind / recipient</th><th>Outcome</th><th>Reason</th></tr></thead>
+			<tbody>
+				for _,outcome:=range data.Recent {
+					<tr><td>{ outcome.Time }</td><td>{ outcome.Kind } · { outcome.Recipient }</td><td>{ outcome.State }</td><td>{ outcome.Reason }</td></tr>
+				}
+			</tbody>
+		</table>
+	</section>
+}
+
+templ sendingAction(data SendingData, kind string, label string, count int) {
+	<form id={ "sending-action-" + kind + "-" + strconv.Itoa(count) + "-" + sendingControlKey(data) } hx-preserve method="post" action={ data.Base + "/" + kind } class="space-y-2">
+		<input type="hidden" name="action_id" value={ data.ActionID + kind }/>
+		<input type="hidden" name="expected_count" value={ strconv.Itoa(count) }/>
+		<label class="block"><input type="checkbox" name="confirmed" value="yes" required/> Confirm { count } recipients</label>
+		<button class="btn btn-primary" type="submit" disabled?={ !data.Enabled || !data.Approved || count==0 }>{ label }</button>
+	</form>
+}
+
+templ sendingRowFields(row SendingRow) {
+	<input type="hidden" name="action_id" value={ row.ActionID }/>
+	<input type="hidden" name="member_id" value={ row.ID }/>
+	<input type="hidden" name="expected_count" value="1"/>
+}
+
+templ SendingControls(data SendingData) {
+	<section class="card border p-5 space-y-4">
+		<p>Confirm these fresh counts. If progress changes them before submission, reload this page and confirm again.</p>
+		<div class="flex flex-wrap gap-4">
+			@sendingAction(data, "start", "Start", data.Remaining)
+			@sendingAction(data, "resume", "Resume safe remainder", data.Remaining)
+			@sendingAction(data, "retry_all", "Retry all definite failures", data.RetryableFailed)
+			<form id={ "sending-stop-" + data.Status } hx-preserve method="post" action={ data.Base + "/stop" }>
+				<input type="hidden" name="action_id" value={ data.ActionID + "stop" }/>
+				<input type="hidden" name="expected_count" value="0"/>
+				<input type="hidden" name="confirmed" value="yes"/>
+				<button class="btn btn-warning" type="submit">Stop future launches and drain</button>
+			</form>
+		</div>
+		<h3 class="font-bold">Individual recovery</h3>
+		for _,row:=range data.Rows {
+			if row.State=="definite_failure" || row.State=="failed" || row.State=="auth_failure" || row.State=="correction_required" || row.State=="manually_submitted" || row.State=="review_required" {
+				<div class="border rounded p-3 space-y-2">
+					<p>Worksheet row { row.Number }: { row.State } · { row.Reason }</p>
+					if row.Attempt.ID!="" {
+						<p>Prior attempt { row.Attempt.ID }: { row.Attempt.Recipient } · { row.Attempt.State } · { row.Attempt.Time } · { row.Attempt.Reason }</p>
+					}
+					if row.State=="manually_submitted" {
+						<p>Marked already submitted by { row.ResolutionActor } at { row.ResolvedAt }. Basis: { row.ResolutionBasis }</p>
+						<p>This operator resolution does not establish a Microsoft acceptance timestamp.</p>
+					} else if row.State=="correction_required" {
+						<p>Correct the recipient or required values in the source workbook and upload a corrected task. This unchanged snapshot cannot be retried.</p>
+					} else if row.State=="review_required" {
+						<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resend" } class="space-y-2">
+							@sendingRowFields(row)
+							<label class="block"><input type="checkbox" name="duplicate_risk" value="yes" required/> The earlier request may have been accepted. Sending again can create a duplicate.</label>
+							<label class="block"><input type="checkbox" name="confirmed" value="yes" required/> Confirm sending this 1 recipient again.</label>
+							<button class="btn btn-warning" type="submit" disabled?={ !data.Enabled }>Send again — duplicate risk</button>
+						</form>
+						<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resolve" } class="space-y-2">
+							@sendingRowFields(row)
+							<label class="block">Basis for resolution <input class="input input-bordered" name="basis" required maxlength="2000"/></label>
+							<label class="block"><input type="checkbox" name="confirmed" value="yes" required/> I verified this recipient was already submitted.</label>
+							<button class="btn" type="submit">Mark as already submitted</button>
+							<p>Records the operator, basis and resolution time. Does not invent a Microsoft acceptance timestamp.</p>
+						</form>
+					} else {
+						<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/retry" }>
+							@sendingRowFields(row)
+							<label><input type="checkbox" name="confirmed" value="yes" required/> Retry this 1 definite failure using its unchanged snapshot.</label>
+							<button class="btn" type="submit" disabled?={ !data.Enabled }>Retry</button>
+						</form>
+					}
+				</div>
+			}
+		}
+	</section>
+}

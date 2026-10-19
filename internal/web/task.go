@@ -257,7 +257,7 @@ func (s *server) handleTaskExcluded(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if task.Status != intake.TaskReady {
+	if task.Status == intake.TaskStaging {
 		http.NotFound(w, r)
 		return
 	}
@@ -326,7 +326,7 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task) (views.TaskPag
 			Selected: sheet.Name == task.Sheet,
 		})
 	}
-	if task.Status != intake.TaskReady {
+	if task.Status == intake.TaskStaging {
 		return data, nil
 	}
 
