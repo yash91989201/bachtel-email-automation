@@ -88,6 +88,8 @@ const (
 	// refreshSkew: a stored access token with more than this lifetime left is
 	// used as-is; anything closer to expiry is refreshed first.
 	refreshSkew = 60 * time.Second
+	// tokenAccessTimeout includes waiting for another refresh and its HTTP call.
+	tokenAccessTimeout = 20 * time.Second
 )
 
 // scopes: offline_access yields the refresh token, Mail.Send is the only
@@ -114,9 +116,10 @@ type Service struct {
 	mu       sync.Mutex
 	attempts map[string]pendingAttempt
 
-	// refreshMu serializes credential refresh and upserts. The process-wide
-	// mutex is correct for the single-instance SQLite deployment.
-	refreshMu sync.Mutex
+	// A context-aware semaphore serializes refresh and persistence. Initialize
+	// lazily so directly constructed services retain the same safe behavior.
+	refreshOnce sync.Once
+	refreshSlot chan struct{}
 
 	guardMu sync.RWMutex
 	guard   DispatchGuard
@@ -273,14 +276,27 @@ func (s *Service) CompleteAuth(ctx context.Context, operatorID, state, code stri
 // when it is close to expiry. A credential Microsoft rejects is marked
 // reconnect required; unreadable ciphertext is never overwritten.
 func (s *Service) AccessToken(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, tokenAccessTimeout)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	// Fast path: a comfortably valid stored token needs no lock and no
 	// network call.
 	if _, token, err := s.storedToken(); err == nil && time.Until(token.Expiry) > refreshSkew {
 		return token.AccessToken, nil
 	}
 
-	s.refreshMu.Lock()
-	defer s.refreshMu.Unlock()
+	s.refreshOnce.Do(func() { s.refreshSlot = make(chan struct{}, 1) })
+	select {
+	case s.refreshSlot <- struct{}{}:
+		defer func() { <-s.refreshSlot }()
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 
 	// Double-check: another goroutine may have refreshed while we waited for
 	// the mutex.
@@ -320,7 +336,7 @@ func (s *Service) AccessToken(ctx context.Context) (string, error) {
 	record.Set("credential_expires_at", refreshed.Expiry)
 	// Persist before returning: a rotated token the database never saw must
 	// not be used, or the next start would silently hold a stale credential.
-	if err := s.app.Save(record); err != nil {
+	if err := s.app.SaveWithContext(ctx, record); err != nil {
 		return "", fmt.Errorf("persisting the refreshed Microsoft credentials failed: %w", err)
 	}
 	return refreshed.AccessToken, nil
