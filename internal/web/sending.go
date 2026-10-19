@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
@@ -46,6 +47,11 @@ func (s *server) sendingData(r *http.Request) (views.SendingData, error) {
 		return views.SendingData{}, err
 	}
 	data := views.SendingData{ArtifactNeeded: progress.ArtifactNeeded, Base: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/sending", TaskURL: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID, Sender: s.cfg.Microsoft.SenderAddress, Hash: progress.ContentHash, Approved: progress.Approved, Enabled: progress.ProductionEnabled, Status: progress.Status, Reason: progress.Reason, Eligible: progress.Eligible, Remaining: progress.Remaining, Submitted: progress.Submitted, Failed: progress.Failed, RetryableFailed: progress.RetryableFailed, Held: progress.Held, InFlight: progress.InFlight, Reserved: progress.Reserved, Invalid: progress.Invalid, Duplicate: progress.Duplicate, Ineligible: progress.Ineligible, ActionID: actionID()}
+	data.RestoreReview = progress.RestoreReview
+	if artifact, e := s.exports.TaskArtifact(r.Context(), task.ID); e == nil && artifact != nil {
+		data.ResultsState = artifact.State
+		data.ResultsReady = artifact.Ready
+	}
 	data.ScheduleAt = sending.DisplayTime(task.ScheduleAt)
 	data.ScheduleState = task.ScheduleState
 	data.ScheduleMinDate = sending.DisplayDate(time.Now())
@@ -230,7 +236,14 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 			s.renderWithStatus(w, r, http.StatusBadRequest, views.SendingPage(data))
 			return
 		}
-		if s.dispatcher != nil && kind != "artifacts" {
+		if kind == "artifacts" {
+			// Generation is a file export, never a send: a failure leaves the
+			// durable marker set for the background worker or a retry.
+			if err = s.exports.GenerateTask(r.Context(), task.ID, false); err != nil && !errors.Is(err, exports.ErrInProgress) {
+				s.app.Logger().Error("generate task results after request", "task", task.ID, "error", err)
+			}
+			s.exports.Trigger()
+		} else if s.dispatcher != nil {
 			s.dispatcher.Wake()
 		}
 		http.Redirect(w, r, "/campaigns/"+task.CampaignID+"/tasks/"+task.ID+"/sending", http.StatusSeeOther)

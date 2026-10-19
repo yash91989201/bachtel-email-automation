@@ -68,9 +68,9 @@ func (s *Store) SetCooldown(ctx context.Context, until time.Time, reason string)
 	})
 }
 func attemptFrom(r *core.Record) *Attempt {
-	return &Attempt{ID: r.Id, Work: Work{ID: r.Id, Kind: r.GetString("kind"), TaskID: r.GetString("task"), MemberID: r.GetString("member"), CandidateID: r.GetString("candidate"), ConfigurationID: r.GetString("configuration"), ContentHash: r.GetString("content_hash"), Recipient: r.GetString("recipient"), Subject: r.GetString("subject"), Body: r.GetString("body"), RetryCount: r.GetInt("retry_count")}, State: r.GetString("state"), Reason: r.GetString("reason"), StartedAt: stamp(r, "started_at"), FinishedAt: stamp(r, "finished_at")}
+	return &Attempt{ID: r.Id, Work: Work{ID: r.Id, Kind: r.GetString("kind"), TaskID: r.GetString("task"), MemberID: r.GetString("member"), CandidateID: r.GetString("candidate"), ConfigurationID: r.GetString("configuration"), ContentHash: r.GetString("content_hash"), Recipient: r.GetString("recipient"), Sender: r.GetString("sender"), Subject: r.GetString("subject"), Body: r.GetString("body"), RetryCount: r.GetInt("retry_count")}, State: r.GetString("state"), Reason: r.GetString("reason"), StartedAt: stamp(r, "started_at"), FinishedAt: stamp(r, "finished_at")}
 }
-func workFrom(app core.App, task, member *core.Record) (*Work, error) {
+func workFrom(app core.App, task, member *core.Record, sender string) (*Work, error) {
 	c, e := app.FindRecordById(intake.CandidatesCollection, member.GetString("candidate"))
 	if e != nil {
 		return nil, e
@@ -95,9 +95,12 @@ func workFrom(app core.App, task, member *core.Record) (*Work, error) {
 	if e != nil {
 		return nil, e
 	}
-	return &Work{ID: member.Id, Kind: KindCandidate, TaskID: task.Id, MemberID: member.Id, CandidateID: c.Id, ConfigurationID: cfg.Id, ContentHash: cfg.GetString("content_hash"), Recipient: c.GetString("email_key"), Subject: rendered.Subject, Body: rendered.Body, RetryCount: member.GetInt("retry_count")}, nil
+	return &Work{ID: member.Id, Kind: KindCandidate, TaskID: task.Id, MemberID: member.Id, CandidateID: c.Id, ConfigurationID: cfg.Id, ContentHash: cfg.GetString("content_hash"), Recipient: c.GetString("email_key"), Sender: sender, Subject: rendered.Subject, Body: rendered.Body, RetryCount: member.GetInt("retry_count")}, nil
 }
 func (s *Store) NextWork(ctx context.Context) (*Work, error) {
+	if s.options.RestoreReview {
+		return nil, nil
+	}
 	// Select one due row in SQLite; loading every remaining snapshot on each
 	// opportunity makes a thousand-recipient task do quadratic allocation work.
 	now := s.options.Now().UTC().Format(types.DefaultDateLayout)
@@ -137,7 +140,7 @@ func (s *Store) NextWork(ctx context.Context) (*Work, error) {
 			if stamp(m, "retry_at").After(s.options.Now()) {
 				continue
 			}
-			w, e := workFrom(s.app, task, m)
+			w, e := workFrom(s.app, task, m, s.options.SenderAddress)
 			if e != nil {
 				return nil, e
 			}
@@ -239,7 +242,7 @@ func (s *Store) BeginAttempt(ctx context.Context, w *Work, startedAt, nextEligib
 			if task.GetString("status") != "running" || m.GetString("dispatch_state") != "reserved" || c.GetString("claim_task") != task.Id || c.GetString("submission_state") != intake.SubmissionNone {
 				return ErrNoWork
 			}
-			fresh, e := workFrom(app, task, m)
+			fresh, e := workFrom(app, task, m, s.options.SenderAddress)
 			if e != nil {
 				return e
 			}
@@ -298,6 +301,7 @@ func putWork(r *core.Record, w *Work) {
 	r.Set("content_hash", w.ContentHash)
 	r.Set("kind", w.Kind)
 	r.Set("recipient", w.Recipient)
+	r.Set("sender", w.Sender)
 	r.Set("subject", w.Subject)
 	r.Set("body", w.Body)
 	r.Set("retry_count", w.RetryCount)

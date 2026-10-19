@@ -185,9 +185,10 @@ For an uncertain candidate, inspect its prior attempt and check externally:
   and leaves provider-confirmed acceptance time unset.
 
 Completed, stopped and recovered tasks carry a durable
-`result_generation_needed` marker. Requesting generation again only marks
-artifact work. Change 5 consumes that marker and publishes downloads; artifact
-failure or retry never creates an email attempt or changes eligibility.
+`result_generation_needed` marker. The process-owned export worker consumes it,
+and the task page offers generation or retry when no ready file is published.
+Artifact failure or retry never creates an email attempt or changes
+eligibility; see [history-exports.md](history-exports.md).
 
 Rollback requires stopping and draining, preserving all attempt history, then
 restoring compatible code and schema together. Sending migrations intentionally

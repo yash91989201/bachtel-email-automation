@@ -150,6 +150,13 @@ type TaskPageData struct {
 
 	ScheduleAt    string
 	ScheduleState string
+
+	// ResultsState is the generated workbook state: empty, generating, ready
+	// or failed. ResultsError carries the fixed retry message.
+	ResultsState string
+	ResultsError string
+	ResultsAsOf  string
+	ResultsReady bool
 }
 
 // TaskSheetOption is one stored worksheet of the uploaded workbook.
@@ -295,6 +302,48 @@ templ TaskPage(data TaskPageData) {
 					<p class="text-sm text-base-content/70">This schedule started the task once.</p>
 				}
 			}
+			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="results-heading">
+				<div class="card-body gap-4">
+					<h2 id="results-heading" class="card-title">Task results workbook</h2>
+					<p>The workbook keeps every original worksheet, row and cell, and adds the result columns after the source columns. It is built from retained records only; generating it never sends or retries an email.</p>
+					if data.ResultsReady {
+						<dl class="space-y-1 text-sm">
+							<div class="flex gap-2">
+								<dt class="font-semibold">As of:</dt>
+								<dd>{ data.ResultsAsOf }</dd>
+							</div>
+						</dl>
+						<div class="card-actions">
+							<a class="btn btn-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results.xlsx" }>Download results</a>
+							<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results" }>
+								<button class="btn btn-ghost" type="submit">Regenerate</button>
+							</form>
+							<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results/delete" }>
+								<button class="btn btn-ghost" type="submit">Remove generated file</button>
+							</form>
+						</div>
+						<p class="text-sm text-base-content/60">Removing this file deletes only the generated workbook. Candidate eligibility, uploads and attempt history stay unchanged, and the workbook can be generated again.</p>
+					} else {
+						if data.ResultsState == "generating" {
+							<p>Generating the workbook now. Reload this page shortly.</p>
+						} else if data.ResultsState == "failed" {
+							if data.ResultsError != "" {
+								<div class="alert alert-error" role="alert">{ data.ResultsError }</div>
+							}
+							<p>The last generation did not finish, so no download is presented. Retrying rebuilds the file from retained records.</p>
+						} else if data.Status == "completed" || data.Status == "stopped" || data.Status == "interrupted" {
+							<p>No workbook is published yet. Generate it now, or wait for the background worker to consume the recorded marker.</p>
+						} else {
+							<p>A results workbook becomes available after the task completes, stops or recovers from an interruption. Current status: <code>{ data.Status }</code>.</p>
+						}
+						if data.Status == "completed" || data.Status == "stopped" || data.Status == "interrupted" {
+							<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results" }>
+								<button class="btn btn-primary" type="submit">Generate results workbook</button>
+							</form>
+						}
+					}
+				</div>
+			</section>
 			if data.Stale {
 				<div class="alert alert-warning" role="alert">
 					<div>

@@ -46,6 +46,9 @@ const (
 	// EnvGraphBaseURL overrides the Microsoft Graph API base URL, used by
 	// simulated Graph servers in tests.
 	EnvGraphBaseURL = "MS_GRAPH_BASE_URL"
+	// EnvRestoreReview disables every send-like action after a backup restore
+	// until the operator reconciles the submission gap.
+	EnvRestoreReview = "APP_RESTORE_REVIEW"
 	// EnvPandocPath overrides the DOCX converter executable. It defaults to
 	// "pandoc" on PATH, which is what the application image packages.
 	EnvPandocPath = "PANDOC_PATH"
@@ -85,6 +88,8 @@ var (
 	// ErrEncryptionKeyInvalid reports an EnvEncryptionKey that is not base64
 	// for exactly 32 bytes.
 	ErrEncryptionKeyInvalid = errors.New("APP_ENCRYPTION_KEY must be base64 for exactly 32 bytes")
+	// ErrRestoreReviewInvalid reports an unparseable restore-review switch.
+	ErrRestoreReviewInvalid = errors.New("APP_RESTORE_REVIEW must be true or false")
 	// ErrIntakeLimitInvalid reports an unparseable or out-of-range intake
 	// resource limit.
 	ErrIntakeLimitInvalid = errors.New("intake resource limits must be whole byte counts: INTAKE_MAX_UPLOAD_BYTES must be positive and no larger than the supported ceiling, and INTAKE_UNZIP_XML_SIZE_LIMIT must not exceed INTAKE_UNZIP_SIZE_LIMIT")
@@ -103,6 +108,9 @@ type Config struct {
 	// Intake bounds one uploaded task workbook: upload size and expanded
 	// archive limits. Values are always resolved, never zero.
 	Intake intake.Limits
+	// RestoreReview keeps candidate dispatch disabled after a backup restore
+	// until the operator reconciles submissions that postdate the backup.
+	RestoreReview bool
 }
 
 // Microsoft holds the Microsoft Entra application and mailbox settings.
@@ -148,12 +156,17 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	restoreReview, err := strconv.ParseBool(strings.TrimSpace(os.Getenv(EnvRestoreReview)))
+	if err != nil && strings.TrimSpace(os.Getenv(EnvRestoreReview)) != "" {
+		return Config{}, ErrRestoreReviewInvalid
+	}
 
 	return Config{
-		Origin:     origin,
-		Microsoft:  microsoft,
-		PandocPath: strings.TrimSpace(os.Getenv(EnvPandocPath)),
-		Intake:     intakeLimits,
+		Origin:        origin,
+		Microsoft:     microsoft,
+		PandocPath:    strings.TrimSpace(os.Getenv(EnvPandocPath)),
+		Intake:        intakeLimits,
+		RestoreReview: restoreReview,
 	}, nil
 }
 

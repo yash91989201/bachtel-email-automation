@@ -6,7 +6,8 @@ import "fmt"
 type SendingData struct {
 	Base, TaskURL, Sender, Hash, Status, Reason, ActionID, Error, LatestTest, Cooldown               string
 	ScheduleAt, ScheduleState, ScheduleMinDate                                                       string
-	Approved, Enabled, ArtifactNeeded                                                                bool
+	Approved, Enabled, ArtifactNeeded, RestoreReview, ResultsReady                                   bool
+	ResultsState                                                                                     string
 	Rate                                                                                             int
 	RetryableFailed                                                                                  int
 	Eligible, Remaining, Submitted, Failed, Held, InFlight, Reserved, Invalid, Duplicate, Ineligible int
@@ -36,6 +37,9 @@ templ SendingPage(data SendingData) {
 		if !data.Enabled {
 			<div class="alert alert-warning">Candidate sending is gated until change 5 production release verification passes. Diagnostic test emails remain available.</div>
 		}
+		if data.RestoreReview {
+			<div class="alert alert-error" role="alert">Restore review is active. Sending, scheduling, retries and resends are disabled until submissions made after the restored backup are reconciled and the server is restarted without APP_RESTORE_REVIEW.</div>
+		}
 		if data.Error!="" {
 			<div class="alert alert-error" role="alert">{ data.Error }</div>
 		}
@@ -48,7 +52,14 @@ templ SendingPage(data SendingData) {
 				<input type="hidden" name="confirmed" value="yes"/>
 				<button class="btn" type="submit">Request result generation for terminal task</button>
 			</form>
-			<p>This request only marks results for change 5; it never submits or retries email.</p>
+			<p>This request generates the task results workbook from retained records. It never submits or retries email, and a generation failure never changes eligibility.</p>
+			if data.ResultsReady {
+				<a class="btn btn-primary" href={ data.TaskURL + "/results.xlsx" }>Download results workbook</a>
+			} else if data.ResultsState == "generating" {
+				<p>Generating the results workbook now.</p>
+			} else if data.ResultsState == "failed" {
+				<p class="text-error">The last generation failed; request generation again to retry. No incomplete file is offered.</p>
+			}
 			<h2 class="text-xl font-bold">Mailbox pacing</h2>
 			<p>Default 25 starts per minute; maximum 30 and four in flight across candidates, tests and retries. Microsoft throttling may reduce throughput. Other Outlook clients consume mailbox capacity outside this app's observations.</p>
 			<form method="post" action={ data.Base + "/rate" }>
@@ -118,7 +129,7 @@ templ SendingProgress(data SendingData) {
 		<p>Safe remaining: { data.Remaining } · Submitted: { data.Submitted } · Definite failures: { data.Failed } · Held for review: { data.Held } · In flight: { data.InFlight } · Reserved: { data.Reserved }</p>
 		<p>Exclusions: invalid { data.Invalid }, duplicate { data.Duplicate }, ineligible { data.Ineligible }. Counts are refreshed before each action; changed exclusions require another confirmation.</p>
 		if data.ArtifactNeeded {
-			<p>Result generation requested. Downloads become available in change 5; artifact failures never requeue email.</p>
+			<p>Result generation requested. The background worker builds the workbook; artifact failures never requeue email.</p>
 		}
 		@SendingDiagnostics(data)
 		@SendingControls(data)

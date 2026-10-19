@@ -10,6 +10,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/hook"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
+	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web"
@@ -22,6 +23,7 @@ import (
 func bindSending(app core.App, cfg config.Config, connections *microsoft.Service) {
 	var mu sync.Mutex
 	var dispatcher *sending.Dispatcher
+	var exportWorker func()
 	var terminating bool
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
 		mu.Lock()
@@ -29,16 +31,37 @@ func bindSending(app core.App, cfg config.Config, connections *microsoft.Service
 		if terminating {
 			return errors.New("application is shutting down")
 		}
-		store := sending.NewStore(app, sending.Options{})
+		store := sending.NewStore(app, sending.Options{
+			SenderAddress: cfg.Microsoft.SenderAddress,
+			RestoreReview: cfg.RestoreReview,
+		})
 		dispatcher = sending.NewDispatcher(store, sending.NewGraph(connections, sending.GraphOptions{
 			BaseURL: cfg.Microsoft.GraphBaseURL,
 			Timeout: 20 * time.Second,
 		}), sending.WorkerOptions{DataDir: app.DataDir(), RequestTimeout: 20 * time.Second})
+		exported := exports.NewService(app, cfg)
+		exported.BindTaskNotifications()
 		if err := dispatcher.Start(); err != nil {
 			return err
 		}
 		connections.SetDispatchGuard(dispatcher)
-		event.Router.Any("/{path...}", apis.WrapStdHandler(web.NewHandlerWithDispatcher(app, cfg, connections, store, dispatcher)))
+		// The export worker is process-owned like the dispatcher: it consumes
+		// durable result markers and never depends on a browser session.
+		exportsCtx, cancelExports := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			exported.Run(exportsCtx)
+		}()
+		exportWorker = func() {
+			cancelExports()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				app.Logger().Warn("export worker did not stop within the shutdown allowance")
+			}
+		}
+		event.Router.Any("/{path...}", apis.WrapStdHandler(web.NewHandlerWithServices(app, cfg, connections, store, dispatcher, exported)))
 		return event.Next()
 	})
 	app.OnTerminate().Bind(&hook.Handler[*core.TerminateEvent]{
@@ -48,10 +71,17 @@ func bindSending(app core.App, cfg config.Config, connections *microsoft.Service
 			mu.Lock()
 			terminating = true
 			active := dispatcher
+			stopExports := exportWorker
 			mu.Unlock()
+			if stopExports != nil {
+				stopExports()
+			}
 			if active != nil {
-				// Compose grants 30 seconds; requests have a 20-second deadline.
-				ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+				// The container stop allowance is 45 seconds (compose.yaml and
+				// the documented Coolify setting). Graph requests are bounded at
+				// 20 seconds, and final persistence needs headroom, so the drain
+				// budget is 35 seconds.
+				ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 				err := active.Shutdown(ctx)
 				cancel()
 				if err != nil {

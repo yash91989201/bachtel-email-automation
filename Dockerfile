@@ -45,7 +45,9 @@ WORKDIR /app
 COPY --from=build /out/bachtel /usr/local/bin/bachtel
 USER app:app
 EXPOSE 8090
+# Minimal liveness only: the application health route never includes database,
+# mailbox or task detail.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -q -O /dev/null http://127.0.0.1:8090/api/health || exit 1
+    CMD wget -q -O /dev/null http://127.0.0.1:8090/health || exit 1
 ENTRYPOINT ["bachtel"]
 CMD ["serve", "--http=0.0.0.0:8090", "--dir=/app/pb_data"]

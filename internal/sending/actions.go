@@ -12,6 +12,17 @@ import (
 	"strings"
 )
 
+// restoreBlocked reports the actions a restored backup must not accept until
+// the operator reconciles the gap between the backup and the interruption.
+func restoreBlocked(kind string) bool {
+	switch kind {
+	case "start", "resume", "retry", "retry_all", "resend":
+		return true
+	default:
+		return false
+	}
+}
+
 func approved(app core.App, t *core.Record) (bool, error) {
 	r, e := app.FindFirstRecordByFilter(ApprovalsCollection, "configuration={:c} && content_hash={:h}", dbx.Params{"c": t.GetString("configuration"), "h": t.GetString("content_hash")})
 	if errors.Is(e, sql.ErrNoRows) {
@@ -28,7 +39,7 @@ func (s *Store) Preview(ctx context.Context, id string) (*Progress, error) {
 	if e != nil {
 		return nil, e
 	}
-	p := &Progress{TaskID: id, Status: t.GetString("status"), Reason: t.GetString("pause_reason"), ContentHash: t.GetString("content_hash"), Approved: isApproved, ProductionEnabled: s.options.AllowCandidateSending, ArtifactNeeded: t.GetBool("result_generation_needed")}
+	p := &Progress{TaskID: id, Status: t.GetString("status"), Reason: t.GetString("pause_reason"), ContentHash: t.GetString("content_hash"), Approved: isApproved, ProductionEnabled: s.options.AllowCandidateSending, ArtifactNeeded: t.GetBool("result_generation_needed"), RestoreReview: s.options.RestoreReview}
 	var counts intake.Counts
 	if e = t.UnmarshalJSONField("counts", &counts); e != nil {
 		return nil, fmt.Errorf("decode task counts: %w", e)
@@ -276,6 +287,9 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 		if !in.Confirmed {
 			return errors.New("explicit confirmation is required")
 		}
+		if s.options.RestoreReview && restoreBlocked(in.Kind) {
+			return &ScheduleRefusal{Reason: "restore review is active: reconcile submissions made after the backup and restart without APP_RESTORE_REVIEW before sending"}
+		}
 		if in.Kind != "resolve" && !s.options.AllowCandidateSending {
 			return ErrReleaseGate
 		}
@@ -493,7 +507,7 @@ func (s *Store) QueueTest(ctx context.Context, in TestRequest) (*Attempt, error)
 			return e
 		}
 		r := core.NewRecord(col)
-		putWork(r, &Work{Kind: KindTest, TaskID: t.Id, ConfigurationID: cfg.Id, ContentHash: cfg.GetString("content_hash"), Recipient: recipient, Subject: rendered.Subject, Body: rendered.Body})
+		putWork(r, &Work{Kind: KindTest, TaskID: t.Id, ConfigurationID: cfg.Id, ContentHash: cfg.GetString("content_hash"), Recipient: recipient, Sender: s.options.SenderAddress, Subject: rendered.Subject, Body: rendered.Body})
 		r.Set("state", AttemptQueued)
 		if e = app.Save(r); e != nil {
 			return e

@@ -101,6 +101,9 @@ func (s *Store) Schedule(ctx context.Context, in ScheduleRequest) (*ActionResult
 		if !in.Confirmed {
 			return &ScheduleRefusal{Reason: "explicit confirmation is required"}
 		}
+		if s.options.RestoreReview {
+			return &ScheduleRefusal{Reason: "restore review is active: reconcile submissions made after the backup and restart without APP_RESTORE_REVIEW before scheduling"}
+		}
 		if in.At.Before(s.options.Now().Add(ScheduleLead)) {
 			return &ScheduleRefusal{Reason: "choose a start time at least 30 minutes from now"}
 		}

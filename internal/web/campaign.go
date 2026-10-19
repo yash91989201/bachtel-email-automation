@@ -16,8 +16,12 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
+	"github.com/pocketbase/dbx"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
+	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/retention"
+	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
@@ -31,6 +35,12 @@ func (s *server) registerCampaignRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /campaigns/{id}/revisions", s.requireOperator(s.handleCampaignRevision))
 	mux.HandleFunc("POST /campaigns/{id}/labels", s.requireOperator(s.handleCampaignLabels))
 	mux.HandleFunc("POST /campaigns/{id}/preview", s.requireOperator(s.handleCampaignPreview))
+	mux.HandleFunc("POST /campaigns/{id}/exports", s.requireOperator(s.handleCampaignExportsGenerate))
+	mux.HandleFunc("POST /campaigns/{id}/exports/delete", s.requireOperator(s.handleCampaignExportsDelete))
+	mux.HandleFunc("GET /campaigns/{id}/exports/report.xlsx", s.requireOperator(s.handleCampaignReportDownload))
+	mux.HandleFunc("GET /campaigns/{id}/exports/package.zip", s.requireOperator(s.handleCampaignPackageDownload))
+	mux.HandleFunc("GET /campaigns/{id}/attempts/{attempt}/email.html", s.requireOperator(s.handleAttemptHTML))
+	mux.HandleFunc("POST /campaigns/{id}/delete", s.requireOperator(s.handleCampaignDelete))
 	// No candidate-send surface exists: GET /campaigns/{id} would otherwise
 	// make the mux answer 405 (path match, method mismatch) for this path, so
 	// the not-found answer is pinned explicitly.
@@ -110,6 +120,129 @@ func (s *server) handleCampaignDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderWithStatus(w, r, http.StatusOK, views.CampaignPage(data))
+}
+
+// handleCampaignExportsGenerate rebuilds the campaign report and ZIP from one
+// consistent snapshot. Export generation never touches email state.
+func (s *server) handleCampaignExportsGenerate(w http.ResponseWriter, r *http.Request) {
+	page, err := s.campaignPageData(r, r.PathValue("id"), nil)
+	if err != nil {
+		s.campaignLoadFailure(w, r, err)
+		return
+	}
+	if err = s.exports.GenerateCampaign(r.Context(), page.ID, true); err != nil {
+		if errors.Is(err, exports.ErrInProgress) {
+			page.RevisionError = "export generation is already in progress; reload this page shortly"
+			s.renderWithStatus(w, r, http.StatusConflict, views.CampaignPage(page))
+			return
+		}
+		s.app.Logger().Error("generate campaign exports", "campaign", page.ID, "error", err)
+		page.RevisionError = "the campaign downloads could not be generated; retry"
+		s.renderWithStatus(w, r, http.StatusInternalServerError, views.CampaignPage(page))
+		return
+	}
+	http.Redirect(w, r, "/campaigns/"+page.ID, http.StatusSeeOther)
+}
+
+// handleCampaignExportsDelete removes only the generated report and package.
+// Campaign records, attempts and candidate eligibility stay unchanged.
+func (s *server) handleCampaignExportsDelete(w http.ResponseWriter, r *http.Request) {
+	target := r.PathValue("id")
+	if err := s.exports.DeleteCampaign(r.Context(), target); err != nil {
+		page, dataErr := s.campaignPageData(r, target, nil)
+		if dataErr != nil {
+			s.campaignLoadFailure(w, r, dataErr)
+			return
+		}
+		s.app.Logger().Error("delete campaign exports", "campaign", target, "error", err)
+		page.RevisionError = "the generated downloads could not be removed; retry"
+		s.renderWithStatus(w, r, http.StatusInternalServerError, views.CampaignPage(page))
+		return
+	}
+	http.Redirect(w, r, "/campaigns/"+target, http.StatusSeeOther)
+}
+
+func (s *server) handleCampaignReportDownload(w http.ResponseWriter, r *http.Request) {
+	data, filename, err := s.exports.DownloadCampaign(r.Context(), r.PathValue("id"), exports.KindCampaignReport)
+	if err != nil {
+		s.writeDownloadFailure(w, "load campaign report", err)
+		return
+	}
+	s.writeDownload(w, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename, data)
+}
+
+func (s *server) handleCampaignPackageDownload(w http.ResponseWriter, r *http.Request) {
+	data, filename, err := s.exports.DownloadCampaign(r.Context(), r.PathValue("id"), exports.KindCampaignPackage)
+	if err != nil {
+		s.writeDownloadFailure(w, "load campaign package", err)
+		return
+	}
+	s.writeDownload(w, "application/zip", filename, data)
+}
+
+// handleAttemptHTML serves one recorded attempt as a static, isolated HTML
+// document. The document declares its own restrictive policy so stored content
+// cannot run scripts even if opened directly.
+func (s *server) handleAttemptHTML(w http.ResponseWriter, r *http.Request) {
+	campaignID := r.PathValue("id")
+	attemptID := r.PathValue("attempt")
+	belongs, err := s.exports.AttemptBelongsTo(r.Context(), attemptID, campaignID)
+	if err != nil {
+		s.writeDownloadFailure(w, "load attempt", err)
+		return
+	}
+	if !belongs {
+		http.NotFound(w, r)
+		return
+	}
+	data, filename, err := s.exports.AttemptHTML(r.Context(), attemptID)
+	if err != nil {
+		s.writeDownloadFailure(w, "build attempt html", err)
+		return
+	}
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+	s.writeDownload(w, "text/html; charset=utf-8", filename, data)
+}
+
+// handleCampaignDelete removes a confirmed inactive campaign and its history.
+// An active claim or in-flight request refuses the deletion.
+func (s *server) handleCampaignDelete(w http.ResponseWriter, r *http.Request) {
+	target := r.PathValue("id")
+	if strings.TrimSpace(r.FormValue("confirm")) != "delete" {
+		page, err := s.campaignPageData(r, target, nil)
+		if err != nil {
+			s.campaignLoadFailure(w, r, err)
+			return
+		}
+		page.DeleteError = "confirm the deletion before submitting"
+		s.renderWithStatus(w, r, http.StatusBadRequest, views.CampaignPage(page))
+		return
+	}
+	if err := s.retention.DeleteCampaign(r.Context(), target); err != nil {
+		if errors.Is(err, retention.ErrCampaignActive) {
+			page, dataErr := s.campaignPageData(r, target, nil)
+			if dataErr != nil {
+				s.campaignLoadFailure(w, r, dataErr)
+				return
+			}
+			page.DeleteError = err.Error()
+			s.renderWithStatus(w, r, http.StatusConflict, views.CampaignPage(page))
+			return
+		}
+		s.app.Logger().Error("delete campaign", "campaign", target, "error", err)
+		http.Error(w, "Unable to delete the campaign", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/campaigns", http.StatusSeeOther)
+}
+
+func (s *server) writeDownloadFailure(w http.ResponseWriter, operation string, err error) {
+	if errors.Is(err, exports.ErrNotReady) || errors.Is(err, sql.ErrNoRows) {
+		http.NotFound(w, nil)
+		return
+	}
+	s.app.Logger().Error(operation, "error", err)
+	http.Error(w, "Unable to load the requested download", http.StatusInternalServerError)
 }
 
 func (s *server) handleCampaignRevision(w http.ResponseWriter, r *http.Request) {
@@ -319,6 +452,40 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 			Revision:    revision.Revision,
 			ContentHash: revision.ContentHash,
 			Approved:    revision.ApprovalCurrent(),
+		})
+	}
+	artifacts, err := s.exports.CampaignArtifacts(ctx, data.ID)
+	if err != nil {
+		return data, err
+	}
+	for _, artifact := range artifacts {
+		switch artifact.Kind {
+		case exports.KindCampaignReport:
+			data.ReportState = artifact.State
+			data.ReportError = artifact.Error
+			data.ReportReady = artifact.Ready
+			data.ReportAsOf = sending.DisplayTime(artifact.AsOf)
+		case exports.KindCampaignPackage:
+			data.PackageState = artifact.State
+			data.PackageError = artifact.Error
+			data.PackageReady = artifact.Ready
+			data.PackageAsOf = sending.DisplayTime(artifact.AsOf)
+		}
+	}
+	attempts, err := s.app.FindRecordsByFilter(sending.AttemptsCollection, "task.campaign={:c}", "-created,-id", 100, 0, dbx.Params{"c": data.ID})
+	if err != nil {
+		return data, err
+	}
+	for _, attempt := range attempts {
+		data.Attempts = append(data.Attempts, views.AttemptRow{
+			ID:         attempt.Id,
+			Kind:       attempt.GetString("kind"),
+			Recipient:  attempt.GetString("recipient"),
+			Subject:    attempt.GetString("subject"),
+			State:      attempt.GetString("state"),
+			Reason:     attempt.GetString("reason"),
+			FinishedAt: sending.DisplayTime(attempt.GetDateTime("finished_at").Time().UTC()),
+			Test:       attempt.GetString("kind") == sending.KindTest,
 		})
 	}
 	return data, nil

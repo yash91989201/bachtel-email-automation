@@ -434,10 +434,11 @@ func TestCampaignDetailApprovalAndHistory(t *testing.T) {
 			t.Fatalf("detail page missing %q: %.900s", want, body)
 		}
 	}
-	// The history is read-only: sign-out, revision upload, labels and sample
-	// preview are the only forms, none of them per stored revision.
-	if forms := strings.Count(body, "<form"); forms != 4 {
-		t.Fatalf("detail page has %d forms, want 4 (logout, revision, labels, preview)", forms)
+	// The history is read-only: the page's forms are fixed (sign-out, revision
+	// upload, labels, sample preview, export generation, export removal and
+	// campaign deletion), never one per stored revision.
+	if forms := strings.Count(body, "<form"); forms != 7 {
+		t.Fatalf("detail page has %d forms, want 7 fixed forms", forms)
 	}
 }
 

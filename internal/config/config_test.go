@@ -17,6 +17,7 @@ func clearEnvironment(t *testing.T) {
 		EnvOrigin, EnvEncryptionKey, EnvTenantID, EnvClientID, EnvClientSecret,
 		EnvRedirectURL, EnvSenderAddress, EnvAuthorityURL, EnvGraphBaseURL,
 		EnvIntakeMaxUploadBytes, EnvIntakeUnzipSizeLimit, EnvIntakeUnzipXMLSizeLimit,
+		EnvRestoreReview,
 	} {
 		t.Setenv(name, "")
 	}
@@ -43,6 +44,26 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if missing := cfg.Microsoft.Missing(); len(missing) != 3 {
 		t.Fatalf("expected tenant/client/secret to be reported missing, got %v", missing)
+	}
+}
+
+func TestLoadRestoreReview(t *testing.T) {
+	clearEnvironment(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.RestoreReview {
+		t.Fatal("restore review must default to disabled")
+	}
+	t.Setenv(EnvRestoreReview, "true")
+	cfg, err = Load()
+	if err != nil || !cfg.RestoreReview {
+		t.Fatalf("restore review was not enabled: %+v %v", cfg, err)
+	}
+	t.Setenv(EnvRestoreReview, "not-a-switch")
+	if _, err = Load(); !errors.Is(err, ErrRestoreReviewInvalid) {
+		t.Fatalf("malformed restore review accepted: %v", err)
 	}
 }
 

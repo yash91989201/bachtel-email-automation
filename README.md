@@ -184,6 +184,15 @@ Workbook support, header matching, recipient-key rules, resource limits,
 duplicate handling and the private artifacts are documented in
 [docs/task-intake.md](docs/task-intake.md).
 
+## History and downloads
+
+Completed, stopped and recovered tasks publish a results workbook built from
+the retained original upload. Campaign pages publish an Excel report and a ZIP
+package containing report, per-attempt HTML and an index. Generated files are
+private, stored until explicit manual deletion, and regenerable from retained
+records. See [docs/history-exports.md](docs/history-exports.md) for workbook
+statuses, package contents and the two deletion scopes.
+
 ## Background sending and recovery
 
 Open a validated task and choose **Sending and recovery**. Send a diagnostic
@@ -332,7 +341,10 @@ docker compose up --build -d  # rebuild/recreate; retain data
 ```
 
 Run one app instance against this local SQLite volume; do not share it between
-replicas. Use PocketBase's dashboard backup facility before upgrades. For raw
+replicas. The Coolify deployment, backup, restore, restore-review and rollback
+procedures are in [docs/coolify-deployment.md](docs/coolify-deployment.md);
+release acceptance steps are in
+[docs/release-checklist.md](docs/release-checklist.md). Use PocketBase's dashboard backup facility before upgrades. For raw
 volume copies, stop the app first. `docker compose down -v` deletes the database
 volume. Configure SMTP through the dashboard when implementing email features;
 this runtime image does not provide sendmail.

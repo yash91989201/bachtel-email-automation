@@ -46,7 +46,13 @@ func (r *ScheduleRefusal) Error() string { return r.Reason }
 
 type StoreOptions struct {
 	AllowCandidateSending bool
-	Now                   func() time.Time
+	// SenderAddress is recorded on each attempt so a historical HTML export
+	// shows the mailbox used at send time.
+	SenderAddress string
+	// RestoreReview disables every send-like action after a backup restore.
+	// Stop, history resolution and export generation remain available.
+	RestoreReview bool
+	Now           func() time.Time
 }
 type Options = StoreOptions
 type Store struct {
@@ -66,6 +72,7 @@ func NewStore(app core.App, options StoreOptions) *Store {
 type Work struct {
 	ID, Kind, TaskID, MemberID, CandidateID, ConfigurationID, ContentHash, Recipient, Subject, Body string
 	RetryCount                                                                                      int
+	Sender                                                                                          string
 }
 type Attempt struct {
 	Work
@@ -96,7 +103,7 @@ type Progress struct {
 	RetryableFailed                                                                                  int
 	Members                                                                                          []MemberProgress
 	TaskID, Status, Reason, ContentHash, LatestSuccessfulTestID                                      string
-	Approved, ProductionEnabled, ArtifactNeeded                                                      bool
+	Approved, ProductionEnabled, ArtifactNeeded, RestoreReview                                       bool
 	Eligible, Remaining, Submitted, Failed, Held, InFlight, Reserved, Invalid, Duplicate, Ineligible int
 	Recent                                                                                           []Attempt
 }

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
+	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
@@ -31,6 +32,9 @@ func (s *server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/revalidate", s.requireOperator(s.handleTaskRevalidate))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/preview", s.requireOperator(s.handleTaskPreview))
 	mux.HandleFunc("GET /campaigns/{id}/tasks/{task}/excluded.xlsx", s.requireOperator(s.handleTaskExcluded))
+	mux.HandleFunc("GET /campaigns/{id}/tasks/{task}/results.xlsx", s.requireOperator(s.handleTaskResultsDownload))
+	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/results", s.requireOperator(s.handleTaskResultsGenerate))
+	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/results/delete", s.requireOperator(s.handleTaskResultsDelete))
 }
 
 // handleTaskList lists a campaign's tasks with their status and counts.
@@ -280,6 +284,63 @@ func (s *server) handleTaskExcluded(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleTaskResultsDownload serves a ready task-results workbook. An artifact
+// that is still generating, failed or absent is never presented as complete.
+func (s *server) handleTaskResultsDownload(w http.ResponseWriter, r *http.Request) {
+	task, ok := s.loadCampaignTask(w, r)
+	if !ok {
+		return
+	}
+	data, filename, err := s.exports.DownloadTask(r.Context(), task.ID)
+	if err != nil {
+		if errors.Is(err, exports.ErrNotReady) {
+			http.NotFound(w, r)
+			return
+		}
+		s.app.Logger().Error("download task results", "task", task.ID, "error", err)
+		http.Error(w, "Unable to load the results workbook", http.StatusInternalServerError)
+		return
+	}
+	s.writeDownload(w, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename, data)
+}
+
+// handleTaskResultsGenerate regenerates the results workbook from retained
+// records. It never creates or retries an email attempt.
+func (s *server) handleTaskResultsGenerate(w http.ResponseWriter, r *http.Request) {
+	task, ok := s.loadCampaignTask(w, r)
+	if !ok {
+		return
+	}
+	err := s.exports.GenerateTask(r.Context(), task.ID, true)
+	switch {
+	case err == nil:
+		http.Redirect(w, r, "/campaigns/"+task.CampaignID+"/tasks/"+task.ID, http.StatusSeeOther)
+	case errors.Is(err, exports.ErrInProgress):
+		s.renderTaskMessage(w, r, task, "result generation is already in progress; reload this page shortly", http.StatusConflict)
+	case errors.Is(err, exports.ErrNotTerminal):
+		s.renderTaskMessage(w, r, task, err.Error(), http.StatusBadRequest)
+	default:
+		s.app.Logger().Error("generate task results", "task", task.ID, "error", err)
+		s.renderTaskMessage(w, r, task, "the results workbook could not be generated; retry", http.StatusInternalServerError)
+	}
+}
+
+// handleTaskResultsDelete removes only the generated workbook. Candidate
+// eligibility, uploads and attempt history stay intact and regeneration is
+// still possible.
+func (s *server) handleTaskResultsDelete(w http.ResponseWriter, r *http.Request) {
+	task, ok := s.loadCampaignTask(w, r)
+	if !ok {
+		return
+	}
+	if err := s.exports.DeleteTask(r.Context(), task.ID); err != nil {
+		s.app.Logger().Error("delete task results", "task", task.ID, "error", err)
+		s.renderTaskMessage(w, r, task, "the generated workbook could not be removed; retry", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/campaigns/"+task.CampaignID+"/tasks/"+task.ID, http.StatusSeeOther)
+}
+
 // loadCampaignTask loads the path's task and confirms it belongs to the
 // campaign in the path, so a task id is never usable from another campaign.
 func (s *server) loadCampaignTask(w http.ResponseWriter, r *http.Request) (*intake.Task, bool) {
@@ -293,6 +354,15 @@ func (s *server) loadCampaignTask(w http.ResponseWriter, r *http.Request) (*inta
 		return nil, false
 	}
 	return task, true
+}
+
+func (s *server) writeDownload(w http.ResponseWriter, contentType, filename string, data []byte) {
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	w.Header().Set("Cache-Control", "no-store")
+	if _, err := w.Write(data); err != nil {
+		s.app.Logger().Warn("write download response", "error", err)
+	}
 }
 
 // taskLoadFailure answers a failed task load without leaking storage detail:
@@ -362,6 +432,14 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task) (views.TaskPag
 		ReviewRequired:   task.Counts.ReviewRequired,
 	}
 	data.ResultLabels = task.ResultLabels
+	if artifact, err := s.exports.TaskArtifact(ctx, task.ID); err == nil && artifact != nil {
+		data.ResultsState = artifact.State
+		data.ResultsError = artifact.Error
+		data.ResultsReady = artifact.Ready
+		data.ResultsAsOf = sending.DisplayTime(artifact.AsOf)
+	} else if err != nil {
+		return data, err
+	}
 	data.Revision = configuration.Revision
 	data.ContentHash = task.ContentHash
 	data.Approved = configuration.ApprovalCurrent()

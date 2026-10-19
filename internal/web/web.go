@@ -13,8 +13,10 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
+	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
+	"github.com/yash91989201/bachtel-email-automation/internal/retention"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
@@ -33,16 +35,27 @@ type server struct {
 	logins      *loginLimiter
 	sending     *sending.Store
 	dispatcher  Dispatcher
+	exports     *exports.Service
+	retention   *retention.Service
 }
 
 // NewHandler serves the application UI. PocketBase owns the server lifecycle,
 // its API, and the dashboard on the same listener.
 func NewHandler(app core.App, cfg config.Config, connections *microsoft.Service) http.Handler {
-	return NewHandlerWithDispatcher(app, cfg, connections, sending.NewStore(app, sending.StoreOptions{}), nil)
+	store := sending.NewStore(app, sending.StoreOptions{
+		SenderAddress: cfg.Microsoft.SenderAddress,
+		RestoreReview: cfg.RestoreReview,
+	})
+	return NewHandlerWithDispatcher(app, cfg, connections, store, nil)
 }
 
 // NewHandlerWithDispatcher injects the process-owned sender and its durable store.
 func NewHandlerWithDispatcher(app core.App, cfg config.Config, connections *microsoft.Service, store *sending.Store, dispatcher Dispatcher) http.Handler {
+	return NewHandlerWithServices(app, cfg, connections, store, dispatcher, exports.NewService(app, cfg))
+}
+
+// NewHandlerWithServices shares the process-owned export worker with handlers.
+func NewHandlerWithServices(app core.App, cfg config.Config, connections *microsoft.Service, store *sending.Store, dispatcher Dispatcher, exported *exports.Service) http.Handler {
 	campaigns := campaign.NewService(app, cfg.PandocPath)
 	s := &server{
 		app:         app,
@@ -52,6 +65,8 @@ func NewHandlerWithDispatcher(app core.App, cfg config.Config, connections *micr
 		connections: connections,
 		campaigns:   campaigns,
 		tasks:       intake.NewService(app, campaigns, cfg.Intake),
+		exports:     exported,
+		retention:   retention.NewService(app),
 		logins:      newLoginLimiter(10, 5*time.Minute),
 	}
 

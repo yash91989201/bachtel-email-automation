@@ -174,6 +174,15 @@ a later result export can never overwrite an original cell. The resolved labels
 are shown on the task page and are re-resolved from the current campaign labels
 when a start is prepared.
 
+## Result columns and result workbook
+
+The snapshotted result labels are appended to the selected worksheet of the
+retained original workbook after a task completes, stops or is recovered.
+Original worksheets, rows, cell values and column order are preserved; the new
+values are written as strings, so formula-like source text is never evaluated.
+See [history-exports.md](history-exports.md) for the status vocabulary,
+timestamps and download behavior.
+
 ## Private artifacts
 
 Every artifact below is stored as a private file on the task record. Collection

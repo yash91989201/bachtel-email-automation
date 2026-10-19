@@ -145,8 +145,34 @@ type CampaignPageData struct {
 
 	RevisionError string
 	LabelsError   string
+	DeleteError   string
 
 	History []RevisionRow
+
+	// Generated download state: empty, generating, ready or failed.
+	ReportState  string
+	ReportError  string
+	ReportAsOf   string
+	ReportReady  bool
+	PackageState string
+	PackageError string
+	PackageAsOf  string
+	PackageReady bool
+
+	Attempts []AttemptRow
+}
+
+// AttemptRow is one recorded attempt in the campaign history list. Test
+// attempts are marked so they are never mistaken for candidate sends.
+type AttemptRow struct {
+	ID         string
+	Kind       string
+	Recipient  string
+	Subject    string
+	State      string
+	Reason     string
+	FinishedAt string
+	Test       bool
 }
 
 // RevisionRow is one immutable revision-history entry.
@@ -171,6 +197,9 @@ templ CampaignPage(data CampaignPageData) {
 		}
 		if data.LabelsError != "" {
 			<div class="alert alert-error" role="alert">{ data.LabelsError }</div>
+		}
+		if data.DeleteError != "" {
+			<div class="alert alert-error" role="alert">{ data.DeleteError }</div>
 		}
 		if len(data.Warnings) > 0 {
 			<div class="alert alert-warning" role="alert">
@@ -325,6 +354,103 @@ templ CampaignPage(data CampaignPageData) {
 						}
 					</ol>
 				}
+			</div>
+		</section>
+		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="exports-heading">
+			<div class="card-body gap-4">
+				<h2 id="exports-heading" class="card-title">History and downloads</h2>
+				<p>The report is an Excel workbook with an as-of summary, one row per candidate and every attempt with its kind kept explicit. The package contains the same report, one static HTML file per recorded attempt and a CSV index. Test submissions never count toward candidate totals. Generation only reads recorded history; it never sends or retries an email.</p>
+				<form method="post" action={ "/campaigns/" + data.ID + "/exports" }>
+					<button class="btn btn-primary" type="submit">Generate or refresh downloads</button>
+				</form>
+				<div class="grid gap-4 md:grid-cols-2">
+					<div class="rounded-box border border-base-300 p-4">
+						<h3 class="font-semibold">Campaign report (XLSX)</h3>
+						if data.ReportReady {
+							<p class="text-sm text-base-content/60">As of { data.ReportAsOf }</p>
+							<a class="btn btn-outline btn-sm" href={ "/campaigns/" + data.ID + "/exports/report.xlsx" }>Download report</a>
+						} else if data.ReportState == "generating" {
+							<p>Generating now. Reload this page shortly.</p>
+						} else if data.ReportState == "failed" {
+							if data.ReportError != "" {
+								<p class="text-error">{ data.ReportError }</p>
+							}
+						} else {
+							<p>Not generated yet.</p>
+						}
+					</div>
+					<div class="rounded-box border border-base-300 p-4">
+						<h3 class="font-semibold">Campaign package (ZIP)</h3>
+						if data.PackageReady {
+							<p class="text-sm text-base-content/60">As of { data.PackageAsOf }</p>
+							<a class="btn btn-outline btn-sm" href={ "/campaigns/" + data.ID + "/exports/package.zip" }>Download package</a>
+						} else if data.PackageState == "generating" {
+							<p>Generating now. Reload this page shortly.</p>
+						} else if data.PackageState == "failed" {
+							if data.PackageError != "" {
+								<p class="text-error">{ data.PackageError }</p>
+							}
+						} else {
+							<p>Not generated yet.</p>
+						}
+					</div>
+				</div>
+				<form method="post" action={ "/campaigns/" + data.ID + "/exports/delete" }>
+					<button class="btn btn-ghost btn-sm" type="submit">Remove generated downloads</button>
+				</form>
+				<p class="text-sm text-base-content/60">Removing generated downloads deletes only those files. Campaign records, uploads, candidate eligibility and attempt history stay unchanged, and the downloads can be generated again.</p>
+				<div class="overflow-x-auto">
+					<table class="table table-sm">
+						<caption class="p-2 text-left text-sm text-base-content/60">Most recent 100 attempts. Every attempt keeps its own row, including retries and manual resolutions.</caption>
+						<thead>
+							<tr>
+								<th>Attempt</th>
+								<th>Kind</th>
+								<th>Recipient</th>
+								<th>State</th>
+								<th>Finished</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							if len(data.Attempts) == 0 {
+								<tr><td colspan="6">No attempts recorded yet.</td></tr>
+							} else {
+								for _, attempt := range data.Attempts {
+									<tr>
+										<td><code>{ attempt.ID }</code></td>
+										<td>
+											if attempt.Test {
+												<span class="badge badge-warning badge-sm">Test</span>
+											} else {
+												<span class="badge badge-ghost badge-sm">Candidate</span>
+											}
+										</td>
+										<td>{ attempt.Recipient }</td>
+										<td>{ attempt.State }</td>
+										<td>{ attempt.FinishedAt }</td>
+										<td><a class="link link-primary" href={ "/campaigns/" + data.ID + "/attempts/" + attempt.ID + "/email.html" }>HTML</a></td>
+									</tr>
+								}
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</section>
+		<section class="card border border-error bg-base-100 shadow-sm" aria-labelledby="delete-heading">
+			<div class="card-body gap-4">
+				<h2 id="delete-heading" class="card-title">Delete campaign</h2>
+				<p>Deleting this campaign removes its revisions and uploaded documents, tasks and retained workbooks, candidate identities, attempts, approvals, manual resolutions and generated downloads. Deleting it also removes its duplicate-prevention history, so a future campaign can send to the same recipients again. There is no automatic expiry: nothing is removed until you confirm here.</p>
+				<p>Deleting live records never rewrites backups that already exist. Any backup retains its own copy until you remove that backup separately.</p>
+				<p>Deletion is refused while a task is running or stopping, while a candidate is reserved or in flight, or while an attempt is queued or in flight.</p>
+				<form method="post" action={ "/campaigns/" + data.ID + "/delete" } class="space-y-3">
+					<label class="label cursor-pointer justify-start gap-3">
+						<input class="checkbox checkbox-error" type="checkbox" name="confirm" value="delete"/>
+						<span>I understand that this deletes the campaign's records, files and duplicate-prevention history.</span>
+					</label>
+					<button class="btn btn-error" type="submit">Delete campaign</button>
+				</form>
 			</div>
 		</section>
 	}
