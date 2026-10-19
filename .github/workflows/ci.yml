@@ -31,7 +31,8 @@ jobs:
           node-version: '26.10.0'
           cache: npm
       - run: npm ci
-      - run: make check
+      - name: Verify shared Go policy, race tests, and build
+        run: make check
 
   vulnerabilities:
     name: Go vulnerabilities

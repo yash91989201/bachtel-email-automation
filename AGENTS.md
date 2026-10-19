@@ -16,6 +16,13 @@
 
 ## Code and dependencies
 
+- For Go implementation, fixes, and refactoring, use the `go-development` skill
+  alongside the selected OpenSpec workflow. Its canonical instructions live in
+  `.agents/skills/go-development/SKILL.md`.
+- `.golangci.yml` is the shared executable Go policy; `.golangci-version` pins
+  its runner. Use the same wrapper/config in the editor, local checks, and CI.
+  Upgrade tools and review new rules in a dedicated change, not during a fix.
+
 - Follow existing package boundaries, naming, and error handling. Reuse existing
   code, standard packages, platform features, and approved dependencies before
   adding code or dependencies. Explain any new dependency's concrete need and
@@ -43,14 +50,17 @@
 ## Required verification
 
 - Run `npm ci` on a fresh checkout, then `make check` and `make vulncheck`.
-  `make check` covers formatting, generation consistency, vet, race tests, and
-  the production binary build. Stage intentional regenerated output before
-  checking generation consistency; do not stage unrelated work.
+  `make check` covers formatting, generation consistency, lint (including vet),
+  race tests, and the production binary build. Stage intentional regenerated
+  output before checking generation consistency; do not stage unrelated work.
 - Run `make verify-converter` for converter, campaign, dependency, Docker, or
   release changes. CI always runs this packaged-Pandoc check so a missing local
   converter cannot silently skip its coverage.
 - When OpenSpec artifacts change, also run
   `openspec validate --all --strict --json --no-interactive`.
+- Use `make lint` during development. Do not bypass error checking with `_` or
+  blanket exclusions; any necessary `nolint` must name the rule and explain the
+  operation contract that makes the exception safe.
 - Never weaken a check to get a pass. Report commands actually run, results,
   skipped coverage, and remaining limitations. A local pass is not a hosted CI
   run or evidence of delivery, deployment, or completed release acceptance.
