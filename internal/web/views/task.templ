@@ -147,6 +147,9 @@ type TaskPageData struct {
 	Stale        bool
 	HeldRows     []TaskHeldRow
 	Rows         []TaskAdmittedRow
+
+	ScheduleAt    string
+	ScheduleState string
 }
 
 // TaskSheetOption is one stored worksheet of the uploaded workbook.
@@ -284,6 +287,14 @@ templ TaskPage(data TaskPageData) {
 					</div>
 				</div>
 			</section>
+			if data.ScheduleAt != "" {
+				<p class="font-semibold">Scheduled start: { data.ScheduleAt } ({ data.ScheduleState })</p>
+				if data.ScheduleState == "missed" {
+					<p class="text-warning">The scheduled time passed without starting. Review this task and schedule a new start.</p>
+				} else if data.ScheduleState == "fired" {
+					<p class="text-sm text-base-content/70">This schedule started the task once.</p>
+				}
+			}
 			if data.Stale {
 				<div class="alert alert-warning" role="alert">
 					<div>

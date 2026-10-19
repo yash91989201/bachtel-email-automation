@@ -100,6 +100,7 @@ func (s *Service) Stage(ctx context.Context, campaignID, filename string, data [
 	record := core.NewRecord(collection)
 	record.Set("campaign", campaignID)
 	record.Set("status", TaskStaging)
+	record.Set("schedule_state", ScheduleNone)
 	record.Set("source", source)
 	record.Set("source_name", sourceName(filename))
 	record.Set("source_digest", WorkbookDigest(data))
@@ -951,6 +952,11 @@ func taskFromRecord(record *core.Record, campaignName string) *Task {
 		ValidationError: record.GetString("validation_error"),
 		SourceName:      record.GetString("source_name"),
 		SourceDigest:    record.GetString("source_digest"),
+		ScheduleAt:      record.GetDateTime("schedule_at").Time().UTC(),
+		ScheduleState:   record.GetString("schedule_state"),
+	}
+	if task.ScheduleState == "" {
+		task.ScheduleState = ScheduleNone
 	}
 	if err := record.UnmarshalJSONField("sheets", &task.Sheets); err != nil {
 		task.Sheets = nil

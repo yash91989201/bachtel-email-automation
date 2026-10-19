@@ -15,6 +15,7 @@ type DispatchStore interface {
 	DispatcherState(context.Context) (Settings, error)
 	NextWork(context.Context) (*Work, error)
 	NextWorkDeadline(context.Context) (time.Time, error)
+	FireScheduled(context.Context) (bool, error)
 	BeginAttempt(context.Context, *Work, time.Time, time.Time) (*Attempt, error)
 	RecordActualStart(context.Context, string, time.Time, time.Time) error
 	CompleteAttempt(context.Context, string, Outcome) error
@@ -215,6 +216,15 @@ func (d *Dispatcher) launchPrepared(sender Sender, prepared bool) (time.Duration
 	}
 	if err = ValidateRate(s.Rate); err != nil {
 		return 0, err
+	}
+	// Due schedules are evaluated before normal launches so a due task starts
+	// even while another task is running, sharing the same pacing and slots.
+	fired, err := d.store.FireScheduled(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if fired {
+		return -1, nil
 	}
 	work, err := d.store.NextWork(ctx)
 	if err != nil {

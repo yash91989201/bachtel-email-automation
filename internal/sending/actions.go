@@ -188,6 +188,42 @@ func saveAction(app core.App, in ActionRequest, out *ActionResult) error {
 	r.Set("result", out)
 	return app.Save(r)
 }
+
+// startable reports whether one membership row can be reserved by a start-like
+// action right now: an eligible snapshot row, no submission history or
+// unresolved outcome, and no reservation held by another task or by an active
+// attempt. Retries and uncertain resends have their own narrower rules.
+func startable(taskID string, m, c *core.Record) bool {
+	if m.GetString("state") != intake.RowEligible {
+		return false
+	}
+	if c.GetString("submission_state") != intake.SubmissionNone {
+		return false
+	}
+	if claim := c.GetString("claim_task"); claim != "" && claim != taskID {
+		return false
+	}
+	switch m.GetString("dispatch_state") {
+	case AttemptInFlight, "reserved", AttemptFailed, AttemptAuth, AttemptSubmitted, AttemptReview, "correction_required":
+		return false
+	}
+	return true
+}
+
+// reserve records the reservation of one candidate for one task.
+func (s *Store) reserve(app core.App, t, m, c *core.Record) error {
+	c.Set("submission_state", intake.SubmissionNone)
+	c.Set("claim_task", t.Id)
+	nowField(c, "claimed_at", s.options.Now())
+	m.Set("dispatch_state", "reserved")
+	m.Set("retry_count", 0)
+	m.Set("retry_at", "")
+	if e := app.Save(c); e != nil {
+		return e
+	}
+	return app.Save(m)
+}
+
 func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error) {
 	var out *ActionResult
 	if strings.TrimSpace(in.ActionID) == "" || len(in.ActionID) > 128 {
@@ -223,6 +259,12 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 		if in.Kind == "stop" {
 			if t.GetString("status") == "running" || t.GetString("status") == "waiting" || t.GetString("status") == "paused" || t.GetString("status") == "interrupted" {
 				t.Set("status", "stopping")
+			}
+			// Stopping also cancels a schedule that has not fired yet, so a
+			// later stop press can never be followed by an unattended start.
+			if t.GetString("schedule_state") == intake.ScheduleScheduled {
+				t.Set("schedule_at", "")
+				t.Set("schedule_state", intake.ScheduleNone)
 			}
 			t.Set("result_generation_needed", true)
 			if e = app.Save(t); e != nil {
@@ -317,7 +359,7 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 			case "resend", "resolve":
 				eligible = submission == intake.SubmissionUncertain && dispatch == AttemptReview
 			default:
-				eligible = eligible && dispatch != AttemptFailed && dispatch != AttemptAuth && dispatch != AttemptSubmitted && dispatch != AttemptReview && dispatch != "correction_required"
+				eligible = startable(t.Id, m, c)
 			}
 			if !eligible {
 				out.Excluded++
@@ -340,6 +382,12 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 				if e = app.Save(r); e != nil {
 					return e
 				}
+				if e = app.Save(c); e != nil {
+					return e
+				}
+				if e = app.Save(m); e != nil {
+					return e
+				}
 			} else {
 				if in.Kind == "resend" {
 					col, e := app.FindCollectionByNameOrId(ResolutionsCollection)
@@ -356,18 +404,9 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 						return e
 					}
 				}
-				c.Set("submission_state", intake.SubmissionNone)
-				c.Set("claim_task", t.Id)
-				nowField(c, "claimed_at", s.options.Now())
-				m.Set("dispatch_state", "reserved")
-				m.Set("retry_count", 0)
-				m.Set("retry_at", "")
-			}
-			if e = app.Save(c); e != nil {
-				return e
-			}
-			if e = app.Save(m); e != nil {
-				return e
+				if e = s.reserve(app, t, m, c); e != nil {
+					return e
+				}
 			}
 			out.Claimed++
 		}
@@ -380,6 +419,10 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 		if in.Kind != "resolve" {
 			t.Set("status", "running")
 			t.Set("pause_reason", "")
+			// An explicit start supersedes a pending schedule; the schedule
+			// must never fire a second time.
+			t.Set("schedule_at", "")
+			t.Set("schedule_state", intake.ScheduleNone)
 		}
 		if e = app.Save(t); e != nil {
 			return e

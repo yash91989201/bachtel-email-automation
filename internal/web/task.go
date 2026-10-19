@@ -16,6 +16,7 @@ import (
 
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
@@ -318,6 +319,8 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task) (views.TaskPag
 		ValidationError: task.ValidationError,
 		DefaultSheet:    task.Sheet,
 		HeaderRow:       task.HeaderRow,
+		ScheduleAt:      sending.DisplayTime(task.ScheduleAt),
+		ScheduleState:   task.ScheduleState,
 	}
 	for _, sheet := range task.Sheets {
 		data.Sheets = append(data.Sheets, views.TaskSheetOption{

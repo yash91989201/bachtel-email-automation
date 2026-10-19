@@ -26,6 +26,35 @@ Changing the subject, DOCX, mapping, fallback or normalization creates a new
 configuration requiring another test and approval. An already started task
 continues to use its pinned snapshot for resume and retries.
 
+## Scheduled start
+
+A validated task accepts one single-shot schedule: a date and a 12-hour clock
+time (hour, minute, AM/PM) stored as one absolute UTC instant. The instant must
+be at least 30 minutes ahead; operator-visible times carry the explicit India
+offset, such as `2026-10-20T09:30:00+05:30`. A schedule never repeats, and
+enabling one is that task's explicit start authorization. A disabled schedule
+leaves the ordinary manual Start action in place, and validation never starts
+sending by itself.
+
+Confirming a schedule shows the same fresh counts as Start — eligible,
+invalid, duplicate, already submitted, already scheduled and review required —
+plus the sender, pinned configuration revision and approved test. The
+dispatcher fires due schedules from durable state; it survives restarts and
+does not depend on a browser session. At fire time it rechecks the production
+release gate, the pinned configuration revision, the approved test for that
+exact hash and current eligibility, then reserves only candidates free at that
+moment. Candidates taken in the meantime are excluded as already scheduled;
+the remaining free candidates start. With no free candidate, nothing starts.
+
+A fire-time refusal — closed release gate, changed revision, missing approval
+or no free candidate — sends nothing, records the reason, marks the schedule
+missed and leaves the task ready for revalidation, re-approval, rescheduling
+or a manual Start. Firing starts the first candidate batch only: retries,
+Retry all definite failures, resends and uncertain-outcome resolutions remain
+explicit operator actions. Candidate sending stays gated until
+`add-history-exports-and-coolify-delivery` completes release verification;
+scheduling obeys the same gate.
+
 ## Durable states
 
 Task lifecycle and row outcomes are separate. A task may complete with failures
@@ -41,6 +70,16 @@ or held rows; completion does not imply every recipient was accepted.
 | `paused` | Authorization, service, storage or retry limit needs attention |
 | `interrupted` | Startup recovered active work; safe remainder needs explicit resume |
 | `completed` | Accepted work settled; inspect failures and held counts |
+
+The schedule on `send_tasks` is a separate axis from the task lifecycle. Its
+`schedule_state` records where the single-shot instant stands:
+
+| Schedule state | Meaning |
+| --- | --- |
+| `none` | No schedule; start uses the manual action |
+| `scheduled` | Single-shot instant stored; the dispatcher owns firing |
+| `fired` | The dispatcher started the first batch from the schedule |
+| `missed` | Fire-time refusal or a passed instant; reason recorded, no send |
 
 The original intake membership state and raw/normalized values stay separate
 from `dispatch_state`. Invalid and duplicate rows remain file-only exclusions.
@@ -116,6 +155,11 @@ intents. Startup marks each one REVIEW_REQUIRED, preserves definite outcomes
 and pacing/cooldown, releases only safe unstarted claims and marks active tasks
 interrupted. Even a crash before actual transmission may require review: this
 conservative choice avoids an automatic duplicate.
+
+A schedule instant that passed while the server was not running pauses the
+task with a missed-schedule reason and creates no attempt. The operator
+resumes the safe remainder explicitly, which clears the schedule state, or
+reschedules. A restart before the stored instant keeps the same stored time.
 
 Reconnect Microsoft when needed, then explicitly Resume the safe remainder.
 Held recipients do not block safe rows. A successful diagnostic test or

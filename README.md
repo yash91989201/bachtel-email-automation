@@ -198,8 +198,15 @@ means Microsoft accepted the request, not that it was delivered. Uncertain
 attempts are held for review and never automatically resent. Stop drains
 requests already started; restart requires explicit resume of safe work.
 
+A validated task also accepts a one-time scheduled start at least 30 minutes
+ahead, explicit start authorization that fires from durable state across
+restarts. It starts only the candidates free at that instant; a window that
+passes while the server is down pauses the task with a missed-schedule reason
+and no attempt, and resume or reschedule stays explicit.
+
 See [docs/background-sending.md](docs/background-sending.md) for the states,
-approval workflow, retry and review actions, shutdown behavior and release gate.
+approval workflow, scheduling, retry and review actions, shutdown behavior and
+release gate.
 
 ## Layout
 

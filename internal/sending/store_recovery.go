@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/types"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 )
 
@@ -57,6 +58,22 @@ func (s *Store) Recover(ctx context.Context) error {
 			t.Set("status", "interrupted")
 			t.Set("pause_reason", "server restarted; review held attempts and explicitly resume safe remaining candidates")
 			t.Set("result_generation_needed", true)
+			if e = app.Save(t); e != nil {
+				return e
+			}
+		}
+		// A stored start time that passed while no dispatcher owned this data
+		// is a downtime miss: nothing was started, so no attempt is created and
+		// the operator must review the remainder before it can send.
+		now := s.options.Now().UTC().Format(types.DefaultDateLayout)
+		missed, e := records(app, intake.TasksCollection, "status={:ready} && schedule_state={:scheduled} && schedule_at <= {:now}", "", dbx.Params{"ready": intake.TaskReady, "scheduled": intake.ScheduleScheduled, "now": now})
+		if e != nil {
+			return e
+		}
+		for _, t := range missed {
+			t.Set("status", "paused")
+			t.Set("schedule_state", intake.ScheduleMissed)
+			t.Set("pause_reason", "the scheduled start time passed while the server was not running; review the safe remainder and resume explicitly")
 			if e = app.Save(t); e != nil {
 				return e
 			}

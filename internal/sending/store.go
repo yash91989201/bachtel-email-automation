@@ -165,6 +165,22 @@ func (s *Store) NextWorkDeadline(ctx context.Context) (time.Time, error) {
 			return now, nil
 		}
 	}
+	// A pending schedule is itself a wakeup: it must be observed even when no
+	// candidate work is runnable and even when the release gate is closed, so
+	// the fire path can record a refusal instead of starting unattended.
+	scheduled, err := s.app.FindRecordsByFilter(intake.TasksCollection, "status={:ready} && schedule_state={:scheduled}", "schedule_at", 1, 0, dbx.Params{"ready": intake.TaskReady, "scheduled": intake.ScheduleScheduled})
+	if err != nil {
+		return time.Time{}, err
+	}
+	if len(scheduled) > 0 {
+		deadline := stamp(scheduled[0], "schedule_at")
+		if deadline.IsZero() {
+			return now, nil
+		}
+		if earliest.IsZero() || deadline.Before(earliest) {
+			earliest = deadline
+		}
+	}
 	if !s.options.AllowCandidateSending {
 		return earliest, nil
 	}

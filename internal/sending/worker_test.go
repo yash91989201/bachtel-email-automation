@@ -17,17 +17,25 @@ type workerFixture struct {
 	now                                       time.Time
 	queue                                     []*Work
 	retryReadyAt                              time.Time
+	due                                       time.Time
+	dueQueue                                  []*Work
+	manualAfter                               bool
 	advanceOnDeadlineQuery                    bool
 	settings                                  Settings
 	intents, results                          int
 	intentError, resultError                  bool
 	recovered                                 bool
 	nextWorkCalls, deadlineCalls, settleCalls int
+	fireCalls                                 int
 }
 
 func (f *workerFixture) clock() time.Time { f.mu.Lock(); defer f.mu.Unlock(); return f.now }
 func (f *workerFixture) after(d time.Duration) <-chan time.Time {
 	f.mu.Lock()
+	if f.manualAfter {
+		f.mu.Unlock()
+		return make(chan time.Time)
+	}
 	f.now = f.now.Add(d)
 	f.mu.Unlock()
 	return time.After(time.Millisecond)
@@ -50,13 +58,29 @@ func (f *workerFixture) NextWorkDeadline(context.Context) (time.Time, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.deadlineCalls++
-	if len(f.queue) == 0 {
+	if len(f.queue) == 0 && f.due.IsZero() {
 		return time.Time{}, nil
 	}
 	if f.advanceOnDeadlineQuery && f.retryReadyAt.After(f.now) {
 		f.now = f.retryReadyAt
 	}
-	return f.retryReadyAt, nil
+	earliest := f.retryReadyAt
+	if !f.due.IsZero() && (earliest.IsZero() || f.due.Before(earliest)) {
+		earliest = f.due
+	}
+	return earliest, nil
+}
+func (f *workerFixture) FireScheduled(context.Context) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.fireCalls++
+	if f.due.IsZero() || f.now.Before(f.due) {
+		return false, nil
+	}
+	f.due = time.Time{}
+	f.queue = append(f.queue, f.dueQueue...)
+	f.dueQueue = nil
+	return true, nil
 }
 func (f *workerFixture) BeginAttempt(_ context.Context, w *Work, start, next time.Time) (*Attempt, error) {
 	f.mu.Lock()
@@ -197,6 +221,47 @@ func TestWorkerRescansWhenRetryBecomesDueDuringDeadlineQuery(t *testing.T) {
 	if f.deadlineCalls < 1 || f.now.Before(f.retryReadyAt) {
 		t.Fatalf("due retry was not rescanned after deadline query: calls=%d now=%s due=%s", f.deadlineCalls, f.now, f.retryReadyAt)
 	}
+}
+
+func TestWorkerFiresDueScheduleBeforeCandidateLaunch(t *testing.T) {
+	f := newWorkerFixture(0)
+	f.mu.Lock()
+	f.due = f.now.Add(45 * time.Millisecond)
+	f.dueQueue = []*Work{{Kind: KindTest, Recipient: "scheduled@example.invalid"}}
+	f.mu.Unlock()
+	_ = startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted}
+	}))
+	eventually(t, func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.intents == 1 })
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.fireCalls == 0 {
+		t.Fatal("dispatcher never consulted a pending schedule")
+	}
+	if len(f.queue) != 0 || len(f.dueQueue) != 0 {
+		t.Fatalf("due schedule was not consumed: queue=%d dueQueue=%d", len(f.queue), len(f.dueQueue))
+	}
+}
+
+func TestWorkerObservesNewScheduleWhileIdleWithoutWaitingForOldDeadline(t *testing.T) {
+	f := newWorkerFixture(0)
+	f.mu.Lock()
+	f.manualAfter = true
+	f.due = f.now.Add(time.Hour)
+	f.mu.Unlock()
+	d := startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted}
+	}))
+	eventually(t, func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.deadlineCalls > 0 })
+	// The first deadline timer never fires in this fixture, so only the
+	// operator wake can observe the newly stored schedule.
+	f.mu.Lock()
+	f.now = f.now.Add(10 * time.Minute)
+	f.due = f.now
+	f.dueQueue = []*Work{{Kind: KindTest, Recipient: "rescheduled@example.invalid"}}
+	f.mu.Unlock()
+	d.Wake()
+	eventually(t, func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.intents == 1 })
 }
 
 func startFixture(t *testing.T, f *workerFixture, s Sender) *Dispatcher {

@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Collection names owned by this package.
@@ -34,6 +35,20 @@ const (
 	// TaskReady marks a validated task: its manifest is published and its
 	// snapshot is complete. Starting it is a later change's responsibility.
 	TaskReady = "ready"
+)
+
+// Stored values of a task's single-shot start schedule. A task has at most one
+// schedule; schedule_state is the source of truth for whether a fire is still
+// pending.
+const (
+	// ScheduleNone means no start is scheduled.
+	ScheduleNone = "none"
+	// ScheduleScheduled means a fire is pending at the task's schedule_at.
+	ScheduleScheduled = "scheduled"
+	// ScheduleFired records that the schedule started the task once.
+	ScheduleFired = "fired"
+	// ScheduleMissed records a schedule that could not start sending.
+	ScheduleMissed = "missed"
 )
 
 // MaxCandidateRows is the supported number of rows carrying data in one task's
@@ -323,6 +338,12 @@ type Task struct {
 	ValidationError string
 	SourceName      string
 	SourceDigest    string
+	// ScheduleAt is the stored UTC instant of the task's single-shot start
+	// schedule. It stays set after a fire as history and is zero when the
+	// operator cleared it.
+	ScheduleAt time.Time
+	// ScheduleState is one of none, scheduled, fired or missed.
+	ScheduleState string
 }
 
 // Admitted reports whether the task holds a published validation snapshot.

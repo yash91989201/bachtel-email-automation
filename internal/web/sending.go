@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
@@ -22,7 +23,7 @@ func (s *server) registerSendingRoutes(mux *http.ServeMux) {
 	base := "/campaigns/{id}/tasks/{task}/sending"
 	mux.HandleFunc("GET "+base, s.requireOperator(s.handleSending))
 	mux.HandleFunc("GET "+base+"/progress", s.requireOperator(s.handleSendingProgress))
-	for _, action := range []string{"test", "approve", "start", "resume", "stop", "retry", "retry_all", "resend", "resolve", "rate", "artifacts"} {
+	for _, action := range []string{"test", "approve", "start", "resume", "stop", "retry", "retry_all", "resend", "resolve", "rate", "schedule", "artifacts"} {
 		mux.HandleFunc("POST "+base+"/"+action, s.requireOperator(s.handleSendingMutation(action)))
 	}
 }
@@ -45,6 +46,9 @@ func (s *server) sendingData(r *http.Request) (views.SendingData, error) {
 		return views.SendingData{}, err
 	}
 	data := views.SendingData{ArtifactNeeded: progress.ArtifactNeeded, Base: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/sending", TaskURL: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID, Sender: s.cfg.Microsoft.SenderAddress, Hash: progress.ContentHash, Approved: progress.Approved, Enabled: progress.ProductionEnabled, Status: progress.Status, Reason: progress.Reason, Eligible: progress.Eligible, Remaining: progress.Remaining, Submitted: progress.Submitted, Failed: progress.Failed, RetryableFailed: progress.RetryableFailed, Held: progress.Held, InFlight: progress.InFlight, Reserved: progress.Reserved, Invalid: progress.Invalid, Duplicate: progress.Duplicate, Ineligible: progress.Ineligible, ActionID: actionID()}
+	data.ScheduleAt = sending.DisplayTime(task.ScheduleAt)
+	data.ScheduleState = task.ScheduleState
+	data.ScheduleMinDate = sending.DisplayDate(time.Now())
 	settings, err := s.sending.DispatcherState(r.Context())
 	if err != nil {
 		return data, err
@@ -152,6 +156,39 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 			} else {
 				err = setRate()
 			}
+		case "schedule":
+			var request sending.ScheduleRequest
+			switch action := r.FormValue("schedule_action"); action {
+			case "clear":
+				request = sending.ScheduleRequest{ActionID: id, TaskID: task.ID, Actor: actor}
+			case "enable":
+				at, e := sending.ParseSchedule(r.FormValue("schedule_date"), r.FormValue("schedule_hour"), r.FormValue("schedule_minute"), r.FormValue("schedule_meridiem"))
+				if e != nil {
+					err = e
+					break
+				}
+				count, e := strconv.Atoi(r.FormValue("expected_count"))
+				if e != nil || count < 0 {
+					http.Error(w, "Reload the fresh count before confirming", http.StatusBadRequest)
+					return
+				}
+				request = sending.ScheduleRequest{ActionID: id, TaskID: task.ID, Actor: actor, At: at, Confirmed: r.FormValue("confirmed") == "yes", ExpectedCount: count}
+			default:
+				http.Error(w, "Choose whether to schedule a start or clear the current one", http.StatusBadRequest)
+				return
+			}
+			if err != nil {
+				break
+			}
+			schedule := func() error {
+				_, err = s.sending.Schedule(r.Context(), request)
+				return err
+			}
+			if s.dispatcher != nil {
+				err = s.dispatcher.Synchronize(schedule)
+			} else {
+				err = schedule()
+			}
 		default:
 			count, e := strconv.Atoi(r.FormValue("expected_count"))
 			if e != nil || count < 0 {
@@ -175,10 +212,20 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 				s.taskLoadFailure(w, r, e)
 				return
 			}
-			if kind == "test" {
+			const actionRejected = "Action was not accepted. Refresh the counts and check approval, selected row, confirmations, and release readiness."
+			switch kind {
+			case "test":
 				data.Error = "Diagnostic test was not queued. Check the test recipient and sample row, and reconnect Microsoft if the connection needs attention."
-			} else {
-				data.Error = "Action was not accepted. Refresh the counts and check approval, selected row, confirmations, and release readiness."
+			case "schedule":
+				if refusal, ok := errors.AsType[*sending.ScheduleRefusal](err); ok {
+					data.Error = refusal.Reason
+				} else if errors.Is(err, sending.ErrReleaseGate) {
+					data.Error = sending.ErrReleaseGate.Error()
+				} else {
+					data.Error = actionRejected
+				}
+			default:
+				data.Error = actionRejected
 			}
 			s.renderWithStatus(w, r, http.StatusBadRequest, views.SendingPage(data))
 			return

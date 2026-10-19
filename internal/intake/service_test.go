@@ -1150,3 +1150,27 @@ func TestRecipientMappingDrivesIntakeAndIdentity(t *testing.T) {
 		t.Fatalf("duplicate groups = %+v", manifest.Groups)
 	}
 }
+
+// TestTaskLoadsUnscheduledBeforeAndAfterValidation covers the schedule fields
+// on both a staging task created after the migration and a validated one, plus
+// the campaign listing.
+func TestTaskLoadsUnscheduledBeforeAndAfterValidation(t *testing.T) {
+	env := newEnv(t)
+	staged := env.stage(mixedWorkbook(t), "book.xlsx")
+	if staged.ScheduleState != intake.ScheduleNone || !staged.ScheduleAt.IsZero() {
+		t.Fatalf("staged schedule = %q %s", staged.ScheduleState, staged.ScheduleAt)
+	}
+	ready := env.validate(mixedWorkbook(t))
+	if ready.ScheduleState != intake.ScheduleNone || !ready.ScheduleAt.IsZero() {
+		t.Fatalf("validated schedule = %q %s", ready.ScheduleState, ready.ScheduleAt)
+	}
+	tasks, err := env.service.ListTasks(context.Background(), env.campaign)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range tasks {
+		if task.ScheduleState != intake.ScheduleNone {
+			t.Fatalf("listed task %s schedule = %q", task.ID, task.ScheduleState)
+		}
+	}
+}

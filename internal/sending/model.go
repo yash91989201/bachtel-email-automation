@@ -29,6 +29,21 @@ const (
 var ErrReleaseGate = errors.New("candidate sending remains disabled until change 5 release verification")
 var ErrNoWork = errors.New("work is no longer eligible")
 
+// ScheduleLead is the minimum distance between the current time and a stored
+// start time. A shorter lead would not leave the operator time to reconsider.
+const ScheduleLead = 30 * time.Minute
+
+// ScheduleZone is the fixed operator-facing offset used to interpret and show
+// schedule times. A Docker server often runs in UTC, so a wall-clock entry must
+// never be interpreted in the process's local zone.
+var ScheduleZone = time.FixedZone("Asia/Kolkata", 19800)
+
+// ScheduleRefusal is a fixed, operator-facing reason a schedule was refused. Its
+// message is safe to show in the UI; every other error stays generic there.
+type ScheduleRefusal struct{ Reason string }
+
+func (r *ScheduleRefusal) Error() string { return r.Reason }
+
 type StoreOptions struct {
 	AllowCandidateSending bool
 	Now                   func() time.Time
@@ -93,7 +108,18 @@ type ActionRequest struct {
 type ActionResult struct {
 	ActionID, TaskID, Status string
 	Claimed, Excluded        int
-	Repeated                 bool
+	// Eligible records the fresh eligible count the operator confirmed when
+	// enabling a schedule.
+	Eligible int
+	Repeated bool
+}
+type ScheduleRequest struct {
+	ActionID, TaskID, Actor string
+	// At is the absolute instant to start. A zero value clears a pending or
+	// missed schedule instead.
+	At            time.Time
+	Confirmed     bool
+	ExpectedCount int
 }
 type TestRequest struct {
 	ActionID, TaskID, MemberID, Recipient, Actor string
