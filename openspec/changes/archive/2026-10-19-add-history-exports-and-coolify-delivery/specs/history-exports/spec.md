@@ -18,6 +18,25 @@ The system SHALL generate and store an XLSX task-results workbook after completi
 - **WHEN** the source workbook already contains columns with the desired output labels
 - **THEN** original columns remain intact and new results use the collision-free labels shown before start
 
+### Requirement: Automatic export activation and idle behavior
+The system SHALL automatically generate task results when committed task state becomes completed, stopped or recovered-interrupted, independently of browser requests. When no export work is pending and no export recovery operation has failed, it SHALL wait without recurring export-work discovery queries. Rolled-back task changes SHALL NOT activate export generation.
+
+#### Scenario: Completion without an open browser
+- **WHEN** a task completes while the operator has closed the browser
+- **THEN** its committed results become available for automatic generation without a browser refresh or manual generation action
+
+#### Scenario: Stop waits for final outcomes
+- **WHEN** a stop is requested while email submissions remain in flight
+- **THEN** automatic task-results generation waits until the task reaches its stopped state and the final outcomes have been recorded
+
+#### Scenario: Rolled-back completion
+- **WHEN** a transaction that would mark a task completed is rolled back
+- **THEN** that uncommitted completion does not activate export generation
+
+#### Scenario: No export work
+- **WHEN** startup recovery and pending generation have finished successfully and no new export work becomes eligible
+- **THEN** export-work discovery executes no recurring database queries
+
 ### Requirement: Campaign reporting
 The system SHALL offer a campaign XLSX report with candidate summary and separate attempt history, identifying task, configuration revision, normalized recipient, outcome and timestamp without mixing test submissions into candidate totals.
 
@@ -43,7 +62,7 @@ The system SHALL provide a ZIP containing the campaign report and historical HTM
 - **AND** archive entries cannot escape their intended directory
 
 ### Requirement: Export consistency and retry
-The system SHALL create downloads from a consistent recorded snapshot and publish files atomically. Failed generation SHALL be retryable independently of sending; exports SHALL never create or retry an email attempt.
+The system SHALL publish consistent-snapshot exports atomically, recover pending work and automatically rebuild crash- or shutdown-interrupted generation on startup. Ordinary failures SHALL remain visible for explicit retry, not automatic retry on idle or restart. Export generation and recovery SHALL never create or retry email attempts or change sending eligibility.
 
 #### Scenario: Concurrent progress
 - **WHEN** a download is requested while results are changing
@@ -52,7 +71,30 @@ The system SHALL create downloads from a consistent recorded snapshot and publis
 #### Scenario: Generation interruption
 - **WHEN** the server stops while writing an export
 - **THEN** an incomplete file is not presented as complete
-- **AND** generation can be retried from saved data without resubmission
+- **AND** the next startup automatically rebuilds the interrupted export from saved data without resubmission or an operator retry action
+
+#### Scenario: Crash before export activation
+- **WHEN** the server crashes after export work is durably recorded but before generation is activated
+- **THEN** startup discovers and processes that work automatically
+
+#### Scenario: Task recovery is still in progress
+- **WHEN** startup recovery has recorded only some of a task's recovered sending outcomes
+- **THEN** automatic export generation waits until sending recovery completes before taking its snapshot
+- **AND** the generated results include the task's fully recovered outcomes
+
+#### Scenario: Export recovery fails to generate a file
+- **WHEN** an automatically recovered export encounters an ordinary generation failure
+- **THEN** the failure is recorded and the UI offers an explicit generation retry
+- **AND** later idle periods or server restarts do not automatically repeat that failed generation
+
+#### Scenario: Finished or intentionally deleted export
+- **WHEN** the server starts with an already published export or an export that the operator intentionally deleted without requesting regeneration
+- **THEN** startup recovery does not regenerate it merely because the server restarted
+
+#### Scenario: Requested campaign export is interrupted
+- **WHEN** the server stops during an explicitly requested campaign report or ZIP generation
+- **THEN** startup automatically rebuilds the interrupted output without requiring the request to be repeated
+- **AND** campaign exports that were never requested are not generated merely because the server restarted
 
 ### Requirement: Private and inert downloads
 The system SHALL authorize every original-file and generated-file download, exclude tokens/secrets, escape generated report text and provide static HTML that cannot execute candidate-supplied scripts.

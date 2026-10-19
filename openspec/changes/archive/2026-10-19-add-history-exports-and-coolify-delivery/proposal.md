@@ -7,6 +7,7 @@ The operator needs downloadable original-data results and historical email conte
 ## What Changes
 
 - Generate and retain complete task-results XLSX files after completion, stopping and interruption, including excluded duplicate rows.
+- Start automatic task-results generation when committed task state makes results available, without recurring idle database checks. Recover pending work and automatically rebuild exports interrupted by server shutdown or a crash on startup; ordinary generation failures remain visible for explicit retry.
 - Add campaign XLSX summaries with candidate and attempt history, individual historical HTML emails and campaign ZIP packages.
 - Keep original uploads, configuration revisions, snapshots, attempts and generated artifacts until explicit manual deletion; no automatic expiry.
 - Add guarded deletion that distinguishes generated-file cleanup from removing campaign history.
