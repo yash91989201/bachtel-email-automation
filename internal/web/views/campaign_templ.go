@@ -17,12 +17,12 @@ type CampaignListData struct {
 
 // CampaignListRow summarizes one campaign for the list page.
 type CampaignListRow struct {
-	ID              string
-	Name            string
-	RecipientHeader string
-	Revision        int
-	HasRevision     bool
-	Approved        bool
+	ID            string
+	Name          string
+	SourceHeaders string
+	Revision      int
+	HasRevision   bool
+	Approved      bool
 }
 
 func CampaignList(data CampaignListData) templ.Component {
@@ -86,12 +86,12 @@ func CampaignList(data CampaignListData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(data.Campaigns) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<section class=\"card border border-base-300 bg-base-100 shadow-sm\"><div class=\"card-body\"><h2 class=\"card-title\">No campaigns yet</h2><p>Create a campaign to define its recipient column, subject, body document and result labels.</p></div></section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<section class=\"card border border-base-300 bg-base-100 shadow-sm\"><div class=\"card-body\"><h2 class=\"card-title\">No campaigns yet</h2><p>Create a campaign to define its source headers, subject, body document and result labels.</p></div></section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-label=\"Campaigns\"><div class=\"card-body\"><table class=\"table\"><thead><tr><th>Name</th><th>Recipient header</th><th>Current revision</th><th>Approval</th><th></th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-label=\"Campaigns\"><div class=\"card-body\"><table class=\"table\"><thead><tr><th>Name</th><th>Source headers</th><th>Current revision</th><th>Approval</th><th></th></tr></thead> <tbody>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -114,9 +114,9 @@ func CampaignList(data CampaignListData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var5 string
-					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(row.RecipientHeader)
+					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(row.SourceHeaders)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 62, Col: 40}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 62, Col: 38}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -190,10 +190,10 @@ func CampaignList(data CampaignListData) templ.Component {
 // CampaignFormData is the view model for the campaign creation form. The
 // error is a fixed validation message, never a raw storage failure.
 type CampaignFormData struct {
-	Error           string
-	Name            string
-	RecipientHeader string
-	ResultLabels    string
+	Error         string
+	Name          string
+	SourceHeaders string
+	ResultLabels  string
 }
 
 func CampaignForm(data CampaignFormData) templ.Component {
@@ -229,7 +229,7 @@ func CampaignForm(data CampaignFormData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"space-y-3\"><p class=\"text-sm font-medium uppercase tracking-widest text-primary\">Campaigns</p><h1 class=\"text-4xl font-bold tracking-tight\">New campaign</h1><p class=\"max-w-2xl text-base-content/70\">The name and the expected recipient column define the campaign. The subject and body document follow as the first content revision.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<div class=\"space-y-3\"><p class=\"text-sm font-medium uppercase tracking-widest text-primary\">Campaigns</p><h1 class=\"text-4xl font-bold tracking-tight\">New campaign</h1><p class=\"max-w-2xl text-base-content/70\">The name and the source headers for the mapping draft define the campaign. The subject and body document follow as the first content revision.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -265,20 +265,20 @@ func CampaignForm(data CampaignFormData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" maxlength=\"200\" required> <label class=\"label\" for=\"campaign-recipient\">Expected recipient header</label> <input class=\"input w-full\" id=\"campaign-recipient\" type=\"text\" name=\"recipient_header\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" maxlength=\"200\" required> <label class=\"label\" for=\"campaign-headers\">Source headers for mapping draft</label> <input class=\"input w-full\" id=\"campaign-headers\" type=\"text\" name=\"source_headers\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var12 string
-			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.RecipientHeader)
+			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.SourceHeaders)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 106, Col: 120}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 106, Col: 114}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" maxlength=\"255\" required><p class=\"text-sm text-base-content/60\">The source worksheet column that holds the candidate email address, for example <code>Email</code>.</p><label class=\"label\" for=\"campaign-labels\">Result column labels</label> <input class=\"input w-full\" id=\"campaign-labels\" type=\"text\" name=\"result_labels\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" required><p class=\"text-sm text-base-content/60\">Comma-separated source worksheet headers, including the candidate email column. These generate the draft mapping table; mark one row as recipient when creating a revision.</p><label class=\"label\" for=\"campaign-labels\">Result column labels</label> <input class=\"input w-full\" id=\"campaign-labels\" type=\"text\" name=\"result_labels\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -308,10 +308,18 @@ func CampaignForm(data CampaignFormData) templ.Component {
 // CampaignPageData is the safe view model for one campaign page. It never
 // carries uploaded documents or storage diagnostics.
 type CampaignPageData struct {
-	ID              string
-	Name            string
-	RecipientHeader string
-	ResultLabels    string
+	ID            string
+	Name          string
+	SourceHeaders string
+	ResultLabels  string
+	// MappingDraft pre-fills the revision form while the campaign has no
+	// content revision. Once a revision exists the form starts empty.
+	MappingDraft string
+	// ExampleVariable and ExampleHeader are the mapping help's worked example:
+	// the first name the draft derives from this campaign's source headers, so
+	// the help never teaches a variable name the draft does not use.
+	ExampleVariable string
+	ExampleHeader   string
 
 	HasRevision bool
 	Revision    int
@@ -376,26 +384,26 @@ func CampaignPage(data CampaignPageData) templ.Component {
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(data.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 155, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 163, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</h1><p class=\"max-w-2xl text-base-content/70\">Expected recipient header <code>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</h1><p class=\"max-w-2xl text-base-content/70\">Nothing on this page sends email.</p><div class=\"card-actions\"><a class=\"btn btn-primary\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var17 string
-			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(data.RecipientHeader)
+			var templ_7745c5c3_Var17 templ.SafeURL
+			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.ID + "/tasks")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 156, Col: 99}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 166, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</code>. Nothing on this page sends email.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\">Email tasks</a></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -407,7 +415,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 				var templ_7745c5c3_Var18 string
 				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(data.RevisionError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 159, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 170, Col: 67}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 				if templ_7745c5c3_Err != nil {
@@ -430,7 +438,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 				var templ_7745c5c3_Var19 string
 				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(data.LabelsError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 162, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 173, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 				if templ_7745c5c3_Err != nil {
@@ -458,7 +466,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 					var templ_7745c5c3_Var20 string
 					templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(warning)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 170, Col: 20}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 181, Col: 20}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 					if templ_7745c5c3_Err != nil {
@@ -486,7 +494,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 				var templ_7745c5c3_Var21 string
 				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(data.Revision)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 183, Col: 26}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 194, Col: 26}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 				if templ_7745c5c3_Err != nil {
@@ -499,7 +507,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 				var templ_7745c5c3_Var22 string
 				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(data.Subject)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 187, Col: 25}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 198, Col: 25}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 				if templ_7745c5c3_Err != nil {
@@ -512,7 +520,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 				var templ_7745c5c3_Var23 string
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(data.Converter)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 191, Col: 27}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 202, Col: 27}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 				if templ_7745c5c3_Err != nil {
@@ -525,7 +533,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 				var templ_7745c5c3_Var24 string
 				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(data.ContentHash)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 195, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 206, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 				if templ_7745c5c3_Err != nil {
@@ -556,178 +564,256 @@ func CampaignPage(data CampaignPageData) templ.Component {
 			var templ_7745c5c3_Var25 templ.SafeURL
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.ID + "/revisions")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 211, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 222, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\" enctype=\"multipart/form-data\" class=\"space-y-4\"><label class=\"label\" for=\"revision-document\">Body document (DOCX)</label> <input class=\"file-input file-input-bordered w-full\" id=\"revision-document\" type=\"file\" name=\"document\" accept=\".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document\" required> <label class=\"label\" for=\"revision-subject\">Subject</label> <input class=\"input input-bordered w-full\" id=\"revision-subject\" type=\"text\" name=\"subject\" maxlength=\"998\" required> <label class=\"label\" for=\"revision-mappings\">Mapping table</label> <textarea class=\"textarea textarea-bordered w-full\" id=\"revision-mappings\" name=\"mappings\" rows=\"8\" placeholder=\"full_name | Full Name | required | name\"></textarea><p class=\"text-sm text-base-content/60\">One mapping per line: <code>variable | source header | required|optional | format | fallback</code>. The format column is one of text, name, designation or email and defaults to text; a fallback applies to optional rows only.</p><div class=\"card-actions\"><button class=\"btn btn-primary\" type=\"submit\">Create revision</button></div></form></div></section><section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-labelledby=\"labels-heading\"><div class=\"card-body gap-4\"><h2 id=\"labels-heading\" class=\"card-title\">Result column labels</h2><form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\" enctype=\"multipart/form-data\" class=\"space-y-4\"><label class=\"label\" for=\"revision-document\">Body document (DOCX)</label> <input class=\"file-input file-input-bordered w-full\" id=\"revision-document\" type=\"file\" name=\"document\" accept=\".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document\" required> <label class=\"label\" for=\"revision-subject\">Subject</label> <input class=\"input input-bordered w-full\" id=\"revision-subject\" type=\"text\" name=\"subject\" maxlength=\"998\" required> <label class=\"label\" for=\"revision-mappings\">Mapping table</label><div id=\"revision-mappings-help\" class=\"space-y-4 text-sm\"><div class=\"rounded-box border border-base-300 bg-base-200/50 p-4\"><p class=\"mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60\">Source headers for mapping draft</p><code class=\"break-words\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var26 templ.SafeURL
-			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.ID + "/labels")
+			var templ_7745c5c3_Var26 string
+			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(data.SourceHeaders)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 228, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 231, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\" class=\"space-y-4\"><label class=\"label\" for=\"labels-input\">Labels</label> <input class=\"input input-bordered w-full\" id=\"labels-input\" type=\"text\" name=\"result_labels\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</code></div><div class=\"overflow-x-auto rounded-box border border-base-300\"><table class=\"table table-sm\"><caption class=\"p-3 text-left font-medium\">Column order <span class=\"font-normal text-base-content/60\">— separate each column with <code>|</code></span></caption> <thead class=\"bg-base-200/50\"><tr><th>Variable</th><th>Source header</th><th>Required / optional / recipient</th><th>Format</th><th>Fallback</th></tr></thead> <tbody><tr><td><code>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var27 string
-			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ResultLabels)
+			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(data.ExampleVariable)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 230, Col: 124}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 247, Col: 42}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\" required><p class=\"text-sm text-base-content/60\">Comma-separated labels for the downloadable result columns. Changing them never invalidates content approval.</p><div class=\"card-actions\"><button class=\"btn btn-primary\" type=\"submit\">Save labels</button></div></form></div></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</code></td><td><code>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var28 string
+			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(data.ExampleHeader)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 248, Col: 40}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</code></td><td><code>required</code></td><td><code>text</code></td><td class=\"text-base-content/50\">Leave blank</td></tr></tbody></table></div><div class=\"flex flex-wrap items-center gap-2 text-base-content/70\"><span>Formats:</span> <code class=\"badge badge-ghost badge-sm\">text</code> <code class=\"badge badge-ghost badge-sm\">name</code> <code class=\"badge badge-ghost badge-sm\">designation</code> <code class=\"badge badge-ghost badge-sm\">email</code> <span class=\"text-xs\">Defaults to text, or email for recipient rows. Fallback is only for optional rows.</span></div><div class=\"rounded-box border border-primary/20 bg-primary/5 p-4\"><p class=\"mb-2 text-xs font-semibold uppercase tracking-wide text-primary\">Example line</p><code class=\"break-words\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var29 string
+			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(data.ExampleVariable + " | " + data.ExampleHeader + " | required | text")
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 266, Col: 107}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</code></div></div><p class=\"text-sm\">Sending address example: <code>candidate_email | Candidate Email | recipient | email</code>. The recipient is required and cannot have a fallback.</p><p id=\"revision-mappings-hint\" class=\"text-sm text-base-content/60\">Enter your mappings below, one per line. Mark exactly one row as <code>recipient</code> to select the sending address. It needs no placeholder in the subject or body. Other rows must match the <code>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var30 string
+			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs("{{...}}")
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 270, Col: 283}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</code> placeholders.</p><textarea class=\"textarea textarea-bordered w-full font-mono\" id=\"revision-mappings\" name=\"mappings\" rows=\"8\" aria-describedby=\"revision-mappings-help revision-mappings-hint\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var31 string
+			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(data.MappingDraft)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 271, Col: 199}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</textarea><div class=\"card-actions\"><button class=\"btn btn-primary\" type=\"submit\">Create revision</button></div></form></div></section><section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-labelledby=\"labels-heading\"><div class=\"card-body gap-4\"><h2 id=\"labels-heading\" class=\"card-title\">Result column labels</h2><form method=\"post\" action=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var32 templ.SafeURL
+			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.ID + "/labels")
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 281, Col: 68}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "\" class=\"space-y-4\"><label class=\"label\" for=\"labels-input\">Labels</label> <input class=\"input input-bordered w-full\" id=\"labels-input\" type=\"text\" name=\"result_labels\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var33 string
+			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ResultLabels)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 283, Col: 124}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\" required><p class=\"text-sm text-base-content/60\">Comma-separated labels for the downloadable result columns. Changing them never invalidates content approval.</p><div class=\"card-actions\"><button class=\"btn btn-primary\" type=\"submit\">Save labels</button></div></form></div></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if data.HasRevision {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-labelledby=\"preview-heading\"><div class=\"card-body gap-4\"><h2 id=\"preview-heading\" class=\"card-title\">Sample preview</h2><p>Fill one sample value per variable to render the email exactly as a candidate row would. Nothing is sent and nothing is stored.</p><form method=\"post\" action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "<section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-labelledby=\"preview-heading\"><div class=\"card-body gap-4\"><h2 id=\"preview-heading\" class=\"card-title\">Sample preview</h2><p>Fill one sample value per variable to render the email exactly as a candidate row would. Nothing is sent and nothing is stored.</p><form method=\"post\" action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var28 templ.SafeURL
-				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.ID + "/preview")
+				var templ_7745c5c3_Var34 templ.SafeURL
+				templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.ID + "/preview")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 243, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 296, Col: 70}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\" hx-post=\"")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var29 string
-				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue("/campaigns/" + data.ID + "/preview")
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 243, Col: 119}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "\" hx-post=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\" hx-target=\"#preview-result\" hx-swap=\"innerHTML\" hx-disabled-elt=\"this\" class=\"space-y-4\">")
+				var templ_7745c5c3_Var35 string
+				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue("/campaigns/" + data.ID + "/preview")
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 296, Col: 119}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\" hx-target=\"#preview-result\" hx-swap=\"innerHTML\" hx-disabled-elt=\"this\" class=\"space-y-4\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, variable := range data.Variables {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<label class=\"label\" for=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<label class=\"label\" for=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var30 string
-					templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue("sample-" + variable)
+					var templ_7745c5c3_Var36 string
+					templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue("sample-" + variable)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 245, Col: 54}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 298, Col: 54}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "\">Sample value for ")
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var31 string
-					templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(variable)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 245, Col: 84}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "\">Sample value for ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</label> <input class=\"input input-bordered w-full\" id=\"")
+					var templ_7745c5c3_Var37 string
+					templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(variable)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 298, Col: 84}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var32 string
-					templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue("sample-" + variable)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 246, Col: 75}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "</label> <input class=\"input input-bordered w-full\" id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "\" type=\"text\" name=\"")
+					var templ_7745c5c3_Var38 string
+					templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue("sample-" + variable)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 299, Col: 75}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var33 string
-					templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(variable)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 246, Col: 105}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "\" type=\"text\" name=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "\">")
+					var templ_7745c5c3_Var39 string
+					templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(variable)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 299, Col: 105}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<div class=\"card-actions\"><button class=\"btn btn-primary\" type=\"submit\">Render preview</button></div></form><div id=\"preview-result\" role=\"status\" aria-live=\"polite\"><p class=\"text-base-content/60\">Submit sample values to render the preview here.</p></div></div></section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<div class=\"card-actions\"><button class=\"btn btn-primary\" type=\"submit\">Render preview</button></div></form><div id=\"preview-result\" role=\"status\" aria-live=\"polite\"><p class=\"text-base-content/60\">Submit sample values to render the preview here.</p></div></div></section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, " <section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-labelledby=\"history-heading\"><div class=\"card-body gap-4\"><h2 id=\"history-heading\" class=\"card-title\">Revision history</h2><p>Revisions are immutable. Older revisions stay for audit and have no edit controls.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, " <section class=\"card border border-base-300 bg-base-100 shadow-sm\" aria-labelledby=\"history-heading\"><div class=\"card-body gap-4\"><h2 id=\"history-heading\" class=\"card-title\">Revision history</h2><p>Revisions are immutable. Older revisions stay for audit and have no edit controls.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(data.History) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<p class=\"text-base-content/60\">No revisions yet.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "<p class=\"text-base-content/60\">No revisions yet.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<ol class=\"space-y-2\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "<ol class=\"space-y-2\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, entry := range data.History {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<li class=\"flex flex-wrap items-center gap-2 text-sm\"><span class=\"font-semibold\">Revision ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<li class=\"flex flex-wrap items-center gap-2 text-sm\"><span class=\"font-semibold\">Revision ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var34 string
-					templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(entry.Revision)
+					var templ_7745c5c3_Var40 string
+					templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(entry.Revision)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 268, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 321, Col: 61}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "</span> <code class=\"break-all\">")
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var35 string
-					templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(entry.ContentHash)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 269, Col: 51}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "</span> <code class=\"break-all\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "</code>")
+					var templ_7745c5c3_Var41 string
+					templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(entry.ContentHash)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 322, Col: 51}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "</code>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -735,17 +821,17 @@ func CampaignPage(data CampaignPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "</li>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "</li>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "</ol>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</ol>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "</div></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "</div></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -768,10 +854,11 @@ type PreviewData struct {
 	ContentHash string
 	Approved    bool
 
-	Error   string
-	Subject string
-	Body    string
-	Values  []PreviewValue
+	Error     string
+	Recipient string
+	Subject   string
+	Body      string
+	Values    []PreviewValue
 }
 
 // PreviewValue is one mapped sample value as it was submitted, next to the
@@ -799,43 +886,43 @@ func PreviewResult(data PreviewData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var36 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var36 == nil {
-			templ_7745c5c3_Var36 = templ.NopComponent
+		templ_7745c5c3_Var42 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var42 == nil {
+			templ_7745c5c3_Var42 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<div class=\"card border border-base-300 bg-base-100 shadow-sm\"><div class=\"card-body gap-4\"><h3 class=\"card-title\">Preview result</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "<div class=\"card border border-base-300 bg-base-100 shadow-sm\"><div class=\"card-body gap-4\"><h3 class=\"card-title\">Preview result</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if data.HasRevision {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "<dl class=\"space-y-1 text-sm\"><div class=\"flex gap-2\"><dt class=\"font-semibold\">Revision:</dt><dd>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "<dl class=\"space-y-1 text-sm\"><div class=\"flex gap-2\"><dt class=\"font-semibold\">Revision:</dt><dd>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var37 string
-			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(data.Revision)
+			var templ_7745c5c3_Var43 string
+			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(data.Revision)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 312, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 366, Col: 25}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "</dd></div><div class=\"flex gap-2\"><dt class=\"font-semibold\">Content hash:</dt><dd><code class=\"break-all\">")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var38 string
-			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(data.ContentHash)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 316, Col: 52}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "</dd></div><div class=\"flex gap-2\"><dt class=\"font-semibold\">Content hash:</dt><dd><code class=\"break-all\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "</code></dd></div><div class=\"flex gap-2\"><dt class=\"font-semibold\">Approval:</dt><dd>")
+			var templ_7745c5c3_Var44 string
+			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(data.ContentHash)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 370, Col: 52}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "</code></dd></div><div class=\"flex gap-2\"><dt class=\"font-semibold\">Approval:</dt><dd>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -843,44 +930,57 @@ func PreviewResult(data PreviewData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</dd></div></dl>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "</dd></div></dl>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if data.Error != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<div class=\"alert alert-error\" role=\"alert\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "<div class=\"alert alert-error\" role=\"alert\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var39 string
-			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(data.Error)
+			var templ_7745c5c3_Var45 string
+			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(data.Error)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 325, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 379, Col: 60}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "<div class=\"space-y-1\"><p class=\"text-sm font-semibold uppercase tracking-widest text-base-content/60\">Subject</p><p class=\"font-semibold\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "<div class=\"space-y-1\"><p class=\"text-sm font-semibold uppercase tracking-widest text-base-content/60\">To</p><p class=\"font-semibold\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var40 string
-			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(data.Subject)
+			var templ_7745c5c3_Var46 string
+			templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(data.Recipient)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 329, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 383, Col: 46}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "</p></div><div class=\"space-y-1\"><p class=\"text-sm font-semibold uppercase tracking-widest text-base-content/60\">Body</p><div class=\"rounded-box border border-base-300 p-4\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "</p></div><div class=\"space-y-1\"><p class=\"text-sm font-semibold uppercase tracking-widest text-base-content/60\">Subject</p><p class=\"font-semibold\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var47 string
+			templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(data.Subject)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 387, Col: 44}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "</p></div><div class=\"space-y-1\"><p class=\"text-sm font-semibold uppercase tracking-widest text-base-content/60\">Body</p><div class=\"rounded-box border border-base-300 p-4\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -888,74 +988,74 @@ func PreviewResult(data PreviewData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "</div></div><table class=\"table table-sm\"><thead><tr><th>Variable</th><th>Source header</th><th>Raw value</th><th>Used value</th></tr></thead> <tbody>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</div></div><table class=\"table table-sm\"><thead><tr><th>Variable</th><th>Source header</th><th>Raw value</th><th>Used value</th></tr></thead> <tbody>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, value := range data.Values {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "<tr><td>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "<tr><td>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var41 string
-				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(value.Variable)
+				var templ_7745c5c3_Var48 string
+				templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(value.Variable)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 347, Col: 28}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 405, Col: 28}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "</td><td><code>")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var42 string
-				templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(value.Header)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 348, Col: 32}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "</td><td><code>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "</code></td><td><code>")
+				var templ_7745c5c3_Var49 string
+				templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(value.Header)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 406, Col: 32}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var43 string
-				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(value.Raw)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 349, Col: 29}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "</code></td><td><code>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "</code></td><td><code>")
+				var templ_7745c5c3_Var50 string
+				templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(value.Raw)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 407, Col: 29}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var44 string
-				templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(value.Normalized)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 350, Col: 36}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "</code></td><td><code>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "</code></td></tr>")
+				var templ_7745c5c3_Var51 string
+				templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(value.Normalized)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `campaign.templ`, Line: 408, Col: 36}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "</code></td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "</tbody></table>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "</tbody></table>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -981,23 +1081,23 @@ func revisionState(hasRevision, approved bool) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var45 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var45 == nil {
-			templ_7745c5c3_Var45 = templ.NopComponent
+		templ_7745c5c3_Var52 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var52 == nil {
+			templ_7745c5c3_Var52 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if !hasRevision {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "<span class=\"badge badge-ghost\">No revision</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "<span class=\"badge badge-ghost\">No revision</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else if approved {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "<span class=\"badge badge-success\">Approved</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, "<span class=\"badge badge-success\">Approved</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "<span class=\"badge badge-warning\">Not approved</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 92, "<span class=\"badge badge-warning\">Not approved</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

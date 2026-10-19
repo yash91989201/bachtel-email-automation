@@ -37,11 +37,14 @@ administrative surface that requires a superuser.
 On a fresh database, use the one-time installer link printed in the server
 console to create your first superuser. No credentials are seeded.
 
-`make dev` regenerates templates and assets, then starts the server. It also
+`make dev` uses [Air](https://github.com/air-verse/air) to regenerate templates
+and assets, rebuild, and restart the server when Go, `.templ`, CSS, or
+JavaScript sources change. The pinned Air version downloads automatically on
+the first run; no global installation is required. It also
 sources a local `.env` into the server process when one exists: copy
 `.env.example` to `.env` and fill it in instead of exporting variables by
-hand. Stop and rerun it after changes. It intentionally doesn't install an
-additional reload daemon. Generated CSS and JavaScript are ignored by Git;
+hand. Restart `make dev` after changing `.env` or `.air.toml`. Refresh the
+browser after a rebuild to see UI changes. Generated CSS and JavaScript are ignored by Git;
 `make setup` restores them on a fresh checkout. Generated `*_templ.go` files
 are committed; edit the `.templ` sources instead.
 
@@ -54,6 +57,8 @@ are committed; edit the `.templ` sources instead.
 | `POST /logout` | Operator session |
 | `GET /` | Operator session (dashboard) |
 | `GET /status` | Operator session (HTML fragment) |
+| `GET /campaigns`, `POST /campaigns`, `POST /campaigns/{id}/…` | Operator session; campaign authoring (create, revision upload, labels, sample preview) |
+| `GET /campaigns/{id}/tasks…`, `POST /campaigns/{id}/tasks/{task}/…` | Operator session; task intake (upload, validation, review, duplicate and exclusion downloads) |
 | `GET /connection`, `POST /connection/connect`, `GET /connection/callback`, `POST /connection/disconnect` | Operator session (the callback must match an in-flight authorization attempt) |
 | `GET /static/`, `GET /robots.txt` | Public assets; `robots.txt` disallows everything |
 | `GET /api/health` | Public PocketBase health probe |
@@ -117,6 +122,8 @@ connection reports an actionable configuration error instead.
 | `MS_REDIRECT_URL` | Redirect URI sent to Microsoft. Defaults to `APP_ORIGIN` + `/connection/callback` and must match the app registration exactly. |
 | `MS_SENDER_ADDRESS` | The single mailbox allowed to connect. Defaults to `hr@bachtelcorporation.com`. |
 | `MS_AUTHORITY_URL`, `MS_GRAPH_BASE_URL` | Advanced overrides for simulated authorization/Graph servers; leave unset in production. |
+| `INTAKE_MAX_UPLOAD_BYTES` | Upload limit for one task workbook, in bytes. Defaults to 10 MiB, which is also the supported ceiling. |
+| `INTAKE_UNZIP_SIZE_LIMIT`, `INTAKE_UNZIP_XML_SIZE_LIMIT` | Expanded workbook archive and single-part limits, in bytes. Default to 64 MiB and 16 MiB. |
 
 `APP_ENCRYPTION_KEY` is separate from PocketBase's own `--encryptionEnv`
 settings key and separate from `MS_CLIENT_SECRET`; each protects different
@@ -147,6 +154,35 @@ at authoring time.
   packages. It is the one target that needs a `docker` binary; no other
   target depends on Docker.
 
+## Task intake
+
+Each email task starts with an uploaded `.xlsx` workbook. Uploading stores the
+original bytes privately and creates a **staging** task; the operator then
+chooses the worksheet and header row, and validation either publishes an
+immutable snapshot of the eligible rows or fails with an actionable reason.
+
+- Validation runs before any candidate exists: every mapped source header,
+  including the revision's explicit `recipient` row, must exist exactly once.
+  The recipient supplies the sending address without needing a DOCX placeholder.
+  Duplicate recipient keys hold
+  every row of their group, and unusable addresses are excluded. Excluded rows
+  live only in the stored workbook, a private validation manifest and a
+  downloadable exclusion report — never as candidate records.
+- Candidates are identified by campaign plus trimmed lowercase email address,
+  with generated internal ids, so a corrected upload creates a new task over the
+  same identities and an earlier task keeps its snapshot.
+- A validated task is **ready**, not running: this application does not send
+  candidate email yet. Starting, retries and sending attempts belong to the
+  dispatch change, which rechecks eligibility through the same preflight and
+  reservation operations intake defines.
+- The upload screen shows the workbook constraints (supported format, size,
+  expanded-archive limits and the 1,000-row task bound) and reports every
+  rejection inline.
+
+Workbook support, header matching, recipient-key rules, resource limits,
+duplicate handling and the private artifacts are documented in
+[docs/task-intake.md](docs/task-intake.md).
+
 ## Layout
 
 ```text
@@ -156,6 +192,7 @@ internal/
   config/                       Environment configuration (origin, Microsoft settings, encryption key)
   campaign/                     Campaign revisions, mapping validation, normalization and the single render path
   convert/                      Sandboxed DOCX-to-HTML conversion (pinned Pandoc) and document inspection
+  intake/                       Task workbook validation, candidate identity, membership snapshots and reservations
   microsoft/                    Microsoft connection service (OAuth flow, encrypted credentials)
   operator/                     Single-operator provisioning
   migrations/
@@ -163,6 +200,7 @@ internal/
     1792233010_operator_collection.go   Single-operator auth collection with locked rules
     1792233020_microsoft_connection.go  Microsoft connection metadata collection
     1792233040_campaign_collections.go  Campaigns and immutable configuration revisions
+    1792233050_intake_collections.go    Tasks, campaign candidate identity and membership snapshots
   web/
     web.go                      Route table, handler assembly, render helper
                                 (/health, /robots.txt, /static, GET /{$}, GET /status)
@@ -170,11 +208,13 @@ internal/
     login.go                    GET /login, POST /login, POST /logout
     connection.go               GET /connection, connect, callback, and disconnect handlers
     campaign.go                 /campaigns pages: create, revision upload, labels, sample preview
+    task.go                     Task intake pages: upload, worksheet selection, review, downloads
     ratelimit.go                Fixed-window login rate limiter
     web_test.go                 Route, auth, CSRF, rate-limit, and DB integration tests
-    views/                      templ layouts and pages (layout, home, login, connection, campaign)
+    views/                      templ layouts and pages (layout, home, login, connection, campaign, task)
     static/                     Embedded files and generated CSS/JS
 docs/campaign-templates.md      Placeholder syntax, mapping/formatting rules, DOCX support and limits
+docs/task-intake.md             Task workbook support, header matching, duplicate handling and limits
 docs/microsoft-setup.md         Microsoft app registration and first-time connection setup
 web/css/app.css                 Tailwind and daisyUI source
 scripts/copy-assets.mjs         Copy pinned Alpine/htmx distributions locally

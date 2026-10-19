@@ -3,8 +3,11 @@ package config
 import (
 	"encoding/base64"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 )
 
 // clearEnvironment removes ambient connection settings so tests are hermetic.
@@ -13,6 +16,7 @@ func clearEnvironment(t *testing.T) {
 	for _, name := range []string{
 		EnvOrigin, EnvEncryptionKey, EnvTenantID, EnvClientID, EnvClientSecret,
 		EnvRedirectURL, EnvSenderAddress, EnvAuthorityURL, EnvGraphBaseURL,
+		EnvIntakeMaxUploadBytes, EnvIntakeUnzipSizeLimit, EnvIntakeUnzipXMLSizeLimit,
 	} {
 		t.Setenv(name, "")
 	}
@@ -40,6 +44,55 @@ func TestLoadDefaults(t *testing.T) {
 	if missing := cfg.Microsoft.Missing(); len(missing) != 3 {
 		t.Fatalf("expected tenant/client/secret to be reported missing, got %v", missing)
 	}
+}
+
+func TestLoadIntakeLimits(t *testing.T) {
+	t.Run("defaults", func(t *testing.T) {
+		clearEnvironment(t)
+		cfg, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Intake != intake.DefaultLimits() {
+			t.Fatalf("intake limits = %+v, want the documented defaults", cfg.Intake)
+		}
+	})
+
+	t.Run("configured", func(t *testing.T) {
+		clearEnvironment(t)
+		t.Setenv(EnvIntakeMaxUploadBytes, "2048")
+		t.Setenv(EnvIntakeUnzipSizeLimit, "4096")
+		t.Setenv(EnvIntakeUnzipXMLSizeLimit, "1024")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := intake.Limits{MaxUploadBytes: 2048, UnzipSizeLimit: 4096, UnzipXMLSizeLimit: 1024}
+		if cfg.Intake != want {
+			t.Fatalf("intake limits = %+v, want %+v", cfg.Intake, want)
+		}
+	})
+
+	t.Run("rejected", func(t *testing.T) {
+		cases := map[string]map[string]string{
+			"not a number":           {EnvIntakeMaxUploadBytes: "10MiB"},
+			"zero":                   {EnvIntakeMaxUploadBytes: "0"},
+			"negative":               {EnvIntakeMaxUploadBytes: "-1"},
+			"above the ceiling":      {EnvIntakeMaxUploadBytes: strconv.Itoa(intake.MaxUploadBytes + 1)},
+			"xml part above archive": {EnvIntakeUnzipSizeLimit: "1024", EnvIntakeUnzipXMLSizeLimit: "2048"},
+		}
+		for name, env := range cases {
+			t.Run(name, func(t *testing.T) {
+				clearEnvironment(t)
+				for key, value := range env {
+					t.Setenv(key, value)
+				}
+				if _, err := Load(); !errors.Is(err, ErrIntakeLimitInvalid) {
+					t.Fatalf("got %v, want ErrIntakeLimitInvalid", err)
+				}
+			})
+		}
+	})
 }
 
 func TestLoadRejectsMalformedOrigin(t *testing.T) {

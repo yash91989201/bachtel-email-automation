@@ -14,7 +14,9 @@ See proposal.md. Changes 1 and 2 provide private access, configuration revisions
 
 ### Excelize and file artifacts
 
-Add a pinned compatible github.com/xuri/excelize/v2 dependency for XLSX parsing, duplicate reports and later result workbooks. One task selects one worksheet and header row; default to the first visible worksheet and row 1, with a preview and explicit selection before validation. Map headers after trimming surrounding whitespace, with case-sensitive labels and ambiguous duplicate labels rejected.
+Add a pinned compatible github.com/xuri/excelize/v2 dependency for XLSX parsing, duplicate reports and later result workbooks. One task selects one worksheet and header row; default to the first visible worksheet and row 1, with a preview and explicit selection before validation. Map headers after trimming surrounding whitespace, with case-sensitive labels and ambiguous duplicate labels rejected. The immutable campaign revision selects the recipient source column through exactly one explicit recipient mapping; campaign source-header suggestions only seed the first mapping draft. Intake validates all mapped columns, reads the selected mapping's raw source value, and uses its trimmed lowercase normalized address for routing, duplicate grouping and campaign candidate identity.
+
+Store campaign source-header suggestions in the campaign record as `source_headers`; remove the former `recipient_header` field through a forward schema migration. Do not convert its old value or infer a recipient mapping: existing drafts begin with required text mappings and the operator explicitly selects one recipient mapping. These storage and migration details do not change the visible mapping behavior.
 
 Enforce the 1,000 non-empty candidate-row support bound plus documented configurable upload/expanded-archive resource limits. Preserve workbook bytes and a digest in private persistent storage. Read displayed/cached cell values without evaluating uploaded formulas or following external links; missing formula cached values needed for replacement require corrected input.
 

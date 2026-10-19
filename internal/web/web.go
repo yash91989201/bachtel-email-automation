@@ -13,6 +13,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
+	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
@@ -27,17 +28,20 @@ type server struct {
 	cfg         config.Config
 	connections *microsoft.Service
 	campaigns   *campaign.Service
+	tasks       *intake.Service
 	logins      *loginLimiter
 }
 
 // NewHandler serves the application UI. PocketBase owns the server lifecycle,
 // its API, and the dashboard on the same listener.
 func NewHandler(app core.App, cfg config.Config, connections *microsoft.Service) http.Handler {
+	campaigns := campaign.NewService(app, cfg.PandocPath)
 	s := &server{
 		app:         app,
 		cfg:         cfg,
 		connections: connections,
-		campaigns:   campaign.NewService(app, cfg.PandocPath),
+		campaigns:   campaigns,
+		tasks:       intake.NewService(app, campaigns, cfg.Intake),
 		logins:      newLoginLimiter(10, 5*time.Minute),
 	}
 
@@ -62,6 +66,7 @@ func NewHandler(app core.App, cfg config.Config, connections *microsoft.Service)
 	mux.HandleFunc("GET /connection/callback", s.requireOperator(s.handleCallback))
 	mux.HandleFunc("POST /connection/disconnect", s.requireOperator(s.handleDisconnect))
 	s.registerCampaignRoutes(mux)
+	s.registerTaskRoutes(mux)
 
 	// Cross-origin writes (forms) are rejected before any handler mutates
 	// state; no bespoke CSRF token protocol is needed.

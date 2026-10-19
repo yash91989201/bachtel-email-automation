@@ -18,7 +18,7 @@ func TestDocumentedSampleRenders(t *testing.T) {
 <li>Reply to this email with questions</li>
 </ul>
 <p><strong>{{first_name}}</strong>, contact your manager for access.</p>`
-	mappings := []Mapping{
+	mappings := []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail},
 		{Variable: "first_name", Header: "First Name", Required: true, Format: FormatName},
 		{Variable: "job_title", Header: "Title", Required: true, Format: FormatDesignation},
 		{Variable: "team", Header: "Team", Required: false, Fallback: "our team", Format: FormatText},
@@ -29,7 +29,7 @@ func TestDocumentedSampleRenders(t *testing.T) {
 		t.Fatalf("Compile: %v", err)
 	}
 
-	rendered, err := tmpl.Render(map[string]string{
+	rendered, err := tmpl.Render(map[string]string{"candidate_email": "ada@example.com",
 		"first_name": "  ada   lovelace ",
 		"job_title":  "head of qa",
 		"team":       "",
@@ -39,6 +39,9 @@ func TestDocumentedSampleRenders(t *testing.T) {
 	}
 
 	const wantSubject = "Welcome aboard, Ada Lovelace"
+	if rendered.Recipient != "ada@example.com" || strings.Contains(rendered.Body, rendered.Recipient) {
+		t.Errorf("recipient must appear only in To: %+v", rendered)
+	}
 	if rendered.Subject != wantSubject {
 		t.Errorf("subject = %q, want %q", rendered.Subject, wantSubject)
 	}
@@ -79,7 +82,7 @@ func TestDocumentedSampleRenders(t *testing.T) {
 
 	// An empty required value holds only that row and names the variable.
 	var missing *MissingRequiredError
-	_, err = tmpl.Render(map[string]string{
+	_, err = tmpl.Render(map[string]string{"candidate_email": "ada@example.com",
 		"first_name": "",
 		"job_title":  "head of qa",
 		"team":       "",

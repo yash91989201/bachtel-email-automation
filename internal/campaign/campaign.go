@@ -57,14 +57,15 @@ var Formats = []Format{FormatText, FormatName, FormatDesignation, FormatEmail}
 func (f Format) Valid() bool { return slices.Contains(Formats, f) }
 
 // Mapping binds one user-facing variable to a source column and its
-// replacement policy. Variables default to required; an optional variable may
-// declare a fallback.
+// replacement policy. Exactly one mapping selects the required recipient;
+// ordinary optional variables may declare a fallback.
 type Mapping struct {
-	Variable string `json:"variable"`
-	Header   string `json:"header"`
-	Required bool   `json:"required"`
-	Fallback string `json:"fallback"`
-	Format   Format `json:"format"`
+	Variable  string `json:"variable"`
+	Header    string `json:"header"`
+	Required  bool   `json:"required"`
+	Recipient bool   `json:"recipient"`
+	Fallback  string `json:"fallback"`
+	Format    Format `json:"format"`
 }
 
 // Variable describes one compiled placeholder and where it is used.
@@ -79,7 +80,7 @@ type Variable struct {
 type Campaign struct {
 	ID                string
 	Name              string
-	RecipientHeader   string
+	SourceHeaders     []string
 	ResultLabels      []string
 	CurrentRevisionID string
 	Revision          int
@@ -152,7 +153,8 @@ func ValidateVariableName(name string) error {
 }
 
 // ValidateMappings checks the mapping table: one row per variable, unique
-// variables, exact header names and a supported format. A fallback is only
+// variables, exactly one recipient, exact header names and a supported format.
+// Recipient mappings imply required email values. A fallback is only
 // meaningful for an optional variable, so declaring one on a required variable
 // is rejected instead of being silently ignored.
 func ValidateMappings(mappings []Mapping) error {
@@ -160,6 +162,7 @@ func ValidateMappings(mappings []Mapping) error {
 		return ErrNoMappings
 	}
 	seen := make(map[string]struct{}, len(mappings))
+	recipients := 0
 	for i, mapping := range mappings {
 		variable := strings.TrimSpace(mapping.Variable)
 		if err := ValidateVariableName(variable); err != nil {
@@ -172,16 +175,85 @@ func ValidateMappings(mappings []Mapping) error {
 		if strings.TrimSpace(mapping.Header) == "" {
 			return fmt.Errorf("variable %q needs a source header", variable)
 		}
+		if mapping.Recipient {
+			recipients++
+			mapping.Required = true
+			if mapping.Format == "" {
+				mapping.Format = FormatEmail
+			}
+			if mapping.Format != FormatEmail {
+				return fmt.Errorf("recipient variable %q must use email formatting", variable)
+			}
+		}
 		if !mapping.Format.Valid() {
 			return fmt.Errorf("variable %q has unsupported formatting %q", variable, mapping.Format)
 		}
 		if mapping.Required && strings.TrimSpace(mapping.Fallback) != "" {
 			return fmt.Errorf("variable %q is required, so it cannot have a fallback", mapping.Variable)
 		}
-		mappings[i].Variable = variable
-		mappings[i].Header = strings.TrimSpace(mapping.Header)
+		mapping.Variable = variable
+		mapping.Header = strings.TrimSpace(mapping.Header)
+		mappings[i] = mapping
+	}
+	if recipients != 1 {
+		return errors.New("mark exactly one mapping row as recipient to select the sending address")
 	}
 	return nil
+}
+
+// DefaultMappings derives the draft mapping table for a campaign that has no
+// revision yet: one required text mapping per source header. The variable name is the header lowercased with every run
+// of non-alphanumeric characters replaced by one underscore. A header that
+// cannot form a variable name, and a name that repeats an earlier one, is
+// omitted. The operator must explicitly mark one row as recipient.
+func DefaultMappings(sourceHeaders []string) []Mapping {
+	seen := make(map[string]struct{})
+	var mappings []Mapping
+	for _, header := range sourceHeaders {
+		header = strings.TrimSpace(header)
+		if header == "" {
+			continue
+		}
+		variable := deriveVariableName(header)
+		if variable == "" {
+			continue
+		}
+		if _, ok := seen[variable]; ok {
+			continue
+		}
+		seen[variable] = struct{}{}
+		mappings = append(mappings, Mapping{
+			Variable: variable,
+			Header:   header,
+			Required: true,
+			Format:   FormatText,
+		})
+	}
+	return mappings
+}
+
+// deriveVariableName spells a header as a placeholder name, or "" when the
+// header cannot produce one. Only ASCII letters and digits survive, because
+// that is the alphabet a variable name is allowed to use.
+func deriveVariableName(header string) string {
+	var name strings.Builder
+	separator := false
+	for _, r := range strings.ToLower(header) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			if separator && name.Len() > 0 {
+				name.WriteByte('_')
+			}
+			separator = false
+			name.WriteRune(r)
+			continue
+		}
+		separator = true
+	}
+	derived := name.String()
+	if !variableNamePattern.MatchString(derived) {
+		return ""
+	}
+	return derived
 }
 
 // ValidateResultLabels checks the output column labels: at least one, none

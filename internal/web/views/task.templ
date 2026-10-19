@@ -1,0 +1,474 @@
+package views
+
+import "strings"
+
+// TaskListData is the safe view model for a campaign's task list. It carries
+// ids and fixed status text only, never storage detail.
+type TaskListData struct {
+	CampaignID   string
+	CampaignName string
+	Tasks        []TaskListRow
+}
+
+// TaskListRow summarizes one task for the list page.
+type TaskListRow struct {
+	ID        string
+	Status    string
+	Sheet     string
+	HeaderRow int
+	Total     int
+	Eligible  int
+}
+
+templ TaskList(data TaskListData) {
+	@Layout("Tasks", true) {
+		<div class="space-y-3">
+			<p class="text-sm font-medium uppercase tracking-widest text-primary">Tasks</p>
+			<h1 class="text-4xl font-bold tracking-tight">Task intake</h1>
+			<p class="max-w-2xl text-base-content/70">Upload an Excel workbook, confirm its worksheet and header row, then review the validated snapshot for { data.CampaignName }. Nothing on this page sends email.</p>
+			<div class="card-actions">
+				<a class="btn btn-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/new" }>Upload workbook</a>
+				<a class="btn btn-ghost" href={ "/campaigns/" + data.CampaignID }>Back to campaign</a>
+			</div>
+		</div>
+		if len(data.Tasks) == 0 {
+			<section class="card border border-base-300 bg-base-100 shadow-sm">
+				<div class="card-body">
+					<h2 class="card-title">No tasks yet</h2>
+					<p>Upload an XLSX workbook to create the first task for this campaign.</p>
+				</div>
+			</section>
+		} else {
+			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-label="Tasks">
+				<div class="card-body">
+					<table class="table">
+						<thead>
+							<tr>
+								<th>Status</th>
+								<th>Worksheet</th>
+								<th>Header row</th>
+								<th>Total rows</th>
+								<th>Eligible rows</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, row := range data.Tasks {
+								<tr>
+									<td>@taskStatusBadge(row.Status)</td>
+									<td><code>{ row.Sheet }</code></td>
+									<td>{ row.HeaderRow }</td>
+									<td>{ row.Total }</td>
+									<td>{ row.Eligible }</td>
+									<td><a class="link link-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + row.ID }>Open</a></td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</section>
+		}
+	}
+}
+
+// TaskUploadData is the view model for the workbook upload page. The limits
+// are the configured byte bounds, rendered as literal numbers so the operator
+// sees exactly what the server enforces.
+type TaskUploadData struct {
+	CampaignID        string
+	CampaignName      string
+	Error             string
+	MaxUploadBytes    int64
+	UnzipSizeLimit    int64
+	UnzipXMLSizeLimit int64
+}
+
+templ TaskUpload(data TaskUploadData) {
+	@Layout("New task", true) {
+		<div class="space-y-3">
+			<p class="text-sm font-medium uppercase tracking-widest text-primary">Tasks</p>
+			<h1 class="text-4xl font-bold tracking-tight">Upload a task workbook</h1>
+			<p class="max-w-2xl text-base-content/70">Uploading stores the workbook as a staging task for { data.CampaignName }. You then confirm the worksheet and header row before anything is validated.</p>
+			<div class="card-actions">
+				<a class="btn btn-ghost" href={ "/campaigns/" + data.CampaignID + "/tasks" }>Back to task list</a>
+			</div>
+		</div>
+		if data.Error != "" {
+			<div class="alert alert-error" role="alert">{ data.Error }</div>
+		}
+		<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks" } enctype="multipart/form-data" class="card border border-base-300 bg-base-100 shadow-sm">
+			<div class="card-body gap-4">
+				<label class="label" for="task-workbook">Workbook (XLSX)</label>
+				<input class="file-input file-input-bordered w-full" id="task-workbook" type="file" name="workbook" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required/>
+				<div class="card-actions">
+					<button class="btn btn-primary" type="submit">Upload workbook</button>
+				</div>
+			</div>
+		</form>
+		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="constraints-heading">
+			<div class="card-body gap-2">
+				<h2 id="constraints-heading" class="card-title">Workbook constraints</h2>
+				<ul class="list-inside list-disc space-y-1 text-sm text-base-content/70">
+					<li>Format: <code>.xlsx</code> only, with no password and no legacy <code>.xls</code> file; password-protected and macro containers are rejected.</li>
+					<li>Upload size limit: { data.MaxUploadBytes } bytes.</li>
+					<li>Expanded workbook archive limit: { data.UnzipSizeLimit } bytes, and { data.UnzipXMLSizeLimit } bytes for a single expanded XML part.</li>
+					<li>Support bound of 1,000 rows carrying data per task; split larger lists across several tasks.</li>
+					<li>Header labels are matched after trimming surrounding whitespace, are case sensitive, and each required label must appear exactly once in the chosen header row.</li>
+					<li>A formula cell is read as its cached value; the workbook's formulas are never evaluated.</li>
+					<li>Duplicate recipient addresses are held for a corrected upload; every row of a duplicate group stays out of the snapshot.</li>
+				</ul>
+			</div>
+		</section>
+	}
+}
+
+// TaskPageData is the safe view model for one task page. A staging task uses
+// the selection fields; a ready task uses the review fields. Error is a fixed
+// inline message from a failed selection or revalidation, ValidationError is
+// the failure recorded on the staging task itself.
+type TaskPageData struct {
+	CampaignID   string
+	CampaignName string
+	TaskID       string
+	Status       string
+
+	Error           string
+	ValidationError string
+
+	Sheets       []TaskSheetOption
+	DefaultSheet string
+	HeaderRow    int
+
+	Counts       TaskCounts
+	ResultLabels []string
+	Revision     int
+	ContentHash  string
+	Approved     bool
+	Stale        bool
+	HeldRows     []TaskHeldRow
+	Rows         []TaskAdmittedRow
+}
+
+// TaskSheetOption is one stored worksheet of the uploaded workbook.
+type TaskSheetOption struct {
+	Name     string
+	Visible  bool
+	Selected bool
+}
+
+// TaskCounts mirrors the task validation counts in plain view fields.
+type TaskCounts struct {
+	Total            int
+	Eligible         int
+	Ineligible       int
+	Duplicate        int
+	Invalid          int
+	AlreadySubmitted int
+	AlreadyScheduled int
+	ReviewRequired   int
+}
+
+// TaskHeldRow is one manifest row held back from candidate storage, with the
+// fixed operator-facing reason text already resolved.
+type TaskHeldRow struct {
+	Row    int
+	Reason string
+}
+
+// TaskAdmittedRow is one admitted snapshot row for the review tables.
+type TaskAdmittedRow struct {
+	ID     string
+	Row    int
+	State  string
+	Reason string
+}
+
+templ TaskPage(data TaskPageData) {
+	@Layout("Task", true) {
+		<div class="space-y-3">
+			<p class="text-sm font-medium uppercase tracking-widest text-primary">Task</p>
+			<h1 class="text-4xl font-bold tracking-tight">Task for { data.CampaignName }</h1>
+			<p class="max-w-2xl text-base-content/70">Status <code>{ data.Status }</code>. Nothing on this page sends email.</p>
+			<div class="card-actions">
+				<a class="btn btn-ghost" href={ "/campaigns/" + data.CampaignID + "/tasks" }>Back to task list</a>
+			</div>
+		</div>
+		if data.Error != "" {
+			<div class="alert alert-error" role="alert">{ data.Error }</div>
+		}
+		if data.Status == "staging" {
+			if data.ValidationError != "" {
+				<div class="alert alert-warning" role="alert">{ data.ValidationError }</div>
+			}
+			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="selection-heading">
+				<div class="card-body gap-4">
+					<h2 id="selection-heading" class="card-title">Worksheet and header row</h2>
+					<p>Confirm the worksheet and the header row that names the workbook columns. The default selection is worksheet <code>{ data.DefaultSheet }</code> with header row { data.HeaderRow }.</p>
+					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/select" } class="space-y-4">
+						<label class="label" for="select-sheet">Worksheet</label>
+						<select class="select select-bordered w-full" id="select-sheet" name="sheet">
+							for _, sheet := range data.Sheets {
+								if sheet.Selected {
+									<option value={ sheet.Name } selected>@sheetLabel(sheet)</option>
+								} else {
+									<option value={ sheet.Name }>@sheetLabel(sheet)</option>
+								}
+							}
+						</select>
+						<label class="label" for="select-header-row">Header row</label>
+						<input class="input input-bordered w-full" id="select-header-row" type="number" name="header_row" min="1" value={ data.HeaderRow } required/>
+						<div class="card-actions">
+							<button class="btn btn-primary" type="submit">Validate task</button>
+						</div>
+					</form>
+				</div>
+			</section>
+		} else {
+			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="counts-heading">
+				<div class="card-body gap-4">
+					<h2 id="counts-heading" class="card-title">Validation snapshot</h2>
+					<dl class="space-y-1 text-sm">
+						<div class="flex gap-2">
+							<dt class="font-semibold">Total rows:</dt>
+							<dd>{ data.Counts.Total }</dd>
+						</div>
+						<div class="flex gap-2">
+							<dt class="font-semibold">Eligible:</dt>
+							<dd>{ data.Counts.Eligible }</dd>
+						</div>
+						<div class="flex gap-2">
+							<dt class="font-semibold">Ineligible:</dt>
+							<dd>{ data.Counts.Ineligible }</dd>
+						</div>
+						<div class="flex gap-2">
+							<dt class="font-semibold">Duplicate:</dt>
+							<dd>{ data.Counts.Duplicate }</dd>
+						</div>
+						<div class="flex gap-2">
+							<dt class="font-semibold">Invalid address:</dt>
+							<dd>{ data.Counts.Invalid }</dd>
+						</div>
+						<div class="flex gap-2">
+							<dt class="font-semibold">Already submitted:</dt>
+							<dd>{ data.Counts.AlreadySubmitted }</dd>
+						</div>
+						<div class="flex gap-2">
+							<dt class="font-semibold">Already scheduled:</dt>
+							<dd>{ data.Counts.AlreadyScheduled }</dd>
+						</div>
+						<div class="flex gap-2">
+							<dt class="font-semibold">Review required:</dt>
+							<dd>{ data.Counts.ReviewRequired }</dd>
+						</div>
+					</dl>
+					<div class="space-y-1">
+						<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Result labels</p>
+						<p>{ joinLabels(data.ResultLabels) }</p>
+					</div>
+					<div class="space-y-1">
+						<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Pinned revision</p>
+						<dl class="space-y-1 text-sm">
+							<div class="flex gap-2">
+								<dt class="font-semibold">Revision:</dt>
+								<dd>{ data.Revision }</dd>
+							</div>
+							<div class="flex gap-2">
+								<dt class="font-semibold">Content hash:</dt>
+								<dd><code class="break-all">{ data.ContentHash }</code></dd>
+							</div>
+							<div class="flex gap-2">
+								<dt class="font-semibold">Approval:</dt>
+								<dd>@revisionState(true, data.Approved)</dd>
+							</div>
+						</dl>
+					</div>
+				</div>
+			</section>
+			if data.Stale {
+				<div class="alert alert-warning" role="alert">
+					<div>
+						<p class="font-semibold">The campaign content changed after this task was validated</p>
+						<p>Revalidate this task to rebuild the snapshot against the current revision.</p>
+					</div>
+					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate" }>
+						<button class="btn btn-warning btn-sm" type="submit">Revalidate</button>
+					</form>
+				</div>
+			}
+			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="download-heading">
+				<div class="card-body gap-2">
+					<h2 id="download-heading" class="card-title">Exclusion report</h2>
+					<p class="text-sm text-base-content/60">Every held row with its original columns, available even when no row is eligible.</p>
+					<div class="card-actions">
+						<a class="btn btn-outline" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download exclusion report</a>
+					</div>
+				</div>
+			</section>
+			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="held-heading">
+				<div class="card-body">
+					<h2 id="held-heading" class="card-title">Held rows</h2>
+					if len(data.HeldRows) == 0 {
+						<p class="text-base-content/60">No held rows: every candidate row was admitted.</p>
+					} else {
+						<table class="table table-sm">
+							<thead>
+								<tr>
+									<th>Worksheet row</th>
+									<th>Reason</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, held := range data.HeldRows {
+									<tr>
+										<td>{ held.Row }</td>
+										<td>{ held.Reason }</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					}
+				</div>
+			</section>
+			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="rows-heading">
+				<div class="card-body">
+					<h2 id="rows-heading" class="card-title">Admitted rows</h2>
+					if len(data.Rows) == 0 {
+						<p class="text-base-content/60">No admitted rows in this snapshot.</p>
+					} else {
+						<table class="table table-sm">
+							<thead>
+								<tr>
+									<th>Worksheet row</th>
+									<th>State</th>
+									<th>Reason</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, row := range data.Rows {
+									<tr>
+										<td>{ row.Row }</td>
+										<td><code>{ row.State }</code></td>
+										<td>{ row.Reason }</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					}
+				</div>
+			</section>
+			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="preview-heading">
+				<div class="card-body gap-4">
+					<h2 id="preview-heading" class="card-title">Row preview</h2>
+					<p class="text-sm text-base-content/60">Render one admitted row through the pinned revision. Nothing is stored and nothing is sent.</p>
+					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-post={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-target="#task-preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
+						<label class="label" for="preview-row">Row</label>
+						<select class="select select-bordered w-full" id="preview-row" name="row">
+							for _, row := range data.Rows {
+								<option value={ row.ID }>Worksheet row { row.Row } ({ row.State })</option>
+							}
+						</select>
+						<div class="card-actions">
+							<button class="btn btn-primary" type="submit">Render preview</button>
+						</div>
+					</form>
+					<div id="task-preview-result" role="status" aria-live="polite">
+						<p class="text-base-content/60">Submit a row to render its pinned email here.</p>
+					</div>
+				</div>
+			</section>
+			<p class="text-sm text-base-content/70">This build does not send email: starting and retries belong to a later change.</p>
+		}
+	}
+}
+
+// TaskPreviewData is the view model for the preview partial. The error is a
+// fixed operator-facing message shown instead of rendered content.
+type TaskPreviewData struct {
+	Error       string
+	Recipient   string
+	Subject     string
+	Body        string
+	Values      []PreviewValue
+	SourceRow   int
+	ContentHash string
+	Approved    bool
+}
+
+templ TaskPreviewResult(data TaskPreviewData) {
+	<div class="card border border-base-300 bg-base-100 shadow-sm">
+		<div class="card-body gap-4">
+			<h3 class="card-title">Preview result</h3>
+			if data.Error != "" {
+				<div class="alert alert-error" role="alert">{ data.Error }</div>
+			} else {
+				<dl class="space-y-1 text-sm">
+					<div class="flex gap-2">
+						<dt class="font-semibold">Worksheet row:</dt>
+						<dd>{ data.SourceRow }</dd>
+					</div>
+					<div class="flex gap-2">
+						<dt class="font-semibold">Content hash:</dt>
+						<dd><code class="break-all">{ data.ContentHash }</code></dd>
+					</div>
+					<div class="flex gap-2">
+						<dt class="font-semibold">Approval:</dt>
+						<dd>@revisionState(true, data.Approved)</dd>
+					</div>
+				</dl>
+				<div class="space-y-1">
+					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">To</p>
+					<p class="font-semibold">{ data.Recipient }</p>
+				</div>
+				<div class="space-y-1">
+					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Subject</p>
+					<p class="font-semibold">{ data.Subject }</p>
+				</div>
+				<div class="space-y-1">
+					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Body</p>
+					<div class="rounded-box border border-base-300 p-4">@templ.Raw(data.Body)</div>
+				</div>
+				<table class="table table-sm">
+					<thead>
+						<tr>
+							<th>Variable</th>
+							<th>Source header</th>
+							<th>Raw value</th>
+							<th>Used value</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, value := range data.Values {
+							<tr>
+								<td>{ value.Variable }</td>
+								<td><code>{ value.Header }</code></td>
+								<td><code>{ value.Raw }</code></td>
+								<td><code>{ value.Normalized }</code></td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		</div>
+	</div>
+}
+
+// joinLabels renders the task's resolved result labels as one line.
+func joinLabels(labels []string) string {
+	return strings.Join(labels, ", ")
+}
+
+templ taskStatusBadge(status string) {
+	if status == "ready" {
+		<span class="badge badge-success">Ready</span>
+	} else {
+		<span class="badge badge-warning">Staging</span>
+	}
+}
+
+templ sheetLabel(sheet TaskSheetOption) {
+	if sheet.Visible {
+		{ sheet.Name }
+	} else {
+		{ sheet.Name } (hidden)
+	}
+}

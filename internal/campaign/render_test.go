@@ -2,6 +2,7 @@ package campaign
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -22,7 +23,7 @@ func TestCompileValidation(t *testing.T) {
 			name:     "unknown subject variable",
 			subject:  "Update for {{candidate_name}} in {{office}}",
 			body:     `<p>Hello {{candidate_name}}</p>`,
-			mappings: []Mapping{nameMapping},
+			mappings: []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail}, nameMapping},
 			check: func(t *testing.T, err error) {
 				var unknown *UnknownVariableError
 				if !errors.As(err, &unknown) || len(unknown.Variables) != 1 || unknown.Variables[0] != "office" {
@@ -34,7 +35,7 @@ func TestCompileValidation(t *testing.T) {
 			name:     "unknown body variable",
 			subject:  "Update for {{candidate_name}}",
 			body:     `<p>Hello {{candidate_name}}, you are {{rank}}</p>`,
-			mappings: []Mapping{nameMapping},
+			mappings: []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail}, nameMapping},
 			check: func(t *testing.T, err error) {
 				var unknown *UnknownVariableError
 				if !errors.As(err, &unknown) || len(unknown.Variables) != 1 || unknown.Variables[0] != "rank" {
@@ -46,7 +47,7 @@ func TestCompileValidation(t *testing.T) {
 			name:     "configured variable used nowhere",
 			subject:  "Update for {{candidate_name}}",
 			body:     `<p>Hello {{candidate_name}}</p>`,
-			mappings: []Mapping{nameMapping, locationMapping},
+			mappings: []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail}, nameMapping, locationMapping},
 			check: func(t *testing.T, err error) {
 				var unused *UnusedVariableError
 				if !errors.As(err, &unused) || len(unused.Variables) != 1 || unused.Variables[0] != "location" {
@@ -58,7 +59,7 @@ func TestCompileValidation(t *testing.T) {
 			name:     "malformed placeholder in body",
 			subject:  "Update for {{candidate_name}}",
 			body:     `<p>Hello {{candidate name}}</p>`,
-			mappings: []Mapping{nameMapping},
+			mappings: []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail}, nameMapping},
 			check: func(t *testing.T, err error) {
 				if err == nil || !strings.Contains(err.Error(), "malformed placeholder") {
 					t.Fatalf("error = %v, want a malformed placeholder error", err)
@@ -79,7 +80,7 @@ func TestCompileValidation(t *testing.T) {
 
 	t.Run("subject only variable is valid", func(t *testing.T) {
 		t.Parallel()
-		compiled, err := Compile("Update for {{candidate_name}}", "<p>Dear candidate,</p>", []Mapping{nameMapping})
+		compiled, err := Compile("Update for {{candidate_name}}", "<p>Dear candidate,</p>", []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail}, nameMapping})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -91,7 +92,7 @@ func TestCompileValidation(t *testing.T) {
 
 func TestRenderSubjectAndBody(t *testing.T) {
 	t.Parallel()
-	mappings := []Mapping{
+	mappings := []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail},
 		{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatName},
 		{Variable: "location", Header: "Location", Fallback: "Remote", Format: FormatText},
 	}
@@ -104,7 +105,7 @@ func TestRenderSubjectAndBody(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rendered, err := compiled.Render(map[string]string{"candidate_name": "  ada   lovelace ", "location": "London"})
+	rendered, err := compiled.Render(map[string]string{"candidate_email": "ada@example.com", "candidate_name": "  ada   lovelace ", "location": "London"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,17 +117,17 @@ func TestRenderSubjectAndBody(t *testing.T) {
 			t.Fatalf("body %q missing %q", rendered.Body, want)
 		}
 	}
-	if len(rendered.Values) != 2 {
+	if len(rendered.Values) != 3 {
 		t.Fatalf("values = %+v, want one entry per mapping", rendered.Values)
 	}
-	if rendered.Values[0].Raw != "  ada   lovelace " || rendered.Values[0].Normalized != "Ada Lovelace" {
-		t.Fatalf("raw/normalized pair = %+v", rendered.Values[0])
+	if rendered.Values[1].Raw != "  ada   lovelace " || rendered.Values[1].Normalized != "Ada Lovelace" {
+		t.Fatalf("raw/normalized pair = %+v", rendered.Values[1])
 	}
 }
 
 func TestRenderSplitRunPlaceholder(t *testing.T) {
 	t.Parallel()
-	mappings := []Mapping{{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatName}}
+	mappings := []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail}, {Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatName}}
 	// Word splits the placeholder across two differently formatted runs.
 	compiled, err := Compile(
 		"Update for {{candidate_name}}",
@@ -136,7 +137,7 @@ func TestRenderSplitRunPlaceholder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rendered, err := compiled.Render(map[string]string{"candidate_name": "Ada"})
+	rendered, err := compiled.Render(map[string]string{"candidate_email": "ada@example.com", "candidate_name": "Ada"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +151,7 @@ func TestRenderSplitRunPlaceholder(t *testing.T) {
 
 func TestRenderIsInertData(t *testing.T) {
 	t.Parallel()
-	mappings := []Mapping{{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatText}}
+	mappings := []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail}, {Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatText}}
 	compiled, err := Compile(
 		"Update for {{candidate_name}}",
 		`<p>Hello {{candidate_name}}, location {{location}} and { braces }.</p>`,
@@ -160,7 +161,7 @@ func TestRenderIsInertData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rendered, err := compiled.Render(map[string]string{
+	rendered, err := compiled.Render(map[string]string{"candidate_email": "ada@example.com",
 		"candidate_name": `<script>alert(1)</script>`,
 		"location":       `{{candidate_name}}`,
 	})
@@ -183,7 +184,7 @@ func TestRenderIsInertData(t *testing.T) {
 
 func TestRenderLiteralBracesSurvive(t *testing.T) {
 	t.Parallel()
-	mappings := []Mapping{{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatText}}
+	mappings := []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail}, {Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatText}}
 	compiled, err := Compile(
 		"Update for {{candidate_name}}: cost is 5 {{ dollars",
 		`<p>Braces {{ here, and closing braces }} here.</p>`,
@@ -192,7 +193,7 @@ func TestRenderLiteralBracesSurvive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rendered, err := compiled.Render(map[string]string{"candidate_name": "Ada"})
+	rendered, err := compiled.Render(map[string]string{"candidate_email": "ada@example.com", "candidate_name": "Ada"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +207,7 @@ func TestRenderLiteralBracesSurvive(t *testing.T) {
 
 func TestRenderEligibility(t *testing.T) {
 	t.Parallel()
-	mappings := []Mapping{
+	mappings := []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail},
 		{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatName},
 		{Variable: "location", Header: "Location", Fallback: "Remote", Format: FormatText},
 		{Variable: "team", Header: "Team", Format: FormatText},
@@ -218,7 +219,7 @@ func TestRenderEligibility(t *testing.T) {
 
 	t.Run("missing required value holds only this row", func(t *testing.T) {
 		t.Parallel()
-		_, err := compiled.Render(map[string]string{"candidate_name": "   ", "location": "London"})
+		_, err := compiled.Render(map[string]string{"candidate_email": "ada@example.com", "candidate_name": "   ", "location": "London"})
 		var missing *MissingRequiredError
 		if !errors.As(err, &missing) || len(missing.Variables) != 1 || missing.Variables[0] != "candidate_name" {
 			t.Fatalf("error = %v, want a MissingRequiredError naming candidate_name", err)
@@ -227,7 +228,7 @@ func TestRenderEligibility(t *testing.T) {
 
 	t.Run("optional fallback then empty string", func(t *testing.T) {
 		t.Parallel()
-		rendered, err := compiled.Render(map[string]string{"candidate_name": "Ada"})
+		rendered, err := compiled.Render(map[string]string{"candidate_email": "ada@example.com", "candidate_name": "Ada"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -246,7 +247,7 @@ func TestRenderEligibility(t *testing.T) {
 
 func TestRenderSubjectControls(t *testing.T) {
 	t.Parallel()
-	mappings := []Mapping{{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatText}}
+	mappings := []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail}, {Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatText}}
 	compiled, err := Compile("Update for {{candidate_name}}", "<p>Hello {{candidate_name}}</p>", mappings)
 	if err != nil {
 		t.Fatal(err)
@@ -254,7 +255,7 @@ func TestRenderSubjectControls(t *testing.T) {
 
 	t.Run("header controls make the row ineligible", func(t *testing.T) {
 		t.Parallel()
-		_, err := compiled.Render(map[string]string{"candidate_name": "Ada\x00Bcc: evil@example.com"})
+		_, err := compiled.Render(map[string]string{"candidate_email": "ada@example.com", "candidate_name": "Ada\x00Bcc: evil@example.com"})
 		var controls *SubjectControlError
 		if !errors.As(err, &controls) {
 			t.Fatalf("error = %v, want a SubjectControlError", err)
@@ -263,7 +264,7 @@ func TestRenderSubjectControls(t *testing.T) {
 
 	t.Run("line breaks are normalized away", func(t *testing.T) {
 		t.Parallel()
-		rendered, err := compiled.Render(map[string]string{"candidate_name": "Ada\r\n  Lovelace"})
+		rendered, err := compiled.Render(map[string]string{"candidate_email": "ada@example.com", "candidate_name": "Ada\r\n  Lovelace"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -275,7 +276,7 @@ func TestRenderSubjectControls(t *testing.T) {
 
 func TestCompilePlaceholderInAttribute(t *testing.T) {
 	t.Parallel()
-	mappings := []Mapping{{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatText}}
+	mappings := []Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Required: true, Format: FormatEmail}, {Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: FormatText}}
 	compiled, err := Compile(
 		"Update for {{candidate_name}}",
 		`<p><a href="https://example.com/{{candidate_name}}">link</a> Hello {{candidate_name}}</p>`,
@@ -284,7 +285,7 @@ func TestCompilePlaceholderInAttribute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rendered, err := compiled.Render(map[string]string{"candidate_name": "Ada"})
+	rendered, err := compiled.Render(map[string]string{"candidate_email": "ada@example.com", "candidate_name": "Ada"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,5 +297,46 @@ func TestCompilePlaceholderInAttribute(t *testing.T) {
 	}
 	if strings.Contains(rendered.Body, `example.com/Ada`) {
 		t.Fatalf("body = %q, want attribute placeholders left unsubstituted", rendered.Body)
+	}
+}
+
+func TestRecipientMappingRendering(t *testing.T) {
+	t.Parallel()
+	for _, includePlaceholder := range []bool{false, true} {
+		t.Run(fmt.Sprint(includePlaceholder), func(t *testing.T) {
+			body := "<p>Welcome</p>"
+			if includePlaceholder {
+				body = "<p>Welcome {{candidate_email}}</p>"
+			}
+			mappings := []Mapping{{Variable: "candidate_email", Header: "Candidate Email", Recipient: true}}
+			compiled, err := Compile("Welcome", body, mappings)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !mappings[0].Required || mappings[0].Format != FormatEmail {
+				t.Fatalf("recipient defaults = %+v", mappings[0])
+			}
+			rendered, err := compiled.Render(map[string]string{"candidate_email": " ADA@EXAMPLE.COM "})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if rendered.Recipient != "ada@example.com" || strings.Contains(rendered.Body, "ada@example.com") != includePlaceholder {
+				t.Fatalf("recipient/content = %+v", rendered)
+			}
+			if _, ok := compiled.VarKeys()[""]; ok {
+				t.Fatal("unused recipient created an empty template key")
+			}
+			for _, invalid := range []string{"not-email", "a@example.com,b@example.com", "Ada <ada@example.com>", "ada@exam\nple.com"} {
+				_, err := compiled.Render(map[string]string{"candidate_email": invalid})
+				if !errors.Is(err, ErrRecipientInvalid) {
+					t.Fatalf("Render(%q) error = %v", invalid, err)
+				}
+			}
+			_, err = compiled.Render(nil)
+			var missing *MissingRequiredError
+			if !errors.As(err, &missing) || strings.Join(missing.Variables, ",") != "candidate_email" {
+				t.Fatalf("missing recipient error = %v", err)
+			}
+		})
 	}
 }

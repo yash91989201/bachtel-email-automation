@@ -40,18 +40,23 @@ const (
 	literalBraceAction = `{{"{{"}}`
 )
 
-// UnknownVariableError reports placeholders without a mapping.
+// UnknownVariableError reports placeholders without a mapping. The message
+// names the remedy too, because either side of the mismatch may be the wrong
+// one: the mapping table may be missing the row, or the document may use a
+// name the table spells differently.
 type UnknownVariableError struct{ Variables []string }
 
 func (e *UnknownVariableError) Error() string {
-	return fmt.Sprintf("no mapping for variable(s): %s", strings.Join(e.Variables, ", "))
+	return fmt.Sprintf("no mapping for variable(s): %s. Add a mapping row for each name, or rename the placeholder in the subject or body.", strings.Join(e.Variables, ", "))
 }
 
 // UnusedVariableError reports mappings that appear in neither subject nor body.
+// The message names the remedy too: the row is what the operator can drop, or
+// the placeholder is what the document can gain.
 type UnusedVariableError struct{ Variables []string }
 
 func (e *UnusedVariableError) Error() string {
-	return fmt.Sprintf("configured variable(s) missing from the subject and body: %s", strings.Join(e.Variables, ", "))
+	return fmt.Sprintf("configured variable(s) missing from the subject and body: %s. Remove each mapping row, or add its placeholder to the subject or body.", strings.Join(e.Variables, ", "))
 }
 
 // MissingRequiredError reports the required variables a single row did not
@@ -81,9 +86,10 @@ type Value struct {
 
 // Rendered is one personalized email.
 type Rendered struct {
-	Subject string  `json:"subject"`
-	Body    string  `json:"body"`
-	Values  []Value `json:"values"`
+	Recipient string  `json:"recipient"`
+	Subject   string  `json:"subject"`
+	Body      string  `json:"body"`
+	Values    []Value `json:"values"`
 }
 
 // Template is a compiled configuration: literal placeholders rewritten into
@@ -143,8 +149,8 @@ func Compile(subject, bodyHTML string, mappings []Mapping) (*Template, error) {
 		return nil, &UnknownVariableError{Variables: unknown}
 	}
 	var unused []string
-	for name := range configured {
-		if _, ok := used[name]; !ok {
+	for name, mapping := range configured {
+		if _, ok := used[name]; !ok && !mapping.Recipient {
 			unused = append(unused, name)
 		}
 	}
@@ -220,6 +226,7 @@ func (t *Template) VarKeys() map[string]string {
 func (t *Template) Render(raw map[string]string) (Rendered, error) {
 	data := make(map[string]string, len(t.keys))
 	values := make([]Value, 0, len(t.Mappings))
+	var recipient string
 	var missing []string
 	for _, mapping := range t.Mappings {
 		rawValue := raw[mapping.Variable]
@@ -231,7 +238,17 @@ func (t *Template) Render(raw map[string]string) (Rendered, error) {
 				normalized = Normalize(mapping.Format, mapping.Fallback)
 			}
 		}
-		data[t.keys[mapping.Variable]] = normalized
+		if mapping.Recipient && normalized != "" {
+			var err error
+			recipient, err = NormalizeRecipient(rawValue)
+			if err != nil {
+				return Rendered{}, fmt.Errorf("recipient variable %q: %w", mapping.Variable, ErrRecipientInvalid)
+			}
+			normalized = recipient
+		}
+		if key, used := t.keys[mapping.Variable]; used {
+			data[key] = normalized
+		}
 		values = append(values, Value{
 			Variable:   mapping.Variable,
 			Header:     mapping.Header,
@@ -252,7 +269,7 @@ func (t *Template) Render(raw map[string]string) (Rendered, error) {
 	if err := t.body.Execute(&body, data); err != nil {
 		return Rendered{}, fmt.Errorf("render body: %w", err)
 	}
-	rendered := Rendered{Subject: subject.String(), Body: body.String(), Values: values}
+	rendered := Rendered{Recipient: recipient, Subject: subject.String(), Body: body.String(), Values: values}
 	if controlPattern.MatchString(rendered.Subject) {
 		return Rendered{}, &SubjectControlError{Subject: rendered.Subject}
 	}
