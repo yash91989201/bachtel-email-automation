@@ -61,9 +61,6 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func formatSeconds(d time.Duration) string {
-	seconds := int(d.Seconds())
-	if seconds < 1 {
-		seconds = 1
-	}
+	seconds := max(int(d.Seconds()), 1)
 	return strconv.Itoa(seconds)
 }

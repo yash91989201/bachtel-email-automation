@@ -69,7 +69,9 @@ func newAcceptanceEnv(t *testing.T) *acceptanceEnv {
 		// Real Microsoft token envelopes can exceed PocketBase's default text
 		// limit once encrypted and base64 encoded. Keep this fixture large so
 		// all connection acceptance tests exercise the production schema limit.
-		fmt.Fprintf(w, `{"access_token":"access-token-1","token_type":"Bearer","expires_in":3600,"refresh_token":%q,"scope":"offline_access"}`, "refresh-token-1"+strings.Repeat("r", 8192))
+		if _, err := fmt.Fprintf(w, `{"access_token":"access-token-1","token_type":"Bearer","expires_in":3600,"refresh_token":%q,"scope":"offline_access"}`, "refresh-token-1"+strings.Repeat("r", 8192)); err != nil {
+			t.Errorf("write mock response: %v", err)
+		}
 	}))
 	t.Cleanup(env.authority.Close)
 	t.Setenv(config.EnvAuthorityURL, env.authority.URL)
@@ -83,7 +85,9 @@ func newAcceptanceEnv(t *testing.T) *acceptanceEnv {
 			t.Errorf("unexpected graph authorization header")
 		}
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"id":"account-1","mail":%q,"userPrincipalName":%q}`, config.DefaultSenderAddress, config.DefaultSenderAddress)
+		if _, err := fmt.Fprintf(w, `{"id":"account-1","mail":%q,"userPrincipalName":%q}`, config.DefaultSenderAddress, config.DefaultSenderAddress); err != nil {
+			t.Errorf("write mock response: %v", err)
+		}
 	}))
 	t.Cleanup(env.graph.Close)
 	t.Setenv(config.EnvGraphBaseURL, env.graph.URL+"/v1.0")

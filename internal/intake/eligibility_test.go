@@ -267,16 +267,14 @@ func TestStoreClaimAdmitsExactlyOneOwner(t *testing.T) {
 	results := make([]bool, racers)
 	errs := make([]error, racers)
 	for i := range racers {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			outcomes, err := store.Claim(ctx, tasks[i], []string{candidate.ID})
 			if err != nil {
 				errs[i] = err
 				return
 			}
 			results[i] = outcomes[candidate.ID].Claimed
-		}()
+		})
 	}
 	wait.Wait()
 

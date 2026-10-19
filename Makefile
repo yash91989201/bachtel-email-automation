@@ -32,3 +32,28 @@ verify-converter:
 fmt:
 	gofmt -w cmd internal
 	go tool templ fmt internal/web/views
+
+# Keep local verification and CI on the same commands. No .env is sourced.
+.PHONY: check check-format check-generated lint vulncheck
+
+check-format:
+	bash scripts/check-format.sh
+
+# Compare generated output with the index (staged source/output is supported).
+check-generated: generate
+	git diff --exit-code -- 'internal/web/views/*_templ.go'
+	@test -z "$$(git ls-files --others --exclude-standard -- 'internal/web/views/*_templ.go')" || { echo 'Untracked generated templates: stage the generated output.' >&2; exit 1; }
+
+lint: generate assets
+	bash scripts/golangci-lint.sh config verify
+	bash scripts/golangci-lint.sh run --config .golangci.yml ./...
+
+check:
+	$(MAKE) check-format
+	$(MAKE) check-generated lint
+	go test -race ./...
+	$(MAKE) build
+
+# Pin the analysis tool independently; do not change application dependencies.
+vulncheck: generate assets
+	go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...

@@ -92,8 +92,7 @@ func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			uploadError(intake.ErrUploadTooLarge.Error())
 		} else {
 			uploadError("the form could not be read; choose an XLSX workbook and try again")
@@ -110,11 +109,14 @@ func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	defer func() { _ = file.Close() }()
+	defer func() {
+		if err := file.Close(); err != nil {
+			s.app.Logger().Warn("close uploaded file", "error", err)
+		}
+	}()
 	data, err := io.ReadAll(file)
 	if err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			uploadError(intake.ErrUploadTooLarge.Error())
 		} else {
 			s.app.Logger().Error("read workbook body", "campaign", id, "error", err)
@@ -165,8 +167,7 @@ func (s *server) handleTaskSelect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.tasks.Validate(ctx, task.ID, r.FormValue("sheet"), headerRow); err != nil {
-		var validation *intake.ValidationError
-		if errors.As(err, &validation) {
+		if validation, ok := errors.AsType[*intake.ValidationError](err); ok {
 			s.renderTaskMessage(w, r, task, validation.Message, http.StatusBadRequest)
 			return
 		}
@@ -184,8 +185,7 @@ func (s *server) handleTaskRevalidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.tasks.Revalidate(r.Context(), task.ID); err != nil {
-		var validation *intake.ValidationError
-		if errors.As(err, &validation) {
+		if validation, ok := errors.AsType[*intake.ValidationError](err); ok {
 			s.renderTaskMessage(w, r, task, validation.Message, http.StatusBadRequest)
 			return
 		}
@@ -274,7 +274,9 @@ func (s *server) handleTaskExcluded(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		s.app.Logger().Warn("write exclusion report response", "error", err)
+	}
 }
 
 // loadCampaignTask loads the path's task and confirms it belongs to the
@@ -441,12 +443,10 @@ func (s *server) taskPreviewMessage(err error) string {
 // documented workbook sentinels contribute their fixed text. The underlying
 // error may quote a reader diagnostic or a path, so it is never returned.
 func intakeErrorMessage(err error) string {
-	var validation *intake.ValidationError
-	if errors.As(err, &validation) {
+	if validation, ok := errors.AsType[*intake.ValidationError](err); ok {
 		return validation.Message
 	}
-	var tooLarge *http.MaxBytesError
-	if errors.As(err, &tooLarge) {
+	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		return intake.ErrUploadTooLarge.Error()
 	}
 	for _, sentinel := range []error{

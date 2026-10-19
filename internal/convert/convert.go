@@ -100,7 +100,7 @@ func (c Converter) Version(ctx context.Context) (string, error) {
 // DOCXToHTML converts one DOCX document to semantic HTML. The document must
 // already be size-checked by the caller; the limit is re-checked here so the
 // converter is safe on its own.
-func (c Converter) DOCXToHTML(ctx context.Context, document []byte) (string, error) {
+func (c Converter) DOCXToHTML(ctx context.Context, document []byte) (result string, err error) {
 	if len(document) == 0 {
 		return "", ErrNotDocx
 	}
@@ -119,7 +119,12 @@ func (c Converter) DOCXToHTML(ctx context.Context, document []byte) (string, err
 	if err != nil {
 		return "", fmt.Errorf("create conversion directory: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(dir) }()
+	defer func() {
+		if cleanupErr := os.RemoveAll(dir); cleanupErr != nil {
+			result = ""
+			err = errors.Join(err, fmt.Errorf("remove conversion directory: %w", cleanupErr))
+		}
+	}()
 	if err := os.Chmod(dir, 0o700); err != nil {
 		return "", fmt.Errorf("secure conversion directory: %w", err)
 	}
@@ -210,10 +215,10 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 	if b.overflowed {
 		return len(p), nil
 	}
-	remaining := b.limit - int64(b.Buffer.Len())
+	remaining := b.limit - int64(b.Len())
 	if remaining <= 0 {
 		b.overflowed = true
-		b.Buffer.Reset()
+		b.Reset()
 		return len(p), nil
 	}
 	if int64(len(p)) > remaining {
@@ -283,13 +288,13 @@ func InspectDocument(document []byte) Inspection {
 	return inspection
 }
 
-func readZipFile(file *zip.File, limit int64) ([]byte, error) {
+func readZipFile(file *zip.File, limit int64) (content []byte, err error) {
 	reader, err := file.Open()
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = reader.Close() }()
-	content, err := io.ReadAll(io.LimitReader(reader, limit))
+	defer func() { err = errors.Join(err, reader.Close()) }()
+	content, err = io.ReadAll(io.LimitReader(reader, limit))
 	if err != nil {
 		return nil, err
 	}

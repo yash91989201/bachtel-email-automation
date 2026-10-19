@@ -127,8 +127,7 @@ func (s *server) handleCampaignRevision(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			revisionError(convert.ErrInputTooLarge.Error())
 		} else {
 			revisionError("the form could not be read; upload a DOCX body document and try again")
@@ -162,7 +161,11 @@ func (s *server) handleCampaignRevision(w http.ResponseWriter, r *http.Request) 
 		revisionError(campaign.ErrNoBody.Error())
 		return
 	}
-	defer func() { _ = file.Close() }()
+	defer func() {
+		if err := file.Close(); err != nil {
+			s.app.Logger().Warn("close uploaded file", "error", err)
+		}
+	}()
 	document, err := io.ReadAll(file)
 	if err != nil {
 		revisionError("the uploaded document could not be read; try again")
@@ -345,7 +348,9 @@ func (s *server) renderWithStatus(w http.ResponseWriter, r *http.Request, status
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	_, _ = w.Write(buf.Bytes())
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		s.app.Logger().Warn("write page response", "error", err)
+	}
 }
 
 // parseMappings reads the revision form's mapping textarea. The contract is:
@@ -456,7 +461,7 @@ func campaignFormError(input campaign.CreateCampaignInput) string {
 // entries, mirroring NormalizeResultLabels so the form and the service agree.
 func splitLabels(raw string) []string {
 	var labels []string
-	for _, label := range strings.Split(raw, ",") {
+	for label := range strings.SplitSeq(raw, ",") {
 		if label = strings.TrimSpace(label); label != "" {
 			labels = append(labels, label)
 		}

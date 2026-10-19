@@ -83,7 +83,11 @@ func (s *Service) Stage(ctx context.Context, campaignID, filename string, data [
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = workbook.Close() }()
+	defer func() {
+		if err := workbook.Close(); err != nil {
+			s.app.Logger().Warn("close intake workbook", "error", err)
+		}
+	}()
 
 	source, err := filesystem.NewFileFromBytes(data, sourceName(filename))
 	if err != nil {
@@ -438,7 +442,11 @@ func (s *Service) validate(ctx context.Context, task *Task, sheet string, header
 	if err != nil {
 		return s.fail(task, workbookFailure(err))
 	}
-	defer func() { _ = workbook.Close() }()
+	defer func() {
+		if err := workbook.Close(); err != nil {
+			s.app.Logger().Warn("close intake workbook", "error", err)
+		}
+	}()
 	if err := workbook.Select(sheet, headerRow); err != nil {
 		return s.fail(task, workbookFailure(err))
 	}
@@ -910,7 +918,7 @@ func (s *Service) sourceBytes(ctx context.Context, taskID string) ([]byte, error
 // readArtifact reads one private file field of a task record. Files are reached
 // through the PocketBase filesystem, never through a public URL: every
 // collection rule is nil, so only this server-side path can read them.
-func (s *Service) readArtifact(ctx context.Context, record *core.Record, field string) ([]byte, error) {
+func (s *Service) readArtifact(ctx context.Context, record *core.Record, field string) (data []byte, err error) {
 	name := record.GetString(field)
 	if name == "" {
 		return nil, fmt.Errorf("task artifact %q is missing", field)
@@ -919,13 +927,13 @@ func (s *Service) readArtifact(ctx context.Context, record *core.Record, field s
 	if err != nil {
 		return nil, err
 	}
-	defer fsys.Close()
+	defer func() { err = errors.Join(err, fsys.Close()) }()
 	fsys.SetContext(ctx)
 	reader, err := fsys.GetReader(record.BaseFilesPath() + "/" + name)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = reader.Close() }()
+	defer func() { err = errors.Join(err, reader.Close()) }()
 	return io.ReadAll(reader)
 }
 

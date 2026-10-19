@@ -256,8 +256,7 @@ func TestRenderSubjectControls(t *testing.T) {
 	t.Run("header controls make the row ineligible", func(t *testing.T) {
 		t.Parallel()
 		_, err := compiled.Render(map[string]string{"candidate_email": "ada@example.com", "candidate_name": "Ada\x00Bcc: evil@example.com"})
-		var controls *SubjectControlError
-		if !errors.As(err, &controls) {
+		if _, ok := errors.AsType[*SubjectControlError](err); !ok {
 			t.Fatalf("error = %v, want a SubjectControlError", err)
 		}
 	})

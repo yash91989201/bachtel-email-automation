@@ -342,7 +342,7 @@ esac
 	// _), so the environment is checked as a set: only the scrubbed entries and
 	// those shell internals are allowed, with the fixed values.
 	environment := map[string]string{}
-	for _, line := range strings.Split(strings.TrimSpace(recorded("env.txt")), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(recorded("env.txt")), "\n") {
 		name, value, _ := strings.Cut(line, "=")
 		if _, allowed := map[string]bool{"PWD": true, "HOME": true, "LANG": true, "SHLVL": true, "PATH": true, "_": true}[name]; !allowed {
 			t.Fatalf("converter environment carried an unexpected variable %q", line)

@@ -13,7 +13,11 @@ func TestRecipientMappingReplacesCampaignHeaderSchema(t *testing.T) {
 	if err := app.Bootstrap(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = app.ClearBootstrap() })
+	t.Cleanup(func() {
+		if err := app.ClearBootstrap(); err != nil {
+			t.Error(err)
+		}
+	})
 	var original core.MigrationsList
 	for _, migration := range core.AppMigrations.Items() {
 		if migration.File < "1792320000_recipient_mapping.go" {

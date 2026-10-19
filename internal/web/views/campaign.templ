@@ -9,12 +9,12 @@ type CampaignListData struct {
 
 // CampaignListRow summarizes one campaign for the list page.
 type CampaignListRow struct {
-	ID              string
-	Name            string
+	ID            string
+	Name          string
 	SourceHeaders string
-	Revision        int
-	HasRevision     bool
-	Approved        bool
+	Revision      int
+	HasRevision   bool
+	Approved      bool
 }
 
 templ CampaignList(data CampaignListData) {
@@ -68,7 +68,7 @@ templ CampaignList(data CampaignListData) {
 										}
 									</td>
 									<td>@revisionState(row.HasRevision, row.Approved)</td>
-									<td><a class="link link-primary" href={"/campaigns/" + row.ID}>Open</a></td>
+									<td><a class="link link-primary" href={ "/campaigns/" + row.ID }>Open</a></td>
 								</tr>
 							}
 						</tbody>
@@ -82,10 +82,10 @@ templ CampaignList(data CampaignListData) {
 // CampaignFormData is the view model for the campaign creation form. The
 // error is a fixed validation message, never a raw storage failure.
 type CampaignFormData struct {
-	Error           string
-	Name            string
+	Error         string
+	Name          string
 	SourceHeaders string
-	ResultLabels    string
+	ResultLabels  string
 }
 
 templ CampaignForm(data CampaignFormData) {
@@ -120,10 +120,10 @@ templ CampaignForm(data CampaignFormData) {
 // CampaignPageData is the safe view model for one campaign page. It never
 // carries uploaded documents or storage diagnostics.
 type CampaignPageData struct {
-	ID              string
-	Name            string
+	ID            string
+	Name          string
 	SourceHeaders string
-	ResultLabels    string
+	ResultLabels  string
 	// MappingDraft pre-fills the revision form while the campaign has no
 	// content revision. Once a revision exists the form starts empty.
 	MappingDraft string
@@ -133,13 +133,13 @@ type CampaignPageData struct {
 	ExampleVariable string
 	ExampleHeader   string
 
-	HasRevision    bool
-	Revision       int
-	Subject        string
-	Converter      string
-	ContentHash    string
-	Approved       bool
-	Warnings       []string
+	HasRevision bool
+	Revision    int
+	Subject     string
+	Converter   string
+	ContentHash string
+	Approved    bool
+	Warnings    []string
 
 	Variables []string
 
@@ -163,7 +163,7 @@ templ CampaignPage(data CampaignPageData) {
 			<h1 class="text-4xl font-bold tracking-tight">{ data.Name }</h1>
 			<p class="max-w-2xl text-base-content/70">Nothing on this page sends email.</p>
 			<div class="card-actions">
-				<a class="btn btn-primary" href={"/campaigns/" + data.ID + "/tasks"}>Email tasks</a>
+				<a class="btn btn-primary" href={ "/campaigns/" + data.ID + "/tasks" }>Email tasks</a>
 			</div>
 		</div>
 		if data.RevisionError != "" {
@@ -219,7 +219,7 @@ templ CampaignPage(data CampaignPageData) {
 			<div class="card-body gap-4">
 				<h2 id="upload-heading" class="card-title">New revision</h2>
 				<p>Upload the DOCX body document with its subject and mapping table. Revisions are immutable: a valid upload becomes the current revision, and the history below is never edited.</p>
-				<form method="post" action={"/campaigns/" + data.ID + "/revisions"} enctype="multipart/form-data" class="space-y-4">
+				<form method="post" action={ "/campaigns/" + data.ID + "/revisions" } enctype="multipart/form-data" class="space-y-4">
 					<label class="label" for="revision-document">Body document (DOCX)</label>
 					<input class="file-input file-input-bordered w-full" id="revision-document" type="file" name="document" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required/>
 					<label class="label" for="revision-subject">Subject</label>
@@ -267,7 +267,7 @@ templ CampaignPage(data CampaignPageData) {
 						</div>
 					</div>
 					<p class="text-sm">Sending address example: <code>candidate_email | Candidate Email | recipient | email</code>. The recipient is required and cannot have a fallback.</p>
-					<p id="revision-mappings-hint" class="text-sm text-base-content/60">Enter your mappings below, one per line. Mark exactly one row as <code>recipient</code> to select the sending address. It needs no placeholder in the subject or body. Other rows must match the <code>{"{{...}}"}</code> placeholders.</p>
+					<p id="revision-mappings-hint" class="text-sm text-base-content/60">Enter your mappings below, one per line. Mark exactly one row as <code>recipient</code> to select the sending address. It needs no placeholder in the subject or body. Other rows must match the <code>{ "{{...}}" }</code> placeholders.</p>
 					<textarea class="textarea textarea-bordered w-full font-mono" id="revision-mappings" name="mappings" rows="8" aria-describedby="revision-mappings-help revision-mappings-hint">{ data.MappingDraft }</textarea>
 					<div class="card-actions">
 						<button class="btn btn-primary" type="submit">Create revision</button>
@@ -278,7 +278,7 @@ templ CampaignPage(data CampaignPageData) {
 		<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="labels-heading">
 			<div class="card-body gap-4">
 				<h2 id="labels-heading" class="card-title">Result column labels</h2>
-				<form method="post" action={"/campaigns/" + data.ID + "/labels"} class="space-y-4">
+				<form method="post" action={ "/campaigns/" + data.ID + "/labels" } class="space-y-4">
 					<label class="label" for="labels-input">Labels</label>
 					<input class="input input-bordered w-full" id="labels-input" type="text" name="result_labels" value={ data.ResultLabels } required/>
 					<p class="text-sm text-base-content/60">Comma-separated labels for the downloadable result columns. Changing them never invalidates content approval.</p>
@@ -293,10 +293,10 @@ templ CampaignPage(data CampaignPageData) {
 				<div class="card-body gap-4">
 					<h2 id="preview-heading" class="card-title">Sample preview</h2>
 					<p>Fill one sample value per variable to render the email exactly as a candidate row would. Nothing is sent and nothing is stored.</p>
-					<form method="post" action={"/campaigns/" + data.ID + "/preview"} hx-post={"/campaigns/" + data.ID + "/preview"} hx-target="#preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
+					<form method="post" action={ "/campaigns/" + data.ID + "/preview" } hx-post={ "/campaigns/" + data.ID + "/preview" } hx-target="#preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
 						for _, variable := range data.Variables {
-							<label class="label" for={"sample-" + variable}>Sample value for { variable }</label>
-							<input class="input input-bordered w-full" id={"sample-" + variable} type="text" name={ variable }/>
+							<label class="label" for={ "sample-" + variable }>Sample value for { variable }</label>
+							<input class="input input-bordered w-full" id={ "sample-" + variable } type="text" name={ variable }/>
 						}
 						<div class="card-actions">
 							<button class="btn btn-primary" type="submit">Render preview</button>
@@ -339,11 +339,11 @@ type PreviewData struct {
 	ContentHash string
 	Approved    bool
 
-	Error   string
+	Error     string
 	Recipient string
-	Subject string
-	Body    string
-	Values  []PreviewValue
+	Subject   string
+	Body      string
+	Values    []PreviewValue
 }
 
 // PreviewValue is one mapped sample value as it was submitted, next to the
