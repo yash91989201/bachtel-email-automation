@@ -270,6 +270,55 @@ func TestStoreRecoveryPausedIntentAndDurablePacing(t *testing.T) {
 	}
 }
 
+func TestStoreNextWorkDeadlineTracksOnlyActionableFutureRetries(t *testing.T) {
+	f := newAcceptanceFixture(t, true)
+	task := f.task(t, 1)
+	storeApprove(t, f, task)
+	storeAct(t, f, task, "start", "start", 1)
+	futureTest := f.clock.Now().Add(5 * time.Minute)
+	queued, err := f.store.QueueTest(storeCtx, sending.TestRequest{ActionID: "deadline-test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_name": "Sample", "candidate_email": "sample@example.invalid"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queuedRecord := storeRecord(t, f, sending.AttemptsCollection, queued.ID)
+	queuedRecord.Set("retry_at", futureTest)
+	storeSave(t, f, queuedRecord)
+	member, err := f.app.FindFirstRecordByFilter(intake.TaskCandidatesCollection, "task={:task}", dbx.Params{"task": task})
+	if err != nil {
+		t.Fatal(err)
+	}
+	futureCandidate := f.clock.Now().Add(7 * time.Minute)
+	member.Set("retry_at", futureCandidate)
+	storeSave(t, f, member)
+	deadline, err := f.store.NextWorkDeadline(storeCtx)
+	if err != nil || !deadline.Equal(futureTest) {
+		t.Fatalf("deadline should favor queued test: %v, %v", deadline, err)
+	}
+	queuedRecord.Set("retry_at", f.clock.Now().Add(-time.Second))
+	storeSave(t, f, queuedRecord)
+	deadline, err = f.store.NextWorkDeadline(storeCtx)
+	if err != nil || deadline.After(f.clock.Now()) {
+		t.Fatalf("due retry must trigger immediate rescan: %v, %v", deadline, err)
+	}
+	queuedRecord.Set("retry_at", futureTest)
+	queuedRecord.Set("state", sending.AttemptRetryable)
+	storeSave(t, f, queuedRecord)
+	deadline, err = f.store.NextWorkDeadline(storeCtx)
+	if err != nil || !deadline.Equal(futureCandidate) {
+		t.Fatalf("historical retry attempt scheduled work: %v, %v", deadline, err)
+	}
+	disabled := sending.NewStore(f.app, sending.Options{AllowCandidateSending: false, Now: f.clock.Now})
+	deadline, err = disabled.NextWorkDeadline(storeCtx)
+	if err != nil || !deadline.IsZero() {
+		t.Fatalf("release gate scheduled candidate work: %v, %v", deadline, err)
+	}
+	storeAct(t, f, task, "stop", "stop-for-deadline", 0)
+	deadline, err = f.store.NextWorkDeadline(storeCtx)
+	if err != nil || !deadline.IsZero() {
+		t.Fatalf("stopped task scheduled candidate work: %v, %v", deadline, err)
+	}
+}
+
 func TestStoreSafeRetriesAreBoundedAndAppendHistory(t *testing.T) {
 	f := newAcceptanceFixture(t, true)
 	task := f.task(t, 2)

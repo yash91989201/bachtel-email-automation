@@ -136,6 +136,51 @@ func (s *Store) NextWork(ctx context.Context) (*Work, error) {
 	}
 	return nil, nil
 }
+
+// NextWorkDeadline returns the earliest persisted retry time among currently
+// eligible pending work. It is consulted only after NextWork finds nothing;
+// historical retryable attempts and tasks outside the running state do not
+// schedule dispatcher wakeups. Including due and blank times closes the race
+// where a retry becomes eligible between NextWork and this query.
+func (s *Store) NextWorkDeadline(ctx context.Context) (time.Time, error) {
+	now := s.options.Now().UTC()
+	var earliest time.Time
+	tests, err := s.app.FindRecordsByFilter(AttemptsCollection, "kind='test' && state='queued'", "retry_at", 1, 0, nil)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if len(tests) > 0 {
+		earliest = stamp(tests[0], "retry_at")
+		if earliest.IsZero() {
+			return now, nil
+		}
+	}
+	if !s.options.AllowCandidateSending {
+		return earliest, nil
+	}
+	tasks, err := records(s.app, intake.TasksCollection, "status='running'", "created", nil)
+	if err != nil {
+		return time.Time{}, err
+	}
+	for _, task := range tasks {
+		members, err := s.app.FindRecordsByFilter(intake.TaskCandidatesCollection, "task={:task} && dispatch_state='reserved'", "retry_at", 1, 0, dbx.Params{"task": task.Id})
+		if err != nil {
+			return time.Time{}, err
+		}
+		if len(members) == 0 {
+			continue
+		}
+		deadline := stamp(members[0], "retry_at")
+		if deadline.IsZero() {
+			return now, nil
+		}
+		if earliest.IsZero() || deadline.Before(earliest) {
+			earliest = deadline
+		}
+	}
+	return earliest, nil
+}
+
 func (s *Store) BeginAttempt(ctx context.Context, w *Work, startedAt, nextEligible time.Time) (*Attempt, error) {
 	var out *Attempt
 	err := s.app.RunInTransaction(func(app core.App) error {

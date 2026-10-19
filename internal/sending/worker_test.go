@@ -13,13 +13,16 @@ import (
 )
 
 type workerFixture struct {
-	mu                       sync.Mutex
-	now                      time.Time
-	queue                    []*Work
-	settings                 Settings
-	intents, results         int
-	intentError, resultError bool
-	recovered                bool
+	mu                                        sync.Mutex
+	now                                       time.Time
+	queue                                     []*Work
+	retryReadyAt                              time.Time
+	advanceOnDeadlineQuery                    bool
+	settings                                  Settings
+	intents, results                          int
+	intentError, resultError                  bool
+	recovered                                 bool
+	nextWorkCalls, deadlineCalls, settleCalls int
 }
 
 func (f *workerFixture) clock() time.Time { f.mu.Lock(); defer f.mu.Unlock(); return f.now }
@@ -37,10 +40,23 @@ func (f *workerFixture) DispatcherState(context.Context) (Settings, error) {
 func (f *workerFixture) NextWork(context.Context) (*Work, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if len(f.queue) == 0 {
+	f.nextWorkCalls++
+	if len(f.queue) == 0 || (!f.retryReadyAt.IsZero() && f.now.Before(f.retryReadyAt)) {
 		return nil, nil
 	}
 	return f.queue[0], nil
+}
+func (f *workerFixture) NextWorkDeadline(context.Context) (time.Time, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deadlineCalls++
+	if len(f.queue) == 0 {
+		return time.Time{}, nil
+	}
+	if f.advanceOnDeadlineQuery && f.retryReadyAt.After(f.now) {
+		f.now = f.retryReadyAt
+	}
+	return f.retryReadyAt, nil
 }
 func (f *workerFixture) BeginAttempt(_ context.Context, w *Work, start, next time.Time) (*Attempt, error) {
 	f.mu.Lock()
@@ -77,7 +93,12 @@ func (f *workerFixture) SetCooldown(_ context.Context, until time.Time, _ string
 func (f *workerFixture) Recover(context.Context) error                   { f.recovered = true; return nil }
 func (f *workerFixture) PauseMailbox(context.Context, string) error      { return nil }
 func (f *workerFixture) PauseTask(context.Context, string, string) error { return nil }
-func (f *workerFixture) SettleTasks(context.Context) error               { return nil }
+func (f *workerFixture) SettleTasks(context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.settleCalls++
+	return nil
+}
 
 type workerSender func(context.Context, Message) SendResult
 
@@ -90,6 +111,61 @@ func newWorkerFixture(n int) *workerFixture {
 	}
 	return f
 }
+func TestWorkerIdleWaitsForWakeWithoutPollingStore(t *testing.T) {
+	f := newWorkerFixture(0)
+	d := startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted}
+	}))
+	eventually(t, func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return f.nextWorkCalls == 1 && f.deadlineCalls == 1
+	})
+	time.Sleep(30 * time.Millisecond)
+	f.mu.Lock()
+	before := f.nextWorkCalls
+	f.queue = append(f.queue, &Work{Kind: KindTest, Recipient: "wake@example.invalid"})
+	f.mu.Unlock()
+	if before != 1 {
+		t.Fatalf("idle dispatcher polled work %d times", before)
+	}
+	d.notify()
+	eventually(t, func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.intents == 1 })
+}
+
+func TestWorkerFutureRetryTimerStartsWithoutWake(t *testing.T) {
+	f := newWorkerFixture(1)
+	f.mu.Lock()
+	f.retryReadyAt = f.now.Add(45 * time.Millisecond)
+	f.mu.Unlock()
+	_ = startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted}
+	}))
+	eventually(t, func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.intents == 1 })
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.deadlineCalls == 0 {
+		t.Fatal("worker did not consult the persisted retry deadline")
+	}
+}
+
+func TestWorkerRescansWhenRetryBecomesDueDuringDeadlineQuery(t *testing.T) {
+	f := newWorkerFixture(1)
+	f.mu.Lock()
+	f.retryReadyAt = f.now.Add(45 * time.Millisecond)
+	f.advanceOnDeadlineQuery = true
+	f.mu.Unlock()
+	_ = startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted}
+	}))
+	eventually(t, func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.intents == 1 })
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.deadlineCalls < 1 || f.now.Before(f.retryReadyAt) {
+		t.Fatalf("due retry was not rescanned after deadline query: calls=%d now=%s due=%s", f.deadlineCalls, f.now, f.retryReadyAt)
+	}
+}
+
 func startFixture(t *testing.T, f *workerFixture, s Sender) *Dispatcher {
 	t.Helper()
 	d := NewDispatcher(f, s, WorkerOptions{DataDir: t.TempDir(), Now: f.clock, After: f.after})
@@ -138,6 +214,16 @@ func TestWorkerFourSlotsAndShutdownDrainsIndependentRequests(t *testing.T) {
 		t.Fatal("fifth request exceeded capacity")
 	case <-time.After(10 * time.Millisecond):
 	}
+	f.mu.Lock()
+	workCalls, deadlineCalls, settles := f.nextWorkCalls, f.deadlineCalls, f.settleCalls
+	f.mu.Unlock()
+	time.Sleep(30 * time.Millisecond)
+	f.mu.Lock()
+	if workCalls != f.nextWorkCalls || deadlineCalls != f.deadlineCalls || settles != f.settleCalls {
+		f.mu.Unlock()
+		t.Fatal("full dispatcher continued querying SQLite")
+	}
+	f.mu.Unlock()
 	stopped := make(chan error, 1)
 	go func() { stopped <- d.Shutdown(context.Background()) }()
 	eventually(t, func() bool { d.mu.Lock(); defer d.mu.Unlock(); return d.stopping })
@@ -174,6 +260,30 @@ func TestWorkerIntentFailureSendsNothingAndCannotWakePastStorageBarrier(t *testi
 	case <-called:
 		t.Fatal("storage failure permitted a later send")
 	case <-time.After(20 * time.Millisecond):
+	}
+}
+
+func TestWorkerManualMailboxPauseSleepsUntilExplicitAction(t *testing.T) {
+	f := newWorkerFixture(10)
+	d := startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeAuthFailure, PauseMailbox: true}
+	}))
+	eventually(t, func() bool {
+		d.mu.Lock()
+		paused, inflight := d.paused, d.inflight
+		d.mu.Unlock()
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return paused && inflight == 0 && f.results >= 1 && f.settleCalls >= 2
+	})
+	f.mu.Lock()
+	workCalls, deadlineCalls, settles := f.nextWorkCalls, f.deadlineCalls, f.settleCalls
+	f.mu.Unlock()
+	time.Sleep(30 * time.Millisecond)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if workCalls != f.nextWorkCalls || deadlineCalls != f.deadlineCalls || settles != f.settleCalls {
+		t.Fatal("manually paused dispatcher continued querying SQLite")
 	}
 }
 

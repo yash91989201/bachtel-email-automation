@@ -14,6 +14,7 @@ import (
 type DispatchStore interface {
 	DispatcherState(context.Context) (Settings, error)
 	NextWork(context.Context) (*Work, error)
+	NextWorkDeadline(context.Context) (time.Time, error)
 	BeginAttempt(context.Context, *Work, time.Time, time.Time) (*Attempt, error)
 	RecordActualStart(context.Context, string, time.Time, time.Time) error
 	CompleteAttempt(context.Context, string, Outcome) error
@@ -155,7 +156,7 @@ func (d *Dispatcher) run() {
 			d.mu.Unlock()
 			return
 		}
-		delay := 250 * time.Millisecond
+		delay := time.Duration(0)
 		if !d.stopping && !d.paused && d.inflight < 4 {
 			var err error
 			delay, err = d.launch()
@@ -163,18 +164,33 @@ func (d *Dispatcher) run() {
 				d.pause("Sending stopped because its durable state could not be saved. Restart after checking storage.")
 			}
 		}
-		if err := d.store.SettleTasks(context.Background()); err != nil {
-			d.pause("Sending stopped because task progress could not be saved. Restart after checking storage.")
-		}
-		d.mu.Unlock()
-		if delay <= 0 {
+		// A negative delay means the just-launched attempt should be followed by
+		// another opportunity check so the coordinator can fill available slots.
+		if delay < 0 {
+			d.mu.Unlock()
 			continue
 		}
+		// Settle only when an event or a real timer brought the coordinator here.
+		// A full, paused or idle dispatcher then sleeps until an event instead of
+		// repeatedly querying and updating SQLite.
+		if !d.fatalStorage {
+			if err := d.store.SettleTasks(context.Background()); err != nil {
+				d.pause("Sending stopped because task progress could not be saved. Restart after checking storage.")
+			}
+		}
+		d.mu.Unlock()
 		select {
 		case <-d.wake:
-		case <-d.options.After(delay):
+		case <-timer(d.options.After, delay):
 		}
 	}
+}
+
+func timer(after func(time.Duration) <-chan time.Time, delay time.Duration) <-chan time.Time {
+	if delay <= 0 {
+		return nil
+	}
+	return after(delay)
 }
 
 func (d *Dispatcher) pause(reason string) {
@@ -199,16 +215,30 @@ func (d *Dispatcher) launchPrepared(sender Sender, prepared bool) (time.Duration
 	if err = ValidateRate(s.Rate); err != nil {
 		return 0, err
 	}
+	work, err := d.store.NextWork(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if work == nil {
+		deadline, err := d.store.NextWorkDeadline(ctx)
+		if err != nil {
+			return 0, err
+		}
+		now := d.options.Now()
+		if deadline.After(now) {
+			return deadline.Sub(now), nil
+		}
+		if !deadline.IsZero() {
+			return -1, nil
+		}
+		return 0, nil
+	}
 	now := d.options.Now()
 	if !d.lastStart.IsZero() && d.lastStart.Add(time.Minute/time.Duration(s.Rate)).After(s.NextEligible) {
 		s.NextEligible = d.lastStart.Add(time.Minute / time.Duration(s.Rate))
 	}
 	if next := nextStart(now, s); next.After(now) {
 		return next.Sub(now), nil
-	}
-	work, err := d.store.NextWork(ctx)
-	if err != nil || work == nil {
-		return 250 * time.Millisecond, err
 	}
 	if preparation, ok := sender.(PreparingSender); ok && !prepared {
 		// Authorization may refresh over the network. Stop/operator actions must
@@ -231,7 +261,7 @@ func (d *Dispatcher) launchPrepared(sender Sender, prepared bool) (time.Duration
 	}
 	attempt, err := d.store.BeginAttempt(ctx, work, now, now.Add(time.Minute/time.Duration(s.Rate)))
 	if errors.Is(err, ErrNoWork) {
-		return 0, nil
+		return -1, nil
 	}
 	if err != nil {
 		return 0, err
@@ -260,7 +290,7 @@ func (d *Dispatcher) launchPrepared(sender Sender, prepared bool) (time.Duration
 	}
 	d.lastStart = start.at
 	d.inflight++
-	return 0, nil
+	return -1, nil
 }
 
 func (d *Dispatcher) send(sender Sender, attempt *Attempt, work *Work) {

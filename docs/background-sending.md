@@ -77,8 +77,10 @@ The mailbox has one coordinator using `golang.org/x/time/rate` with burst 1 and
 at most four active requests. It defaults to 25 starts per minute; browser,
 server and stored settings accept only integers 1 through 30. Starts are evenly
 spaced, and persisted recent starts enforce the rolling allowance after rate
-changes and restarts. Tests receive a normal paced opportunity before queued
-candidate work. Candidate tasks receive round-robin opportunities.
+changes and restarts. When there is no eligible work, the coordinator waits for
+an operator action, a submission result or the earliest persisted retry time.
+Tests receive a normal paced opportunity before queued candidate work.
+Candidate tasks receive round-robin opportunities.
 
 Microsoft `429` responses establish a shared cooldown from Retry-After seconds
 or HTTP date. Missing headers use bounded exponential backoff with jitter.
