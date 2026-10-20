@@ -721,6 +721,14 @@ dt {
   .disclosure>.disclosure-body {
     padding: 0 1rem 1rem;
   }
+
+  .card-disclosure>summary {
+    padding: 1rem;
+  }
+
+  .card-disclosure>.card-body {
+    padding: 1rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -864,42 +872,106 @@ label:has(> input[type="checkbox"]) {
   max-width: 880px;
 }
 
-.mapping-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1.5rem;
-  align-items: start;
+.card-disclosure>summary {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: 1.25rem 1.75rem;
+  cursor: pointer;
+  list-style: none;
 }
 
-.mapping-workspace>* {
-  min-width: 0;
+.card-disclosure>summary::-webkit-details-marker {
+  display: none;
 }
 
-.mapping-workspace textarea {
-  min-height: 260px;
+.card-disclosure>summary::after {
+  content: "▸";
+  margin-left: auto;
+  color: #637584;
+  font-size: .9rem;
+  transition: transform .15s ease;
 }
 
-.mapping-workspace .table {
-  min-width: 0;
-  table-layout: fixed;
-  width: 100%;
+.card-disclosure[open]>summary {
+  border-bottom: 1px solid #e6ecef;
 }
 
-.mapping-workspace .table th,
-.mapping-workspace .table td {
-  padding: .65rem;
-  white-space: normal;
-  overflow-wrap: anywhere;
+.card-disclosure[open]>summary::after {
+  transform: rotate(90deg);
 }
 
-.mapping-workspace aside {
-  font-size: .8125rem;
+.card-disclosure>.card-body {
+  padding-top: 1.25rem;
 }
 
-@media (max-width: 960px) {
-  .mapping-workspace {
-    grid-template-columns: 1fr;
-  }
+.field-hint-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.hint {
+  display: inline-flex;
+}
+
+.hint-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 1px solid #b9c8d4;
+  border-radius: 999px;
+  background: white;
+  color: #637584;
+  font-size: .7rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.hint-trigger:hover,
+.hint-trigger:focus-visible {
+  border-color: #176b63;
+  color: #176b63;
+}
+
+/* The panel stays in the document and is linked with aria-describedby, so it
+   is only hidden visually: opacity and pointer-events keep it reachable by
+   assistive technology and selectable for copying. */
+.hint-popover {
+  position: absolute;
+  top: calc(100% + .4rem);
+  left: 0;
+  z-index: 30;
+  width: max-content;
+  max-width: min(24rem, 78vw);
+  padding: .6rem .75rem;
+  border-radius: .55rem;
+  background: #243747;
+  color: #f5f8fa;
+  font-size: .78rem;
+  font-weight: 400;
+  line-height: 1.55;
+  text-align: left;
+  box-shadow: 0 10px 26px #2437472e;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s ease;
+}
+
+.hint-popover code {
+  background: #ffffff24;
+  border-radius: .25rem;
+  padding: 0 .2rem;
+}
+
+.hint:hover .hint-popover,
+.hint:focus-within .hint-popover {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 #sending-progress .metric-grid {
@@ -998,10 +1070,7 @@ label:has(> input[type="checkbox"]) {
   color: #425767;
 }
 
-.workspace-tab:hover {
-  background: #f3f6f8;
-}
-
+.workspace-tab:hover,
 .workspace-tab[aria-selected="true"] {
   background: #e9f4ef;
   color: #176b63;
@@ -1036,10 +1105,6 @@ label:has(> input[type="checkbox"]) {
 
 .workspace-panel[hidden] {
   display: none !important;
-}
-
-.workspace-panel .mapping-workspace {
-  grid-template-columns: 1fr;
 }
 
 @media (max-width: 760px) {

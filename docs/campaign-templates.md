@@ -117,6 +117,29 @@ mappings, recipient selection, required flags, fallbacks or formatting creates a
 starts unapproved. Approval covers one exact content hash; stored
 personalized content and running task snapshots never change under you.
 
+### The revision form
+
+The campaign template tab shows three cards in order:
+
+1. **Current revision** — a collapsed accordion with the current revision,
+   its approval and the conversion details.
+2. **Mapping reference** — a collapsed accordion with the campaign's source
+   headers, the column-order table, the format list, the example line and the
+   note that revisions are immutable.
+3. **Create a new content revision** — always open, and it leads with what you
+   have to fill in:
+   - **Email content** — the subject, then the body document.
+   - **Recipient mapping** — the mapping table.
+
+Each field has a `?` control beside its label. Hover it, or move keyboard
+focus to it, to see the help for that field: the mapping row syntax, the rule
+that exactly one row is marked `recipient`, the example sending-address row,
+and a placeholder example such as `{{candidate_name}}`. The help text is also
+announced by screen readers, because each control names its help with
+`aria-describedby`.
+
+Nothing in the two accordions affects what is submitted.
+
 ## DOCX support
 
 The body document is a `.docx` file converted to HTML. Surviving content:

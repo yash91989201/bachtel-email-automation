@@ -230,9 +230,11 @@ templ CampaignPage(data CampaignPageData) {
 			</aside>
 			<div class="workspace-content">
 				@workspaceTabPanel("campaign", "template", campaignInitialTab(data)) {
-					<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="revision-heading">
-						<div class="card-body gap-4">
+					<details class="card card-disclosure border border-base-300 bg-base-100 shadow-sm">
+						<summary>
 							<h2 id="revision-heading" class="card-title">Current revision</h2>
+						</summary>
+						<div class="card-body gap-4">
 							if data.HasRevision {
 								<dl class="space-y-1 text-sm">
 									<div class="flex gap-2">
@@ -265,64 +267,89 @@ templ CampaignPage(data CampaignPageData) {
 								<p class="text-base-content/70">No content revision yet. Upload a body document below to create the first one.</p>
 							}
 						</div>
-					</section>
+					</details>
+					<details class="card card-disclosure border border-base-300 bg-base-100 shadow-sm">
+						<summary>
+							<h2 id="mapping-reference-heading" class="card-title">Mapping reference</h2>
+						</summary>
+						<div class="card-body gap-4 text-sm">
+							<p class="text-base-content/70">Revisions are immutable: a valid upload becomes the current revision, and the history is never edited.</p>
+							<div class="rounded-box border border-base-300 bg-base-200/50 p-4">
+								<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">Source headers for mapping draft</p>
+								<code class="break-words">{ data.SourceHeaders }</code>
+							</div>
+							<div class="overflow-x-auto rounded-box border border-base-300">
+								<table class="table table-sm">
+									<caption class="p-3 text-left font-medium">Column order <span class="font-normal text-base-content/60">— separate each column with <code>|</code></span></caption>
+									<thead class="bg-base-200/50"><tr><th>Column</th><th>What to enter</th></tr></thead>
+									<tbody>
+										<tr><td>1 · Variable</td><td><code>{ data.ExampleVariable }</code></td></tr>
+										<tr><td>2 · Source header</td><td><code>{ data.ExampleHeader }</code></td></tr>
+										<tr><td>3 · Role</td><td><code>required</code>, <code>optional</code> or <code>recipient</code></td></tr>
+										<tr><td>4 · Format</td><td><code>text</code>, <code>name</code>, <code>designation</code> or <code>email</code></td></tr>
+										<tr><td>5 · Fallback</td><td>Optional rows only; leave blank otherwise.</td></tr>
+									</tbody>
+								</table>
+							</div>
+							<div class="flex flex-wrap items-center gap-2 text-base-content/70">
+								<span>Formats:</span>
+								<code class="badge badge-ghost badge-sm">text</code>
+								<code class="badge badge-ghost badge-sm">name</code>
+								<code class="badge badge-ghost badge-sm">designation</code>
+								<code class="badge badge-ghost badge-sm">email</code>
+								<span class="text-xs">Defaults to text, or email for recipient rows. Fallback is only for optional rows.</span>
+							</div>
+							<div class="rounded-box border border-primary/20 bg-primary/5 p-4">
+								<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">Example line</p>
+								<code class="break-words">{ data.ExampleVariable + " | " + data.ExampleHeader + " | required | text" }</code>
+							</div>
+						</div>
+					</details>
 					<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="upload-heading">
 						<div class="card-body gap-4">
 							<h2 id="upload-heading" class="card-title">Create a new content revision</h2>
-							<p>Upload the DOCX body document with its subject and mapping table. Revisions are immutable: a valid upload becomes the current revision, and the history below is never edited.</p>
+							<p class="text-sm text-base-content/70">Upload the body document, its subject and the recipient mapping. A valid upload becomes the current revision.</p>
 							<form method="post" action={ "/campaigns/" + data.ID + "/revisions" } enctype="multipart/form-data" class="space-y-4">
-								<div class="field-grid">
+								<div class="space-y-2">
+									<p class="eyebrow">Step 1 · Email content</p>
 									<div class="space-y-2">
-										<label class="label" for="revision-document">Body document (DOCX)</label>
-										<input class="file-input file-input-bordered w-full" id="revision-document" type="file" name="document" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required/>
-									</div>
-									<div class="space-y-2">
-										<label class="label" for="revision-subject">Subject</label>
-										<input class="input input-bordered w-full" id="revision-subject" type="text" name="subject" maxlength="998" required/>
+										<div class="space-y-2">
+											<div class="field-hint-row">
+												<label class="label" for="revision-subject">Subject</label>
+												@hintTrigger("revision-subject-help", "Subject help") {
+													The subject line of the email. It may use the same placeholders as the document, for example <code>{ "{{" + data.ExampleVariable + "}}" }</code>.
+												}
+											</div>
+											<input class="input input-bordered w-full" id="revision-subject" type="text" name="subject" maxlength="998" aria-describedby="revision-subject-help" required/>
+										</div>
+										<div class="space-y-2">
+											<div class="field-hint-row">
+												<label class="label" for="revision-document">Body document (DOCX)</label>
+												@hintTrigger("revision-document-help", "Body document help") {
+													The Word document that becomes the email body. Put placeholders in it wherever a value should appear, for example <code>{ "{{" + data.ExampleVariable + "}}" }</code>, and use the same names in your mapping.
+												}
+											</div>
+											<input class="file-input file-input-bordered w-full" id="revision-document" type="file" name="document" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-describedby="revision-document-help" required/>
+										</div>
 									</div>
 								</div>
-								<h3 class="font-semibold">Personalization & recipient mapping</h3>
-								<p class="text-sm text-base-content/70">Place <code>{ "{{" + data.ExampleVariable + "}}" }</code> in the subject or Word document wherever its value should appear. Use the same variable name in your mapping below.</p>
-								<div class="mapping-workspace">
-									<div class="space-y-4">
-										<label class="label" for="revision-mappings">Mapping table</label>
-										<p class="text-sm">Sending address example: <code>candidate_email | Candidate Email | recipient | email</code>. The recipient is required and cannot have a fallback.</p>
-										<p id="revision-mappings-hint" class="text-sm text-base-content/60">Enter your mappings below, one per line. Mark exactly one row as <code>recipient</code> to select the sending address. It needs no placeholder in the subject or body. Other rows must match the <code>{ "{{...}}" }</code> placeholders.</p>
-										<textarea class="textarea textarea-bordered w-full font-mono" id="revision-mappings" name="mappings" rows="8" aria-describedby="revision-mappings-help revision-mappings-hint">{ data.MappingDraft }</textarea>
-									</div>
-									<aside aria-label="Mapping reference">
-										<div id="revision-mappings-help" class="space-y-4 text-sm">
-											<div class="rounded-box border border-base-300 bg-base-200/50 p-4">
-												<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">Source headers for mapping draft</p>
-												<code class="break-words">{ data.SourceHeaders }</code>
-											</div>
-											<div class="overflow-x-auto rounded-box border border-base-300">
-												<table class="table table-sm">
-													<caption class="p-3 text-left font-medium">Column order <span class="font-normal text-base-content/60">— separate each column with <code>|</code></span></caption>
-													<thead class="bg-base-200/50"><tr><th>Column</th><th>What to enter</th></tr></thead>
-													<tbody>
-														<tr><td>1 · Variable</td><td><code>{ data.ExampleVariable }</code></td></tr>
-														<tr><td>2 · Source header</td><td><code>{ data.ExampleHeader }</code></td></tr>
-														<tr><td>3 · Role</td><td><code>required</code>, <code>optional</code> or <code>recipient</code></td></tr>
-														<tr><td>4 · Format</td><td><code>text</code>, <code>name</code>, <code>designation</code> or <code>email</code></td></tr>
-														<tr><td>5 · Fallback</td><td>Optional rows only; leave blank otherwise.</td></tr>
-													</tbody>
-												</table>
-											</div>
-											<div class="flex flex-wrap items-center gap-2 text-base-content/70">
-												<span>Formats:</span>
-												<code class="badge badge-ghost badge-sm">text</code>
-												<code class="badge badge-ghost badge-sm">name</code>
-												<code class="badge badge-ghost badge-sm">designation</code>
-												<code class="badge badge-ghost badge-sm">email</code>
-												<span class="text-xs">Defaults to text, or email for recipient rows. Fallback is only for optional rows.</span>
-											</div>
-											<div class="rounded-box border border-primary/20 bg-primary/5 p-4">
-												<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">Example line</p>
-												<code class="break-words">{ data.ExampleVariable + " | " + data.ExampleHeader + " | required | text" }</code>
-											</div>
+								<div class="space-y-2">
+									<p class="eyebrow">Step 2 · Recipient mapping</p>
+									<p class="text-sm text-base-content/70">Place <code>{ "{{" + data.ExampleVariable + "}}" }</code> in the subject or Word document wherever its value should appear. Use the same variable name in your mapping below.</p>
+									<div class="space-y-2">
+										<div class="field-hint-row">
+											<label class="label" for="revision-mappings">Mapping table</label>
+											@hintTrigger("revision-mappings-help", "Mapping table help") {
+												Enter your mappings one per line: <code>variable | source header | role | format | fallback</code>.
+												<br/>
+												Mark exactly one row as <code>recipient</code> to select the sending address, for example <code>candidate_email | Candidate Email | recipient | email</code>.
+												<br/>
+												The recipient needs no placeholder. Every other row must match the placeholders in the subject or body.
+											}
 										</div>
-									</aside>
+										<textarea class="textarea textarea-bordered w-full min-h-64 font-mono" id="revision-mappings" name="mappings" rows="8" aria-describedby="revision-mappings-hint revision-mappings-help">{ data.MappingDraft }</textarea>
+										<p id="revision-mappings-hint" class="text-sm text-base-content/60">One row per line. Mark exactly one row as <code>recipient</code> to select the sending address.</p>
+									</div>
 								</div>
 								<div class="card-actions">
 									<button class="btn btn-primary" type="submit">Create revision</button>
@@ -595,6 +622,22 @@ templ PreviewResult(data PreviewData) {
 			}
 		</div>
 	</div>
+}
+
+// hintTrigger is the inline help affordance for a form field. The help text
+// stays in the document and is linked with aria-describedby, so assistive
+// technology announces it; the panel itself is revealed on hover and on
+// keyboard focus, and its text stays selectable so it can be copied.
+templ hintTrigger(id string, label string) {
+	<span class="hint">
+		<button class="hint-trigger" type="button" aria-describedby={ id }>
+			<span aria-hidden="true">?</span>
+			<span class="sr-only">{ label }</span>
+		</button>
+		<span class="hint-popover" id={ id } role="note">
+			{ children... }
+		</span>
+	</span>
 }
 
 // revisionState is the shared approval badge: a missing revision is neither
