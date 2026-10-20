@@ -1680,7 +1680,7 @@ templ legendContent(items []LegendItem, p *LegendProps) {
 					if it.Icon != "" && !p.HideIcon {
 						@templ.Raw(it.Icon)
 					} else {
-						<div class="h-2 w-2 shrink-0 rounded-[2px]" style={ "background-color:" + it.Color }></div>
+						<div class="h-2 w-2 shrink-0 rounded-xs" style={ "background-color:" + it.Color }></div>
 					}
 					{ it.Label }
 				</div>
