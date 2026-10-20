@@ -66,7 +66,7 @@ func TestDiagnosticRejectsDisconnectedBeforeQueue(t *testing.T) {
 }
 
 func TestSendingPollRefreshesConfirmationIdentityAndRecovery(t *testing.T) {
-	data := views.SendingData{Base: "/sending", Hash: "hash", Status: "paused", Enabled: true, Approved: true, Remaining: 2, Rate: 17, LatestTest: "new-successful-test", Rows: []views.SendingRow{{ID: "member", Number: 2, State: "auth_failure", Reason: "Reconnect Microsoft", Attempt: views.SendingOutcome{ID: "old-attempt-outside-recents", Recipient: "candidate@example.com", State: "auth_failure", Time: "2026-10-18T12:00:00+05:30"}}}}
+	data := views.SendingData{Base: "/sending", Hash: "hash", Status: "paused", Approved: true, Remaining: 2, Rate: 17, LatestTest: "new-successful-test", Rows: []views.SendingRow{{ID: "member", Number: 2, State: "auth_failure", Reason: "Reconnect Microsoft", Attempt: views.SendingOutcome{ID: "old-attempt-outside-recents", Recipient: "candidate@example.com", State: "auth_failure", Time: "2026-10-18T12:00:00+05:30"}}}}
 	render := func(data views.SendingData) string {
 		var out bytes.Buffer
 		if err := views.SendingProgress(data).Render(context.Background(), &out); err != nil {

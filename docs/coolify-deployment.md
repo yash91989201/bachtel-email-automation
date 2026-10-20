@@ -41,8 +41,10 @@ docker compose logs -f app
 
 The shadcn-templ migration is a UI asset and Go binary change, with no database
 schema migration. Rebuild and redeploy the image while retaining the persistent
-`/app/pb_data` volume. Use the release checklist for production sending gates;
-a successful UI redeploy does not satisfy those gates.
+`/app/pb_data` volume. Use the release checklist to record deployment
+acceptance evidence. Candidate starts still require explicit operator
+authorization and received-format approval for a successfully submitted test of
+the exact configuration.
 
 ## Volume ownership on first deployment
 

@@ -6,8 +6,9 @@
   proposal, design, delta specs, and tasks before implementation. Check current
   status rather than assuming planned features already exist.
 - Implement the selected change and necessary supporting work only. Keep the
-  established change order and prerequisites; do not enable candidate sending
-  before the release verification in the delivery change.
+  established change order and prerequisites. Candidate starts require explicit
+  operator authorization and approval of the received formatting for the exact
+  submitted test and configuration; there is no global release unlock.
 - Keep behavior and acceptance scenarios in specs, technical decisions in
   design, and implementation/verification in tasks. Refine them in small loops
   as new facts emerge; surface conflicts before changing approved behavior.

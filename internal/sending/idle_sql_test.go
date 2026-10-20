@@ -30,7 +30,7 @@ func (s *observedIdleStore) NextWorkDeadline(ctx context.Context) (time.Time, er
 // Count real SQL on both PocketBase connection pools, including transactions.
 // An idle interval longer than the former 250ms poll must execute no queries.
 func TestIdleDispatcherExecutesNoRecurringSQLAndWakesForTest(t *testing.T) {
-	f := newAcceptanceFixture(t, false)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
 	store := &observedIdleStore{Store: sending.NewStore(f.app, sending.Options{}), checked: make(chan struct{}, 1)}
 	var calls atomic.Int64

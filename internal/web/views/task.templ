@@ -370,7 +370,7 @@ templ TaskPage(data TaskPageData) {
 								if data.Counts.Eligible == 0 && data.Status == "ready" {
 									<div class="status-warning" role="status">No eligible recipients. Review the held rows in Rows & exclusions, correct the workbook and upload a new task.</div>
 								}
-								<p class="text-sm text-muted-foreground">Candidate sending requires completed production release verification. Tests, approval, progress and recovery controls are available on the sending page.</p>
+								<p class="text-sm text-muted-foreground">Send a test email and approve its received formatting before starting or scheduling candidate sending. Tests, approval, progress and recovery controls are available on the sending page.</p>
 								<div class="p-[1.1rem] border border-border rounded-[.65rem] bg-muted">
 									<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Result labels</p>
 									<p>{ joinLabels(data.ResultLabels) }</p>

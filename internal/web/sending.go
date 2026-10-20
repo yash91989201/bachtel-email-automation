@@ -46,7 +46,7 @@ func (s *server) sendingData(r *http.Request) (views.SendingData, error) {
 	if err != nil {
 		return views.SendingData{}, err
 	}
-	data := views.SendingData{ArtifactNeeded: progress.ArtifactNeeded, Base: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/sending", TaskURL: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID, Sender: s.cfg.Microsoft.SenderAddress, Hash: progress.ContentHash, Approved: progress.Approved, Enabled: progress.ProductionEnabled, Status: progress.Status, Reason: progress.Reason, Eligible: progress.Eligible, Remaining: progress.Remaining, Submitted: progress.Submitted, Failed: progress.Failed, RetryableFailed: progress.RetryableFailed, Held: progress.Held, InFlight: progress.InFlight, Reserved: progress.Reserved, Invalid: progress.Invalid, Duplicate: progress.Duplicate, Ineligible: progress.Ineligible, ActionID: actionID()}
+	data := views.SendingData{ArtifactNeeded: progress.ArtifactNeeded, Base: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/sending", TaskURL: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID, Sender: s.cfg.Microsoft.SenderAddress, Hash: progress.ContentHash, Approved: progress.Approved, Status: progress.Status, Reason: progress.Reason, Eligible: progress.Eligible, Remaining: progress.Remaining, Submitted: progress.Submitted, Failed: progress.Failed, RetryableFailed: progress.RetryableFailed, Held: progress.Held, InFlight: progress.InFlight, Reserved: progress.Reserved, Invalid: progress.Invalid, Duplicate: progress.Duplicate, Ineligible: progress.Ineligible, ActionID: actionID()}
 	data.RestoreReview = progress.RestoreReview
 	if artifact, e := s.exports.TaskArtifact(r.Context(), task.ID); e == nil && artifact != nil {
 		data.ResultsState = artifact.State
@@ -225,8 +225,6 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 			case "schedule":
 				if refusal, ok := errors.AsType[*sending.ScheduleRefusal](err); ok {
 					data.Error = refusal.Reason
-				} else if errors.Is(err, sending.ErrReleaseGate) {
-					data.Error = sending.ErrReleaseGate.Error()
 				} else {
 					data.Error = actionRejected
 				}

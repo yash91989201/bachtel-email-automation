@@ -113,9 +113,6 @@ func (s *Store) NextWork(ctx context.Context) (*Work, error) {
 			return &attemptFrom(r).Work, nil
 		}
 	}
-	if !s.options.AllowCandidateSending {
-		return nil, nil
-	}
 	tasks, e := records(s.app, intake.TasksCollection, "status='running'", "created", nil)
 	if e != nil {
 		return nil, e
@@ -169,8 +166,8 @@ func (s *Store) NextWorkDeadline(ctx context.Context) (time.Time, error) {
 		}
 	}
 	// A pending schedule is itself a wakeup: it must be observed even when no
-	// candidate work is runnable and even when the release gate is closed, so
-	// the fire path can record a refusal instead of starting unattended.
+	// candidate work is runnable, so the fire path can recheck approval and
+	// eligibility before starting.
 	scheduled, err := s.app.FindRecordsByFilter(intake.TasksCollection, "status={:ready} && schedule_state={:scheduled}", "schedule_at", 1, 0, dbx.Params{"ready": intake.TaskReady, "scheduled": intake.ScheduleScheduled})
 	if err != nil {
 		return time.Time{}, err
@@ -183,9 +180,6 @@ func (s *Store) NextWorkDeadline(ctx context.Context) (time.Time, error) {
 		if earliest.IsZero() || deadline.Before(earliest) {
 			earliest = deadline
 		}
-	}
-	if !s.options.AllowCandidateSending {
-		return earliest, nil
 	}
 	tasks, err := records(s.app, intake.TasksCollection, "status='running'", "created", nil)
 	if err != nil {
@@ -224,9 +218,6 @@ func (s *Store) BeginAttempt(ctx context.Context, w *Work, startedAt, nextEligib
 				return ErrNoWork
 			}
 		} else {
-			if !s.options.AllowCandidateSending {
-				return ErrReleaseGate
-			}
 			task, e := app.FindRecordById(intake.TasksCollection, w.TaskID)
 			if e != nil {
 				return e

@@ -7,9 +7,10 @@ no separate database service or frontend server.
 
 The application includes operator sign-in, a Microsoft connection for the fixed
 HR mailbox, campaign templates, Excel intake, and durable background sending
-and recovery controls. Candidate sending remains gated in the production
-entrypoint until change 5 completes export and release verification. Explicit
-diagnostic test emails are available through the connected mailbox.
+and recovery controls. Candidate starts require explicit operator authorization
+and received-format approval for a successfully submitted test of the exact
+configuration. Explicit diagnostic test emails are available through the
+connected mailbox.
 
 ## Run locally
 
@@ -176,7 +177,8 @@ immutable snapshot of the eligible rows or fails with an actionable reason.
 - A validated task is **ready**, not running. Its sending page provides explicit
   test, received-format approval, start, stop and recovery actions. Candidate
   actions recheck and claim eligibility transactionally; production candidate
-  dispatch remains gated pending change 5.
+  dispatch requires received-format approval for the exact configuration and
+  an explicit operator action.
 - The upload screen shows the workbook constraints (supported format, size,
   expanded-archive limits and the 1,000-row task bound) and reports every
   rejection inline.
@@ -215,8 +217,7 @@ passes while the server is down pauses the task with a missed-schedule reason
 and no attempt, and resume or reschedule stays explicit.
 
 See [docs/background-sending.md](docs/background-sending.md) for the states,
-approval workflow, scheduling, retry and review actions, shutdown behavior and
-release gate.
+approval workflow, scheduling, retry and review actions, and shutdown behavior.
 
 ## Layout
 

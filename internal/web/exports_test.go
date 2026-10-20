@@ -110,7 +110,7 @@ func TestExportDownloadsRequireOperatorAndReadiness(t *testing.T) {
 
 func TestAttemptHTMLRequiresOwnershipAndOperator(t *testing.T) {
 	f := newExportWebFixture(t)
-	store := sending.NewStore(f.app, sending.StoreOptions{AllowCandidateSending: true, SenderAddress: "hr@example.invalid"})
+	store := sending.NewStore(f.app, sending.StoreOptions{SenderAddress: "hr@example.invalid"})
 	attempt, err := store.QueueTest(context.Background(), sending.TestRequest{
 		ActionID:  "export-html-test-123456",
 		TaskID:    f.taskID,

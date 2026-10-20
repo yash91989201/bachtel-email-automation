@@ -59,7 +59,7 @@ func newRetentionFixture(t *testing.T) *retentionFixture {
 		app:       app,
 		service:   retention.NewService(app),
 		exports:   exports.NewService(app, cfg),
-		store:     sending.NewStore(app, sending.Options{AllowCandidateSending: true, SenderAddress: "hr@example.invalid", Now: func() time.Time { return now }}),
+		store:     sending.NewStore(app, sending.Options{SenderAddress: "hr@example.invalid", Now: func() time.Time { return now }}),
 		intake:    intake.NewService(app, campaigns, intake.Limits{}),
 		campaigns: campaigns,
 		now:       now,

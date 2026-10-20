@@ -15,13 +15,12 @@ import (
 // candidate submission history is absent from the restored database, but the
 // restore-review flag keeps those recipients from silently becoming eligible.
 func TestRestoreReviewBlocksSendingAndScheduling(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 2)
 	restored := sending.NewStore(f.app, sending.Options{
-		AllowCandidateSending: true,
-		RestoreReview:         true,
-		SenderAddress:         "hr@example.invalid",
-		Now:                   f.clock.Now,
+		RestoreReview: true,
+		SenderAddress: "hr@example.invalid",
+		Now:           f.clock.Now,
 	})
 	ctx := context.Background()
 
@@ -71,11 +70,10 @@ func TestRestoreReviewBlocksSendingAndScheduling(t *testing.T) {
 // TestAttemptStoresSenderForHistoricalHTML verifies the recorded sender is the
 // configured mailbox at queue time, independent of later configuration.
 func TestAttemptStoresSenderForHistoricalHTML(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	f.store = sending.NewStore(f.app, sending.Options{
-		AllowCandidateSending: true,
-		SenderAddress:         "hr@example.invalid",
-		Now:                   f.clock.Now,
+		SenderAddress: "hr@example.invalid",
+		Now:           f.clock.Now,
 	})
 	task := f.task(t, 1)
 	ctx := context.Background()

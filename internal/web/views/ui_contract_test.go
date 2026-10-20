@@ -192,9 +192,26 @@ func TestSendingDiagnosticTestFormContract(t *testing.T) {
 	assertSubmitButton(t, form, "Send diagnostic test")
 }
 
+func TestCandidateControlsRequireTestApprovalWithoutReleaseGate(t *testing.T) {
+	for _, approved := range []bool{false, true} {
+		doc := parseView(t, SendingPage(SendingData{Base: "/sending", Status: "ready", Remaining: 2, Approved: approved}))
+		if strings.Contains(viewText(doc), "production release verification") {
+			t.Fatal("obsolete release warning is still shown")
+		}
+		for _, label := range []string{"Start", "Schedule start"} {
+			button := findViewNode(doc, func(n *html.Node) bool {
+				return n.Data == "button" && strings.TrimSpace(viewText(n)) == label
+			})
+			if button == nil || hasViewAttr(button, "disabled") == approved {
+				t.Errorf("%s with approved=%t: expected disabled=%t", label, approved, !approved)
+			}
+		}
+	}
+}
+
 func TestSendingStartAndRecoveryConfirmations(t *testing.T) {
 	base := "/campaigns/campaign-1/tasks/task-1/sending"
-	controls := SendingControls(SendingData{Base: base, ActionID: "actions-", Enabled: false, Approved: true, Remaining: 2})
+	controls := SendingControls(SendingData{Base: base, ActionID: "actions-", Approved: false, Remaining: 2})
 	doc := parseView(t, controls)
 	start := workspaceNode(doc, "action", base+"/start#send")
 	if start == nil || !hasViewAttr(start, "hx-preserve") {
@@ -205,7 +222,7 @@ func TestSendingStartAndRecoveryConfirmations(t *testing.T) {
 	}
 	startButton := findViewNode(start, func(n *html.Node) bool { return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Start" })
 	if startButton == nil || workspaceAttr(startButton, "type") != "submit" || !hasViewAttr(startButton, "disabled") {
-		t.Error("candidate start must be an explicit submit button disabled while release sending is closed")
+		t.Error("candidate start must be an explicit submit button disabled until test formatting is approved")
 	}
 
 	for _, tc := range []struct {
@@ -215,7 +232,7 @@ func TestSendingStartAndRecoveryConfirmations(t *testing.T) {
 		{name: "uncertain outcome resend", state: "review_required", action: "/resend#recovery", expectedButton: "Send again — duplicate risk"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			doc := parseView(t, SendingRecovery(SendingData{Base: base, Enabled: true, Rows: []SendingRow{{ID: "candidate-1", State: tc.state, Attempt: SendingOutcome{ID: "attempt-1"}, ActionID: "row-key-"}}}))
+			doc := parseView(t, SendingRecovery(SendingData{Base: base, Rows: []SendingRow{{ID: "candidate-1", State: tc.state, Attempt: SendingOutcome{ID: "attempt-1"}, ActionID: "row-key-"}}}))
 			form := workspaceNode(doc, "action", base+tc.action)
 			if form == nil || !hasViewAttr(form, "hx-preserve") {
 				t.Fatal("recovery form must preserve state across progress updates")

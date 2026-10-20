@@ -42,7 +42,7 @@ func newScheduleFixture(t *testing.T) *scheduleFixture {
 		t.Fatalf("revision: %d", rec.Code)
 	}
 	taskID := stageTask(t, handler, cookie, id, mixedWorkbook(t))
-	store := sending.NewStore(app, sending.StoreOptions{AllowCandidateSending: true})
+	store := sending.NewStore(app, sending.StoreOptions{})
 	ctx := context.Background()
 	attempt, err := store.QueueTest(ctx, sending.TestRequest{
 		ActionID:  "schedule-fixture-test-123456",

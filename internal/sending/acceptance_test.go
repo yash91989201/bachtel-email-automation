@@ -52,7 +52,7 @@ func (c *acceptanceClock) After(d time.Duration) <-chan time.Time {
 	return ch
 }
 
-func newAcceptanceFixture(t *testing.T, allowed bool) *acceptanceFixture {
+func newAcceptanceFixture(t *testing.T) *acceptanceFixture {
 	t.Helper()
 	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
 	if err := app.Bootstrap(); err != nil {
@@ -92,7 +92,7 @@ func newAcceptanceFixture(t *testing.T, allowed bool) *acceptanceFixture {
 		t.Fatal(err)
 	}
 	clock := &acceptanceClock{now: time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)}
-	return &acceptanceFixture{app: app, store: sending.NewStore(app, sending.Options{AllowCandidateSending: allowed, Now: clock.Now}), intake: intake.NewService(app, campaigns, intake.Limits{}), campaignID: created.ID, clock: clock}
+	return &acceptanceFixture{app: app, store: sending.NewStore(app, sending.Options{Now: clock.Now}), intake: intake.NewService(app, campaigns, intake.Limits{}), campaignID: created.ID, clock: clock}
 }
 
 func (f *acceptanceFixture) task(t *testing.T, count int) string {
@@ -213,7 +213,7 @@ func acceptanceAct(t *testing.T, store *sending.Store, task, kind, id string, co
 }
 
 func TestAcceptanceThousandCandidatePipelineAndReplay(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 1000)
 	mailbox := &acceptanceMailbox{}
 	d := f.dispatcher(t, mailbox)
@@ -291,7 +291,7 @@ func TestAcceptanceThousandCandidatePipelineAndReplay(t *testing.T) {
 }
 
 func TestAcceptanceSharedCapacityCrossTaskClaimsAndStop(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	first := f.task(t, 12)
 	overlap := f.task(t, 12)
 	mailbox := &acceptanceMailbox{}
@@ -359,7 +359,7 @@ func TestAcceptanceSharedCapacityCrossTaskClaimsAndStop(t *testing.T) {
 func TestAcceptanceRestartConservativeIntentsAndCooldown(t *testing.T) {
 	for _, crash := range []string{"before_transmission", "after_transmission", "accepted_before_outcome_commit"} {
 		t.Run(crash, func(t *testing.T) {
-			f := newAcceptanceFixture(t, true)
+			f := newAcceptanceFixture(t)
 			task := f.task(t, 5)
 			ctx := context.Background()
 			sample, err := f.store.QueueTest(ctx, sending.TestRequest{ActionID: "restart-test", TaskID: task, Recipient: "operator@example.invalid", Actor: "acceptance", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
@@ -405,7 +405,7 @@ func TestAcceptanceRestartConservativeIntentsAndCooldown(t *testing.T) {
 			if err = f.store.SetCooldown(ctx, cooldown, "simulated persisted Retry-After"); err != nil {
 				t.Fatal(err)
 			}
-			f.store = sending.NewStore(f.app, sending.Options{AllowCandidateSending: true, Now: f.clock.Now})
+			f.store = sending.NewStore(f.app, sending.Options{Now: f.clock.Now})
 			if err = f.store.Recover(ctx); err != nil {
 				t.Fatal(err)
 			}

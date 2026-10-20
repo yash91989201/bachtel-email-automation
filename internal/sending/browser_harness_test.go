@@ -106,7 +106,7 @@ func TestAcceptanceBrowserHarness(t *testing.T) {
 	if err := os.WriteFile(control, []byte(`{}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 12)
 	overlap := f.task(t, 12)
 	const email = "operator@example.invalid"
@@ -162,9 +162,7 @@ func TestAcceptanceBrowserHarness(t *testing.T) {
 	connection.SetDispatchGuard(proxy)
 	server := httptest.NewServer(web.NewHandlerWithDispatcher(f.app, cfg, connection, f.store, proxy))
 	defer server.Close()
-	gated := httptest.NewServer(web.NewHandlerWithDispatcher(f.app, cfg, connection, sending.NewStore(f.app, sending.Options{}), proxy))
-	defer gated.Close()
-	metadata := map[string]any{"url": server.URL, "task_url": server.URL + "/campaigns/" + f.campaignID + "/tasks/" + task + "/sending", "overlap_task_url": server.URL + "/campaigns/" + f.campaignID + "/tasks/" + overlap + "/sending", "gated_url": gated.URL, "gated_task_url": gated.URL + "/campaigns/" + f.campaignID + "/tasks/" + task + "/sending", "email": email, "password": password, "control": control, "data_dir": f.app.DataDir()}
+	metadata := map[string]any{"url": server.URL, "task_url": server.URL + "/campaigns/" + f.campaignID + "/tasks/" + task + "/sending", "overlap_task_url": server.URL + "/campaigns/" + f.campaignID + "/tasks/" + overlap + "/sending", "email": email, "password": password, "control": control, "data_dir": f.app.DataDir()}
 	data, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
 		t.Fatal(err)
@@ -194,7 +192,7 @@ func TestAcceptanceBrowserHarness(t *testing.T) {
 				t.Fatal(err)
 			}
 			// New store and coordinator recover persisted history; tasks need manual resume.
-			f.store = sending.NewStore(f.app, sending.Options{AllowCandidateSending: true, Now: f.clock.Now})
+			f.store = sending.NewStore(f.app, sending.Options{Now: f.clock.Now})
 			start()
 			proxy.mu.Unlock()
 			restart = c.Restart

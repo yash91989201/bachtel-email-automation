@@ -1,9 +1,11 @@
 # Release checklist
 
-This is the fifth and final change in the ordered release: no candidate batch
-runs until every applicable item below is verified. Automated checks use
-simulated providers and temporary data; they never load `.env`, real mailbox
-credentials or candidate traffic.
+This checklist records deployment and release verification evidence. The
+application has no global release unlock: each candidate start requires an
+explicit operator action and received-format approval for a successfully
+submitted test of the exact configuration. Automated checks use simulated
+providers and temporary data; they never load `.env`, real mailbox credentials
+or candidate traffic.
 
 ## 1. Repository checks
 
@@ -91,20 +93,21 @@ same volume), health green again, the authored campaign and its converted
 revision still present, and a second operator provisioning correctly refused.
 Forced-kill recovery is covered by the sending acceptance suite.
 
-## 5. Operator test email
-
-Candidate sending remains disabled until this section is approved.
+## 5. Operator test email and configuration approval
 
 1. Designate one test recipient address explicitly (not a candidate list).
 2. Send one diagnostic test from a validated task and inspect the received
    subject, formatting, links and personalization.
 3. Record the approval of that exact content hash in the application.
-4. Only after manual approval may an operator start a candidate batch, and only
-   with a separately confirmed fresh count.
+4. An operator may then authorize a candidate start with a separately
+   confirmed fresh count. This approval applies only to that exact
+   configuration; a changed configuration requires another submitted test and
+   received-format approval.
 
-Observed: not performed by automated checks. Candidate sending remains gated;
-this step requires the operator to designate the address, receive the test, and
-record the formatting approval before any batch is enabled.
+Historical observation: this step was not performed by automated checks. The
+checklist does not claim that a test email was sent or received. For any
+candidate start, the operator must designate the test address, receive and
+inspect the test, and record formatting approval for the exact configuration.
 
 ## 6. Event-driven export follow-up
 
@@ -138,5 +141,6 @@ Final verification passed:
 - `openspec validate --all --strict --json --no-interactive`: all nine items valid.
 
 These are local verification results. No hosted deployment or real email was
-performed for this follow-up. The operator test and candidate-sending gate in
-section 5 remain in effect.
+performed for this follow-up. The dated results above are historical evidence;
+section 5 describes the per-configuration operator approval required before a
+candidate start, not a global release unlock.

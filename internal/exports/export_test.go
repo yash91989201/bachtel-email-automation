@@ -98,7 +98,7 @@ func newExportFixtureWithLabels(t *testing.T, labels []string) *exportFixture {
 	fixture := &exportFixture{
 		app:        app,
 		service:    exports.NewService(app, cfg),
-		store:      sending.NewStore(app, sending.Options{AllowCandidateSending: true, SenderAddress: "hr@example.invalid", Now: func() time.Time { return now }}),
+		store:      sending.NewStore(app, sending.Options{SenderAddress: "hr@example.invalid", Now: func() time.Time { return now }}),
 		intake:     intake.NewService(app, campaigns, intake.Limits{}),
 		campaignID: created.ID,
 		now:        now,

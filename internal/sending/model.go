@@ -26,7 +26,6 @@ const (
 	AttemptAuth           = "auth_failure"
 )
 
-var ErrReleaseGate = errors.New("candidate sending remains disabled until change 5 release verification")
 var ErrNoWork = errors.New("work is no longer eligible")
 
 // ScheduleLead is the minimum distance between the current time and a stored
@@ -45,7 +44,6 @@ type ScheduleRefusal struct{ Reason string }
 func (r *ScheduleRefusal) Error() string { return r.Reason }
 
 type StoreOptions struct {
-	AllowCandidateSending bool
 	// SenderAddress is recorded on each attempt so a historical HTML export
 	// shows the mailbox used at send time.
 	SenderAddress string
@@ -103,7 +101,7 @@ type Progress struct {
 	RetryableFailed                                                                                  int
 	Members                                                                                          []MemberProgress
 	TaskID, Status, Reason, ContentHash, LatestSuccessfulTestID                                      string
-	Approved, ProductionEnabled, ArtifactNeeded, RestoreReview                                       bool
+	Approved, ArtifactNeeded, RestoreReview                                                          bool
 	Eligible, Remaining, Submitted, Failed, Held, InFlight, Reserved, Invalid, Duplicate, Ineligible int
 	Recent                                                                                           []Attempt
 }

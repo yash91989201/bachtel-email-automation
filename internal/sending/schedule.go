@@ -55,7 +55,7 @@ func DisplayDate(t time.Time) string {
 
 // Schedule enables or clears a task's single-shot start schedule in one
 // transaction. Enabling is the task's explicit start authorization: it rechecks
-// the release gate, the pinned revision, the approved test and current
+// the pinned revision, the approved test and current
 // candidate eligibility, but reserves nothing. A zero At clears a pending or
 // missed schedule and leaves the manual Start action available.
 func (s *Store) Schedule(ctx context.Context, in ScheduleRequest) (*ActionResult, error) {
@@ -106,9 +106,6 @@ func (s *Store) Schedule(ctx context.Context, in ScheduleRequest) (*ActionResult
 		}
 		if in.At.Before(s.options.Now().Add(ScheduleLead)) {
 			return &ScheduleRefusal{Reason: "choose a start time at least 30 minutes from now"}
-		}
-		if !s.options.AllowCandidateSending {
-			return ErrReleaseGate
 		}
 		if t.GetString("status") != intake.TaskReady || t.GetString("configuration") == "" {
 			return &ScheduleRefusal{Reason: "validate the task before scheduling a start"}
@@ -222,8 +219,8 @@ func (s *Store) fire(_ context.Context, taskID string) (bool, error) {
 			}
 			return saveAction(app, ActionRequest{ActionID: id, TaskID: t.Id, Kind: "fire", Actor: "dispatcher"}, &ActionResult{ActionID: id, TaskID: t.Id, Status: intake.ScheduleMissed})
 		}
-		if !s.options.AllowCandidateSending {
-			return miss(ErrReleaseGate.Error())
+		if s.options.RestoreReview {
+			return miss("restore review is active: reconcile submissions made after the backup and restart without APP_RESTORE_REVIEW before sending")
 		}
 		if t.GetString("configuration") == "" {
 			return miss("this task has no pinned configuration; revalidate and approve it")

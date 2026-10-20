@@ -2,10 +2,12 @@ schema: spec-driven
 
 context: |
   Preserve the operator-controlled sending boundary: a validated task does not
-  send automatically, test approval is not production authorization, and retries,
-  uncertain resends, and manual outcome resolution require explicit operator
-  actions. Candidate sending remains gated until the delivery change's release
-  verification is complete.
+  send automatically. Candidate starts require explicit operator authorization
+  and approval of the received formatting for a successfully submitted test of
+  the exact configuration. Retries, uncertain resends, and manual outcome
+  resolution require explicit operator actions. There is no global release
+  unlock; release verification documents deployment evidence and does not
+  replace per-configuration approval or operator authorization.
 
   Treat persisted attempts and recovery state as the audit record. Missing or
   uncertain evidence must not be interpreted as proof that an email was not
@@ -20,7 +22,7 @@ context: |
 rules:
   proposal:
     - State user-visible behavior, affected capabilities, dependencies, and out-of-scope work.
-    - Identify any release gate or prerequisite that constrains when the change can be enabled.
+    - Identify real prerequisites and operator approvals that constrain an action; do not invent a global release unlock.
   specs:
     - Specify observable behavior and acceptance scenarios; keep implementation mechanisms in design.
     - Include refusal, failure, recovery, and authorization cases where they affect operator outcomes.
@@ -34,7 +36,7 @@ rules:
 operations:
   apply:
     guidance:
-      - Check OpenSpec status, implementation state, and prerequisite changes before starting; preserve the established change order and release gate.
+      - Check OpenSpec status, implementation state, and prerequisite changes before starting; preserve established change order and per-action authorization.
       - Update the change artifacts when implementation clarifies behavior or technical decisions, then run the repository-required verification for the files changed.
       - Use isolated test data and simulated email providers; do not load local environment secrets or use real mailbox credentials in automated checks.
   archive:

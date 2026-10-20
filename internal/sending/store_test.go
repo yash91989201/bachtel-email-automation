@@ -80,7 +80,7 @@ func storeAct(t *testing.T, f *acceptanceFixture, task, kind, id string, count i
 }
 
 func TestStoreApprovalExactHashAndExplicitAction(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
 	a, e := f.store.QueueTest(storeCtx, sending.TestRequest{ActionID: "test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_name": "Sample", "candidate_email": "sample@example.invalid"}})
 	if e != nil {
@@ -97,8 +97,16 @@ func TestStoreApprovalExactHashAndExplicitAction(t *testing.T) {
 		t.Fatalf("test changed approval or candidates: %+v", p)
 	}
 	req := sending.ActionRequest{ActionID: "start", TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 1}
-	if _, e = f.store.Act(storeCtx, req); e == nil {
-		t.Fatal("success alone permitted start")
+	for _, kind := range []string{"start", "resume", "retry", "retry_all", "resend"} {
+		blocked := req
+		blocked.ActionID = "unapproved-" + kind
+		blocked.Kind = kind
+		if _, err := f.store.Act(storeCtx, blocked); err == nil || !strings.Contains(err.Error(), "approve") {
+			t.Fatalf("submitted test without approval permitted %s: %v", kind, err)
+		}
+	}
+	if p := storePreview(t, f, task); p.Reserved != 0 || p.Submitted != 0 || p.Eligible != 1 {
+		t.Fatalf("unapproved actions changed candidate state: %+v", p)
 	}
 	tr := storeRecord(t, f, intake.TasksCollection, task)
 	hash := tr.GetString("content_hash")
@@ -118,10 +126,17 @@ func TestStoreApprovalExactHashAndExplicitAction(t *testing.T) {
 	if !storePreview(t, f, task).Approved {
 		t.Fatal("approval missing")
 	}
+	if _, e = f.store.Act(storeCtx, req); e != nil {
+		t.Fatalf("default store refused approved start: %v", e)
+	}
+	candidate := storeBegin(t, f)
+	if candidate.Kind != sending.KindCandidate || candidate.ContentHash != hash {
+		t.Fatalf("approved candidate attempt: %+v", candidate)
+	}
 }
 
 func TestCorruptPersistedPacingHistoryStopsDispatch(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	if _, err := f.app.DB().NewQuery("UPDATE dispatcher_state SET starts='not-json' WHERE key='mailbox'").Execute(); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +148,7 @@ func TestCorruptPersistedPacingHistoryStopsDispatch(t *testing.T) {
 func TestCorruptConfigurationAndCandidateSnapshotsStopWorkSelection(t *testing.T) {
 	for _, field := range []string{"mappings", "raw"} {
 		t.Run(field, func(t *testing.T) {
-			f := newAcceptanceFixture(t, true)
+			f := newAcceptanceFixture(t)
 			task := f.task(t, 1)
 			storeApprove(t, f, task)
 			storeAct(t, f, task, "start", "start-"+field, 1)
@@ -157,7 +172,7 @@ func TestCorruptConfigurationAndCandidateSnapshotsStopWorkSelection(t *testing.T
 }
 
 func TestStoreActionsRollbackReplayPauseStopAndStaleStart(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 3)
 	storeApprove(t, f, task)
 	if _, e := f.store.Act(storeCtx, sending.ActionRequest{ActionID: "wrong-count", TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 2}); e == nil {
@@ -207,7 +222,7 @@ func TestStoreActionsRollbackReplayPauseStopAndStaleStart(t *testing.T) {
 }
 
 func TestStoreFailuresUncertainResolutionAndRetryHistory(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 2)
 	storeApprove(t, f, task)
 	storeAct(t, f, task, "start", "start", 2)
@@ -259,7 +274,7 @@ func TestStoreFailuresUncertainResolutionAndRetryHistory(t *testing.T) {
 }
 
 func TestStoreRecoveryPausedIntentAndDurablePacing(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 3)
 	storeApprove(t, f, task)
 	storeAct(t, f, task, "start", "start", 3)
@@ -275,7 +290,7 @@ func TestStoreRecoveryPausedIntentAndDurablePacing(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	restarted := sending.NewStore(f.app, sending.Options{AllowCandidateSending: true, Now: f.clock.Now})
+	restarted := sending.NewStore(f.app, sending.Options{Now: f.clock.Now})
 	if e = restarted.Recover(storeCtx); e != nil {
 		t.Fatal(e)
 	}
@@ -307,7 +322,7 @@ func TestStoreRecoveryPausedIntentAndDurablePacing(t *testing.T) {
 }
 
 func TestStoreNextWorkDeadlineTracksOnlyActionableFutureRetries(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
 	storeApprove(t, f, task)
 	storeAct(t, f, task, "start", "start", 1)
@@ -343,11 +358,6 @@ func TestStoreNextWorkDeadlineTracksOnlyActionableFutureRetries(t *testing.T) {
 	if err != nil || !deadline.Equal(futureCandidate) {
 		t.Fatalf("historical retry attempt scheduled work: %v, %v", deadline, err)
 	}
-	disabled := sending.NewStore(f.app, sending.Options{AllowCandidateSending: false, Now: f.clock.Now})
-	deadline, err = disabled.NextWorkDeadline(storeCtx)
-	if err != nil || !deadline.IsZero() {
-		t.Fatalf("release gate scheduled candidate work: %v, %v", deadline, err)
-	}
 	storeAct(t, f, task, "stop", "stop-for-deadline", 0)
 	deadline, err = f.store.NextWorkDeadline(storeCtx)
 	if err != nil || !deadline.IsZero() {
@@ -356,7 +366,7 @@ func TestStoreNextWorkDeadlineTracksOnlyActionableFutureRetries(t *testing.T) {
 }
 
 func TestStoreSafeRetriesAreBoundedAndAppendHistory(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 2)
 	storeApprove(t, f, task)
 	storeAct(t, f, task, "start", "start", 2)
@@ -387,7 +397,7 @@ func TestStoreSafeRetriesAreBoundedAndAppendHistory(t *testing.T) {
 }
 
 func TestStoreConcurrentTasksClaimCandidateOnce(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	a := f.task(t, 1)
 	b := f.task(t, 1)
 	storeApprove(t, f, a)
@@ -415,7 +425,7 @@ func TestStoreConcurrentTasksClaimCandidateOnce(t *testing.T) {
 }
 
 func TestStoreLongBodyAndImmutableIntakeExclusion(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
 	tr := storeRecord(t, f, intake.TasksCollection, task)
 	cfg := storeRecord(t, f, campaign.ConfigurationsCollection, tr.GetString("configuration"))
@@ -450,7 +460,7 @@ func TestStoreLongBodyAndImmutableIntakeExclusion(t *testing.T) {
 }
 
 func TestStoreResumeSafeRemainderAfterRetryBatchCompleted(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 3)
 	storeApprove(t, f, task)
 	storeAct(t, f, task, "start", "start", 3)
@@ -480,7 +490,7 @@ func TestStoreResumeSafeRemainderAfterRetryBatchCompleted(t *testing.T) {
 }
 
 func TestStoreCorrectionRequiresNewIntakeAndTestRetriesKeepHistory(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
 	_, e := f.store.QueueTest(storeCtx, sending.TestRequest{ActionID: "retry-test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_name": "Sample", "candidate_email": "sample@example.invalid"}})
 	if e != nil {
@@ -520,19 +530,15 @@ func TestStoreCorrectionRequiresNewIntakeAndTestRetriesKeepHistory(t *testing.T)
 	}
 }
 
-func TestStoreReleaseGateAndStaleConfiguration(t *testing.T) {
-	f := newAcceptanceFixture(t, false)
+func TestStoreStaleConfiguration(t *testing.T) {
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
 	storeApprove(t, f, task)
 	req := sending.ActionRequest{ActionID: "start", TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 1}
-	if _, e := f.store.Act(storeCtx, req); !errors.Is(e, sending.ErrReleaseGate) {
-		t.Fatalf("release gate: %v", e)
-	}
-	enabled := sending.NewStore(f.app, sending.Options{AllowCandidateSending: true, Now: f.clock.Now})
 	camp := storeRecord(t, f, campaign.CampaignsCollection, f.campaignID)
 	camp.Set("current_configuration", "")
 	storeSave(t, f, camp)
-	if _, e := enabled.Act(storeCtx, req); e == nil || !strings.Contains(e.Error(), "configuration changed") {
+	if _, e := f.store.Act(storeCtx, req); e == nil || !strings.Contains(e.Error(), "configuration changed") {
 		t.Fatalf("stale configuration accepted: %v", e)
 	}
 	if p := storePreview(t, f, task); p.Eligible != 1 || p.Reserved != 0 {
@@ -541,7 +547,7 @@ func TestStoreReleaseGateAndStaleConfiguration(t *testing.T) {
 }
 
 func TestStoreInvalidStoredRateAndActionQueryFailure(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
 	if e := f.store.SetRate(storeCtx, 0); e == nil {
 		t.Fatal("zero rate accepted")
@@ -571,7 +577,7 @@ type storeGraphTokens struct{}
 func (storeGraphTokens) AccessToken(context.Context) (string, error) { return "simulated-token", nil }
 
 func TestStorePreparedGraphDispatchRoundRobinUsesCommittedStarts(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	first := f.task(t, 4)
 	second := f.task(t, 4)
 	storeApprove(t, f, first)

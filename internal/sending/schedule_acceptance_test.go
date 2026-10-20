@@ -16,7 +16,7 @@ import (
 // missed-schedule reason and no attempt, and resume must send exactly the
 // candidates still free, once, then settle to completion.
 func TestAcceptanceScheduleMissedAcrossRestartAndResume(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 2)
 	mailbox := &acceptanceMailbox{}
 	d := f.dispatcher(t, mailbox)

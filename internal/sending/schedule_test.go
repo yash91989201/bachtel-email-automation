@@ -1,7 +1,6 @@
 package sending_test
 
 import (
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -61,7 +60,7 @@ func taskReserved(t *testing.T, f *acceptanceFixture, task string) int {
 }
 
 func TestStoreScheduleValidatesLeadApprovalRevisionAndEligibility(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
 	storeApprove(t, f, task)
 	now := f.clock.Now()
@@ -116,14 +115,8 @@ func TestStoreScheduleValidatesLeadApprovalRevisionAndEligibility(t *testing.T) 
 	}
 }
 
-func TestStoreScheduleRequiresApprovalAndReleaseGate(t *testing.T) {
-	gated := newAcceptanceFixture(t, false)
-	gatedTask := gated.task(t, 1)
-	storeApprove(t, gated, gatedTask)
-	if _, err := gated.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: "gated", TaskID: gatedTask, Actor: "operator", At: gated.clock.Now().Add(time.Hour), Confirmed: true, ExpectedCount: 1}); !errors.Is(err, sending.ErrReleaseGate) {
-		t.Fatalf("release gate: %v", err)
-	}
-	unapproved := newAcceptanceFixture(t, true)
+func TestStoreScheduleRequiresApproval(t *testing.T) {
+	unapproved := newAcceptanceFixture(t)
 	unapprovedTask := unapproved.task(t, 1)
 	if _, err := unapproved.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: "unapproved", TaskID: unapprovedTask, Actor: "operator", At: unapproved.clock.Now().Add(time.Hour), Confirmed: true, ExpectedCount: 1}); err == nil || !strings.Contains(err.Error(), "approve") {
 		t.Fatalf("unapproved schedule: %v", err)
@@ -134,7 +127,7 @@ func TestStoreScheduleRequiresApprovalAndReleaseGate(t *testing.T) {
 }
 
 func TestStoreScheduledFireClaimsOnlyFreeCandidatesAndIsIdempotent(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 2)
 	storeApprove(t, f, task)
 	at := f.clock.Now().Add(time.Hour)
@@ -189,23 +182,21 @@ func TestStoreScheduledFireClaimsOnlyFreeCandidatesAndIsIdempotent(t *testing.T)
 }
 
 func TestStoreScheduledFireRefusalsMarkMissedWithoutSending(t *testing.T) {
-	t.Run("release gate", func(t *testing.T) {
-		f := newAcceptanceFixture(t, false)
+	t.Run("restore review", func(t *testing.T) {
+		f := newAcceptanceFixture(t)
 		task := f.task(t, 1)
 		storeApprove(t, f, task)
 		at := f.clock.Now().Add(time.Hour)
-		record := storeRecord(t, f, intake.TasksCollection, task)
-		record.Set("schedule_at", at)
-		record.Set("schedule_state", intake.ScheduleScheduled)
-		storeSave(t, f, record)
+		scheduleTask(t, f, task, at, 1)
+		restored := sending.NewStore(f.app, sending.Options{RestoreReview: true, Now: f.clock.Now})
 		setClock(f, at.Add(time.Second))
-		if fired, err := f.store.FireScheduled(storeCtx); err != nil || fired {
-			t.Fatalf("gated fire = %t, %v", fired, err)
+		if fired, err := restored.FireScheduled(storeCtx); err != nil || fired {
+			t.Fatalf("restore-review fire = %t, %v", fired, err)
 		}
-		assertMissed(t, f, task, "remains disabled")
+		assertMissed(t, f, task, "restore review")
 	})
 	t.Run("changed revision", func(t *testing.T) {
-		f := newAcceptanceFixture(t, true)
+		f := newAcceptanceFixture(t)
 		task := f.task(t, 1)
 		storeApprove(t, f, task)
 		at := scheduleAndBreakRevision(t, f, task)
@@ -216,7 +207,7 @@ func TestStoreScheduledFireRefusalsMarkMissedWithoutSending(t *testing.T) {
 		assertMissed(t, f, task, "configuration changed")
 	})
 	t.Run("missing approval", func(t *testing.T) {
-		f := newAcceptanceFixture(t, true)
+		f := newAcceptanceFixture(t)
 		task := f.task(t, 1)
 		storeApprove(t, f, task)
 		at := f.clock.Now().Add(time.Hour)
@@ -237,7 +228,7 @@ func TestStoreScheduledFireRefusalsMarkMissedWithoutSending(t *testing.T) {
 		assertMissed(t, f, task, "approval")
 	})
 	t.Run("no free candidate", func(t *testing.T) {
-		f := newAcceptanceFixture(t, true)
+		f := newAcceptanceFixture(t)
 		task := f.task(t, 1)
 		storeApprove(t, f, task)
 		at := f.clock.Now().Add(time.Hour)
@@ -300,14 +291,14 @@ func assertMissed(t *testing.T, f *acceptanceFixture, task, reason string) {
 }
 
 func TestStoreRecoveryPausesMissedScheduleAndResumeUsesSafeRemainder(t *testing.T) {
-	f := newAcceptanceFixture(t, true)
+	f := newAcceptanceFixture(t)
 	task := f.task(t, 2)
 	storeApprove(t, f, task)
 	at := f.clock.Now().Add(time.Hour)
 	scheduleTask(t, f, task, at, 2)
 
 	// A restart before the stored instant preserves the pending schedule.
-	restarted := sending.NewStore(f.app, sending.Options{AllowCandidateSending: true, Now: f.clock.Now})
+	restarted := sending.NewStore(f.app, sending.Options{Now: f.clock.Now})
 	if err := restarted.Recover(storeCtx); err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +308,7 @@ func TestStoreRecoveryPausesMissedScheduleAndResumeUsesSafeRemainder(t *testing.
 
 	// A restart after the instant pauses the task instead of starting it.
 	setClock(f, at.Add(2*time.Hour))
-	restarted = sending.NewStore(f.app, sending.Options{AllowCandidateSending: true, Now: f.clock.Now})
+	restarted = sending.NewStore(f.app, sending.Options{Now: f.clock.Now})
 	if err := restarted.Recover(storeCtx); err != nil {
 		t.Fatal(err)
 	}

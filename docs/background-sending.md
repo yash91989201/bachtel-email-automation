@@ -1,10 +1,11 @@
 # Background sending and recovery
 
-The production entrypoint keeps candidate sending disabled until
-`add-history-exports-and-coolify-delivery` completes its release verification.
-There is no browser or environment switch to bypass this gate. Tests inject an
-enabled store and a simulated sender. Diagnostic test emails are explicit real
-submissions when a usable Microsoft connection is configured.
+There is no global release unlock or environment switch for candidate sending.
+Each candidate start requires explicit operator authorization and approval of
+the received formatting for a successfully submitted test of that exact
+configuration. Diagnostic test emails are explicit real submissions when a
+usable Microsoft connection is configured; automated checks use simulated
+senders and never send real email.
 
 ## Test, approve and start
 
@@ -40,20 +41,19 @@ Confirming a schedule shows the same fresh counts as Start — eligible,
 invalid, duplicate, already submitted, already scheduled and review required —
 plus the sender, pinned configuration revision and approved test. The
 dispatcher fires due schedules from durable state; it survives restarts and
-does not depend on a browser session. At fire time it rechecks the production
-release gate, the pinned configuration revision, the approved test for that
-exact hash and current eligibility, then reserves only candidates free at that
-moment. Candidates taken in the meantime are excluded as already scheduled;
-the remaining free candidates start. With no free candidate, nothing starts.
+does not depend on a browser session. At fire time it rechecks the pinned
+configuration revision, the approved test for that exact hash and current
+eligibility, then reserves only candidates free at that moment. Candidates
+taken in the meantime are excluded as already scheduled; the remaining free
+candidates start. With no free candidate, nothing starts.
 
-A fire-time refusal — closed release gate, changed revision, missing approval
-or no free candidate — sends nothing, records the reason, marks the schedule
-missed and leaves the task ready for revalidation, re-approval, rescheduling
-or a manual Start. Firing starts the first candidate batch only: retries,
-Retry all definite failures, resends and uncertain-outcome resolutions remain
-explicit operator actions. Candidate sending stays gated until
-`add-history-exports-and-coolify-delivery` completes release verification;
-scheduling obeys the same gate.
+A fire-time refusal — changed revision, missing approval or no free candidate —
+sends nothing, records the reason, marks the schedule missed and leaves the task
+ready for revalidation, re-approval, rescheduling or a manual Start. Firing
+starts the first candidate batch only: retries, Retry all definite failures,
+resends and uncertain-outcome resolutions remain explicit operator actions.
+Scheduling is an explicit start authorization and requires the same
+exact-configuration test approval as manual start.
 
 ## Durable states
 
@@ -212,6 +212,5 @@ BACHTEL_BROWSER_HARNESS=/tmp/bachtel-sending-browser \
 
 The directory's `harness.json` contains the temporary task URLs and dummy login.
 Its `control.json` supports `hold`, `reject` and `uncertain` outcomes, an integer
-`restart` counter, and `done: true` to exit. The harness includes a second URL
-using the production candidate gate. Every harness submission is simulated;
+`restart` counter, and `done: true` to exit. Every harness submission is simulated;
 it does not contact Microsoft or send email.

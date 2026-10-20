@@ -280,7 +280,7 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 		"duplicate recipient address in this upload",
 		"not a single usable email address",
 		"missing required value(s): candidate_name",
-		"Candidate sending requires completed production release verification.",
+		"Send a test email and approve its received formatting before starting or scheduling candidate sending.",
 		`hx-post="/campaigns/` + id + `/tasks/` + taskID + `/preview"`,
 		`hx-target="#task-preview-result"`,
 	} {
@@ -572,7 +572,7 @@ func TestAllHeldTaskOffersDownloadOnly(t *testing.T) {
 			body := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
 			for _, want := range []string{
 				`href="/campaigns/` + id + `/tasks/` + taskID + `/excluded.xlsx"`,
-				"Candidate sending requires completed production release verification.",
+				"Send a test email and approve its received formatting before starting or scheduling candidate sending.",
 				"No eligible recipients.",
 			} {
 				if !strings.Contains(body, want) {

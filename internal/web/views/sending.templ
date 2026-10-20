@@ -22,7 +22,7 @@ import (
 type SendingData struct {
 	Base, TaskURL, Sender, Hash, Status, Reason, ActionID, Error, LatestTest, Cooldown               string
 	ScheduleAt, ScheduleState, ScheduleMinDate                                                       string
-	Approved, Enabled, ArtifactNeeded, RestoreReview, ResultsReady                                   bool
+	Approved, ArtifactNeeded, RestoreReview, ResultsReady                                            bool
 	ResultsState                                                                                     string
 	Rate                                                                                             int
 	RetryableFailed                                                                                  int
@@ -41,7 +41,7 @@ type SendingOutcome struct{ ID, Kind, Recipient, State, Reason, Time string }
 
 // A changed control identity discards stale confirmations during polling.
 func sendingControlKey(data SendingData) string {
-	return fmt.Sprintf("%s-%t-%t-%d-%d-%d-%d-%d-%d-%d-%d-%d-%s", data.Status, data.Enabled, data.Approved, data.Remaining, data.Submitted, data.Failed, data.Held, data.InFlight, data.Reserved, data.Invalid, data.Duplicate, data.Ineligible, data.ScheduleState)
+	return fmt.Sprintf("%s-%t-%d-%d-%d-%d-%d-%d-%d-%d-%d-%s", data.Status, data.Approved, data.Remaining, data.Submitted, data.Failed, data.Held, data.InFlight, data.Reserved, data.Invalid, data.Duplicate, data.Ineligible, data.ScheduleState)
 }
 
 // approvalFormID names the approval form by the content hash, the latest test
@@ -83,11 +83,6 @@ templ SendingPage(data SendingData) {
 			</div>
 			<div class="action-bar"><a class={ button.Variants(button.Props{Variant: button.VariantGhost}) } href={ data.TaskURL }>Back to task snapshot and exclusions</a></div>
 		</header>
-		if !data.Enabled {
-			@alert.Alert(alert.Props{Class: "status-warning"}) {
-				Candidate sending is disabled until production release verification is complete. Diagnostic test emails remain available.
-			}
-		}
 		if data.RestoreReview {
 			@alert.Alert(alert.Props{Variant: alert.VariantDestructive, Class: "status-danger"}) {
 				Restore review is active. Sending, scheduling, retries and resends are disabled until submissions made after the restored backup are reconciled and the server is restarted without APP_RESTORE_REVIEW.
@@ -332,7 +327,7 @@ templ sendingAction(data SendingData, kind string, label string, count int) {
 			@checkbox.Checkbox(checkbox.Props{ID: "sending-confirm-" + kind, Name: "confirmed", Value: "yes", Required: true})
 			Confirm { count } recipients
 		</label>
-		@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Enabled || !data.Approved || count == 0}) {
+		@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Approved || count == 0}) {
 			{ label }
 		}
 	</form>
@@ -388,7 +383,7 @@ templ sendingSchedule(data SendingData) {
 					I confirm the fresh counts for this scheduled start.
 				}
 				<div class="action-bar">
-					@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Enabled || !data.Approved || data.Remaining == 0, Attributes: templ.Attributes{"name": "schedule_action", "value": "enable"}}) {
+					@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Approved || data.Remaining == 0, Attributes: templ.Attributes{"name": "schedule_action", "value": "enable"}}) {
 						{ "Schedule start" }
 					}
 				</div>
@@ -454,7 +449,7 @@ templ SendingRecovery(data SendingData) {
 							case "correction_required":
 								<p>Correct the recipient or required values in the source workbook and upload a corrected task. This unchanged snapshot cannot be retried.</p>
 							case "review_required":
-								<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resend#recovery" } class="space-y-2">
+								<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Approved) } hx-preserve method="post" action={ data.Base + "/resend#recovery" } class="space-y-2">
 									@sendingRowFields(row)
 									@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
 										@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-duplicate-" + row.ID, Name: "duplicate_risk", Value: "yes", Required: true})
@@ -464,11 +459,11 @@ templ SendingRecovery(data SendingData) {
 										@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
 										Confirm sending this 1 recipient again.
 									}
-									@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Enabled, Class: "status-warning"}) {
+									@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Approved, Class: "status-warning"}) {
 										{ "Send again — duplicate risk" }
 									}
 								</form>
-								<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resolve#recovery" } class="space-y-2">
+								<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Approved) } hx-preserve method="post" action={ data.Base + "/resolve#recovery" } class="space-y-2">
 									@sendingRowFields(row)
 									@field.Field(field.Props{}) {
 										@field.Label(field.LabelProps{For: "sending-resolution-basis-" + row.ID}) {
@@ -486,13 +481,13 @@ templ SendingRecovery(data SendingData) {
 									<p>Records the operator, basis and resolution time. Does not invent a Microsoft acceptance timestamp.</p>
 								</form>
 							default:
-								<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/retry#recovery" }>
+								<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Approved) } hx-preserve method="post" action={ data.Base + "/retry#recovery" }>
 									@sendingRowFields(row)
 									@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
 										@checkbox.Checkbox(checkbox.Props{ID: "sending-retry-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
 										Retry this 1 definite failure using its unchanged snapshot.
 									}
-									@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Enabled}) {
+									@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Approved}) {
 										{ "Retry" }
 									}
 								</form>

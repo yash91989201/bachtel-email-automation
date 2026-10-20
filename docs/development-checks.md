@@ -50,9 +50,11 @@ If OpenSpec artifacts change, also run:
 openspec validate --all --strict --json --no-interactive
 ```
 
-Checks do not replace the delivery change's simulated end-to-end, redeploy,
-backup/restore, browser, and explicitly authorized real-test release acceptance.
-Keep candidate sending gated until that acceptance is complete.
+Checks do not replace simulated end-to-end, redeploy, backup/restore, and
+browser acceptance. Release records document what was verified; they do not
+unlock candidate sending. Candidate actions remain protected by explicit
+operator authorization and received-format approval for the exact submitted
+test configuration. Automated checks must never send real email.
 
 ## Shared Go policy
 

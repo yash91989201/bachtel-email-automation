@@ -17,9 +17,8 @@ import (
 )
 
 // bindSending attaches the sole dispatcher to the server's lifetime. Neither
-// request cancellation nor logout owns its context. The release gate has no
-// environment or browser override: change 5 must complete release verification
-// before production candidate dispatch can be enabled in code.
+// request cancellation nor logout owns its context. Candidate actions require
+// approved test formatting for the exact configuration and explicit authorization.
 func bindSending(app core.App, cfg config.Config, connections *microsoft.Service) {
 	var mu sync.Mutex
 	var dispatcher *sending.Dispatcher

@@ -31,7 +31,7 @@ func TestTaskWorkspaceTabs(t *testing.T) {
 }
 
 func TestSendingWorkspaceKeepsTabStateOutsidePolling(t *testing.T) {
-	page := renderWorkspace(t, SendingPage(SendingData{Base: "/sending", Status: "ready", Remaining: 2, Enabled: true, Approved: true}))
+	page := renderWorkspace(t, SendingPage(SendingData{Base: "/sending", Status: "ready", Remaining: 2, Approved: true}))
 	assertWorkspaceTabs(t, page, "sending", "test", 6)
 	doc, err := html.Parse(strings.NewReader(page))
 	if err != nil {

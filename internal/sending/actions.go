@@ -39,7 +39,7 @@ func (s *Store) Preview(ctx context.Context, id string) (*Progress, error) {
 	if e != nil {
 		return nil, e
 	}
-	p := &Progress{TaskID: id, Status: t.GetString("status"), Reason: t.GetString("pause_reason"), ContentHash: t.GetString("content_hash"), Approved: isApproved, ProductionEnabled: s.options.AllowCandidateSending, ArtifactNeeded: t.GetBool("result_generation_needed"), RestoreReview: s.options.RestoreReview}
+	p := &Progress{TaskID: id, Status: t.GetString("status"), Reason: t.GetString("pause_reason"), ContentHash: t.GetString("content_hash"), Approved: isApproved, ArtifactNeeded: t.GetBool("result_generation_needed"), RestoreReview: s.options.RestoreReview}
 	var counts intake.Counts
 	if e = t.UnmarshalJSONField("counts", &counts); e != nil {
 		return nil, fmt.Errorf("decode task counts: %w", e)
@@ -289,9 +289,6 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 		}
 		if s.options.RestoreReview && restoreBlocked(in.Kind) {
 			return &ScheduleRefusal{Reason: "restore review is active: reconcile submissions made after the backup and restart without APP_RESTORE_REVIEW before sending"}
-		}
-		if in.Kind != "resolve" && !s.options.AllowCandidateSending {
-			return ErrReleaseGate
 		}
 		if t.GetString("configuration") == "" || t.GetString("status") == intake.TaskStaging {
 			return errors.New("validate the task before sending")
