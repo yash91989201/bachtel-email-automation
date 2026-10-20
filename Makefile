@@ -7,8 +7,8 @@ setup:
 
 generate:
 	go generate ./internal/web
-
 assets:
+	go tool shadcn-templ bundle
 	npm run build
 
 # Local dev reads .env (copy .env.example) into the server process. Shell

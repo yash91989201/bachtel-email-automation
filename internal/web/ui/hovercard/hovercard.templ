@@ -1,0 +1,174 @@
+package hovercard
+
+import (
+	"context"
+	"strconv"
+
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/utils"
+)
+
+type Side string
+
+const (
+	SideTop    Side = "top"
+	SideRight  Side = "right"
+	SideBottom Side = "bottom"
+	SideLeft   Side = "left"
+)
+
+type Align string
+
+const (
+	AlignStart  Align = "start"
+	AlignCenter Align = "center"
+	AlignEnd    Align = "end"
+)
+
+type ctxKey string
+
+const stateKey ctxKey = "hovercardState"
+
+type ctxState struct {
+	id          string
+	open        *bool
+	defaultOpen bool
+}
+
+type delaysKey struct{}
+
+type delays struct {
+	open  int
+	close int
+}
+
+func cardID(ctx context.Context) string {
+	if state, ok := ctx.Value(stateKey).(ctxState); ok {
+		return state.id
+	}
+	return ""
+}
+
+// Trigger returns the attributes that turn any element into the hover card
+// trigger — the asChild equivalent: no wrapper element. Base UI links
+// PreviewCard.Trigger and its card through React context only, no DOM
+// attribute, so data-templ-hover-card-trigger carries that link. delay and
+// closeDelay are PreviewCard.Trigger props in Base UI and render here; in Go
+// they stay on Props because Trigger has none of its own.
+func Trigger(ctx context.Context) templ.Attributes {
+	d, _ := ctx.Value(delaysKey{}).(delays)
+	return templ.Attributes{
+		"data-slot":                     "hover-card-trigger",
+		"data-templ-hover-card-trigger": cardID(ctx),
+		"data-templ-delay":              strconv.Itoa(d.open),
+		"data-templ-close-delay":        strconv.Itoa(d.close),
+	}
+}
+
+type Props struct {
+	ID          string
+	Open        *bool
+	DefaultOpen bool
+	// Delay is the hover intent before showing, in ms. Defaults to 600 like Base UI.
+	Delay int
+	// CloseDelay is the grace period before hiding, in ms. Defaults to 300.
+	CloseDelay int
+}
+
+type ContentProps struct {
+	Class      string
+	Attributes templ.Attributes
+	// Side of the trigger the card opens on. Defaults to bottom; flips
+	// automatically when there is no room.
+	Side Side
+	// Align along the trigger edge. Defaults to center.
+	Align Align
+	// SideOffset is the gap to the trigger in px. Defaults to 4.
+	SideOffset int
+	// AlignOffset shifts the card along the aligned edge in px. Defaults
+	// to 4 (Base UI); only applies with Align start or end.
+	AlignOffset int
+}
+
+// HoverCard renders no element: it only generates the id that links Trigger
+// and Content (via ctx), so the trigger stays a direct child of its layout.
+templ HoverCard(props ...Props) {
+	{{ var p Props }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.ID == "" {
+		{{ p.ID = utils.RandomID() }}
+	}
+	if p.Delay == 0 {
+		{{ p.Delay = 600 }}
+	}
+	if p.CloseDelay == 0 {
+		{{ p.CloseDelay = 300 }}
+	}
+	{{ ctx = context.WithValue(ctx, stateKey, ctxState{id: p.ID, open: p.Open, defaultOpen: p.DefaultOpen}) }}
+	{{ ctx = context.WithValue(ctx, delaysKey{}, delays{open: p.Delay, close: p.CloseDelay}) }}
+	{ children... }
+}
+
+templ Content(props ...ContentProps) {
+	{{ var p ContentProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.Side == "" {
+		{{ p.Side = SideBottom }}
+	}
+	if p.Align == "" {
+		{{ p.Align = AlignCenter }}
+	}
+	if p.SideOffset == 0 {
+		{{ p.SideOffset = 4 }}
+	}
+	if p.AlignOffset == 0 {
+		{{ p.AlignOffset = 4 }}
+	}
+	{{ s, _ := ctx.Value(stateKey).(ctxState) }}
+	// Hidden until the script portals it to <body> on open, so the SSRd
+	// content never participates in layout or sibling CSS. Inside it Base
+	// UI's positioner, which carries the position, around the popup.
+	<div data-templ-portal hidden>
+		<div data-base-ui-portal data-slot="hover-card-portal" hidden>
+			<div
+				data-templ-side={ string(p.Side) }
+				data-templ-align={ string(p.Align) }
+				data-templ-side-offset={ strconv.Itoa(p.SideOffset) }
+				data-templ-align-offset={ strconv.Itoa(p.AlignOffset) }
+				data-closed
+				hidden
+				role="presentation"
+				class="isolate z-50"
+				{ utils.DirectionAttributes(ctx)... }
+			>
+				<div
+					id={ cardID(ctx) }
+					data-slot="hover-card-content"
+					if s.open != nil {
+						data-templ-open={ strconv.FormatBool(*s.open) }
+					}
+					data-templ-default-open?={ s.open == nil && s.defaultOpen }
+					data-closed
+					tabindex="-1"
+					data-base-ui-focusable
+					class={
+						utils.CN(
+							// 1:1 base/ui/hover-card.tsx HoverCardContent, the look comes from
+							// (animations key on Base UI's data-open/data-closed attributes).
+							"data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/5 dark:ring-foreground/10 bg-popover text-popover-foreground w-72 rounded-3xl p-4 text-sm shadow-lg ring-1 duration-100 data-[side=inline-start]:slide-in-from-right-2 data-[side=inline-end]:slide-in-from-left-2 z-50 origin-(--transform-origin) outline-hidden",
+							// The popup stays mounted after animate-out until it unmounts.
+							"data-closed:fill-mode-forwards",
+							p.Class,
+						),
+					}
+					{ p.Attributes... }
+				>
+					{ children... }
+				</div>
+			</div>
+		</div>
+	</div>
+}

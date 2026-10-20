@@ -16,6 +16,7 @@ RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
 COPY --from=assets /src/internal/web/static/ internal/web/static/
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    go tool shadcn-templ bundle && \
     go generate ./internal/web && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/bachtel ./cmd/server
 
@@ -32,6 +33,7 @@ RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
 COPY --from=assets /src/internal/web/static/ internal/web/static/
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    go tool shadcn-templ bundle && \
     go vet ./... && \
     go test ./...
 

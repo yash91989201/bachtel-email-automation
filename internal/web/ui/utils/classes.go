@@ -1,11 +1,16 @@
 package utils
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
+
+	"github.com/a-h/templ"
 
 	twmerge "github.com/Oudwins/tailwind-merge-go"
 )
@@ -164,4 +169,79 @@ func flattenClasses(values []any) []string {
 // RandomID generates a random ID for an unlabeled component instance.
 func RandomID() string {
 	return fmt.Sprintf("id-%s", rand.Text())
+}
+
+// IfElse returns trueValue if condition is true, otherwise falseValue.
+// Example: true, "bg-red-500", "bg-gray-300" → "bg-red-500"
+func IfElse[T any](condition bool, trueValue T, falseValue T) T {
+	if condition {
+		return trueValue
+	}
+	return falseValue
+}
+
+// Map returns f applied to every element of s.
+// Example: Map(fruits, func(f fruit) selectcomp.ItemData { ... }) → items
+func Map[T, U any](s []T, f func(T) U) []U {
+	out := make([]U, len(s))
+	for i, v := range s {
+		out[i] = f(v)
+	}
+	return out
+}
+
+// MergeAttributes combines multiple Attributes into one.
+// Example: MergeAttributes(attr1, attr2) → combined attributes
+func MergeAttributes(attrs ...templ.Attributes) templ.Attributes {
+	merged := templ.Attributes{}
+	for _, attr := range attrs {
+		maps.Copy(merged, attr)
+	}
+	return merged
+}
+
+type directionKey struct{}
+
+// WithDirection is Base UI's DirectionProvider context: components below it
+// read the text direction from ctx (see components/direction).
+func WithDirection(ctx context.Context, direction string) context.Context {
+	return context.WithValue(ctx, directionKey{}, direction)
+}
+
+// Direction is useDirection: the nearest DirectionProvider's direction,
+// "ltr" without one.
+func Direction(ctx context.Context) string {
+	if direction, ok := ctx.Value(directionKey{}).(string); ok && direction != "" {
+		return direction
+	}
+	return "ltr"
+}
+
+// DirectionAttributes renders a DirectionProvider's direction on a part
+// whose script reads it (window.templ.direction): data-templ-direction, a
+// port marker for the context React keeps in memory. Nothing without a
+// provider.
+func DirectionAttributes(ctx context.Context) templ.Attributes {
+	if direction, ok := ctx.Value(directionKey{}).(string); ok && direction != "" {
+		return templ.Attributes{"data-templ-direction": direction}
+	}
+	return templ.Attributes{}
+}
+
+// ScriptVersion is a timestamp generated at app start for cache busting.
+// Used in component script tags to append ?v=<timestamp> to script URLs.
+var ScriptVersion = fmt.Sprintf("%d", time.Now().Unix())
+
+// ScriptURL generates cache-busted script URLs.
+// Override this to use custom cache busting (CDN, content hashing, etc.)
+//
+// Example override in your app:
+//
+//	func init() {
+//	    utils.ScriptURL = func(path string) string {
+//	        return myAssetManifest.GetURL(path)
+//	    }
+//	}
+var ScriptURL = func(path string) string {
+	return path + "?v=" + ScriptVersion
 }

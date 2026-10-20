@@ -36,30 +36,32 @@ commit `191c364eabdfb6e6b75f2733163634db2903a06d`, MIT licensed.
 The release is a beta. Sources are owned here deliberately; the upstream
 package-import workflow is experimental and is not used.
 
-The default CLI registry serves live component payloads even with a pinned CLI.
-To obtain reproducible upstream source, download the exact module release:
+All upstream components are installed with the official CLI, pinned as a Go
+tool dependency (`go tool shadcn-templ`):
 
 ```sh
-go mod download -json github.com/axadrn/shadcn-templ/v2@v2.0.0-beta.15
+shadcn-templ add --all
 ```
 
-Copy only the required `.templ` sources from the returned `Dir/components`,
-rewrite their utils imports to this project's `internal/web/ui/utils`, and review
-the resulting diff. Preserve the upstream license. Do not copy generated files;
-run `make generate`. The installed class-merging dependency
-`github.com/Oudwins/tailwind-merge-go v0.2.2` implements upstream's class conflict
-semantics; the shared utilities retain its deterministic ordering and Tailwind 4
-syntax adaptation. Only helpers needed by the installed primitives are retained.
+The CLI resolves registry dependencies, rewrites imports to this module, and
+rebuilds the component JavaScript bundle. `make assets` reruns
+`go tool shadcn-templ bundle` before the npm CSS/font build; the hashed bundle
+under `internal/web/static/` stays git-ignored and is rebuilt in Docker too.
+Every page renders it once via `@ui.Scripts()` in the layout `<head>`.
+Run `templ generate` (via `make generate`) and `go mod tidy` after adding.
 
 Local adaptations: native select and table render their native element without
 adding a wrapper or icon; alert respects an explicit role so status fragments
 can remain polite; labels retain text selection; the requested Luma preset is active on the body; application
 component CSS supplies structural compatibility and operator-status styling. Input/textarea sizing and label layout are kept compatible
-with existing forms. Review these adaptations rather than blindly overwriting.
+with existing forms. Re-running `add --overwrite` would discard these
+adaptations, so review its diff and re-apply them. The shared `utils` package
+additionally keeps this project's deterministic class ordering and Tailwind 4
+syntax adaptation over the upstream file.
 
 For a new component that needs JavaScript, first inspect its scripts and lifecycle,
-then integrate its build into the existing Make/npm assets pipeline and embedded
-`/static/` serving. Do not add a second Taskfile build system or CDN scripts.
+then rely on the existing bundle pipeline and embedded `/static/` serving.
+Do not add a second Taskfile build system or CDN scripts.
 Test initialization, teardown, keyboard access and form state after htmx swaps.
 
 ## Verification

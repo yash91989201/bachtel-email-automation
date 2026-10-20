@@ -1,0 +1,649 @@
+package contextmenu
+
+import (
+	"context"
+	"strconv"
+
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/icon"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/utils"
+)
+
+type ItemVariant string
+
+const (
+	ItemVariantDefault     ItemVariant = "default"
+	ItemVariantDestructive ItemVariant = "destructive"
+)
+
+type ctxKey string
+
+const stateKey ctxKey = "contextmenuState"
+const subStateKey ctxKey = "contextmenuSubState"
+const radioStateKey ctxKey = "contextmenuRadioState"
+
+type ctxState struct {
+	id          string
+	open        *bool
+	defaultOpen bool
+}
+
+// menuID returns the id shared by Root, Trigger and Content via ctx.
+func menuID(ctx context.Context) string {
+	if state, ok := ctx.Value(stateKey).(ctxState); ok {
+		return state.id
+	}
+	return ""
+}
+
+// subState carries the id a Sub shares with its trigger and its content, and
+// the open state that lands on the content's positioner.
+type ctxSubState struct {
+	id          string
+	open        *bool
+	defaultOpen bool
+}
+
+func subState(ctx context.Context) ctxSubState {
+	if s, ok := ctx.Value(subStateKey).(ctxSubState); ok {
+		return s
+	}
+	return ctxSubState{}
+}
+
+type Props struct {
+	ID          string
+	Open        *bool
+	DefaultOpen bool
+}
+
+type TriggerProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+type Side string
+
+const (
+	SideTop    Side = "top"
+	SideRight  Side = "right"
+	SideBottom Side = "bottom"
+	SideLeft   Side = "left"
+)
+
+type ContentProps struct {
+	Class      string
+	Attributes templ.Attributes
+	// Side of the cursor the menu opens on. Defaults to right (Base UI);
+	// flips automatically when there is no room.
+	Side Side
+	// SideOffset is the gap to the cursor in px. Defaults to 0.
+	SideOffset int
+	// AlignOffset shifts the menu along the aligned edge in px. Defaults to 4.
+	AlignOffset int
+}
+
+type ItemProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+	Variant    ItemVariant
+	Disabled   bool
+	Inset      bool
+	Href       string
+	Target     string
+	// CloseOnClick is Base UI's Menu.Item closeOnClick; nil means true.
+	CloseOnClick *bool
+}
+
+type CheckboxItemProps struct {
+	ID             string
+	Class          string
+	Attributes     templ.Attributes
+	Checked        *bool
+	DefaultChecked bool
+	Disabled       bool
+}
+
+type RadioGroupProps struct {
+	ID           string
+	Class        string
+	Attributes   templ.Attributes
+	Value        *string
+	DefaultValue string
+	Disabled     bool
+}
+
+type RadioItemProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+	Value      string
+	Disabled   bool
+}
+
+type radioState struct {
+	value    string
+	disabled bool
+}
+
+func initialChecked(p CheckboxItemProps) bool {
+	if p.Checked != nil {
+		return *p.Checked
+	}
+	return p.DefaultChecked
+}
+
+func initialRadioValue(p RadioGroupProps) string {
+	if p.Value != nil {
+		return *p.Value
+	}
+	return p.DefaultValue
+}
+
+type SeparatorProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+type LabelProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+	Inset      bool
+}
+
+type ShortcutProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+type GroupProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+// SubProps is SubmenuRoot's: it renders no element, ID names the submenu's
+// popup, the open state lands on its positioner like the root's.
+type SubProps struct {
+	ID          string
+	Open        *bool
+	DefaultOpen bool
+}
+
+type SubTriggerProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+	Inset      bool
+}
+
+type SubContentProps struct {
+	Class      string
+	Attributes templ.Attributes
+}
+
+// Items highlight via real focus (Base UI menus move focus to the item under
+// the pointer and with the arrow keys), so there are no hover: styles here.
+// 1:1 base/ui/context-menu.tsx ContextMenuItem, the look comes from
+// ; the inset padding keys on the data-inset attribute.
+const itemClasses = "focus:bg-accent focus:text-accent-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:text-destructive focus:*:[svg]:text-accent-foreground gap-2.5 rounded-2xl px-3 py-2 text-sm font-medium data-inset:pl-9.5 [&_svg:not([class*='size-'])]:size-4 group/context-menu-item relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0"
+
+// 1:1 base/ui/context-menu.tsx ContextMenuCheckboxItem/RadioItem, cnClass is
+// or.
+func checkItemClasses(cnClass string) string {
+	return cnClass + " relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0"
+}
+
+// contentClasses is the shared 1:1 base/ui/context-menu.tsx ContextMenuContent
+// class list, the look comes from (animations key on
+// Base UI's data-open/data-closed attributes). The --available-height/--transform-origin
+// variables become our JS variable names.
+const contentClasses = "data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/5 dark:ring-foreground/10 bg-popover text-popover-foreground min-w-48 rounded-3xl p-1.5 shadow-lg ring-1 duration-100 data-[side=inline-start]:slide-in-from-right-2 data-[side=inline-end]:slide-in-from-left-2 dark z-50 max-h-(--available-height) origin-(--transform-origin) overflow-x-hidden overflow-y-auto outline-none"
+
+// Root renders no element: it only generates the id that links Trigger and
+// Content (via ctx).
+templ ContextMenu(props ...Props) {
+	{{ var p Props }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.ID == "" {
+		{{ p.ID = utils.RandomID() }}
+	}
+	{{ ctx = context.WithValue(ctx, stateKey, ctxState{id: p.ID, open: p.Open, defaultOpen: p.DefaultOpen}) }}
+	{ children... }
+}
+
+templ Trigger(props ...TriggerProps) {
+	{{ var p TriggerProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<div
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="context-menu-trigger"
+		data-templ-context-menu-trigger={ menuID(ctx) }
+		class={ utils.CN("select-none", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</div>
+}
+
+// PortalProps is the reference Portal's surface: the portal node renders
+// no visible element of its own.
+type PortalProps struct {
+	Attributes templ.Attributes
+}
+
+// Portal is shadcn's ContextMenuPortal, which an example puts around a
+// submenu's content: a portal node of its own, mounted with the submenu.
+templ Portal(props ...PortalProps) {
+	{{ var p PortalProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	@portal(templ.Attributes{"data-slot": "context-menu-portal"}, p.Attributes) {
+		{ children... }
+	}
+}
+
+// portal is MenuPrimitive.Portal inside the content: a hidden node that holds
+// the content until the script portals it to <body> on open.
+templ portal(attrs ...templ.Attributes) {
+	<div data-templ-portal hidden>
+		<div data-base-ui-portal hidden { utils.MergeAttributes(attrs...)... }>
+			{ children... }
+		</div>
+	</div>
+}
+
+templ Content(props ...ContentProps) {
+	{{ var p ContentProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.Side == "" {
+		{{ p.Side = SideRight }}
+	}
+	if p.AlignOffset == 0 {
+		{{ p.AlignOffset = 4 }}
+	}
+	{{ s, _ := ctx.Value(stateKey).(ctxState) }}
+	// Hidden until the script portals it to <body> on open, so the SSRd
+	// content never participates in layout or sibling CSS.
+	@portal() {
+		<div
+			data-templ-side={ string(p.Side) }
+			data-templ-side-offset={ strconv.Itoa(p.SideOffset) }
+			data-templ-align-offset={ strconv.Itoa(p.AlignOffset) }
+			if s.open != nil {
+				data-templ-open={ strconv.FormatBool(*s.open) }
+			}
+			data-templ-default-open?={ s.open == nil && s.defaultOpen }
+			data-closed
+			hidden
+			role="presentation"
+			class="isolate z-50 outline-none"
+			{ utils.DirectionAttributes(ctx)... }
+		>
+			<div
+				id={ menuID(ctx) }
+				data-slot="context-menu-content"
+				data-closed
+				role="menu"
+				tabindex="-1"
+				data-base-ui-focusable
+				class={
+					utils.CN(
+						contentClasses,
+						// The popup stays mounted after animate-out until it unmounts.
+						"relative isolate data-closed:fill-mode-forwards",
+						p.Class,
+					),
+				}
+				{ p.Attributes... }
+			>
+				{ children... }
+			</div>
+		</div>
+	}
+}
+
+templ Item(props ...ItemProps) {
+	{{ var p ItemProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.ID == "" {
+		{{ p.ID = utils.RandomID() }}
+	}
+	if p.Variant == "" {
+		{{ p.Variant = ItemVariantDefault }}
+	}
+	if p.Href != "" {
+		<a
+			id={ p.ID }
+			href={ templ.SafeURL(p.Href) }
+			if p.Target != "" {
+				target={ p.Target }
+			}
+			data-slot="context-menu-item"
+			data-variant={ string(p.Variant) }
+			data-inset?={ p.Inset }
+			if p.CloseOnClick != nil && !*p.CloseOnClick {
+				data-templ-close-on-click="false"
+			}
+			if p.Disabled {
+				aria-disabled="true"
+				data-disabled
+			}
+			role="menuitem"
+			tabindex="-1"
+			class={ utils.CN(itemClasses, p.Class) }
+			{ p.Attributes... }
+		>
+			{ children... }
+		</a>
+	} else {
+		<div
+			id={ p.ID }
+			data-slot="context-menu-item"
+			data-variant={ string(p.Variant) }
+			data-inset?={ p.Inset }
+			if p.CloseOnClick != nil && !*p.CloseOnClick {
+				data-templ-close-on-click="false"
+			}
+			if p.Disabled {
+				aria-disabled="true"
+				data-disabled
+			}
+			role="menuitem"
+			tabindex="-1"
+			class={ utils.CN(itemClasses, p.Class) }
+			{ p.Attributes... }
+		>
+			{ children... }
+		</div>
+	}
+}
+
+templ CheckboxItem(props ...CheckboxItemProps) {
+	{{ var p CheckboxItemProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.ID == "" {
+		{{ p.ID = utils.RandomID() }}
+	}
+	{{ checked := initialChecked(p) }}
+	<div
+		id={ p.ID }
+		data-slot="context-menu-checkbox-item"
+		data-templ-checked?={ p.Checked != nil }
+		role="menuitemcheckbox"
+		tabindex="-1"
+		if checked {
+			data-checked
+			aria-checked="true"
+		} else {
+			data-unchecked
+			aria-checked="false"
+		}
+		if p.Disabled {
+			aria-disabled="true"
+			data-disabled
+		}
+		class={ utils.CN(checkItemClasses("focus:bg-accent focus:text-accent-foreground gap-2.5 rounded-2xl py-2 pr-8 pl-3 text-sm font-medium data-inset:pl-9.5 [&_svg:not([class*='size-'])]:size-4"), p.Class) }
+		{ p.Attributes... }
+	>
+		<span class="absolute right-2 pointer-events-none">
+			@itemIndicator(checked, p.Disabled)
+		</span>
+		{ children... }
+	</div>
+}
+
+// itemIndicator is CheckboxItemIndicator and RadioItemIndicator: mounted
+// while the item is checked, the script toggles [hidden] for the unmount.
+templ itemIndicator(checked, disabled bool) {
+	<span aria-hidden="true" data-checked data-disabled?={ disabled } hidden?={ !checked }>
+		@icon.Check()
+	</span>
+}
+
+templ RadioGroup(props ...RadioGroupProps) {
+	{{ var p RadioGroupProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	{{ value := initialRadioValue(p) }}
+	{{ ctx = context.WithValue(ctx, radioStateKey, radioState{value: value, disabled: p.Disabled}) }}
+	<div
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		role="group"
+		data-slot="context-menu-radio-group"
+		if p.Value != nil {
+			data-templ-value={ *p.Value }
+		}
+		data-disabled?={ p.Disabled }
+		class={ utils.CN("", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</div>
+}
+
+templ RadioItem(props ...RadioItemProps) {
+	{{ var p RadioItemProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.ID == "" {
+		{{ p.ID = utils.RandomID() }}
+	}
+	{{ group, _ := ctx.Value(radioStateKey).(radioState) }}
+	{{ checked := group.value != "" && group.value == p.Value }}
+	{{ disabled := p.Disabled || group.disabled }}
+	<div
+		id={ p.ID }
+		data-slot="context-menu-radio-item"
+		if p.Value != "" {
+			data-templ-value={ p.Value }
+		}
+		role="menuitemradio"
+		tabindex="-1"
+		if checked {
+			data-checked
+			aria-checked="true"
+		} else {
+			data-unchecked
+			aria-checked="false"
+		}
+		if disabled {
+			aria-disabled="true"
+			data-disabled
+		}
+		class={ utils.CN(checkItemClasses("focus:bg-accent focus:text-accent-foreground gap-2.5 rounded-2xl py-2 pr-8 pl-3 text-sm font-medium data-inset:pl-9.5 [&_svg:not([class*='size-'])]:size-4"), p.Class) }
+		{ p.Attributes... }
+	>
+		<span class="absolute right-2 pointer-events-none">
+			@itemIndicator(checked, disabled)
+		</span>
+		{ children... }
+	</div>
+}
+
+templ Group(props ...GroupProps) {
+	{{ var p GroupProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<div
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		role="group"
+		data-slot="context-menu-group"
+		class={ utils.CN("", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</div>
+}
+
+templ Label(props ...LabelProps) {
+	{{ var p LabelProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<div
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="context-menu-label"
+		data-inset?={ p.Inset }
+		role="presentation"
+		class={ utils.CN("text-muted-foreground px-3 py-2.5 text-xs data-inset:pl-9.5", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</div>
+}
+
+templ Separator(props ...SeparatorProps) {
+	{{ var p SeparatorProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<div
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		role="separator"
+		aria-orientation="horizontal"
+		data-orientation="horizontal"
+		data-slot="context-menu-separator"
+		class={ utils.CN("bg-border/50 -mx-1.5 my-1.5 h-px", p.Class) }
+		{ p.Attributes... }
+	></div>
+}
+
+templ Shortcut(props ...ShortcutProps) {
+	{{ var p ShortcutProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<span
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="context-menu-shortcut"
+		class={ utils.CN("text-muted-foreground group-focus/context-menu-item:text-accent-foreground ml-auto text-xs tracking-widest", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</span>
+}
+
+templ Sub(props ...SubProps) {
+	{{ var p SubProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.ID == "" {
+		{{ p.ID = utils.RandomID() }}
+	}
+	{{ ctx = context.WithValue(ctx, subStateKey, ctxSubState{id: p.ID, open: p.Open, defaultOpen: p.DefaultOpen}) }}
+	{ children... }
+}
+
+templ SubTrigger(props ...SubTriggerProps) {
+	{{ var p SubTriggerProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.ID == "" {
+		{{ p.ID = subState(ctx).id + "-trigger" }}
+	}
+	<div
+		id={ p.ID }
+		data-slot="context-menu-sub-trigger"
+		data-inset?={ p.Inset }
+		data-templ-controls={ subState(ctx).id }
+		role="menuitem"
+		tabindex="-1"
+		aria-haspopup="menu"
+		aria-expanded="false"
+		class={
+			utils.CN(
+				// 1:1 base/ui/context-menu.tsx ContextMenuSubTrigger, the look comes
+				// from. Its open highlight keys on
+				// data-open, which Base UI does not render on a submenu trigger
+				// (it renders data-popup-open), so it stays off like upstream's.
+				"focus:bg-accent focus:text-accent-foreground data-open:bg-accent data-open:text-accent-foreground rounded-2xl px-3 py-2 text-sm font-medium data-inset:pl-9.5 [&_svg:not([class*='size-'])]:size-4 flex cursor-default items-center outline-hidden select-none [&_svg]:pointer-events-none [&_svg]:shrink-0",
+				p.Class,
+			),
+		}
+		{ p.Attributes... }
+	>
+		{ children... }
+		@icon.ChevronRight(icon.Props{Class: "ml-auto"})
+	</div>
+}
+
+templ SubContent(props ...SubContentProps) {
+	{{ var p SubContentProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	// shadcn's ContextMenuSubContent is a ContextMenuContent: it portals on
+	// open like the root menu, into the root's portal node.
+	{{ sub := subState(ctx) }}
+	@portal() {
+		<div
+			if sub.open != nil {
+				data-templ-open={ strconv.FormatBool(*sub.open) }
+			}
+			data-templ-default-open?={ sub.open == nil && sub.defaultOpen }
+			data-closed
+			data-nested
+			hidden
+			role="presentation"
+			class="isolate z-50 outline-none"
+			{ utils.DirectionAttributes(ctx)... }
+		>
+			<div
+				id={ sub.id }
+				data-slot="context-menu-sub-content"
+				data-closed
+				data-nested
+				role="menu"
+				aria-labelledby={ sub.id + "-trigger" }
+				tabindex="-1"
+				data-base-ui-focusable
+				class={
+					utils.CN(
+						// 1:1 base/ui/context-menu.tsx ContextMenuSubContent: the content's
+						// classes merged with.
+						"data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/5 dark:ring-foreground/10 bg-popover text-popover-foreground min-w-48 rounded-3xl p-1.5 ring-1 duration-100 data-[side=inline-start]:slide-in-from-right-2 data-[side=inline-end]:slide-in-from-left-2 shadow-lg dark z-50 max-h-(--available-height) origin-(--transform-origin) overflow-x-hidden overflow-y-auto outline-none",
+						// The popup stays mounted after animate-out until it unmounts.
+						"data-closed:fill-mode-forwards",
+						p.Class,
+					),
+				}
+				{ p.Attributes... }
+			>
+				{ children... }
+			</div>
+		</div>
+	}
+}

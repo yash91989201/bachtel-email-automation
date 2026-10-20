@@ -1,0 +1,224 @@
+package inputotp
+
+import (
+	"context"
+	"strconv"
+
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/icon"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/utils"
+)
+
+type ctxKey string
+
+const stateKey ctxKey = "inputotpState"
+
+type ctxState struct {
+	value string
+}
+
+func state(ctx context.Context) ctxState {
+	if s, ok := ctx.Value(stateKey).(ctxState); ok {
+		return s
+	}
+	return ctxState{}
+}
+
+// Props are the OTPInput props of the input-otp library shadcn wraps; ID,
+// Class, Attributes and the input props land on the real input like the
+// library spreads them.
+type Props struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+	// Value is the controlled value, set it on input-otp-change through
+	// window.templ.inputOTP.setValue. DefaultValue is the uncontrolled one.
+	Value        *string
+	DefaultValue string
+	MaxLength    int
+	// Pattern restricts input to a regular expression, e.g.
+	// inputotp.RegexpOnlyDigits (input-otp's REGEXP constants).
+	Pattern  string
+	Disabled bool
+	Required bool
+}
+
+// The pattern constants of the input-otp library.
+const (
+	RegexpOnlyDigits         = "^\\d+$"
+	RegexpOnlyChars          = "^[a-zA-Z]+$"
+	RegexpOnlyDigitsAndChars = "^[a-zA-Z0-9]+$"
+)
+
+// The library's NOSCRIPT_CSS_FALLBACK.
+const noScriptCSSFallback = `
+[data-input-otp] {
+  --nojs-bg: white !important;
+  --nojs-fg: black !important;
+
+  background-color: var(--nojs-bg) !important;
+  color: var(--nojs-fg) !important;
+  caret-color: var(--nojs-fg) !important;
+  letter-spacing: .25em !important;
+  text-align: center !important;
+  border: 1px solid var(--nojs-fg) !important;
+  border-radius: 4px !important;
+  width: 100% !important;
+}
+@media (prefers-color-scheme: dark) {
+  [data-input-otp] {
+    --nojs-bg: black !important;
+    --nojs-fg: white !important;
+  }
+}`
+
+func (p Props) value() string {
+	if p.Value != nil {
+		return *p.Value
+	}
+	return p.DefaultValue
+}
+
+func rootStyle(disabled bool) string {
+	cursor := "text"
+	if disabled {
+		cursor = "default"
+	}
+	return "position:relative;cursor:" + cursor + ";user-select:none;-webkit-user-select:none;pointer-events:none"
+}
+
+const inputStyle = "position:absolute;inset:0;width:100%;height:100%;display:flex;text-align:left;opacity:1;color:transparent;pointer-events:all;background:transparent;caret-color:transparent;border:0 solid transparent;outline:0 solid transparent;box-shadow:none;line-height:1;letter-spacing:-.5em;font-size:var(--root-height);font-family:monospace;font-variant-numeric:tabular-nums"
+
+type GroupProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+type SlotProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+	Index      int
+}
+
+type SeparatorProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+// InputOTP is the pendant of the input-otp library shadcn wraps: one real
+// input stretched invisibly over the whole container captures focus, typing
+// and paste, while the slots only render the characters and the fake caret.
+templ InputOTP(props ...Props) {
+	{{ var p Props }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	{{ value := p.value() }}
+	{{ ctx = context.WithValue(ctx, stateKey, ctxState{value: value}) }}
+	<noscript>
+		@templ.Raw("<style>" + noScriptCSSFallback + "</style>")
+	</noscript>
+	<div
+		data-input-otp-container="true"
+		style={ rootStyle(p.Disabled) }
+		class="gap-2 flex items-center has-disabled:opacity-50"
+	>
+		{ children... }
+		<div style="position:absolute;inset:0;pointer-events:none">
+			<input
+				autocomplete="one-time-code"
+				data-slot="input-otp"
+				spellcheck="false"
+				class={ utils.CN("disabled:cursor-not-allowed", p.Class) }
+				if p.ID != "" {
+					id={ p.ID }
+				}
+				disabled?={ p.Disabled }
+				required?={ p.Required }
+				data-input-otp="true"
+				if value == "" {
+					data-input-otp-placeholder-shown="true"
+				}
+				inputmode="numeric"
+				if p.Pattern != "" {
+					pattern={ p.Pattern }
+				}
+				style={ inputStyle }
+				maxlength={ strconv.Itoa(p.MaxLength) }
+				value={ value }
+				if p.Value != nil {
+					data-templ-value={ *p.Value }
+				}
+				{ p.Attributes... }
+			/>
+		</div>
+	</div>
+}
+
+templ Group(props ...GroupProps) {
+	{{ var p GroupProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<div
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="input-otp-group"
+		class={ utils.CN("has-aria-invalid:ring-destructive/20 dark:has-aria-invalid:ring-destructive/40 has-aria-invalid:border-destructive rounded-3xl has-aria-invalid:ring-3 flex items-center", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</div>
+}
+
+templ Slot(props ...SlotProps) {
+	{{ var p SlotProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	{{
+		s := state(ctx)
+		char := ""
+		if p.Index >= 0 && p.Index < len(s.value) {
+			char = string(s.value[p.Index])
+		}
+	}}
+	<div
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="input-otp-slot"
+		data-active="false"
+		data-templ-index={ strconv.Itoa(p.Index) }
+		class={
+			utils.CN(
+				"bg-input/50 border-input data-[active=true]:border-ring data-[active=true]:ring-ring/30 data-[active=true]:aria-invalid:ring-destructive/20 dark:data-[active=true]:aria-invalid:ring-destructive/40 aria-invalid:border-destructive size-9 border-y border-r text-sm transition-all outline-none first:rounded-l-3xl first:border-l last:rounded-r-3xl data-[active=true]:ring-3 relative flex items-center justify-center data-[active=true]:z-10",
+				p.Class,
+			),
+		}
+		{ p.Attributes... }
+	>
+		{ char }
+	</div>
+}
+
+templ Separator(props ...SeparatorProps) {
+	{{ var p SeparatorProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<div
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="input-otp-separator"
+		role="separator"
+		class={ utils.CN("[&_svg:not([class*='size-'])]:size-4 flex items-center", p.Class) }
+		{ p.Attributes... }
+	>
+		@icon.Minus()
+	</div>
+}

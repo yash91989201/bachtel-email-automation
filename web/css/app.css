@@ -76,22 +76,10 @@ body {
   align-items: center;
 }
 
-.app-nav a {
-  padding: .6rem 1rem;
-  color: var(--color-muted-foreground);
-  font-size: .875rem;
-  font-weight: 600;
-  border-radius: .5rem;
-}
-
-.app-nav a:hover {
-  background: var(--color-muted);
-  color: var(--color-primary);
-}
-
 .app-nav a[aria-current] {
-  background: var(--color-accent);
-  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
 }
 
 .signout-form,
@@ -940,7 +928,7 @@ label:has(> input[type="checkbox"]) {
 /* Keep the application structure while adopting the requested preset. */
 h1, h2, h3, .cn-font-heading { font-family: var(--font-heading); }
 .app-main .cn-card { padding-block: 0; overflow: visible; }
-.app-nav a[aria-current], .workspace-tab[aria-selected="true"] { color: var(--color-accent-foreground); }
+.workspace-tab[aria-selected="true"] { color: var(--color-accent-foreground); }
 .style-luma .cn-alert.status-warning, .style-luma .cn-button.status-warning {
   background: var(--color-warning); color: var(--color-warning-foreground); border-color: var(--color-warning);
 }

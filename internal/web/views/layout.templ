@@ -1,6 +1,9 @@
 package views
 
-import "github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
+import (
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
+)
 
 templ Layout(title string, signedIn bool, active string) {
 	<!DOCTYPE html>
@@ -13,6 +16,7 @@ templ Layout(title string, signedIn bool, active string) {
 			<link rel="stylesheet" href="/static/app.css"/>
 			<script defer src="/static/htmx.min.js"></script>
 			<script defer src="/static/alpine.min.js"></script>
+			@ui.Scripts()
 		</head>
 		<body class="app-body style-luma">
 			<a class="skip-link" href="#main-content">Skip to content</a>
@@ -20,9 +24,15 @@ templ Layout(title string, signedIn bool, active string) {
 				<a class="brand" href="/" aria-label="Bachtel home"><span class="brand-mark" aria-hidden="true">b.</span><span>Bachtel<span class="brand-caption">Email workspace</span></span></a>
 				if signedIn {
 					<nav class="app-nav" aria-label="Main navigation">
-						@navLink("/", "Overview", active == "overview")
-						@navLink("/campaigns", "Campaigns", active == "campaigns")
-						@navLink("/connection", "Mailbox", active == "mailbox")
+						@button.Button(button.Props{Variant: button.VariantLink, Href: "/", Attributes: ariaCurrent(active == "overview")}) {
+							Overview
+						}
+						@button.Button(button.Props{Variant: button.VariantLink, Href: "/campaigns", Attributes: ariaCurrent(active == "campaigns")}) {
+							Campaigns
+						}
+						@button.Button(button.Props{Variant: button.VariantLink, Href: "/connection", Attributes: ariaCurrent(active == "mailbox")}) {
+							Mailbox
+						}
 					</nav>
 					<form method="post" action="/logout" class="signout-form">
 						@button.Button(button.Props{Variant: button.VariantGhost, Size: button.SizeSm, Type: button.TypeSubmit}) {
@@ -41,10 +51,9 @@ templ Layout(title string, signedIn bool, active string) {
 	</html>
 }
 
-templ navLink(url string, label string, current bool) {
+func ariaCurrent(current bool) templ.Attributes {
 	if current {
-		<a href={ templ.SafeURL(url) } aria-current="page">{ label }</a>
-	} else {
-		<a href={ templ.SafeURL(url) }>{ label }</a>
+		return templ.Attributes{"aria-current": "page"}
 	}
+	return nil
 }
