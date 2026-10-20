@@ -8,7 +8,13 @@ content and operator workflows remain unchanged.
 
 ## Structure
 
-- `internal/web/views`: page view models, page templates and persistent Alpine workspace state.
+- `internal/web/views`: page view models and page templates. Workspaces use the
+  owned `tabs` and `collapsible` primitives; no page keeps its own tab state.
+- `web/js/workspace.js`: the tracked workspace adapter. `scripts/copy-assets.mjs`
+  copies it to `internal/web/static/`, and `layout.templ` loads it once with a
+  deferred `<script>` after `@ui.Scripts()`. It reads the URL fragment, writes it
+  when the operator selects a tab, restores disclosure state, and re-applies the
+  active tab and disclosure after htmx swaps.
 - `internal/web/ui`: component packages copied from shadcn-templ, plus shared class utilities and its MIT license.
 - `web/css/theme.css`: resolved preset tokens and application status colors.
 - `web/css/vendor`: pinned upstream Luma, Tailwind variants and animation styles.
@@ -19,15 +25,44 @@ content and operator workflows remain unchanged.
 - `web/css/app.css`: Tailwind sources and application layout/responsive styles.
 - `components.json`: component aliases and existing CSS/static paths for maintenance tooling.
 
-The installed primitives render HTML on the server. They require no additional
-JavaScript runtime. Alpine handles the existing workspace/disclosure interactions;
-htmx handles existing fragments and polling. Native selects, checkboxes, file
-inputs and details remain native. Keep workspace state outside polling regions.
+The installed primitives render HTML on the server, and the interactive ones
+(`tabs`, `collapsible`, `checkbox`, `alertdialog`, `dialog`) rely on the shared
+runtime bundle that every page loads once via `@ui.Scripts()`. The lifecycle
+runtime re-initializes matching elements after htmx swaps, so a swapped fragment
+needs no manual re-init. htmx still owns fragments and polling; Alpine remains
+only for the sample-preview gating and the dismissible preview result.
+
+Workspace markup:
+
+- A workspace root is `@tabs.Tabs` with `OrientationVertical`, an id equal to its
+  scope (`campaign`, `task`, `sending`), and `data-workspace-tabs` passed through
+  `Attributes`. The same root carries `data-workspace-ignore-hash` when the page
+  renders a validation error, so the server-selected panel wins over the URL.
+- `@tabs.List` holds the triggers; the sidebar styling targets
+  `[data-slot="tabs-trigger"]`. A `workspace-group-separator` marks a group break.
+- The sending polling fragment renders only panels. `tabs.Panels` supplies the
+  root's identity so panel ids and labels stay stable, and the adapter re-applies
+  the active tab after each swap. A persisted disclosure is a `collapsible` with
+  a stable id and `data-workspace-persist`; the refresh link carries
+  `data-workspace-hash-link`.
+- `hx-preserve` element ids must be selector-safe (letters, digits, `-`, `_`):
+  htmx restores them with a selector built from the id, so a content hash with
+  `:` is sanitized (`approvalFormID`).
+
+Remaining native controls: `nativeselect`, date, number and file inputs stay
+native because `ui/select`/`ui/combobox` need runtime-driven value submission.
+The campaign and task disclosures stay `<details class="card-disclosure">`: their
+summary contains an `<h2>`, and a heading cannot nest in a button. The campaign
+delete and mailbox disconnect confirmations use `alertdialog`; the confirm
+control is the submit button of the same POST form (via its `form` attribute),
+and the delete form keeps its required `checkbox` confirmation.
+
+Use `card.Card` with `role="region"` and the existing `aria-labelledby` instead
+of a hand-written `cn-card` section, and keep real `<h2>` headings inside.
+`field.Field` groups a label, control and help text. `empty`, `breadcrumb`,
+`item` and `separator` replace repeated list, link and grouping markup.
 Use semantic links styled with `button.Variants`; specify `button.TypeSubmit`
 for submission buttons because the component's safe default is `button`.
-Keep semantic sections, forms, details, and heading tags where replacing them
-with a component's generic div would lose meaning. They can use the owned
-`cn-card`/`cn-card-title` presentation while their contents use component APIs.
 
 ## Provenance and updates
 
@@ -52,7 +87,10 @@ Run `templ generate` (via `make generate`) and `go mod tidy` after adding.
 
 Local adaptations: native select and table render their native element without
 adding a wrapper or icon; alert respects an explicit role so status fragments
-can remain polite; labels retain text selection; the requested Luma preset is active on the body; application
+can remain polite; labels retain text selection; `tabs` returns the orientation
+its root stored (upstream keeps list, panels and arrow keys horizontal),
+tolerates a panel rendered without its root, and exposes `tabs.Panels` for a
+fragment that swaps only panels; the requested Luma preset is active on the body; application
 component CSS supplies structural compatibility and operator-status styling. Input/textarea sizing and label layout are kept compatible
 with existing forms. Re-running `add --overwrite` would discard these
 adaptations, so review its diff and re-apply them. The shared `utils` package
