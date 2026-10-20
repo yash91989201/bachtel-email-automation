@@ -23,3 +23,8 @@
 
 - [x] 5.1 Resolve and apply preset b870VEw0in with the pinned shadcn-templ release, update theme/configuration and document the intentional theme change while preserving application layout and workflows; verify exact preset settings and local assets.
 - [x] 5.2 Verify the preset on desktop/mobile and run affected formatting, build, lint, template, application and OpenSpec checks; record any pre-existing failures separately from migration regressions.
+
+## 6. Documentation and configuration follow-up
+
+- [x] 6.1 Audit README, deployment, development, UI maintenance and release guidance against the migrated build; update active documentation without rewriting historical verification records.
+- [x] 6.2 Check asset embedding, container context and development watching for local fonts and component sources; correct gaps and verify the final configuration and documentation together.

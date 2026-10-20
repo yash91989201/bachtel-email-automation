@@ -7,6 +7,13 @@ credentials or candidate traffic.
 
 ## 1. Repository checks
 
+The dated observations below are historical release evidence. The 2026-10-20
+UI migration passed `make check` and `make verify-converter`, but
+`make vulncheck` found reachable advisories in the unchanged Excelize dependency.
+Review the [migration verification](../openspec/changes/migrate-shadcn-templ/verification.md)
+and rerun these checks for the actual release commit; the earlier vulnerability
+pass does not establish that the current revision is clear.
+
 | Check | Command | Observed |
 | --- | --- | --- |
 | Format, generation, lint, race tests, production build | `make check` | 2026-10-19: passed (format, generated templates, lint, `go test -race ./...`, production build) |
@@ -33,7 +40,10 @@ leave attempt history byte-identical.
 3. Provision the operator, sign in, and confirm the mailbox connection state.
 4. Create a campaign revision from a DOCX and confirm conversion succeeds
    without runtime Node, Word or LibreOffice on the server.
-5. Upload and validate a task; uploads, manifests, exclusion reports and
+5. Confirm the deployed UI loads CSS, JavaScript and `/static/fonts/` files
+   locally, uses preset `b870VEw0in`, and remains usable on desktop and mobile.
+   See [UI component maintenance](ui-components.md) for the source/version layout.
+6. Upload and validate a task; uploads, manifests, exclusion reports and
    generated downloads must be written under `/app/pb_data` and stay private.
 
 Observed 2026-10-19: runtime image `bachtel-runtime-test` started healthy on

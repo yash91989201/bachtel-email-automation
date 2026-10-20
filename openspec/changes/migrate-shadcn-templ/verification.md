@@ -49,3 +49,20 @@ The final packaged converter check and strict OpenSpec validation passed.
 Final preset `make check` passed, including formatting, regeneration consistency,
 lint, all race tests and the production binary build. `make verify-converter`
 also passed after the final sidebar contrast correction.
+
+## Documentation and configuration follow-up
+
+Two bounded documentation audits updated README, Coolify deployment, development
+checks and UI maintenance guidance against the actual build. The release checklist
+now distinguishes its dated historical passes from the migration's existing
+Excelize advisories and includes deployed preset/local-font smoke checks.
+No hosted deployment, production browser session or real mailbox was used.
+
+Air now watches WOFF2 source changes, and Docker excludes generated font copies
+from its input context while building authoritative `web/fonts` sources through
+the assets stage. Documentation links, parsed Air settings and copied font bytes
+were checked. `git diff --check`, `make check` and `make verify-converter` passed
+again for this follow-up. The first vulnerability-analysis attempt was killed
+during parallel verification. The separate retry completed and failed with the
+same four reachable Excelize advisories listed above (no dependency changed).
+Strict OpenSpec validation also passed after the documentation/task updates.

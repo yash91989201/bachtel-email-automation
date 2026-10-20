@@ -11,7 +11,12 @@ lock on the data directory and SQLite requires a single writer.
   PocketBase metadata.
 - `pandoc-cli=3.10-r0` is packaged in the runtime image and pinned. No runtime
   Node, Word or LibreOffice is required. The frontend is built during the image
-  build and served from the binary.
+  build and served from the binary. The Docker build context must include
+  `package.json`, `package-lock.json`, `scripts/`, `web/`,
+  `internal/web/views/` and `internal/web/ui/`. Node is used only in the
+  frontend build stage; the resulting CSS, JavaScript and local Noto Sans and
+  EB Garamond font files are embedded in the Go binary. The fonts' OFL license
+  files are in `web/fonts/licenses/`. No runtime component CLI or CDN is used.
 - The application listens on `0.0.0.0:8090` inside the image.
 - Health: `GET /health` returns `{"status":"ok"}` and no database, mailbox or
   task detail. Use it as the Coolify health check.
@@ -33,6 +38,11 @@ Local Compose equivalent:
 docker compose up --build -d
 docker compose logs -f app
 ```
+
+The shadcn-templ migration is a UI asset and Go binary change, with no database
+schema migration. Rebuild and redeploy the image while retaining the persistent
+`/app/pb_data` volume. Use the release checklist for production sending gates;
+a successful UI redeploy does not satisfy those gates.
 
 ## Volume ownership on first deployment
 

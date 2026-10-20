@@ -24,7 +24,13 @@ make verify-converter
 committed templates, builds assets, runs the shared linter and race tests, and
 builds the production binary. Stage intentional generated `*_templ.go` changes alongside
 `.templ` edits before checking: generated output is compared with the Git index,
-and new untracked generated files fail the check. Generated CSS/JS stay ignored.
+and new untracked generated files fail the check. Generated CSS/JS and copied fonts stay ignored.
+The asset build copies Alpine and htmx from `node_modules`, plus licensed fonts
+from `web/fonts`, into `internal/web/static`. It then compiles `web/css/app.css`
+to the embedded CSS.
+Air watches `.templ`, CSS, JS and WOFF2 source changes and reruns generation,
+asset copying and the server build; generated files under `internal/web/static`
+are excluded from its watch list.
 
 `make vulncheck` uses a pinned govulncheck version and the live Go vulnerability
 database. Findings fail the check; assess and update affected code/dependencies

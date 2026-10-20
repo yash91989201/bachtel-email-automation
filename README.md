@@ -20,8 +20,9 @@ make setup
 make dev
 ```
 
-Open <http://127.0.0.1:8090>. The starter page demonstrates an htmx HTML
-fragment backed by a real database query and an Alpine disclosure panel.
+Open <http://127.0.0.1:8090/login> to sign in to the operator workspace. The
+application provides campaign setup, workbook intake, sending review and
+recovery pages behind the operator account.
 
 Health endpoints:
 
@@ -40,12 +41,12 @@ console to create your first superuser. No credentials are seeded.
 
 `make dev` uses [Air](https://github.com/air-verse/air) to regenerate templates
 and assets, rebuild, and restart the server when Go, `.templ`, CSS, or
-JavaScript sources change. The pinned Air version downloads automatically on
+JavaScript or WOFF2 font sources change. The pinned Air version downloads automatically on
 the first run; no global installation is required. It also
 sources a local `.env` into the server process when one exists: copy
 `.env.example` to `.env` and fill it in instead of exporting variables by
 hand. Restart `make dev` after changing `.env` or `.air.toml`. Refresh the
-browser after a rebuild to see UI changes. Generated CSS and JavaScript are ignored by Git;
+browser after a rebuild to see UI changes. Generated CSS, JavaScript and copied fonts are ignored by Git;
 `make setup` restores them on a fresh checkout. Generated `*_templ.go` files
 are committed; edit the `.templ` sources instead.
 
@@ -252,9 +253,14 @@ docs/campaign-templates.md      Placeholder syntax, mapping/formatting rules, DO
 docs/task-intake.md             Task workbook support, header matching, duplicate handling and limits
 docs/microsoft-setup.md         Microsoft app registration and first-time connection setup
 web/css/app.css                 Tailwind entry and application layout styles
-web/css/theme.css               Bachtel theme tokens
+web/css/theme.css               Resolved preset tokens and application status colors
 web/css/components.css          Bachtel styling for owned UI primitives
-scripts/copy-assets.mjs         Copy pinned Alpine/htmx distributions locally
+web/fonts/                     Self-hosted Noto Sans and EB Garamond font files and OFL licenses
+components.json                 shadcn-templ component and asset paths
+preset.json                     Pinned shadcn-templ preset selection
+web/css/fonts.css               Font-face declarations for local preset fonts
+web/css/vendor/                 Pinned upstream component and animation styles
+scripts/copy-assets.mjs         Copy pinned Alpine/htmx and licensed fonts locally
 Dockerfile                     Frontend build, Go build, non-root runtime
 compose.yaml                   One service, application environment, persistent data volume
 ```
@@ -269,7 +275,7 @@ The existing OpenSpec configuration and skills are preserved.
 
 ```sh
 make generate    # go generate -> module-pinned go tool templ
-make assets      # copy Alpine/htmx and compile Tailwind CSS
+make assets      # copy Alpine/htmx and local fonts; compile Tailwind CSS
 make fmt         # format Go and templ sources
 make test        # regenerate, build assets, go test, go vet
 make build       # build bin/bachtel with assets embedded
@@ -337,7 +343,16 @@ values into the container; the Go process also takes PocketBase CLI flags.
 The default host is loopback. For a remote host, place an HTTPS reverse
 proxy in front and configure trusted proxy headers in PocketBase settings.
 Set `APP_HOST=0.0.0.0` only when direct external access is intended. The
-container health check probes the public `GET /api/health` endpoint.
+container health check probes the public minimal `GET /health` endpoint.
+
+The Docker build context must include `package.json`, `package-lock.json`,
+`scripts/`, `web/` (including local fonts and their licenses),
+`internal/web/views/`, and `internal/web/ui/`. The image builds the frontend
+with Node in a build stage, embeds the generated CSS, JavaScript and fonts in
+the Go binary, and runs without Node, a component CLI or CDN access. This UI
+migration changes no database schema; deploy it by rebuilding and replacing
+the image while retaining the `pb_data` volume. Follow the separate release
+checklist before enabling candidate sending.
 
 ```sh
 docker compose down           # stop; retain data

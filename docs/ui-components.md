@@ -12,7 +12,9 @@ content and operator workflows remain unchanged.
 - `internal/web/ui`: component packages copied from shadcn-templ, plus shared class utilities and its MIT license.
 - `web/css/theme.css`: resolved preset tokens and application status colors.
 - `web/css/vendor`: pinned upstream Luma, Tailwind variants and animation styles.
-- `web/css/fonts.css` and `web/fonts`: self-hosted preset fonts and OFL licenses.
+- `web/css/fonts.css` and `web/fonts`: self-hosted preset fonts and OFL licenses;
+  the asset build copies those font files into `internal/web/static/fonts` for
+  embedded `/static/fonts/...` serving.
 - `web/css/components.css`: presentation of the owned primitives, including native controls.
 - `web/css/app.css`: Tailwind sources and application layout/responsive styles.
 - `components.json`: component aliases and existing CSS/static paths for maintenance tooling.

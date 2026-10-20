@@ -6,7 +6,7 @@ env_files = []
 [build]
 cmd = "make generate assets && go build -o ./tmp/air/server ./cmd/server"
 entrypoint = ["./tmp/air/server", "serve", "--http=127.0.0.1:8090", "--dir=./pb_data", "--dev"]
-include_ext = ["go", "templ", "css", "js", "mjs"]
+include_ext = ["go", "templ", "css", "js", "mjs", "woff2"]
 include_file = ["go.mod", "go.sum", "package.json", "package-lock.json", "components.json", "preset.json", "Makefile"]
 exclude_dir = [".git", ".codegraph", "node_modules", "openspec", "pb_data", "tmp", "bin", "vendor", "internal/web/static"]
 exclude_regex = ["_templ\\.go$", "_test\\.go$"]
