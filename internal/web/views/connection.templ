@@ -3,6 +3,7 @@ package views
 import (
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alert"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alertdialog"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/badge"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
@@ -32,15 +33,17 @@ templ ConnectionPage(data ConnectionData) {
 		</div>
 		if len(data.MissingSettings) > 0 {
 			@alert.Alert(alert.Props{Class: "status-warning"}) {
-				<div>
-					<p class="font-semibold">The Microsoft connection is not configured.</p>
+				@alert.Title(alert.TitleProps{}) {
+					The Microsoft connection is not configured.
+				}
+				@alert.Description(alert.DescriptionProps{}) {
 					<p>Set these settings and restart the server:</p>
 					<ul class="list-inside list-disc">
 						for _, name := range data.MissingSettings {
 							<li><code>{ name }</code></li>
 						}
 					</ul>
-				</div>
+				}
 			}
 		}
 		if data.Notice != "" {
@@ -53,7 +56,7 @@ templ ConnectionPage(data ConnectionData) {
 				{ data.LastError }
 			}
 		}
-		<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="status-heading">
+		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "status-heading"}}) {
 			@card.Content(card.ContentProps{Class: "gap-4"}) {
 				<h2 id="status-heading" class="cn-card-title">Sending mailbox</h2>
 				<div class="flex items-center gap-3">
@@ -96,24 +99,35 @@ templ ConnectionPage(data ConnectionData) {
 						</form>
 					}
 					if data.Status != string(microsoft.StatusDisconnected) {
-						<form method="post" action="/connection/disconnect" class="flex flex-wrap items-center gap-2" x-data="{ confirm: false }">
-							@button.Button(button.Props{Variant: button.VariantOutline, Attributes: templ.Attributes{"x-on:click": "confirm = true", "x-bind:aria-expanded": "confirm", "aria-expanded": "false", "x-show": "!confirm"}}) {
-								Disconnect
+						<form id="mailbox-disconnect-form" method="post" action="/connection/disconnect">
+							@alertdialog.AlertDialog(alertdialog.Props{ID: "mailbox-disconnect-dialog"}) {
+								@button.Button(button.Props{Variant: button.VariantOutline, Attributes: alertdialog.Trigger(ctx)}) {
+									Disconnect
+								}
+								@alertdialog.Content(alertdialog.ContentProps{}) {
+									@alertdialog.Header(alertdialog.HeaderProps{}) {
+										@alertdialog.Title(alertdialog.TitleProps{}) {
+											Disconnect the mailbox?
+										}
+										@alertdialog.Description(alertdialog.DescriptionProps{}) {
+											Diagnostic tests and candidate sending stop until you connect a mailbox again. Recorded attempts and recovery state stay unchanged.
+										}
+									}
+									@alertdialog.Footer(alertdialog.FooterProps{}) {
+										@alertdialog.Cancel(alertdialog.CancelProps{}) {
+											Cancel
+										}
+										@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit, Attributes: templ.Attributes{"form": "mailbox-disconnect-form"}}) {
+											Yes, disconnect
+										}
+									}
+								}
 							}
-							<div class="flex flex-wrap items-center gap-2" x-show="confirm" x-cloak>
-								<span class="text-sm">Disconnect the mailbox?</span>
-								@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeSm, Type: button.TypeSubmit}) {
-									Yes, disconnect
-								}
-								@button.Button(button.Props{Variant: button.VariantGhost, Size: button.SizeSm, Attributes: templ.Attributes{"x-on:click": "confirm = false"}}) {
-									Cancel
-								}
-							</div>
 						</form>
 					}
 				</div>
 			}
-		</section>
+		}
 	}
 }
 

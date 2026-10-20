@@ -3,14 +3,19 @@ package views
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alert"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/checkbox"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/collapsible"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/field"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/input"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/item"
 	uilabel "github.com/yash91989201/bachtel-email-automation/internal/web/ui/label"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/nativeselect"
-	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/table"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tabs"
 )
 
 type SendingData struct {
@@ -36,6 +41,24 @@ type SendingOutcome struct{ ID, Kind, Recipient, State, Reason, Time string }
 // A changed control identity discards stale confirmations during polling.
 func sendingControlKey(data SendingData) string {
 	return fmt.Sprintf("%s-%t-%t-%d-%d-%d-%d-%d-%d-%d-%d-%d-%s", data.Status, data.Enabled, data.Approved, data.Remaining, data.Submitted, data.Failed, data.Held, data.InFlight, data.Reserved, data.Invalid, data.Duplicate, data.Ineligible, data.ScheduleState)
+}
+
+// approvalFormID names the approval form by the content hash, the latest test
+// and the approval state, so a changed configuration or a fresh test discards
+// a stale confirmation. htmx restores a preserved element with a selector
+// built from its id, so the id keeps only selector-safe characters: the
+// content hash carries a "sha256:" prefix.
+func approvalFormID(data SendingData) string {
+	raw := "sending-approval-" + data.Hash + "-" + data.LatestTest + "-" + strconv.FormatBool(data.Approved)
+	var safe strings.Builder
+	safe.Grow(len(raw))
+	for _, r := range raw {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+			safe.WriteRune(r)
+		}
+	}
+	return safe.String()
 }
 
 func sendingNeedsRecovery(row SendingRow) bool {
@@ -77,24 +100,35 @@ templ SendingPage(data SendingData) {
 				{ data.Error }
 			}
 		}
-		<div class="campaign-workspace" x-data="{tab:'test', guidanceOpen:false}" x-init="const requested = location.hash.slice(1); if (Array.from($el.querySelectorAll('[role=tab]')).some(item => item.dataset.tab === requested)) tab = requested">
+		@tabs.Tabs(tabs.Props{ID: "sending", Class: "campaign-workspace", Orientation: tabs.OrientationVertical, DefaultValue: "test", Attributes: templ.Attributes{"data-workspace-tabs": true}}) {
 			<aside class="workspace-sidebar" aria-label="Sending navigation">
-				@workspaceTabList("Sending workflow") {
-					<p class="workspace-nav-heading">Preparation & sending</p>
-					@workspaceSidebarTab("sending", "test", "Test & approval", "Check received formatting", "test")
-					@workspaceSidebarTab("sending", "send", "Send & schedule", "Start, stop & schedule", "test")
-					<p class="workspace-nav-heading">Records & recovery</p>
-					@workspaceSidebarTab("sending", "recovery", "Recovery", "Review failures & uncertainty", "test")
-					@workspaceSidebarTab("sending", "recent", "Recent outcomes", "Submission attempt history", "test")
-					@workspaceSidebarTab("sending", "results", "Results workbook", "Generate & download results", "test")
-					<p class="workspace-nav-heading">Mailbox settings</p>
-					@workspaceSidebarTab("sending", "pacing", "Mailbox pacing", "Shared mailbox rate", "test")
+				@tabs.List(tabs.ListProps{Attributes: templ.Attributes{"aria-label": "Sending workflow"}}) {
+					@tabs.Trigger(tabs.TriggerProps{Value: "test"}) {
+						<span>Test & approval</span><small>Check received formatting</small>
+					}
+					@tabs.Trigger(tabs.TriggerProps{Value: "send"}) {
+						<span>Send & schedule</span><small>Start, stop & schedule</small>
+					}
+					<div class="workspace-group-separator" aria-hidden="true"></div>
+					@tabs.Trigger(tabs.TriggerProps{Value: "recovery"}) {
+						<span>Recovery</span><small>Review failures & uncertainty</small>
+					}
+					@tabs.Trigger(tabs.TriggerProps{Value: "recent"}) {
+						<span>Recent outcomes</span><small>Submission attempt history</small>
+					}
+					@tabs.Trigger(tabs.TriggerProps{Value: "results"}) {
+						<span>Results workbook</span><small>Generate & download results</small>
+					}
+					<div class="workspace-group-separator" aria-hidden="true"></div>
+					@tabs.Trigger(tabs.TriggerProps{Value: "pacing"}) {
+						<span>Mailbox pacing</span><small>Shared mailbox rate</small>
+					}
 				}
 			</aside>
 			<div class="workspace-content">
 				@SendingProgress(data)
-				@workspaceTabPanel("sending", "results", "test") {
-					<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="artifacts-heading">
+				@tabs.Content(tabs.ContentProps{Value: "results", Class: "space-y-6"}) {
+					@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "artifacts-heading"}}) {
 						@card.Content(card.ContentProps{Class: "gap-4"}) {
 							<h2 class="section-heading" id="artifacts-heading">Result workbook</h2>
 							<form method="post" action={ data.Base + "/artifacts#results" }>
@@ -114,17 +148,19 @@ templ SendingPage(data SendingData) {
 								<p class="text-destructive">The last generation failed; request generation again to retry. No incomplete file is offered.</p>
 							}
 						}
-					</section>
+					}
 				}
-				@workspaceTabPanel("sending", "pacing", "test") {
-					<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="pacing-heading">
+				@tabs.Content(tabs.ContentProps{Value: "pacing", Class: "space-y-6"}) {
+					@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "pacing-heading"}}) {
 						@card.Content(card.ContentProps{Class: "gap-4"}) {
 							<h2 class="section-heading" id="pacing-heading">Mailbox pacing</h2>
 							<p class="section-description">Default 25 starts per minute; maximum 30 and four in flight across candidates, tests and retries. Microsoft throttling may reduce throughput. Other Outlook clients consume mailbox capacity outside this app's observations.</p>
 							<form method="post" action={ data.Base + "/rate#pacing" } class="field-grid">
 								<input type="hidden" name="action_id" value={ data.ActionID + "rate" }/>
-								@uilabel.Label(uilabel.Props{Class: "flex flex-col items-start gap-2"}) {
-									Starts per minute
+								@field.Field(field.Props{}) {
+									@field.Label(field.LabelProps{For: "sending-rate"}) {
+										Starts per minute
+									}
 									@input.Input(input.Props{ID: "sending-rate", Name: "rate", Type: "number", Class: "pacing-input", Value: strconv.Itoa(data.Rate), Required: true, Attributes: templ.Attributes{"min": "1", "max": "30", "step": "1"}})
 								}
 								<div class="action-bar">
@@ -134,23 +170,25 @@ templ SendingPage(data SendingData) {
 								</div>
 							</form>
 						}
-					</section>
+					}
 				}
 			</div>
-		</div>
+		}
 	}
 }
 
 templ SendingDiagnostics(data SendingData) {
-	<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="sending-test-heading">
+	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "sending-test-heading"}}) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
 			<p class="eyebrow">Step 1 · Test</p>
 			<h2 class="section-heading" id="sending-test-heading">Send a formatting test</h2>
 			<p class="section-description">Choose a valid sample row and enter the test address. Tests use a separate attempt and never submit a candidate.</p>
 			<form id="sending-diagnostic-test" hx-preserve method="post" action={ data.Base + "/test#test" } class="space-y-3">
 				<input type="hidden" name="action_id" value={ data.ActionID + "test" }/>
-				@uilabel.Label(uilabel.Props{Class: "flex flex-col items-start gap-2"}) {
-					Sample row
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-sample-row"}) {
+						Sample row
+					}
 					@nativeselect.NativeSelect(nativeselect.Props{ID: "sending-sample-row", Name: "member_id", Required: true, Class: "w-full"}) {
 						for _,row:=range data.Rows {
 							if row.SampleEligible {
@@ -161,8 +199,10 @@ templ SendingDiagnostics(data SendingData) {
 						}
 					}
 				}
-				@uilabel.Label(uilabel.Props{Class: "flex flex-col items-start gap-2"}) {
-					Test recipient
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-test-address"}) {
+						Test recipient
+					}
 					@input.Input(input.Props{ID: "sending-test-address", Type: "email", Name: "test_address", Required: true})
 				}
 				<div class="action-bar">
@@ -172,8 +212,8 @@ templ SendingDiagnostics(data SendingData) {
 				</div>
 			</form>
 		}
-	</section>
-	<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="sending-approval-heading">
+	}
+	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "sending-approval-heading"}}) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
 			<p class="eyebrow">Step 2 · Approve</p>
 			<h2 class="section-heading" id="sending-approval-heading">Approve the received formatting</h2>
@@ -181,11 +221,13 @@ templ SendingDiagnostics(data SendingData) {
 			if data.Approved {
 				<p class="text-success">Received formatting approved for this hash.</p>
 			}
-			<form id={ "sending-approval-" + data.Hash + "-" + data.LatestTest + "-" + strconv.FormatBool(data.Approved) } hx-preserve method="post" action={ data.Base + "/approve#test" } class="space-y-3">
+			<form id={ approvalFormID(data) } hx-preserve method="post" action={ data.Base + "/approve#test" } class="space-y-3">
 				<input type="hidden" name="action_id" value={ data.ActionID + "approve" }/>
 				<input type="hidden" name="content_hash" value={ data.Hash }/>
-				@uilabel.Label(uilabel.Props{Class: "flex flex-col items-start gap-2"}) {
-					Successful diagnostic test{ " " }
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-approval-attempt"}) {
+						Successful diagnostic test
+					}
 					@nativeselect.NativeSelect(nativeselect.Props{ID: "sending-approval-attempt", Name: "attempt_id", Required: true, Class: "w-full"}) {
 						<option value="">Choose a submitted test for this configuration</option>
 						if data.LatestTest!="" {
@@ -199,7 +241,8 @@ templ SendingDiagnostics(data SendingData) {
 					}
 				}
 				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-					<input class="app-checkbox" type="checkbox" name="received_checked" value="yes" required/> I received this test and checked its subject, personalized values and HTML formatting.
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-approve-received", Name: "received_checked", Value: "yes", Required: true})
+					I received this test and checked its subject, personalized values and HTML formatting.
 				}
 				<div class="action-bar">
 					@button.Button(button.Props{Type: button.TypeSubmit}) {
@@ -208,10 +251,11 @@ templ SendingDiagnostics(data SendingData) {
 				</div>
 			</form>
 		}
-	</section>
+	}
 }
 
 templ SendingProgress(data SendingData) {
+	{{ ctx = tabs.Panels(ctx, "sending", tabs.OrientationVertical) }}
 	<section id="sending-progress" class="space-y-4" hx-get={ data.Base + "/progress" } hx-trigger="every 2s" hx-swap="outerHTML">
 		<div class="subtle-panel" aria-live="polite">
 			<h2 class="section-heading">Progress · { data.Status }</h2>
@@ -228,45 +272,55 @@ templ SendingProgress(data SendingData) {
 				<div class="metric"><dt>In flight</dt><dd>{ data.InFlight }</dd></div>
 				<div class="metric"><dt>Reserved</dt><dd>{ data.Reserved }</dd></div>
 			</dl>
-			<details class="snapshot-details" x-bind:open="guidanceOpen">
-				<summary x-on:click.prevent="guidanceOpen = !guidanceOpen">Exclusions, mailbox status & sending guidance</summary>
-				<div class="space-y-2 text-sm text-muted-foreground">
+			@collapsible.Collapsible(collapsible.Props{ID: "sending-guidance", Class: "snapshot-details", Attributes: templ.Attributes{"data-workspace-persist": true}}) {
+				<button class="snapshot-details-summary" { collapsible.Trigger(ctx)... }>Exclusions, mailbox status & sending guidance</button>
+				@collapsible.Content(collapsible.ContentProps{Class: "space-y-2 text-sm text-muted-foreground"}) {
 					<p>Exclusions: invalid { data.Invalid }, duplicate { data.Duplicate }, ineligible { data.Ineligible }. Counts refresh before each action; changed exclusions require another confirmation.</p>
 					if data.ArtifactNeeded {
 						<p>Result generation requested. The background worker builds the workbook; artifact failures never requeue email.</p>
 					}
 					<p>Current pacing: { data.Rate } starts per minute. Mailbox cooldown: { data.Cooldown }</p>
 					<p>SUBMITTED means Microsoft accepted the request; it does not confirm delivery. Closing the browser or logging out does not stop server work. Reconnecting Microsoft or sending a diagnostic test never resumes candidates.</p>
-					<p><a class="app-link" href={ data.Base } x-bind:href="$el.getAttribute('href').split('#')[0] + '#' + tab">Refresh successful test choices and all action counts</a></p>
-				</div>
-			</details>
+					<p><a class="app-link" href={ data.Base } data-workspace-hash-link>Refresh successful test choices and all action counts</a></p>
+				}
+			}
 		</div>
-		@workspaceTabPanel("sending", "test", "test") {
+		@tabs.Content(tabs.ContentProps{Value: "test", Class: "space-y-6"}) {
 			@SendingDiagnostics(data)
 		}
-		@workspaceTabPanel("sending", "send", "test") {
+		@tabs.Content(tabs.ContentProps{Value: "send", Class: "space-y-6"}) {
 			@SendingControls(data)
 			@sendingSchedule(data)
 		}
-		@workspaceTabPanel("sending", "recovery", "test") {
+		@tabs.Content(tabs.ContentProps{Value: "recovery", Class: "space-y-6"}) {
 			@SendingRecovery(data)
 		}
-		@workspaceTabPanel("sending", "recent", "test") {
+		@tabs.Content(tabs.ContentProps{Value: "recent", Class: "space-y-6"}) {
 			<section class="subtle-panel" aria-labelledby="recent-outcomes-heading">
 				<h3 class="section-heading" id="recent-outcomes-heading">Recent outcomes · +05:30</h3>
-				<div class="table-scroll">
-					@table.Table(table.Props{Class: "cn-table-compact"}) {
-						<thead><tr><th>Time</th><th>Kind / recipient</th><th>Outcome</th><th>Reason</th></tr></thead>
-						<tbody>
-							if len(data.Recent) == 0 {
-								<tr><td colspan="4">No submission attempts yet.</td></tr>
+				@item.Group(item.GroupProps{}) {
+					if len(data.Recent) == 0 {
+						@item.Item(item.Props{}) {
+							@item.Content(item.ContentProps{}) {
+								@item.Description(item.DescriptionProps{}) {
+									No submission attempts yet.
+								}
 							}
-							for _,outcome:=range data.Recent {
-								<tr><td>{ outcome.Time }</td><td>{ outcome.Kind } · { outcome.Recipient }</td><td>{ outcome.State }</td><td>{ outcome.Reason }</td></tr>
-							}
-						</tbody>
+						}
 					}
-				</div>
+					for _,outcome:=range data.Recent {
+						@item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}) {
+							@item.Content(item.ContentProps{}) {
+								@item.Title(item.TitleProps{}) {
+									{ outcome.Time } · { outcome.Kind } · { outcome.Recipient }
+								}
+								@item.Description(item.DescriptionProps{}) {
+									{ outcome.State } · { outcome.Reason }
+								}
+							}
+						}
+					}
+				}
 			</section>
 		}
 	</section>
@@ -277,7 +331,8 @@ templ sendingAction(data SendingData, kind string, label string, count int) {
 		<input type="hidden" name="action_id" value={ data.ActionID + kind }/>
 		<input type="hidden" name="expected_count" value={ strconv.Itoa(count) }/>
 		<label class="block">
-			<input class="app-checkbox" type="checkbox" name="confirmed" value="yes" required/> Confirm { count } recipients
+			@checkbox.Checkbox(checkbox.Props{ID: "sending-confirm-" + kind, Name: "confirmed", Value: "yes", Required: true})
+			Confirm { count } recipients
 		</label>
 		@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Enabled || !data.Approved || count == 0}) {
 			{ label }
@@ -286,7 +341,7 @@ templ sendingAction(data SendingData, kind string, label string, count int) {
 }
 
 templ sendingSchedule(data SendingData) {
-	<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="schedule-heading">
+	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "schedule-heading"}}) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
 			<h3 class="section-heading" id="schedule-heading">Scheduled start</h3>
 			if data.ScheduleAt != "" {
@@ -298,12 +353,16 @@ templ sendingSchedule(data SendingData) {
 			<form id={ "sending-schedule-" + sendingControlKey(data) } hx-preserve method="post" action={ data.Base + "/schedule#send" } class="field-grid">
 				<input type="hidden" name="action_id" value={ data.ActionID + "schedule" }/>
 				<input type="hidden" name="expected_count" value={ strconv.Itoa(data.Remaining) }/>
-				@uilabel.Label(uilabel.Props{Class: "flex flex-col items-start gap-2"}) {
-					Start date
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-schedule-date"}) {
+						Start date
+					}
 					@input.Input(input.Props{ID: "sending-schedule-date", Type: "date", Name: "schedule_date", Required: true, Attributes: templ.Attributes{"min": data.ScheduleMinDate}})
 				}
-				@uilabel.Label(uilabel.Props{Class: "flex flex-col items-start gap-2"}) {
-					Hour{ " " }
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-schedule-hour"}) {
+						Hour
+					}
 					@nativeselect.NativeSelect(nativeselect.Props{ID: "sending-schedule-hour", Name: "schedule_hour", Required: true, Class: "w-full"}) {
 						<option value="">Hour</option>
 						for hour := 1; hour <= 12; hour++ {
@@ -311,19 +370,24 @@ templ sendingSchedule(data SendingData) {
 						}
 					}
 				}
-				@uilabel.Label(uilabel.Props{Class: "flex flex-col items-start gap-2"}) {
-					Minute
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-schedule-minute"}) {
+						Minute
+					}
 					@input.Input(input.Props{ID: "sending-schedule-minute", Type: "number", Name: "schedule_minute", Required: true, Attributes: templ.Attributes{"min": "0", "max": "59", "step": "1"}})
 				}
-				@uilabel.Label(uilabel.Props{Class: "flex flex-col items-start gap-2"}) {
-					AM or PM{ " " }
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-schedule-meridiem"}) {
+						AM or PM
+					}
 					@nativeselect.NativeSelect(nativeselect.Props{ID: "sending-schedule-meridiem", Name: "schedule_meridiem", Required: true, Class: "w-full"}) {
 						<option value="AM">AM</option>
 						<option value="PM">PM</option>
 					}
 				}
 				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-					<input class="app-checkbox" type="checkbox" name="confirmed" value="yes" required/> I confirm the fresh counts for this scheduled start.
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-schedule-confirm", Name: "confirmed", Value: "yes", Required: true})
+					I confirm the fresh counts for this scheduled start.
 				}
 				<div class="action-bar">
 					@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Enabled || !data.Approved || data.Remaining == 0, Attributes: templ.Attributes{"name": "schedule_action", "value": "enable"}}) {
@@ -338,7 +402,7 @@ templ sendingSchedule(data SendingData) {
 				}
 			</form>
 		}
-	</section>
+	}
 }
 
 templ sendingRowFields(row SendingRow) {
@@ -348,7 +412,7 @@ templ sendingRowFields(row SendingRow) {
 }
 
 templ SendingControls(data SendingData) {
-	<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="controls-heading">
+	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "controls-heading"}}) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
 			<p class="eyebrow">Step 3 · Start or recover</p>
 			<h2 class="section-heading" id="controls-heading">Candidate actions</h2>
@@ -367,11 +431,11 @@ templ SendingControls(data SendingData) {
 				</form>
 			</div>
 		}
-	</section>
+	}
 }
 
 templ SendingRecovery(data SendingData) {
-	<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="recovery-heading">
+	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "recovery-heading"}}) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
 			<h2 class="section-heading" id="recovery-heading">Individual recovery</h2>
 			if !sendingHasRecovery(data.Rows) {
@@ -394,10 +458,12 @@ templ SendingRecovery(data SendingData) {
 							<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resend#recovery" } class="space-y-2">
 								@sendingRowFields(row)
 								@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-									<input class="app-checkbox" type="checkbox" name="duplicate_risk" value="yes" required/> The earlier request may have been accepted. Sending again can create a duplicate.
+									@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-duplicate-" + row.ID, Name: "duplicate_risk", Value: "yes", Required: true})
+									The earlier request may have been accepted. Sending again can create a duplicate.
 								}
 								@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-									<input class="app-checkbox" type="checkbox" name="confirmed" value="yes" required/> Confirm sending this 1 recipient again.
+									@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+									Confirm sending this 1 recipient again.
 								}
 								@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Enabled, Class: "status-warning"}) {
 									{ "Send again — duplicate risk" }
@@ -405,12 +471,15 @@ templ SendingRecovery(data SendingData) {
 							</form>
 							<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resolve#recovery" } class="space-y-2">
 								@sendingRowFields(row)
-								@uilabel.Label(uilabel.Props{Class: "flex flex-col items-start gap-2"}) {
-									Basis for resolution
+								@field.Field(field.Props{}) {
+									@field.Label(field.LabelProps{For: "sending-resolution-basis-" + row.ID}) {
+										Basis for resolution
+									}
 									@input.Input(input.Props{ID: "sending-resolution-basis-" + row.ID, Name: "basis", Required: true, Attributes: templ.Attributes{"maxlength": "2000"}})
 								}
 								@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-									<input class="app-checkbox" type="checkbox" name="confirmed" value="yes" required/> I verified this recipient was already submitted.
+									@checkbox.Checkbox(checkbox.Props{ID: "sending-resolve-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+									I verified this recipient was already submitted.
 								}
 								@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit}) {
 									{ "Mark as already submitted" }
@@ -421,7 +490,8 @@ templ SendingRecovery(data SendingData) {
 							<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/retry#recovery" }>
 								@sendingRowFields(row)
 								@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-									<input class="app-checkbox" type="checkbox" name="confirmed" value="yes" required/> Retry this 1 definite failure using its unchanged snapshot.
+									@checkbox.Checkbox(checkbox.Props{ID: "sending-retry-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+									Retry this 1 definite failure using its unchanged snapshot.
 								}
 								@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Enabled}) {
 									{ "Retry" }
@@ -432,5 +502,5 @@ templ SendingRecovery(data SendingData) {
 				}
 			}
 		}
-	</section>
+	}
 }

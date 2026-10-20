@@ -25,39 +25,18 @@ func TestCampaignTabsExposeTheRelevantPanel(t *testing.T) {
 			if err := CampaignPage(tc.data).Render(context.Background(), &page); err != nil {
 				t.Fatal(err)
 			}
+			assertWorkspaceTabs(t, page.String(), "campaign", tc.visible, tc.tabs)
 			doc, err := html.Parse(strings.NewReader(page.String()))
 			if err != nil {
 				t.Fatal(err)
 			}
-			tabs, selected, visible := 0, 0, 0
-			var inspect func(*html.Node)
-			inspect = func(node *html.Node) {
-				attrs := make(map[string]string, len(node.Attr))
-				for _, attr := range node.Attr {
-					attrs[attr.Key] = attr.Val
-				}
-				if attrs["role"] == "tab" {
-					tabs++
-					if attrs["aria-selected"] == "true" {
-						selected++
-						if attrs["aria-controls"] != "campaign-panel-"+tc.visible {
-							t.Errorf("selected tab controls %q", attrs["aria-controls"])
-						}
-					}
-				}
-				if _, hidden := attrs["hidden"]; attrs["role"] == "tabpanel" && !hidden {
-					visible++
-					if attrs["id"] != "campaign-panel-"+tc.visible || attrs["aria-labelledby"] != "campaign-tab-"+tc.visible {
-						t.Errorf("wrong visible panel: %v", attrs)
-					}
-				}
-				for child := node.FirstChild; child != nil; child = child.NextSibling {
-					inspect(child)
-				}
+			root := workspaceNode(doc, "data-slot", "tabs")
+			if !hasWorkspaceAttr(root, "data-workspace-tabs") {
+				t.Fatal("campaign workspace is not marked for the adapter")
 			}
-			inspect(doc)
-			if tabs != tc.tabs || selected != 1 || visible != 1 {
-				t.Fatalf("tabs=%d selected=%d visible=%d, want %d/1/1", tabs, selected, visible, tc.tabs)
+			wantIgnore := tc.data.RevisionError != "" || tc.data.LabelsError != "" || tc.data.DeleteError != ""
+			if got := hasWorkspaceAttr(root, "data-workspace-ignore-hash"); got != wantIgnore {
+				t.Errorf("ignore-hash = %t, want %t", got, wantIgnore)
 			}
 		})
 	}
@@ -137,27 +116,31 @@ func TestCampaignRevisionFormRevealsItsReferenceOnDemand(t *testing.T) {
 	}
 
 	// The template tab shows the current revision, the mapping reference and
-	// the revision form in that order. The first two are collapsed
-	// accordions; the form stays open.
+	// the revision form in that order. The first two are collapsed items of
+	// one accordion; the form stays open.
 	revision := findCard(doc, "revision-heading")
 	reference := findCard(doc, "mapping-reference-heading")
 	form := findCard(doc, "upload-heading")
-	for name, card := range map[string]*html.Node{"current revision": revision, "mapping reference": reference, "revision form": form} {
-		if card == nil {
-			t.Fatalf("the campaign page has no %s card", name)
+	for name, node := range map[string]*html.Node{"current revision": revision, "mapping reference": reference, "revision form": form} {
+		if node == nil {
+			t.Fatalf("the campaign page has no %s section", name)
 		}
 	}
-	if revision.Data != "details" {
-		t.Errorf("the current revision card is a %q, want a collapsed accordion", revision.Data)
+	for name, item := range map[string]*html.Node{"current revision": revision, "mapping reference": reference} {
+		if got := workspaceAttr(item, "data-slot"); got != "accordion-item" {
+			t.Errorf("the %s section is a %q, want an accordion item", name, got)
+		}
+		if !hasWorkspaceAttr(item, "data-closed") || hasWorkspaceAttr(item, "data-open") {
+			t.Errorf("the %s accordion item does not start closed", name)
+		}
 	}
-	if reference.Data != "details" {
-		t.Errorf("the mapping reference card is a %q, want a collapsed accordion", reference.Data)
+	if group := revision.Parent; group == nil || group != reference.Parent {
+		t.Error("the current revision and mapping reference are not in one accordion")
+	} else if group.Parent != form.Parent {
+		t.Error("the accordion is not a sibling of the revision form card")
 	}
-	if form.Data != "section" {
-		t.Errorf("the revision form card is a %q, want an always-open card", form.Data)
-	}
-	if reference.Parent != form.Parent || revision.Parent != form.Parent {
-		t.Errorf("the reference card is not a sibling of the revision form card")
+	if got := workspaceAttr(form, "data-slot"); got != "card" {
+		t.Errorf("the revision form card is a %q, want an always-open card", got)
 	}
 	for node := byID["upload-heading"]; node != nil; node = node.Parent {
 		if node == reference {
@@ -299,16 +282,16 @@ func TestPreviewResultCanBeClosed(t *testing.T) {
 	}
 }
 
-// findCard returns the card that holds the heading with the given id.
+// findCard returns the disclosure or card that holds the element with the
+// given id.
 func findCard(node *html.Node, headingID string) *html.Node {
-	if node.Type == html.ElementNode && node.Data == "h2" {
-		for _, attr := range node.Attr {
-			if attr.Key == "id" && attr.Val == headingID {
-				for parent := node.Parent; parent != nil; parent = parent.Parent {
-					if parent.Type == html.ElementNode && (parent.Data == "section" || parent.Data == "details") {
-						return parent
-					}
-				}
+	if node.Type == html.ElementNode && workspaceAttr(node, "id") == headingID {
+		for parent := node.Parent; parent != nil; parent = parent.Parent {
+			if parent.Type != html.ElementNode {
+				continue
+			}
+			if slot := workspaceAttr(parent, "data-slot"); slot == "accordion-item" || slot == "card" || workspaceAttr(parent, "role") == "region" {
+				return parent
 			}
 		}
 	}

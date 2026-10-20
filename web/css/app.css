@@ -234,28 +234,6 @@ dt {
   background: var(--color-muted);
 }
 
-.disclosure {
-  border: 1px solid var(--color-border);
-  border-radius: .85rem;
-  background: var(--color-card);
-}
-
-.disclosure>summary {
-  padding: 1.2rem 1.5rem;
-  cursor: pointer;
-  font-size: .9rem;
-  font-weight: 650;
-}
-
-.disclosure>.disclosure-body {
-  padding: 0 1.5rem 1.5rem;
-}
-
-.disclosure[open]>summary {
-  border-bottom: 1px solid var(--color-border);
-  margin-bottom: 1.25rem;
-}
-
 .danger-disclosure {
   border-color: #ecd4d2;
 }
@@ -323,19 +301,22 @@ dt {
 }
 
 .workflow-steps {
-  list-style: none;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
   border: 1px solid var(--color-border);
   border-radius: .85rem;
   background: var(--color-card);
 }
 
-.workflow-steps li {
+.workflow-steps > [data-slot="item"] {
+  border: 0;
+  border-radius: 0;
   padding: 1.75rem;
+  align-items: flex-start;
 }
 
-.workflow-steps li+li {
+.workflow-steps > [data-slot="item"]+[data-slot="item"] {
   border-left: 1px solid var(--color-border);
 }
 
@@ -493,21 +474,6 @@ dt {
     min-width: 540px;
   }
 
-  .disclosure>summary {
-    padding: 1rem;
-  }
-
-  .disclosure>.disclosure-body {
-    padding: 0 1rem 1rem;
-  }
-
-  .card-disclosure>summary {
-    padding: 1rem;
-  }
-
-  .card-disclosure>.cn-card-content {
-    padding: 1rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -651,39 +617,6 @@ label:has(> input[type="checkbox"]) {
   max-width: 880px;
 }
 
-.card-disclosure>summary {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-  padding: 1.25rem 1.75rem;
-  cursor: pointer;
-  list-style: none;
-}
-
-.card-disclosure>summary::-webkit-details-marker {
-  display: none;
-}
-
-.card-disclosure>summary::after {
-  content: "▸";
-  margin-left: auto;
-  color: var(--color-muted-foreground);
-  font-size: .9rem;
-  transition: transform .15s ease;
-}
-
-.card-disclosure[open]>summary {
-  border-bottom: 1px solid var(--color-border);
-}
-
-.card-disclosure[open]>summary::after {
-  transform: rotate(90deg);
-}
-
-.card-disclosure>.cn-card-content {
-  padding-top: 1.25rem;
-}
-
 .field-hint-row {
   position: relative;
   display: flex;
@@ -763,10 +696,14 @@ label:has(> input[type="checkbox"]) {
   padding-top: 1rem;
 }
 
-.snapshot-details summary {
+.snapshot-details .snapshot-details-summary {
   cursor: pointer;
   color: var(--color-muted-foreground);
+  font: inherit;
   font-weight: 600;
+  background: none;
+  border: 0;
+  padding: 0;
 }
 
 .snapshot-details dl {
@@ -814,53 +751,59 @@ label:has(> input[type="checkbox"]) {
   top: 1.5rem;
 }
 
-.workspace-nav-heading {
-  padding: .65rem .75rem;
-  font-size: .62rem;
-  font-weight: 750;
-  color: var(--color-muted-foreground);
-  letter-spacing: .09em;
-  text-transform: uppercase;
-}
-
-.workspace-sidebar [role="tablist"] {
+/* The sidebar is the workspace tabs primitive: the list is a grid, each
+   trigger keeps the two-line label and the separator marks the group break. */
+.workspace-sidebar [data-slot="tabs-list"] {
   display: grid;
+  width: 100%;
   gap: .6rem;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
 }
 
-.workspace-sidebar [role="tablist"]>.workspace-nav-heading {
+.workspace-group-separator {
   border-top: 1px solid var(--color-border);
   margin-top: .65rem;
-  padding-top: 1.15rem;
+  padding-top: .4rem;
 }
 
-.workspace-tab {
+.workspace-sidebar [data-slot="tabs-trigger"] {
   width: 100%;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
   padding: .9rem .75rem;
   border-radius: .5rem;
+  border-color: transparent;
   text-align: left;
   display: block;
   cursor: pointer;
   color: var(--color-foreground);
+  background: transparent;
 }
 
-.workspace-tab:hover,
-.workspace-tab[aria-selected="true"] {
+.workspace-sidebar [data-slot="tabs-trigger"]:hover,
+.workspace-sidebar [data-slot="tabs-trigger"][data-active] {
   background: var(--color-accent);
   color: var(--color-accent-foreground);
 }
 
-.workspace-tab>span {
+.workspace-sidebar [data-slot="tabs-trigger"]>span {
   display: block;
   font-size: .84rem;
   font-weight: 700;
 }
 
-.workspace-tab>small {
+.workspace-sidebar [data-slot="tabs-trigger"]>small {
   display: block;
   font-size: .7rem;
   margin-top: .2rem;
   color: var(--color-muted-foreground);
+}
+
+.workspace-sidebar [data-slot="tabs-trigger"]:is(:hover, [data-active])>small {
+  color: inherit;
 }
 
 .workspace-task-link {
@@ -873,12 +816,8 @@ label:has(> input[type="checkbox"]) {
 }
 
 .workspace-content,
-.workspace-panel {
+.workspace-content [data-slot="tabs-content"] {
   min-width: 0;
-}
-
-.workspace-panel[hidden] {
-  display: none !important;
 }
 
 @media (max-width: 760px) {
@@ -891,26 +830,15 @@ label:has(> input[type="checkbox"]) {
     position: static;
   }
 
-  .workspace-sidebar [role="tablist"] {
+  .workspace-sidebar [data-slot="tabs-list"] {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: .6rem;
   }
 
-  .workspace-sidebar [role="tablist"]>.workspace-nav-heading {
+  .workspace-group-separator {
     grid-column: 1 / -1;
   }
-
-  .workspace-nav-heading {
-    padding-top: .35rem;
-    padding-bottom: .35rem;
-  }
-}
-
-.workspace-sidebar [role="tablist"]>.workspace-nav-heading:first-child {
-  border-top: 0;
-  margin-top: 0;
-  padding-top: .65rem;
 }
 
 #sending-progress>.subtle-panel {
@@ -928,7 +856,6 @@ label:has(> input[type="checkbox"]) {
 /* Keep the application structure while adopting the requested preset. */
 h1, h2, h3, .cn-font-heading { font-family: var(--font-heading); }
 .app-main .cn-card { padding-block: 0; overflow: visible; }
-.workspace-tab[aria-selected="true"] { color: var(--color-accent-foreground); }
 .style-luma .cn-alert.status-warning, .style-luma .cn-button.status-warning {
   background: var(--color-warning); color: var(--color-warning-foreground); border-color: var(--color-warning);
 }
@@ -939,4 +866,3 @@ h1, h2, h3, .cn-font-heading { font-family: var(--font-heading); }
 .style-luma .cn-alert.status-info { background: var(--color-info); color: var(--color-info-foreground); border-color: var(--color-info); }
 .style-luma .cn-button:disabled { background: var(--color-muted); color: var(--color-muted-foreground); border-color: var(--color-border); opacity: 1; }
 
-.workspace-tab:is(:hover, [aria-selected="true"]) > small { color: inherit; }

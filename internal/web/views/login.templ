@@ -4,8 +4,8 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alert"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/field"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/input"
-	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/label"
 )
 
 templ LoginPage(errorMessage string) {
@@ -21,18 +21,24 @@ templ LoginPage(errorMessage string) {
 					{ errorMessage }
 				}
 			}
-			<form method="post" action="/login" class="cn-card border border-border bg-card shadow-sm">
-				@card.Content(card.ContentProps{Class: "gap-4"}) {
-					@label.Label(label.Props{For: "email"}) {
-						Email
-					}
-					@input.Input(input.Props{ID: "email", Type: "email", Name: "email", Required: true, Attributes: templ.Attributes{"autocomplete": "username"}})
-					@label.Label(label.Props{For: "password"}) {
-						Password
-					}
-					@input.Input(input.Props{ID: "password", Type: "password", Name: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "current-password"}})
-					@button.Button(button.Props{Type: button.TypeSubmit}) {
-						Sign in
+			<form method="post" action="/login">
+				@card.Card(card.Props{}) {
+					@card.Content(card.ContentProps{Class: "gap-4"}) {
+						@field.Field(field.Props{}) {
+							@field.Label(field.LabelProps{For: "email"}) {
+								Email
+							}
+							@input.Input(input.Props{ID: "email", Type: "email", Name: "email", Required: true, Attributes: templ.Attributes{"autocomplete": "username"}})
+						}
+						@field.Field(field.Props{}) {
+							@field.Label(field.LabelProps{For: "password"}) {
+								Password
+							}
+							@input.Input(input.Props{ID: "password", Type: "password", Name: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "current-password"}})
+						}
+						@button.Button(button.Props{Type: button.TypeSubmit}) {
+							Sign in
+						}
 					}
 				}
 			</form>

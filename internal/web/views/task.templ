@@ -7,10 +7,12 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/badge"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/empty"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/field"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/input"
-	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/label"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/nativeselect"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/table"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tabs"
 )
 
 // TaskListData is the safe view model for a campaign's task list. It carries
@@ -45,14 +47,18 @@ templ TaskList(data TaskListData) {
 			</div>
 		</header>
 		if len(data.Tasks) == 0 {
-			<section class="cn-card border border-border bg-card shadow-sm">
-				@card.Content(card.ContentProps{}) {
-					<h2 class="cn-card-title">No tasks yet</h2>
-					<p>Upload an XLSX workbook to create the first task for this campaign.</p>
+			@empty.Empty(empty.Props{Class: "border"}) {
+				@empty.Header(empty.HeaderProps{}) {
+					@empty.Title(empty.TitleProps{}) {
+						No tasks yet
+					}
+					@empty.Description(empty.DescriptionProps{}) {
+						Upload an XLSX workbook to create the first task for this campaign.
+					}
 				}
-			</section>
+			}
 		} else {
-			<section class="cn-card border border-border bg-card shadow-sm" aria-label="Tasks">
+			@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-label": "Tasks"}}) {
 				@card.Content(card.ContentProps{Class: "table-scroll"}) {
 					@table.Table(table.Props{}) {
 						<thead>
@@ -81,7 +87,7 @@ templ TaskList(data TaskListData) {
 						</tbody>
 					}
 				}
-			</section>
+			}
 		}
 	}
 }
@@ -115,19 +121,23 @@ templ TaskUpload(data TaskUploadData) {
 				{ data.Error }
 			}
 		}
-		<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks" } enctype="multipart/form-data" class="cn-card border border-border bg-card shadow-sm">
-			@card.Content(card.ContentProps{Class: "gap-4"}) {
-				<h2 class="section-heading">Choose a workbook</h2>
-				<p class="section-description">Select the XLSX file to create a staging task.</p>
-				@label.Label(label.Props{For: "task-workbook"}) {
-					Workbook (XLSX)
-				}
-				@input.Input(input.Props{ID: "task-workbook", Name: "workbook", Type: "file", Accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Required: true})
-				<div class="app-card-actions">
-					@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
-						Upload workbook
+		<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks" } enctype="multipart/form-data">
+			@card.Card(card.Props{}) {
+				@card.Content(card.ContentProps{Class: "gap-4"}) {
+					<h2 class="section-heading">Choose a workbook</h2>
+					<p class="section-description">Select the XLSX file to create a staging task.</p>
+					@field.Field(field.Props{}) {
+						@field.Label(field.LabelProps{For: "task-workbook"}) {
+							Workbook (XLSX)
+						}
+						@input.Input(input.Props{ID: "task-workbook", Name: "workbook", Type: "file", Accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Required: true})
 					}
-				</div>
+					<div class="app-card-actions">
+						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+							Upload workbook
+						}
+					</div>
+				}
 			}
 		</form>
 		<section class="subtle-panel" aria-labelledby="constraints-heading">
@@ -239,42 +249,53 @@ templ TaskPage(data TaskPageData) {
 				{ data.Error }
 			}
 		}
-		<div class="campaign-workspace" x-data="{ tab: 'review' }" x-init="const selected = location.hash.slice(1); if (Array.from($el.querySelectorAll('[role=tab]')).some(item => item.dataset.tab === selected)) tab = selected;">
+		@tabs.Tabs(tabs.Props{ID: "task", Class: "campaign-workspace", Orientation: tabs.OrientationVertical, DefaultValue: "review", Attributes: templ.Attributes{"data-workspace-tabs": true}}) {
 			<aside class="workspace-sidebar" aria-label="Task navigation">
 				if data.Status != "staging" && (data.Counts.Eligible > 0 || data.Status != "ready") {
 					<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault, Class: "workspace-task-link"}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending" }>Continue to test & approval <span aria-hidden="true">→</span></a>
 				}
-				<p class="workspace-nav-heading">Recipient preparation</p>
-				@workspaceTabList("Task sections") {
+				@tabs.List(tabs.ListProps{Attributes: templ.Attributes{"aria-label": "Task sections"}}) {
 					if data.Status == "staging" {
-						@workspaceSidebarTab("task", "review", "Worksheet setup", "Choose sheet & header row", "review")
-					} else {
-						@workspaceSidebarTab("task", "review", "Review snapshot", "Counts, content & approval", "review")
-						if len(data.Rows) > 0 {
-							@workspaceSidebarTab("task", "preview", "Recipient preview", "Check a personalized email", "review")
+						@tabs.Trigger(tabs.TriggerProps{Value: "review"}) {
+							<span>Worksheet setup</span><small>Choose sheet & header row</small>
 						}
-						<p class="workspace-nav-heading">Records & downloads</p>
-						@workspaceSidebarTab("task", "rows", "Rows & exclusions", "Admitted rows & held reasons", "review")
-						@workspaceSidebarTab("task", "results", "Results workbook", "Generate & download results", "review")
+					} else {
+						@tabs.Trigger(tabs.TriggerProps{Value: "review"}) {
+							<span>Review snapshot</span><small>Counts, content & approval</small>
+						}
+						if len(data.Rows) > 0 {
+							@tabs.Trigger(tabs.TriggerProps{Value: "preview"}) {
+								<span>Recipient preview</span><small>Check a personalized email</small>
+							}
+						}
+						<div class="workspace-group-separator" aria-hidden="true"></div>
+						@tabs.Trigger(tabs.TriggerProps{Value: "rows"}) {
+							<span>Rows & exclusions</span><small>Admitted rows & held reasons</small>
+						}
+						@tabs.Trigger(tabs.TriggerProps{Value: "results"}) {
+							<span>Results workbook</span><small>Generate & download results</small>
+						}
 					}
 				}
 			</aside>
 			<div class="workspace-content">
 				if data.Status == "staging" {
-					@workspaceTabPanel("task", "review", "review") {
+					@tabs.Content(tabs.ContentProps{Value: "review", Class: "space-y-6"}) {
 						if data.ValidationError != "" {
 							@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
 								{ data.ValidationError }
 							}
 						}
-						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="selection-heading">
+						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "selection-heading"}}) {
 							@card.Content(card.ContentProps{Class: "gap-4"}) {
 								<p class="eyebrow">Step 2 · Configure</p>
 								<h2 id="selection-heading" class="section-heading">Choose the worksheet and header row</h2>
 								<p class="section-description">Confirm which worksheet contains recipients and which row names its columns. Current default: <code>{ data.DefaultSheet }</code>, row { data.HeaderRow }.</p>
 								<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/select" } class="field-grid">
-									@label.Label(label.Props{For: "select-sheet"}) {
-										Worksheet
+									@field.Field(field.Props{}) {
+										@field.Label(field.LabelProps{For: "select-sheet"}) {
+											Worksheet
+										}
 										@nativeselect.NativeSelect(nativeselect.Props{ID: "select-sheet", Name: "sheet", Class: "w-full"}) {
 											for _, sheet := range data.Sheets {
 												if sheet.Selected {
@@ -289,8 +310,10 @@ templ TaskPage(data TaskPageData) {
 											}
 										}
 									}
-									@label.Label(label.Props{For: "select-header-row"}) {
-										Header row
+									@field.Field(field.Props{}) {
+										@field.Label(field.LabelProps{For: "select-header-row"}) {
+											Header row
+										}
 										@input.Input(input.Props{ID: "select-header-row", Type: "number", Name: "header_row", Required: true, Attributes: templ.Attributes{"min": "1", "value": data.HeaderRow}})
 									}
 									<div class="action-bar">
@@ -300,11 +323,11 @@ templ TaskPage(data TaskPageData) {
 									</div>
 								</form>
 							}
-						</section>
+						}
 					}
 				} else {
-					@workspaceTabPanel("task", "review", "review") {
-						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="counts-heading">
+					@tabs.Content(tabs.ContentProps{Value: "review", Class: "space-y-6"}) {
+						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "counts-heading"}}) {
 							@card.Content(card.ContentProps{Class: "gap-4"}) {
 								<p class="eyebrow">Step 3 · Review</p>
 								<div class="action-bar">
@@ -372,7 +395,7 @@ templ TaskPage(data TaskPageData) {
 									</dl>
 								</details>
 							}
-						</section>
+						}
 						if data.ScheduleAt != "" {
 							<p class="font-semibold">Scheduled start: { data.ScheduleAt } ({ data.ScheduleState })</p>
 							if data.ScheduleState == "missed" {
@@ -383,10 +406,12 @@ templ TaskPage(data TaskPageData) {
 						}
 						if data.Stale {
 							@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
-								<div>
-									<p class="font-semibold">The campaign content changed after this task was validated</p>
-									<p>Revalidate this task to rebuild the snapshot against the current revision.</p>
-								</div>
+								@alert.Title(alert.TitleProps{}) {
+									The campaign content changed after this task was validated
+								}
+								@alert.Description(alert.DescriptionProps{}) {
+									Revalidate this task to rebuild the snapshot against the current revision.
+								}
 								<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate" }>
 									@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeSm, Class: "status-warning"}) {
 										Revalidate
@@ -395,8 +420,8 @@ templ TaskPage(data TaskPageData) {
 							}
 						}
 					}
-					@workspaceTabPanel("task", "rows", "review") {
-						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="download-heading">
+					@tabs.Content(tabs.ContentProps{Value: "rows", Class: "space-y-6"}) {
+						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "download-heading"}}) {
 							@card.Content(card.ContentProps{Class: "gap-2"}) {
 								<h2 id="download-heading" class="cn-card-title">Exclusion report</h2>
 								<p class="text-sm text-muted-foreground">Every held row with its original columns, available even when no row is eligible.</p>
@@ -404,8 +429,8 @@ templ TaskPage(data TaskPageData) {
 									<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download exclusion report</a>
 								</div>
 							}
-						</section>
-						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="held-heading">
+						}
+						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "held-heading"}}) {
 							@card.Content(card.ContentProps{}) {
 								<h2 id="held-heading" class="cn-card-title">Held rows</h2>
 								if len(data.HeldRows) == 0 {
@@ -431,8 +456,8 @@ templ TaskPage(data TaskPageData) {
 									</div>
 								}
 							}
-						</section>
-						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="rows-heading">
+						}
+						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "rows-heading"}}) {
 							@card.Content(card.ContentProps{}) {
 								<h2 id="rows-heading" class="cn-card-title">Admitted rows</h2>
 								if len(data.Rows) == 0 {
@@ -460,21 +485,23 @@ templ TaskPage(data TaskPageData) {
 									</div>
 								}
 							}
-						</section>
+						}
 					}
 					if len(data.Rows) > 0 {
-						@workspaceTabPanel("task", "preview", "review") {
-							<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="preview-heading">
+						@tabs.Content(tabs.ContentProps{Value: "preview", Class: "space-y-6"}) {
+							@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "preview-heading"}}) {
 								@card.Content(card.ContentProps{Class: "gap-4"}) {
 									<h2 id="preview-heading" class="cn-card-title">Row preview</h2>
 									<p class="text-sm text-muted-foreground">Render one admitted row through the pinned revision. Nothing is stored and nothing is sent.</p>
 									<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-post={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-target="#task-preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
-										@label.Label(label.Props{For: "preview-row"}) {
-											Row
-										}
-										@nativeselect.NativeSelect(nativeselect.Props{ID: "preview-row", Name: "row", Class: "w-full"}) {
-											for _, row := range data.Rows {
-												<option value={ row.ID }>Worksheet row { row.Row } ({ row.State })</option>
+										@field.Field(field.Props{}) {
+											@field.Label(field.LabelProps{For: "preview-row"}) {
+												Row
+											}
+											@nativeselect.NativeSelect(nativeselect.Props{ID: "preview-row", Name: "row", Class: "w-full"}) {
+												for _, row := range data.Rows {
+													<option value={ row.ID }>Worksheet row { row.Row } ({ row.State })</option>
+												}
 											}
 										}
 										<div class="action-bar">
@@ -487,11 +514,11 @@ templ TaskPage(data TaskPageData) {
 										<p class="text-muted-foreground">Submit a row to render its pinned email here.</p>
 									</div>
 								}
-							</section>
+							}
 						}
 					}
-					@workspaceTabPanel("task", "results", "review") {
-						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="results-heading">
+					@tabs.Content(tabs.ContentProps{Value: "results", Class: "space-y-6"}) {
+						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "results-heading"}}) {
 							@card.Content(card.ContentProps{Class: "gap-4"}) {
 								<h2 id="results-heading" class="cn-card-title">Task results workbook</h2>
 								<p>The workbook keeps every original worksheet, row and cell, and adds the result columns after the source columns. It is built from retained records only; generating it never sends or retries an email.</p>
@@ -540,11 +567,11 @@ templ TaskPage(data TaskPageData) {
 									}
 								}
 							}
-						</section>
+						}
 					}
 				}
 			</div>
-		</div>
+		}
 	}
 }
 
@@ -643,9 +670,10 @@ templ taskStatusBadge(status string) {
 }
 
 templ sheetLabel(sheet TaskSheetOption) {
-	if sheet.Visible {
-		{ sheet.Name }
-	} else {
-		{ sheet.Name } (hidden)
+	switch sheet.Visible {
+		case true:
+			{ sheet.Name }
+		default:
+			{ sheet.Name } (hidden)
 	}
 }

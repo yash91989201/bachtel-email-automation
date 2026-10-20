@@ -134,20 +134,39 @@ func TestTaskWorksheetSelectionNativeContract(t *testing.T) {
 
 func TestCampaignDeleteConfirmationContract(t *testing.T) {
 	doc := parseView(t, CampaignPage(CampaignPageData{ID: "campaign-1", Name: "Synthetic campaign"}))
-	form := workspaceNode(doc, "action", "/campaigns/campaign-1/delete#settings")
-	if form == nil {
+	form := workspaceNode(doc, "id", "campaign-delete-form")
+	if form == nil || workspaceAttr(form, "method") != "post" {
 		t.Fatal("campaign delete form is missing")
 	}
-	confirmation := workspaceNode(form, "name", "confirm")
-	if confirmation == nil || workspaceAttr(confirmation, "type") != "checkbox" || workspaceAttr(confirmation, "value") != "delete" || workspaceAttr(confirmation, "x-model") != "confirmed" {
-		t.Fatal("campaign deletion must keep its explicit checkbox confirmation")
+	// The destructive dialog replaces the inline confirmation, but the
+	// confirmation field and the same POST form still own the submission.
+	trigger := workspaceNode(form, "aria-haspopup", "dialog")
+	if trigger == nil || trigger.Data != "button" || workspaceAttr(trigger, "type") != "button" {
+		t.Fatal("campaign deletion must open its confirmation dialog from a non-submitting trigger")
+	}
+	dialog := workspaceNode(form, "role", "alertdialog")
+	if dialog == nil {
+		t.Fatal("campaign deletion must render an alert dialog")
+	}
+	confirmation := workspaceNode(dialog, "name", "confirm")
+	if confirmation == nil || workspaceAttr(confirmation, "type") != "checkbox" || workspaceAttr(confirmation, "value") != "delete" || workspaceAttr(confirmation, "form") != "campaign-delete-form" {
+		t.Fatal("campaign deletion must keep its explicit confirmation field in the same POST form")
+	}
+	if !hasViewAttr(confirmation, "required") {
+		t.Error("the confirmation field must stay required")
 	}
 	if hasViewAttr(confirmation, "checked") {
 		t.Error("campaign deletion checkbox must start unchecked")
 	}
-	button := findViewNode(form, func(n *html.Node) bool { return n.Data == "button" && strings.Contains(viewText(n), "Delete campaign") })
-	if button == nil || workspaceAttr(button, "type") != "submit" || workspaceAttr(button, "x-bind:disabled") != "!confirmed" {
-		t.Error("delete submit must remain explicitly gated by the unchecked confirmation")
+	confirm := findViewNode(dialog, func(n *html.Node) bool {
+		return n.Data == "button" && strings.Contains(viewText(n), "Yes, delete campaign")
+	})
+	if confirm == nil || workspaceAttr(confirm, "type") != "submit" || workspaceAttr(confirm, "form") != "campaign-delete-form" {
+		t.Error("the dialog confirm control must submit the same POST form")
+	}
+	cancel := findViewNode(dialog, func(n *html.Node) bool { return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Cancel" })
+	if cancel == nil || workspaceAttr(cancel, "type") != "button" || workspaceAttr(cancel, "data-templ-dialog-close") != "campaign-delete-dialog" {
+		t.Error("cancel must close the dialog without submitting")
 	}
 }
 
@@ -220,6 +239,73 @@ func TestSendingStartAndRecoveryConfirmations(t *testing.T) {
 			if workspaceAttr(form, "hx-trigger") != "" || workspaceAttr(form, "hx-post") != "" || workspaceAttr(form, "x-on:submit") != "" {
 				t.Error("recovery action must not auto-submit")
 			}
+		})
+	}
+}
+
+// Every card is a labelled landmark and every labelled control resolves its
+// label, across all pages, so the primitive migration kept the structure the
+// operator navigates by.
+func TestPagesKeepLabelledRegionsAndControls(t *testing.T) {
+	pages := map[string]templ.Component{
+		"login":                   LoginPage(""),
+		"overview":                Home(),
+		"connection":              ConnectionPage(ConnectionData{Status: "connected", SenderAddress: "hr@example.test"}),
+		"campaign list":           CampaignList(CampaignListData{}),
+		"campaign form":           CampaignForm(CampaignFormData{}),
+		"campaign page":           CampaignPage(CampaignPageData{ID: "campaign-1", Name: "Synthetic", HasRevision: true, Variables: []PreviewVariable{{Name: "recipient", Required: true}}}),
+		"task list":               TaskList(TaskListData{CampaignID: "campaign-1", Tasks: []TaskListRow{{ID: "task-1", Status: "ready"}}}),
+		"task upload":             TaskUpload(TaskUploadData{CampaignID: "campaign-1"}),
+		"task page":               TaskPage(TaskPageData{CampaignID: "campaign-1", TaskID: "task-1", Status: "ready", Rows: []TaskAdmittedRow{{ID: "member", Row: 2, State: "eligible"}}}),
+		"sending page":            SendingPage(SendingData{Base: "/sending", Status: "ready", Rows: []SendingRow{{ID: "member", Number: 2, State: "review_required"}}}),
+		"sending fragment":        SendingProgress(SendingData{Base: "/sending", Status: "ready"}),
+		"campaign list with rows": CampaignList(CampaignListData{Campaigns: []CampaignListRow{{ID: "campaign-1", Name: "Synthetic", HasRevision: true}}}),
+	}
+	for name, component := range pages {
+		t.Run(name, func(t *testing.T) {
+			doc := parseView(t, component)
+			ids := map[string]bool{}
+			var collect func(*html.Node)
+			collect = func(n *html.Node) {
+				if id := workspaceAttr(n, "id"); id != "" {
+					ids[id] = true
+				}
+				for child := n.FirstChild; child != nil; child = child.NextSibling {
+					collect(child)
+				}
+			}
+			collect(doc)
+			var inspect func(*html.Node)
+			inspect = func(n *html.Node) {
+				if workspaceAttr(n, "role") == "region" {
+					labelledBy := workspaceAttr(n, "aria-labelledby")
+					if labelledBy == "" && workspaceAttr(n, "aria-label") == "" {
+						t.Errorf("region %q has no accessible name", workspaceAttr(n, "data-slot"))
+					}
+					for id := range strings.FieldsSeq(labelledBy) {
+						if !ids[id] {
+							t.Errorf("region is labelled by missing id %q", id)
+						}
+					}
+				}
+				for child := n.FirstChild; child != nil; child = child.NextSibling {
+					inspect(child)
+				}
+			}
+			inspect(doc)
+			// A control with a for/id label pair keeps its association.
+			var labels func(*html.Node)
+			labels = func(n *html.Node) {
+				if n.Data == "label" {
+					if target := workspaceAttr(n, "for"); target != "" && !ids[target] {
+						t.Errorf("label points at missing control %q", target)
+					}
+				}
+				for child := n.FirstChild; child != nil; child = child.NextSibling {
+					labels(child)
+				}
+			}
+			labels(doc)
 		})
 	}
 }
