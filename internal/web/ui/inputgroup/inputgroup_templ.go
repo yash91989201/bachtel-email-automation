@@ -9,6 +9,8 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"maps"
+
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/input"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/textarea"
@@ -126,7 +128,7 @@ func InputGroup(props ...Props) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/inputgroup/inputgroup.templ`, Line: 86, Col: 12}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/inputgroup/inputgroup.templ`, Line: 88, Col: 12}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
 			if templ_7745c5c3_Err != nil {
@@ -203,9 +205,7 @@ func Input(props ...InputProps) templ.Component {
 			p = props[0]
 		}
 		attrs := templ.Attributes{"data-slot": "input-group-control"}
-		for k, v := range p.Attributes {
-			attrs[k] = v
-		}
+		maps.Copy(attrs, p.Attributes)
 		templ_7745c5c3_Err = input.Input(input.Props{
 			ID:          p.ID,
 			Type:        p.Type,
@@ -251,9 +251,7 @@ func Textarea(props ...TextareaProps) templ.Component {
 			p = props[0]
 		}
 		attrs := templ.Attributes{"data-slot": "input-group-control"}
-		for k, v := range p.Attributes {
-			attrs[k] = v
-		}
+		maps.Copy(attrs, p.Attributes)
 		templ_7745c5c3_Err = textarea.Textarea(textarea.Props{
 			ID:          p.ID,
 			Name:        p.Name,
@@ -326,7 +324,7 @@ func Addon(props ...AddonProps) templ.Component {
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/inputgroup/inputgroup.templ`, Line: 170, Col: 12}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/inputgroup/inputgroup.templ`, Line: 168, Col: 12}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
@@ -354,7 +352,7 @@ func Addon(props ...AddonProps) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(p.Align))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/inputgroup/inputgroup.templ`, Line: 176, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/inputgroup/inputgroup.templ`, Line: 174, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 		if templ_7745c5c3_Err != nil {
@@ -446,9 +444,7 @@ func Button(props ...ButtonProps) templ.Component {
 			p.Size = ButtonSizeXs
 		}
 		attrs := templ.Attributes{"data-size": string(p.Size)}
-		for k, v := range p.Attributes {
-			attrs[k] = v
-		}
+		maps.Copy(attrs, p.Attributes)
 		templ_7745c5c3_Var13 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
@@ -523,7 +519,7 @@ func Text(props ...TextProps) templ.Component {
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/inputgroup/inputgroup.templ`, Line: 236, Col: 12}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/inputgroup/inputgroup.templ`, Line: 232, Col: 12}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {

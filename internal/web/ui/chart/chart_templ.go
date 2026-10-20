@@ -263,18 +263,24 @@ type CartesianGridProps struct {
 // Bool returns a pointer to v, for the props whose Recharts default is
 // true.
 func Bool(v bool) *bool {
-	return &v
+	p := new(bool)
+	*p = v
+	return p
 }
 
 // Float returns a pointer to v, for the numeric props that carry a
 // meaningful zero.
 func Float(v float64) *float64 {
-	return &v
+	p := new(float64)
+	*p = v
+	return p
 }
 
 // Index returns a pointer to i, for the optional index props.
 func Index(i int) *int {
-	return &i
+	p := new(int)
+	*p = i
+	return p
 }
 
 // boolOr resolves an optional prop against its Recharts default.
@@ -1977,13 +1983,12 @@ func labelListModel(ll LabelListProps, seriesKey string, data []Datum) LabelList
 // chart.js renderer consumes.
 func buildModel(ctx context.Context, st *chartState) Model {
 	config := configFrom(ctx)
-	if st.kind == "pie" {
+	switch st.kind {
+	case "pie":
 		return buildPieModel(ctx, config, st)
-	}
-	if st.kind == "radar" {
+	case "radar":
 		return buildRadarModel(ctx, config, st)
-	}
-	if st.kind == "radial" {
+	case "radial":
 		return buildRadialModel(ctx, config, st)
 	}
 
@@ -2068,7 +2073,8 @@ func buildModel(ctx context.Context, st *chartState) Model {
 		}
 	}
 
-	if st.kind == "bar" {
+	switch st.kind {
+	case "bar":
 		m.CategoryGap = 0.1
 		stacked := false
 		for _, bs := range st.bars {
@@ -2103,7 +2109,7 @@ func buildModel(ctx context.Context, st *chartState) Model {
 			m.Series = append(m.Series, s)
 		}
 		m.Stacked = stacked
-	} else if st.kind == "line" {
+	case "line":
 		for _, l := range st.lines {
 			s := modelSeries(config, l.props.DataKey, "", 0, st.data)
 			s.Hidden = l.props.Hide
@@ -2139,7 +2145,7 @@ func buildModel(ctx context.Context, st *chartState) Model {
 			}
 			m.Series = append(m.Series, s)
 		}
-	} else {
+	case "area":
 		stacked := false
 		for _, a := range st.areas {
 			if a.StackID != "" && !a.Hide {
@@ -2575,7 +2581,7 @@ func legendContent(items []LegendItem, p *LegendProps) templ.Component {
 			var templ_7745c5c3_Var42 string
 			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(it.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/chart/chart.templ`, Line: 1685, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/chart/chart.templ`, Line: 1691, Col: 15}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 			if templ_7745c5c3_Err != nil {

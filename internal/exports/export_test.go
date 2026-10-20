@@ -62,7 +62,7 @@ func newExportFixtureWithLabels(t *testing.T, labels []string) *exportFixture {
 		t.Fatal(err)
 	}
 	stub := filepath.Join(t.TempDir(), "pandoc")
-	if err := os.WriteFile(stub, []byte("#!/bin/sh\nfor arg in \"$@\"; do\nif [ \"$arg\" = \"--version\" ]; then echo 'pandoc export'; exit 0; fi\ndone\nprintf '%s' '<p>Hello {{candidate_name}}</p>'\n"), 0755); err != nil {
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nfor arg in \"$@\"; do\nif [ \"$arg\" = \"--version\" ]; then echo 'pandoc export'; exit 0; fi\ndone\nprintf '%s' '<p>Hello {{candidate_name}}</p>'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	campaigns := campaign.NewServiceWithConverter(app, convert.Converter{Path: stub})
@@ -341,7 +341,18 @@ func (f *exportFixture) attemptsFingerprint(t *testing.T) string {
 	t.Helper()
 	var b strings.Builder
 	for _, a := range f.records(t, sending.AttemptsCollection, "") {
-		b.WriteString(strings.Join([]string{a.Id, a.GetString("kind"), a.GetString("state"), a.GetString("recipient"), a.GetString("subject"), a.GetString("body")}, "|") + "\n")
+		b.WriteString(a.Id)
+		b.WriteByte('|')
+		b.WriteString(a.GetString("kind"))
+		b.WriteByte('|')
+		b.WriteString(a.GetString("state"))
+		b.WriteByte('|')
+		b.WriteString(a.GetString("recipient"))
+		b.WriteByte('|')
+		b.WriteString(a.GetString("subject"))
+		b.WriteByte('|')
+		b.WriteString(a.GetString("body"))
+		b.WriteByte('\n')
 	}
 	return b.String()
 }

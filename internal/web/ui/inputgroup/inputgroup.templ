@@ -1,6 +1,8 @@
 package inputgroup
 
 import (
+	"maps"
+
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/input"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/textarea"
@@ -104,9 +106,7 @@ templ Input(props ...InputProps) {
 	}
 	{{
 		attrs := templ.Attributes{"data-slot": "input-group-control"}
-		for k, v := range p.Attributes {
-			attrs[k] = v
-		}
+		maps.Copy(attrs, p.Attributes)
 	}}
 	@input.Input(input.Props{
 		ID:          p.ID,
@@ -129,9 +129,7 @@ templ Textarea(props ...TextareaProps) {
 	}
 	{{
 		attrs := templ.Attributes{"data-slot": "input-group-control"}
-		for k, v := range p.Attributes {
-			attrs[k] = v
-		}
+		maps.Copy(attrs, p.Attributes)
 	}}
 	@textarea.Textarea(textarea.Props{
 		ID:          p.ID,
@@ -211,9 +209,7 @@ templ Button(props ...ButtonProps) {
 	}
 	{{
 		attrs := templ.Attributes{"data-size": string(p.Size)}
-		for k, v := range p.Attributes {
-			attrs[k] = v
-		}
+		maps.Copy(attrs, p.Attributes)
 	}}
 	@button.Button(button.Props{
 		Type:       p.Type,

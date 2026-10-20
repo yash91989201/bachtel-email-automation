@@ -3,6 +3,8 @@ package combobox
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -62,12 +64,7 @@ type ItemData struct {
 // the combobox has a value "" (Base UI compares the item to the value).
 func (s ctxState) isSelected(value string) bool {
 	if s.multiple {
-		for _, v := range s.values {
-			if v == value {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(s.values, value)
 	}
 	return s.value == value && s.hasSelectedValue()
 }
@@ -296,9 +293,31 @@ templ Combobox(props ...Props) {
 			value={ s.value }
 		}
 		if s.name != "" && !s.multiple {
-			style="clip-path:inset(50%);overflow:hidden;white-space:nowrap;border:0;padding:0;width:1px;height:1px;margin:-1px;position:absolute"
+			style="
+		clip-path: inset(50%);
+		overflow: hidden;
+		white-space: nowrap;
+		border: 0;
+		padding: 0;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		position: absolute;
+	"
 		} else {
-			style="clip-path:inset(50%);overflow:hidden;white-space:nowrap;border:0;padding:0;width:1px;height:1px;margin:-1px;position:fixed;top:0;left:0"
+			style="
+		clip-path: inset(50%);
+		overflow: hidden;
+		white-space: nowrap;
+		border: 0;
+		padding: 0;
+		width: 1px;
+		height: 1px;
+		margin: -1px;
+		position: fixed;
+		top: 0;
+		left: 0;
+	"
 		}
 		tabindex="-1"
 		aria-hidden="true"
@@ -397,9 +416,7 @@ templ Input(props ...InputProps) {
 				"autocapitalize":      "none",
 				"value":               utils.IfElse(s.multiple || !s.hasSelectedValue(), "", labelText(s.labelOf(s.value))),
 			}
-			for k, v := range p.Attributes {
-				attrs[k] = v
-			}
+			maps.Copy(attrs, p.Attributes)
 			if s.readOnly {
 				attrs["readonly"] = true
 			}

@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -66,12 +67,9 @@ func sendingNeedsRecovery(row SendingRow) bool {
 }
 
 func sendingHasRecovery(rows []SendingRow) bool {
-	for _, row := range rows {
-		if sendingNeedsRecovery(row) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(rows, func(row SendingRow) bool {
+		return sendingNeedsRecovery(row)
+	})
 }
 
 templ SendingPage(data SendingData) {
@@ -449,54 +447,55 @@ templ SendingRecovery(data SendingData) {
 						if row.Attempt.ID!="" {
 							<p>Prior attempt { row.Attempt.ID }: { row.Attempt.Recipient } · { row.Attempt.State } · { row.Attempt.Time } · { row.Attempt.Reason }</p>
 						}
-						if row.State=="manually_submitted" {
-							<p>Marked already submitted by { row.ResolutionActor } at { row.ResolvedAt }. Basis: { row.ResolutionBasis }</p>
-							<p>This operator resolution does not establish a Microsoft acceptance timestamp.</p>
-						} else if row.State=="correction_required" {
-							<p>Correct the recipient or required values in the source workbook and upload a corrected task. This unchanged snapshot cannot be retried.</p>
-						} else if row.State=="review_required" {
-							<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resend#recovery" } class="space-y-2">
-								@sendingRowFields(row)
-								@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-									@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-duplicate-" + row.ID, Name: "duplicate_risk", Value: "yes", Required: true})
-									The earlier request may have been accepted. Sending again can create a duplicate.
-								}
-								@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-									@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
-									Confirm sending this 1 recipient again.
-								}
-								@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Enabled, Class: "status-warning"}) {
-									{ "Send again — duplicate risk" }
-								}
-							</form>
-							<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resolve#recovery" } class="space-y-2">
-								@sendingRowFields(row)
-								@field.Field(field.Props{}) {
-									@field.Label(field.LabelProps{For: "sending-resolution-basis-" + row.ID}) {
-										Basis for resolution
+						switch row.State {
+							case "manually_submitted":
+								<p>Marked already submitted by { row.ResolutionActor } at { row.ResolvedAt }. Basis: { row.ResolutionBasis }</p>
+								<p>This operator resolution does not establish a Microsoft acceptance timestamp.</p>
+							case "correction_required":
+								<p>Correct the recipient or required values in the source workbook and upload a corrected task. This unchanged snapshot cannot be retried.</p>
+							case "review_required":
+								<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resend#recovery" } class="space-y-2">
+									@sendingRowFields(row)
+									@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+										@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-duplicate-" + row.ID, Name: "duplicate_risk", Value: "yes", Required: true})
+										The earlier request may have been accepted. Sending again can create a duplicate.
 									}
-									@input.Input(input.Props{ID: "sending-resolution-basis-" + row.ID, Name: "basis", Required: true, Attributes: templ.Attributes{"maxlength": "2000"}})
-								}
-								@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-									@checkbox.Checkbox(checkbox.Props{ID: "sending-resolve-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
-									I verified this recipient was already submitted.
-								}
-								@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit}) {
-									{ "Mark as already submitted" }
-								}
-								<p>Records the operator, basis and resolution time. Does not invent a Microsoft acceptance timestamp.</p>
-							</form>
-						} else {
-							<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/retry#recovery" }>
-								@sendingRowFields(row)
-								@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-									@checkbox.Checkbox(checkbox.Props{ID: "sending-retry-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
-									Retry this 1 definite failure using its unchanged snapshot.
-								}
-								@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Enabled}) {
-									{ "Retry" }
-								}
-							</form>
+									@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+										@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+										Confirm sending this 1 recipient again.
+									}
+									@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Enabled, Class: "status-warning"}) {
+										{ "Send again — duplicate risk" }
+									}
+								</form>
+								<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/resolve#recovery" } class="space-y-2">
+									@sendingRowFields(row)
+									@field.Field(field.Props{}) {
+										@field.Label(field.LabelProps{For: "sending-resolution-basis-" + row.ID}) {
+											Basis for resolution
+										}
+										@input.Input(input.Props{ID: "sending-resolution-basis-" + row.ID, Name: "basis", Required: true, Attributes: templ.Attributes{"maxlength": "2000"}})
+									}
+									@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+										@checkbox.Checkbox(checkbox.Props{ID: "sending-resolve-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+										I verified this recipient was already submitted.
+									}
+									@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit}) {
+										{ "Mark as already submitted" }
+									}
+									<p>Records the operator, basis and resolution time. Does not invent a Microsoft acceptance timestamp.</p>
+								</form>
+							default:
+								<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + row.Attempt.ID + "-" + strconv.FormatBool(data.Enabled) } hx-preserve method="post" action={ data.Base + "/retry#recovery" }>
+									@sendingRowFields(row)
+									@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+										@checkbox.Checkbox(checkbox.Props{ID: "sending-retry-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+										Retry this 1 definite failure using its unchanged snapshot.
+									}
+									@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Enabled}) {
+										{ "Retry" }
+									}
+								</form>
 						}
 					</div>
 				}

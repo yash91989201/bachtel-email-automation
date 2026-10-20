@@ -319,7 +319,12 @@ func TestStartupRebuildsInterruptedTaskExport(t *testing.T) {
 	memberStates := func() string {
 		var state strings.Builder
 		for _, member := range f.records(t, intake.TaskCandidatesCollection, "task='"+taskID+"'") {
-			state.WriteString(member.Id + ":" + member.GetString("state") + ":" + member.GetString("reason") + "\n")
+			state.WriteString(member.Id)
+			state.WriteByte(':')
+			state.WriteString(member.GetString("state"))
+			state.WriteByte(':')
+			state.WriteString(member.GetString("reason"))
+			state.WriteByte('\n')
 		}
 		return state.String()
 	}

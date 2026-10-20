@@ -9,6 +9,8 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"maps"
+
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/icon"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/utils"
 )
@@ -52,9 +54,7 @@ func Spinner(props ...Props) templ.Component {
 		if p.ID != "" {
 			attrs["id"] = p.ID
 		}
-		for k, v := range p.Attributes {
-			attrs[k] = v
-		}
+		maps.Copy(attrs, p.Attributes)
 		templ_7745c5c3_Err = icon.LoaderCircle(icon.Props{
 			Class:      utils.CN("size-4 animate-spin", p.Class),
 			Attributes: attrs,

@@ -1,6 +1,8 @@
 package spinner
 
 import (
+	"maps"
+
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/icon"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/utils"
 )
@@ -25,9 +27,7 @@ templ Spinner(props ...Props) {
 		if p.ID != "" {
 			attrs["id"] = p.ID
 		}
-		for k, v := range p.Attributes {
-			attrs[k] = v
-		}
+		maps.Copy(attrs, p.Attributes)
 	}}
 	@icon.LoaderCircle(icon.Props{
 		Class:      utils.CN("size-4 animate-spin", p.Class),

@@ -1,6 +1,8 @@
 package pagination
 
 import (
+	"maps"
+
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/icon"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/utils"
@@ -129,9 +131,7 @@ templ Link(props ...LinkProps) {
 				attrs["aria-current"] = "page"
 				attrs["data-active"] = "true"
 			}
-			for k, v := range p.Attributes {
-				attrs[k] = v
-			}
+			maps.Copy(attrs, p.Attributes)
 		}}
 		@button.Button(button.Props{
 			ID:         p.ID,
@@ -156,9 +156,7 @@ templ Previous(props ...PreviousProps) {
 	}
 	{{
 		attrs := templ.Attributes{"aria-label": "Go to previous page", "data-slot": "pagination-link"}
-		for k, v := range p.Attributes {
-			attrs[k] = v
-		}
+		maps.Copy(attrs, p.Attributes)
 	}}
 	@button.Button(button.Props{
 		ID:         p.ID,
@@ -183,9 +181,7 @@ templ Next(props ...NextProps) {
 	}
 	{{
 		attrs := templ.Attributes{"aria-label": "Go to next page", "data-slot": "pagination-link"}
-		for k, v := range p.Attributes {
-			attrs[k] = v
-		}
+		maps.Copy(attrs, p.Attributes)
 	}}
 	@button.Button(button.Props{
 		ID:         p.ID,

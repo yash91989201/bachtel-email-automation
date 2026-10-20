@@ -337,7 +337,9 @@ func finalizeSubject(subject string, keys map[string]string) string {
 			continue
 		}
 		out.WriteString(escapeLiteralBraces(subject[last:match[0]]))
-		out.WriteString("{{." + key + "}}")
+		out.WriteString("{{.")
+		out.WriteString(key)
+		out.WriteString("}}")
 		last = match[1]
 	}
 	out.WriteString(escapeLiteralBraces(subject[last:]))
