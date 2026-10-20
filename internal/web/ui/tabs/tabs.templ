@@ -216,8 +216,7 @@ templ Content(props ...ContentProps) {
 	if p.ID == "" {
 		{{ p.ID = contentID(tabsID, p.Value) }}
 	}
-	{{ index := *state(ctx).nextPanel }}
-	{{ *state(ctx).nextPanel++ }}
+	{{ index := nextPanelIndex(ctx) }}
 	<div
 		id={ p.ID }
 		role="tabpanel"
@@ -252,11 +251,43 @@ func IDFromContext(ctx context.Context) string {
 	return state(ctx).id
 }
 
-// orientation is Base UI's orientation of the tabs: shadcn's Tabs renders its
-// orientation prop as the root's data-orientation for the styles but does not
-// pass it on to TabsPrimitive.Root, so list, tabs and panels, the list's
-// aria-orientation and the arrow keys stay horizontal, like upstream's.
+// Panels scopes ctx to a tabs root that the current fragment does not render
+// — an htmx polling target that swaps only the panels. The panels keep the id
+// and aria-labelledby pairing the full page produced, and the client re-applies
+// the active panel after the swap. Inside the root this returns ctx unchanged.
+func Panels(ctx context.Context, id string, orientation Orientation) context.Context {
+	s := state(ctx)
+	if s.id != "" {
+		return ctx
+	}
+	s.id = id
+	s.orientation = orientation
+	s.nextPanel = new(int)
+	return context.WithValue(ctx, stateKey, s)
+}
+
+// nextPanelIndex counts the panels of a tabs root. A panel rendered without
+// its root (an htmx fragment that contains only the panels) has no counter and
+// starts at zero; the workspace adapter re-applies the active panel after the
+// swap, so the standalone render never decides visibility.
+func nextPanelIndex(ctx context.Context) int {
+	s := state(ctx)
+	if s.nextPanel == nil {
+		return 0
+	}
+	index := *s.nextPanel
+	*s.nextPanel++
+	return index
+}
+
+// orientation is the orientation the Tabs root stored, so the list, tabs and
+// panels carry the same data-orientation and the list announces its
+// aria-orientation. tabs.js reads the list's data-orientation to choose the
+// arrow keys, so a vertical list navigates Up/Down instead of Left/Right.
 func orientation(ctx context.Context) Orientation {
+	if o := state(ctx).orientation; o != "" {
+		return o
+	}
 	return OrientationHorizontal
 }
 

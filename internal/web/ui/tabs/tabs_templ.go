@@ -622,8 +622,7 @@ func Content(props ...ContentProps) templ.Component {
 		if p.ID == "" {
 			p.ID = contentID(tabsID, p.Value)
 		}
-		index := *state(ctx).nextPanel
-		*state(ctx).nextPanel++
+		index := nextPanelIndex(ctx)
 		var templ_7745c5c3_Var24 = []any{utils.CN(
 			"text-sm flex-1 outline-none",
 			map[string]bool{"hidden": !tabsIsActive(ctx, p.Value)},
@@ -641,7 +640,7 @@ func Content(props ...ContentProps) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 222, Col: 11}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 221, Col: 11}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 		if templ_7745c5c3_Err != nil {
@@ -654,7 +653,7 @@ func Content(props ...ContentProps) templ.Component {
 		var templ_7745c5c3_Var26 string
 		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(triggerID(tabsID, p.Value))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 224, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 223, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 		if templ_7745c5c3_Err != nil {
@@ -667,7 +666,7 @@ func Content(props ...ContentProps) templ.Component {
 		var templ_7745c5c3_Var27 string
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(utils.IfElse(tabsIsActive(ctx, p.Value), "0", "-1"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 225, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 224, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 		if templ_7745c5c3_Err != nil {
@@ -693,7 +692,7 @@ func Content(props ...ContentProps) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 234, Col: 28}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 233, Col: 28}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 		if templ_7745c5c3_Err != nil {
@@ -706,7 +705,7 @@ func Content(props ...ContentProps) templ.Component {
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(string(orientation(ctx)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 235, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 234, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
@@ -719,7 +718,7 @@ func Content(props ...ContentProps) templ.Component {
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(index))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 237, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `ui/tabs/tabs.templ`, Line: 236, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 		if templ_7745c5c3_Err != nil {
@@ -765,11 +764,43 @@ func IDFromContext(ctx context.Context) string {
 	return state(ctx).id
 }
 
-// orientation is Base UI's orientation of the tabs: shadcn's Tabs renders its
-// orientation prop as the root's data-orientation for the styles but does not
-// pass it on to TabsPrimitive.Root, so list, tabs and panels, the list's
-// aria-orientation and the arrow keys stay horizontal, like upstream's.
+// Panels scopes ctx to a tabs root that the current fragment does not render
+// — an htmx polling target that swaps only the panels. The panels keep the id
+// and aria-labelledby pairing the full page produced, and the client re-applies
+// the active panel after the swap. Inside the root this returns ctx unchanged.
+func Panels(ctx context.Context, id string, orientation Orientation) context.Context {
+	s := state(ctx)
+	if s.id != "" {
+		return ctx
+	}
+	s.id = id
+	s.orientation = orientation
+	s.nextPanel = new(int)
+	return context.WithValue(ctx, stateKey, s)
+}
+
+// nextPanelIndex counts the panels of a tabs root. A panel rendered without
+// its root (an htmx fragment that contains only the panels) has no counter and
+// starts at zero; the workspace adapter re-applies the active panel after the
+// swap, so the standalone render never decides visibility.
+func nextPanelIndex(ctx context.Context) int {
+	s := state(ctx)
+	if s.nextPanel == nil {
+		return 0
+	}
+	index := *s.nextPanel
+	*s.nextPanel++
+	return index
+}
+
+// orientation is the orientation the Tabs root stored, so the list, tabs and
+// panels carry the same data-orientation and the list announces its
+// aria-orientation. tabs.js reads the list's data-orientation to choose the
+// arrow keys, so a vertical list navigates Up/Down instead of Left/Right.
 func orientation(ctx context.Context) Orientation {
+	if o := state(ctx).orientation; o != "" {
+		return o
+	}
 	return OrientationHorizontal
 }
 
