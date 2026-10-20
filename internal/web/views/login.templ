@@ -1,24 +1,40 @@
 package views
 
+import (
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alert"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/input"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/label"
+)
+
 templ LoginPage(errorMessage string) {
 	@Layout("Sign in", false, "") {
 		<div class="login-layout space-y-6">
 			<div class="space-y-2 text-center">
 				<p class="eyebrow">Welcome back</p>
 				<h1>Sign in to your workspace</h1>
-				<p class="text-base-content/70">Manage campaigns and email operations securely.</p>
+				<p class="text-muted-foreground">Manage campaigns and email operations securely.</p>
 			</div>
 			if errorMessage != "" {
-				<div class="alert alert-error" role="alert">{ errorMessage }</div>
+				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+					{ errorMessage }
+				}
 			}
-			<form method="post" action="/login" class="card border border-base-300 bg-base-100 shadow-sm">
-				<div class="card-body gap-4">
-					<label class="label" for="email">Email</label>
-					<input class="input w-full" id="email" type="email" name="email" autocomplete="username" required/>
-					<label class="label" for="password">Password</label>
-					<input class="input w-full" id="password" type="password" name="password" autocomplete="current-password" required/>
-					<button class="btn btn-primary" type="submit">Sign in</button>
-				</div>
+			<form method="post" action="/login" class="cn-card border border-border bg-card shadow-sm">
+				@card.Content(card.ContentProps{Class: "gap-4"}) {
+					@label.Label(label.Props{For: "email"}) {
+						Email
+					}
+					@input.Input(input.Props{ID: "email", Type: "email", Name: "email", Required: true, Attributes: templ.Attributes{"autocomplete": "username"}})
+					@label.Label(label.Props{For: "password"}) {
+						Password
+					}
+					@input.Input(input.Props{ID: "password", Type: "password", Name: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "current-password"}})
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
+						Sign in
+					}
+				}
 			</form>
 		</div>
 	}

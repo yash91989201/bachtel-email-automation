@@ -6,6 +6,7 @@ RUN npm ci
 COPY scripts/ scripts/
 COPY web/ web/
 COPY internal/web/views/ internal/web/views/
+COPY internal/web/ui/ internal/web/ui/
 RUN npm run build
 
 FROM golang:1.27.2-alpine AS build

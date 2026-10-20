@@ -1,7 +1,8 @@
-import { copyFile, mkdir } from 'node:fs/promises';
+import { copyFile, cp, mkdir } from 'node:fs/promises';
 
 const output = new URL('../internal/web/static/', import.meta.url);
 await mkdir(output, { recursive: true });
+await cp(new URL('../web/fonts/', import.meta.url), new URL('fonts/', output), { recursive: true });
 for (const [source, target] of [
   ['alpinejs/dist/cdn.min.js', 'alpine.min.js'],
   ['htmx.org/dist/htmx.min.js', 'htmx.min.js'],

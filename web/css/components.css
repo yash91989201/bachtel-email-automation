@@ -1,0 +1,375 @@
+/* Presentation for locally owned shadcn-templ primitives. */
+
+.cn-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: .85rem;
+  box-shadow: 0 2px 3px #24374703;
+}
+
+.cn-card-content {
+  display: flex;
+  flex-direction: column;
+  flex: auto;
+  font-size: .875rem;
+  padding: 1.75rem;
+  gap: 1rem;
+  justify-content: flex-start;
+}
+
+.cn-card-content p {
+  flex-grow: 0;
+}
+
+.cn-card-title {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -.015em;
+}
+
+.app-card-actions,
+.action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .65rem;
+}
+
+.app-card-actions {
+  margin-top: .4rem;
+}
+
+.cn-button {
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: var(--radius-field);
+  gap: .375rem;
+  text-align: center;
+  vertical-align: middle;
+  text-shadow: 0 .5px oklch(1 0 0 / .15);
+  touch-action: manipulation;
+  font-weight: 650;
+  font-size: .8125rem;
+  box-shadow: none;
+  min-height: 2.6rem;
+  height: auto;
+  padding: .65rem 1rem;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.cn-button-size-sm {
+  min-height: 2.1rem;
+  padding: .4rem .75rem;
+  font-size: .75rem;
+}
+
+.cn-button-variant-default {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+.cn-button-variant-outline {
+  border-color: var(--color-border);
+  background: var(--color-card);
+  color: var(--color-foreground);
+}
+
+.cn-button-variant-ghost {
+  color: var(--color-muted-foreground);
+}
+
+
+.app-link {
+  text-underline-offset: 3px;
+}
+
+.app-link-primary {
+  color: var(--color-primary);
+}
+
+.cn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: .375rem;
+  font-size: .8125rem;
+  font-weight: 650;
+  color: var(--color-foreground);
+  white-space: normal;
+}
+
+form>.cn-label {
+  display: flex;
+  margin-bottom: 0;
+}
+
+.cn-input,
+.cn-native-select,
+.cn-textarea {
+  border-color: var(--color-input);
+  background: var(--color-card);
+  font-size: .875rem;
+  max-width: 100%;
+}
+
+.cn-input:not([type="file"]),
+.cn-native-select {
+  appearance: none;
+  display: inline-flex;
+  position: relative;
+  width: 100%;
+  height: 2.5rem;
+  min-height: 2.8rem;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-field);
+  padding-inline: .75rem;
+  align-items: center;
+  gap: .5rem;
+  box-shadow: inset 0 1px oklab(0.327871 -0.0160721 -0.0340416 / .02), inset 0 -1px oklch(1 0 0 / .1);
+}
+
+.cn-native-select {
+  gap: .375rem;
+  padding-inline-end: 1.75rem;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 20px) calc(1px + 50%), calc(100% - 16.1px) calc(1px + 50%);
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+
+.cn-input[type="file"] {
+  appearance: none;
+  cursor: pointer;
+  display: inline-flex;
+  min-height: 0;
+  height: 2.5rem;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-field);
+  background: var(--color-card);
+  padding: 0 .75rem 0 0;
+  align-items: center;
+  vertical-align: middle;
+  line-height: 2;
+  box-shadow: inset 0 1px oklab(0.327871 -0.0160721 -0.0340416 / .02), inset 0 -1px oklch(1 0 0 / .1);
+}
+
+.cn-input[type="file"]::file-selector-button {
+  cursor: pointer;
+  display: inline-block;
+  height: calc(100% + 2px);
+  margin: -1px 1rem -1px 0;
+  padding: 0 1rem;
+  border: 1px solid color-mix(in oklab, var(--color-muted), black 5%);
+  border-radius: calc(var(--radius-field) - 1px) 0 0 calc(var(--radius-field) - 1px);
+  background: var(--color-muted);
+  color: var(--color-foreground);
+  font-weight: 600;
+  line-height: 2;
+  text-shadow: 0 .5px oklch(1 0 0 / .15);
+  box-shadow: inset 0 .5px 0 .5px oklab(.98 -.00156966 -.00241893 / .2), 0 3px 2px -2px oklab(.971431 -.00226191 -.00346422 / .3), 0 4px 3px -2px oklab(.971431 -.00226191 -.00346422 / .3);
+}
+
+.cn-textarea {
+  appearance: none;
+  display: inline-block;
+  field-sizing: fixed;
+  vertical-align: middle;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-field);
+  box-shadow: inset 0 1px oklab(0.327871 -0.0160721 -0.0340416 / .02), inset 0 -1px oklch(1 0 0 / .1);
+  line-height: 1.65;
+  padding: .8rem;
+}
+
+.cn-input:focus,
+.cn-native-select:focus,
+.cn-textarea:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.cn-alert {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: auto;
+  justify-content: start;
+  justify-items: start;
+  align-items: center;
+  gap: 1rem;
+  padding: .75rem 1rem;
+  border: 1px solid var(--color-muted);
+  background: var(--color-muted);
+  color: var(--color-foreground);
+  line-height: 1.25rem;
+  border-radius: .65rem;
+  font-size: .875rem;
+  box-shadow: none;
+  overflow-wrap: anywhere;
+}
+
+.cn-alert-variant-destructive {
+  background: #fff0ee;
+  color: #9c3030;
+  border-color: #f1c8c4;
+}
+
+.cn-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-muted);
+  border-radius: var(--radius-selector);
+  background: var(--color-card);
+  color: var(--color-foreground);
+  gap: .5rem;
+  vertical-align: middle;
+  font-size: .7rem;
+  font-weight: 650;
+  white-space: normal;
+  height: auto;
+  min-height: 1.5rem;
+  padding: .25rem .6rem;
+  line-height: 1.3;
+}
+
+.table-scroll,
+.overflow-x-auto {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.cn-table {
+  position: relative;
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  border-radius: var(--radius-card);
+  text-align: left;
+  font-size: .8125rem;
+}
+
+.cn-table th {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .045em;
+  color: var(--color-muted-foreground);
+  text-transform: uppercase;
+  padding: .9rem .8rem;
+  background: var(--color-muted);
+}
+
+.cn-table td {
+  padding: 1rem .8rem;
+  border-color: var(--color-border);
+  vertical-align: top;
+}
+
+.cn-table tbody tr:hover {
+  background: var(--color-muted);
+}
+
+.cn-table caption {
+  font-size: .8rem;
+  color: var(--color-muted-foreground);
+}
+
+
+.cn-alert:has(> :nth-child(2)) { grid-template-columns: auto minmax(auto, 1fr); }
+.cn-alert.status-warning { background: var(--color-warning); color: var(--color-warning-foreground); border-color: var(--color-warning); }
+.cn-alert.status-success { background: var(--color-success); color: var(--color-success-foreground); border-color: var(--color-success); }
+.cn-button-variant-destructive { background: var(--color-destructive); color: var(--color-primary-foreground); border-color: color-mix(in oklab, var(--color-destructive), black 5%); }
+.cn-button.status-warning { background: var(--color-warning); color: var(--color-warning-foreground); border-color: color-mix(in oklab, var(--color-warning), black 5%); }
+.cn-button-variant-secondary { background: var(--color-muted); color: var(--color-foreground); border-color: color-mix(in oklab, var(--color-muted), black 5%); }
+.cn-label:has(input) { cursor: pointer; }
+.app-link { cursor: pointer; text-decoration: underline; }
+.cn-table :where(thead, tfoot) { white-space: nowrap; font-weight: 600; }
+.cn-table th { vertical-align: middle; }
+.cn-table thead tr :is(td, th) { border-bottom: 1px solid color-mix(in oklch, var(--color-foreground) 5%, transparent); }
+.cn-table tbody tr:not(:last-child) :is(td, th) { border-bottom: 1px solid var(--color-border); }
+.cn-table-compact :not(thead, tfoot) tr { font-size: .75rem; }
+
+.app-checkbox-error {
+  appearance: none;
+  display: inline-block;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--color-destructive);
+  color: var(--color-primary-foreground);
+  border-radius: var(--radius-selector);
+  padding: .25rem;
+  box-shadow: inset 0 1px oklch(0 0 0 / .1);
+  vertical-align: middle;
+  cursor: pointer;
+  background: transparent;
+}
+.app-checkbox-error:checked {
+  background: #b73838 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='white' stroke-width='2.5' d='m5 12 4 4L19 6'/%3E%3C/svg%3E") center / 100% no-repeat;
+}
+
+@media (hover: hover) {
+  .cn-button-variant-default:hover { background: color-mix(in oklab, var(--color-primary), black 7%); }
+  .cn-button-variant-ghost:hover { background: color-mix(in oklab, var(--color-muted), black 7%); color: var(--color-foreground); }
+  .cn-button-variant-destructive:hover { background: color-mix(in oklab, var(--color-destructive), black 7%); }
+  .cn-button.status-warning:hover { background: color-mix(in oklab, var(--color-warning), black 7%); }
+}
+
+.cn-badge.status-success { background: var(--color-success); border-color: var(--color-success); color: var(--color-success-foreground); }
+.cn-badge.status-warning { background: var(--color-warning); border-color: var(--color-warning); color: var(--color-warning-foreground); }
+.cn-badge-variant-ghost { background: var(--color-muted); }
+.cn-alert.status-info { background: var(--color-info); border-color: var(--color-info); color: var(--color-info-foreground); }
+
+@layer components {
+  .cn-textarea { min-height: 5rem; }
+}
+
+.cn-input.pacing-input { width: clamp(3rem, 20rem, 100%); }
+
+@supports (appearance: base-select) {
+  .cn-native-select, .cn-native-select::picker(select) { appearance: base-select; }
+}
+.cn-native-select::picker-icon { display: none; }
+.cn-native-select::picker(select) {
+  color: inherit;
+  border: 1px solid var(--color-muted);
+  border-radius: var(--radius-card);
+  background-color: inherit;
+  max-height: min(24rem, 70dvh);
+  box-shadow: 0 20px 25px -5px #0000001a, 0 8px 10px -6px #0000001a;
+  margin: .5rem;
+  padding: .5rem;
+  translate: -.5rem;
+}
+.cn-native-select option {
+  border-radius: var(--radius-field);
+  padding: .375rem .75rem;
+  white-space: normal;
+}
+.cn-native-select option:not(:disabled):hover,
+.cn-native-select option:not(:disabled):focus-visible {
+  background: color-mix(in oklab, var(--color-foreground) 10%, transparent);
+  cursor: pointer;
+}
+
+.cn-button:disabled {
+  color: var(--color-muted-foreground);
+  background: var(--color-muted);
+  border-color: var(--color-border);
+  opacity: 1;
+}

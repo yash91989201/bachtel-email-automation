@@ -3,6 +3,7 @@ module github.com/yash91989201/bachtel-email-automation
 go 1.27.2
 
 require (
+	github.com/Oudwins/tailwind-merge-go v0.2.2
 	github.com/a-h/templ v0.3.1070
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/pocketbase/dbx v1.12.0

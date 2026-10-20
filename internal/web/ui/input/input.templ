@@ -1,0 +1,65 @@
+package input
+
+import "github.com/yash91989201/bachtel-email-automation/internal/web/ui/utils"
+
+type Props struct {
+	ID          string
+	Class       string
+	Attributes  templ.Attributes
+	Name        string
+	Type        string
+	Form        string
+	Placeholder string
+	Value       string
+	Disabled    bool
+	ReadOnly    bool
+	Required    bool
+	Accept      string
+}
+
+templ Input(props ...Props) {
+	{{ var p Props }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.ID == "" {
+		{{ p.ID = utils.RandomID() }}
+	}
+	<input
+		id={ p.ID }
+		if _, hasSlot := p.Attributes["data-slot"]; !hasSlot {
+			data-slot="input"
+		}
+		if p.Type != "" {
+			type={ p.Type }
+		}
+		if p.Name != "" {
+			name={ p.Name }
+		}
+		if p.Placeholder != "" {
+			placeholder={ p.Placeholder }
+		}
+		if p.Value != "" {
+			value={ p.Value }
+		}
+		if p.Type == "file" && p.Accept != "" {
+			accept={ p.Accept }
+		}
+		if p.Form != "" {
+			form={ p.Form }
+		}
+		disabled?={ p.Disabled }
+		data-disabled?={ p.Disabled }
+		readonly?={ p.ReadOnly }
+		required?={ p.Required }
+		class={
+			utils.CN(
+				// 1:1 base/ui/input.tsx: structure lives here, the look comes from
+				// the active style-*.css via cn-input.
+				"cn-input w-full min-w-0 outline-none file:inline-flex file:border-0 file:bg-transparent file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+				p.Class,
+			),
+		}
+		{ p.Attributes... }
+	/>
+}

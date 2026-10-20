@@ -1,8 +1,10 @@
 package views
 
+import "github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
+
 templ Layout(title string, signedIn bool, active string) {
 	<!DOCTYPE html>
-	<html lang="en" data-theme="light">
+	<html lang="en">
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -12,7 +14,7 @@ templ Layout(title string, signedIn bool, active string) {
 			<script defer src="/static/htmx.min.js"></script>
 			<script defer src="/static/alpine.min.js"></script>
 		</head>
-		<body class="app-body">
+		<body class="app-body style-luma">
 			<a class="skip-link" href="#main-content">Skip to content</a>
 			<header class="app-header">
 				<a class="brand" href="/" aria-label="Bachtel home"><span class="brand-mark" aria-hidden="true">b.</span><span>Bachtel<span class="brand-caption">Email workspace</span></span></a>
@@ -22,7 +24,11 @@ templ Layout(title string, signedIn bool, active string) {
 						@navLink("/campaigns", "Campaigns", active == "campaigns")
 						@navLink("/connection", "Mailbox", active == "mailbox")
 					</nav>
-					<form method="post" action="/logout" class="signout-form"><button class="btn btn-ghost btn-sm" type="submit">Sign out <span aria-hidden="true">↗</span></button></form>
+					<form method="post" action="/logout" class="signout-form">
+						@button.Button(button.Props{Variant: button.VariantGhost, Size: button.SizeSm, Type: button.TypeSubmit}) {
+							Sign out <span aria-hidden="true">↗</span>
+						}
+					</form>
 				} else {
 					<span class="operator-label">Operator workspace</span>
 				}

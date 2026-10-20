@@ -31,7 +31,7 @@ verify-converter:
 
 fmt:
 	gofmt -w cmd internal
-	go tool templ fmt internal/web/views
+	go tool templ fmt internal/web
 
 # Keep local verification and CI on the same commands. No .env is sourced.
 .PHONY: check check-format check-generated lint vulncheck
@@ -41,8 +41,8 @@ check-format:
 
 # Compare generated output with the index (staged source/output is supported).
 check-generated: generate
-	git diff --exit-code -- 'internal/web/views/*_templ.go'
-	@test -z "$$(git ls-files --others --exclude-standard -- 'internal/web/views/*_templ.go')" || { echo 'Untracked generated templates: stage the generated output.' >&2; exit 1; }
+	git diff --exit-code -- ':(glob)internal/web/**/*_templ.go'
+	@test -z "$$(git ls-files --others --exclude-standard -- ':(glob)internal/web/**/*_templ.go')" || { echo 'Untracked generated templates: stage the generated output.' >&2; exit 1; }
 
 lint: generate assets
 	bash scripts/golangci-lint.sh config verify

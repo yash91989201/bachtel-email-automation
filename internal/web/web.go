@@ -21,7 +21,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
-//go:generate go tool templ generate -path views
+//go:generate go tool templ generate -path .
 
 //go:embed static
 var assets embed.FS

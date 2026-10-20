@@ -1,0 +1,191 @@
+package table
+
+import "github.com/yash91989201/bachtel-email-automation/internal/web/ui/utils"
+
+type Props struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+type HeaderProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+type BodyProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+type FooterProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+type RowProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+type HeadProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+type CellProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+type CaptionProps struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+}
+
+templ Table(props ...Props) {
+	{{ var p Props }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<table
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="table"
+		class={ utils.CN("cn-table", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</table>
+}
+
+templ Header(props ...HeaderProps) {
+	{{ var p HeaderProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<thead
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="table-header"
+		class={ utils.CN("cn-table-header", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</thead>
+}
+
+templ Body(props ...BodyProps) {
+	{{ var p BodyProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<tbody
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="table-body"
+		class={ utils.CN("cn-table-body", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</tbody>
+}
+
+templ Footer(props ...FooterProps) {
+	{{ var p FooterProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<tfoot
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="table-footer"
+		class={ utils.CN("cn-table-footer", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</tfoot>
+}
+
+templ Row(props ...RowProps) {
+	{{ var p RowProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<tr
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="table-row"
+		class={ utils.CN("cn-table-row has-aria-expanded:bg-muted/50", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</tr>
+}
+
+templ Head(props ...HeadProps) {
+	{{ var p HeadProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	// cn-table-head-aria adds the checkbox padding for our
+	// data-slot=checkbox markup (our checkbox has no role attribute).
+	<th
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="table-head"
+		class={ utils.CN("cn-table-head cn-table-head-aria", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</th>
+}
+
+templ Cell(props ...CellProps) {
+	{{ var p CellProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	// cn-table-cell-aria adds the checkbox padding for our
+	// data-slot=checkbox markup (our checkbox has no role attribute).
+	<td
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="table-cell"
+		class={ utils.CN("cn-table-cell cn-table-cell-aria", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</td>
+}
+
+templ Caption(props ...CaptionProps) {
+	{{ var p CaptionProps }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	<caption
+		if p.ID != "" {
+			id={ p.ID }
+		}
+		data-slot="table-caption"
+		class={ utils.CN("cn-table-caption", p.Class) }
+		{ p.Attributes... }
+	>
+		{ children... }
+	</caption>
+}

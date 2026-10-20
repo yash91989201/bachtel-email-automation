@@ -1,0 +1,58 @@
+package textarea
+
+import (
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/utils"
+	"strconv"
+)
+
+type Props struct {
+	ID          string
+	Class       string
+	Attributes  templ.Attributes
+	Name        string
+	Value       string
+	Form        string
+	Placeholder string
+	Rows        int
+	Disabled    bool
+	ReadOnly    bool
+}
+
+templ Textarea(props ...Props) {
+	{{ var p Props }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.ID == "" {
+		{{ p.ID = utils.RandomID() }}
+	}
+	<textarea
+		id={ p.ID }
+		if _, hasSlot := p.Attributes["data-slot"]; !hasSlot {
+			data-slot="textarea"
+		}
+		if p.Name != "" {
+			name={ p.Name }
+		}
+		if p.Form != "" {
+			form={ p.Form }
+		}
+		if p.Placeholder != "" {
+			placeholder={ p.Placeholder }
+		}
+		if p.Rows > 0 {
+			rows={ strconv.Itoa(p.Rows) }
+		}
+		disabled?={ p.Disabled }
+		readonly?={ p.ReadOnly }
+		class={
+			utils.CN(
+				// 1:1 base/ui/textarea.tsx: structure lives here, the look comes
+				// from the active style-*.css via cn-textarea.
+				"cn-textarea w-full outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+				p.Class,
+			),
+		}
+		{ p.Attributes... }
+	>{ p.Value }</textarea>
+}

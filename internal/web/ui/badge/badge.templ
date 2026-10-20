@@ -1,0 +1,87 @@
+package badge
+
+import "github.com/yash91989201/bachtel-email-automation/internal/web/ui/utils"
+
+type Variant string
+
+const (
+	VariantDefault     Variant = "default"
+	VariantSecondary   Variant = "secondary"
+	VariantDestructive Variant = "destructive"
+	VariantOutline     Variant = "outline"
+	VariantGhost       Variant = "ghost"
+	VariantLink        Variant = "link"
+)
+
+type Props struct {
+	ID         string
+	Class      string
+	Attributes templ.Attributes
+	Variant    Variant
+	Href       string
+}
+
+templ Badge(props ...Props) {
+	{{ var p Props }}
+	if len(props) > 0 {
+		{{ p = props[0] }}
+	}
+	if p.Href != "" {
+		<a
+			href={ templ.SafeURL(p.Href) }
+			if p.ID != "" {
+				id={ p.ID }
+			}
+			data-slot="badge"
+			data-variant={ string(p.variant()) }
+			class={ badgeClasses(p) }
+			{ p.Attributes... }
+		>
+			{ children... }
+		</a>
+	} else {
+		<span
+			if p.ID != "" {
+				id={ p.ID }
+			}
+			data-slot="badge"
+			data-variant={ string(p.variant()) }
+			class={ badgeClasses(p) }
+			{ p.Attributes... }
+		>
+			{ children... }
+		</span>
+	}
+}
+
+// 1:1 base/ui/badge.tsx: structure lives here, the look comes from the
+// active style-*.css via the cn-badge-* classes.
+const baseClasses = "cn-badge group/badge inline-flex w-fit shrink-0 items-center justify-center overflow-hidden whitespace-nowrap focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none"
+
+func badgeClasses(p Props) string {
+	return utils.CN(baseClasses, p.variantClasses(), p.Class)
+}
+
+func (p Props) variant() Variant {
+	if p.Variant == "" {
+		return VariantDefault
+	}
+	return p.Variant
+}
+
+func (p Props) variantClasses() string {
+	switch p.variant() {
+	case VariantSecondary:
+		return "cn-badge-variant-secondary"
+	case VariantDestructive:
+		return "cn-badge-variant-destructive"
+	case VariantOutline:
+		return "cn-badge-variant-outline"
+	case VariantGhost:
+		return "cn-badge-variant-ghost"
+	case VariantLink:
+		return "cn-badge-variant-link"
+	default:
+		return "cn-badge-variant-default"
+	}
+}

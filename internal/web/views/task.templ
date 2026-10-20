@@ -1,6 +1,17 @@
 package views
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alert"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/badge"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/input"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/label"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/nativeselect"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/table"
+)
 
 // TaskListData is the safe view model for a campaign's task list. It carries
 // ids and fixed status text only, never storage detail.
@@ -29,21 +40,21 @@ templ TaskList(data TaskListData) {
 				<p class="page-description">Upload an Excel workbook, confirm its worksheet and header row, then review the validated snapshot for { data.CampaignName }. Nothing on this page sends email.</p>
 			</div>
 			<div class="action-bar">
-				<a class="btn btn-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/new" }>Upload workbook</a>
-				<a class="btn btn-ghost" href={ "/campaigns/" + data.CampaignID }>Back to campaign</a>
+				<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/new" }>Upload workbook</a>
+				<a class={ button.Variants(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID }>Back to campaign</a>
 			</div>
 		</header>
 		if len(data.Tasks) == 0 {
-			<section class="card border border-base-300 bg-base-100 shadow-sm">
-				<div class="card-body">
-					<h2 class="card-title">No tasks yet</h2>
+			<section class="cn-card border border-border bg-card shadow-sm">
+				@card.Content(card.ContentProps{}) {
+					<h2 class="cn-card-title">No tasks yet</h2>
 					<p>Upload an XLSX workbook to create the first task for this campaign.</p>
-				</div>
+				}
 			</section>
 		} else {
-			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-label="Tasks">
-				<div class="card-body table-scroll">
-					<table class="table">
+			<section class="cn-card border border-border bg-card shadow-sm" aria-label="Tasks">
+				@card.Content(card.ContentProps{Class: "table-scroll"}) {
+					@table.Table(table.Props{}) {
 						<thead>
 							<tr>
 								<th>Status</th>
@@ -64,12 +75,12 @@ templ TaskList(data TaskListData) {
 									<td>{ row.HeaderRow }</td>
 									<td>{ row.Total }</td>
 									<td>{ row.Eligible }</td>
-									<td><a class="btn btn-outline btn-sm" href={ "/campaigns/" + data.CampaignID + "/tasks/" + row.ID }>Review task</a></td>
+									<td><a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + row.ID }>Review task</a></td>
 								</tr>
 							}
 						</tbody>
-					</table>
-				</div>
+					}
+				}
 			</section>
 		}
 	}
@@ -96,27 +107,33 @@ templ TaskUpload(data TaskUploadData) {
 				<p class="page-description">Uploading stores the workbook as a staging task for { data.CampaignName }. Next, confirm the worksheet and header row before validation.</p>
 			</div>
 			<div class="action-bar">
-				<a class="btn btn-ghost" href={ "/campaigns/" + data.CampaignID + "/tasks" }>Back to task list</a>
+				<a class={ button.Variants(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks" }>Back to task list</a>
 			</div>
 		</header>
 		if data.Error != "" {
-			<div class="alert alert-error" role="alert">{ data.Error }</div>
+			@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+				{ data.Error }
+			}
 		}
-		<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks" } enctype="multipart/form-data" class="card border border-base-300 bg-base-100 shadow-sm">
-			<div class="card-body gap-4">
+		<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks" } enctype="multipart/form-data" class="cn-card border border-border bg-card shadow-sm">
+			@card.Content(card.ContentProps{Class: "gap-4"}) {
 				<h2 class="section-heading">Choose a workbook</h2>
 				<p class="section-description">Select the XLSX file to create a staging task.</p>
-				<label class="label" for="task-workbook">Workbook (XLSX)</label>
-				<input class="file-input file-input-bordered w-full" id="task-workbook" type="file" name="workbook" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required/>
-				<div class="card-actions">
-					<button class="btn btn-primary" type="submit">Upload workbook</button>
+				@label.Label(label.Props{For: "task-workbook"}) {
+					Workbook (XLSX)
+				}
+				@input.Input(input.Props{ID: "task-workbook", Name: "workbook", Type: "file", Accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Required: true})
+				<div class="app-card-actions">
+					@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+						Upload workbook
+					}
 				</div>
-			</div>
+			}
 		</form>
 		<section class="subtle-panel" aria-labelledby="constraints-heading">
 			<div class="space-y-2">
 				<h2 id="constraints-heading" class="section-heading">Workbook requirements</h2>
-				<ul class="list-inside list-disc space-y-1 text-sm text-base-content/70">
+				<ul class="list-inside list-disc space-y-1 text-sm text-muted-foreground">
 					<li>Format: <code>.xlsx</code> only, with no password and no legacy <code>.xls</code> file; password-protected and macro containers are rejected.</li>
 					<li>Upload size limit: { data.MaxUploadBytes } bytes.</li>
 					<li>Expanded workbook archive limit: { data.UnzipSizeLimit } bytes, and { data.UnzipXMLSizeLimit } bytes for a single expanded XML part.</li>
@@ -214,16 +231,18 @@ templ TaskPage(data TaskPageData) {
 				}
 			</div>
 			<div class="action-bar">
-				<a class="btn btn-ghost" href={ "/campaigns/" + data.CampaignID + "/tasks" }>Back to task list</a>
+				<a class={ button.Variants(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks" }>Back to task list</a>
 			</div>
 		</header>
 		if data.Error != "" {
-			<div class="alert alert-error" role="alert">{ data.Error }</div>
+			@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+				{ data.Error }
+			}
 		}
 		<div class="campaign-workspace" x-data="{ tab: 'review' }" x-init="const selected = location.hash.slice(1); if (Array.from($el.querySelectorAll('[role=tab]')).some(item => item.dataset.tab === selected)) tab = selected;">
 			<aside class="workspace-sidebar" aria-label="Task navigation">
 				if data.Status != "staging" && (data.Counts.Eligible > 0 || data.Status != "ready") {
-					<a class="btn btn-primary workspace-task-link" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending" }>Continue to test & approval <span aria-hidden="true">→</span></a>
+					<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault, Class: "workspace-task-link"}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending" }>Continue to test & approval <span aria-hidden="true">→</span></a>
 				}
 				<p class="workspace-nav-heading">Recipient preparation</p>
 				@workspaceTabList("Task sections") {
@@ -244,17 +263,19 @@ templ TaskPage(data TaskPageData) {
 				if data.Status == "staging" {
 					@workspaceTabPanel("task", "review", "review") {
 						if data.ValidationError != "" {
-							<div class="alert alert-warning" role="alert">{ data.ValidationError }</div>
+							@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
+								{ data.ValidationError }
+							}
 						}
-						<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="selection-heading">
-							<div class="card-body gap-4">
+						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="selection-heading">
+							@card.Content(card.ContentProps{Class: "gap-4"}) {
 								<p class="eyebrow">Step 2 · Configure</p>
 								<h2 id="selection-heading" class="section-heading">Choose the worksheet and header row</h2>
 								<p class="section-description">Confirm which worksheet contains recipients and which row names its columns. Current default: <code>{ data.DefaultSheet }</code>, row { data.HeaderRow }.</p>
 								<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/select" } class="field-grid">
-									<label class="label" for="select-sheet">
+									@label.Label(label.Props{For: "select-sheet"}) {
 										Worksheet
-										<select class="select select-bordered w-full" id="select-sheet" name="sheet">
+										@nativeselect.NativeSelect(nativeselect.Props{ID: "select-sheet", Name: "sheet", Class: "w-full"}) {
 											for _, sheet := range data.Sheets {
 												if sheet.Selected {
 													<option value={ sheet.Name } selected>
@@ -266,23 +287,25 @@ templ TaskPage(data TaskPageData) {
 													</option>
 												}
 											}
-										</select>
-									</label>
-									<label class="label" for="select-header-row">
+										}
+									}
+									@label.Label(label.Props{For: "select-header-row"}) {
 										Header row
-										<input class="input input-bordered w-full" id="select-header-row" type="number" name="header_row" min="1" value={ data.HeaderRow } required/>
-									</label>
+										@input.Input(input.Props{ID: "select-header-row", Type: "number", Name: "header_row", Required: true, Attributes: templ.Attributes{"min": "1", "value": data.HeaderRow}})
+									}
 									<div class="action-bar">
-										<button class="btn btn-primary" type="submit">Validate task</button>
+										@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+											Validate task
+										}
 									</div>
 								</form>
-							</div>
+							}
 						</section>
 					}
 				} else {
 					@workspaceTabPanel("task", "review", "review") {
-						<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="counts-heading">
-							<div class="card-body gap-4">
+						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="counts-heading">
+							@card.Content(card.ContentProps{Class: "gap-4"}) {
 								<p class="eyebrow">Step 3 · Review</p>
 								<div class="action-bar">
 									<h2 id="counts-heading" class="section-heading">Validation snapshot</h2>@revisionState(true, data.Approved)
@@ -322,11 +345,11 @@ templ TaskPage(data TaskPageData) {
 									</div>
 								</dl>
 								if data.Counts.Eligible == 0 && data.Status == "ready" {
-									<div class="alert alert-warning" role="status">No eligible recipients. Review the held rows in Rows & exclusions, correct the workbook and upload a new task.</div>
+									<div class="status-warning" role="status">No eligible recipients. Review the held rows in Rows & exclusions, correct the workbook and upload a new task.</div>
 								}
-								<p class="text-sm text-base-content/70">Candidate sending requires completed production release verification. Tests, approval, progress and recovery controls are available on the sending page.</p>
+								<p class="text-sm text-muted-foreground">Candidate sending requires completed production release verification. Tests, approval, progress and recovery controls are available on the sending page.</p>
 								<div class="subtle-panel">
-									<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Result labels</p>
+									<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Result labels</p>
 									<p>{ joinLabels(data.ResultLabels) }</p>
 								</div>
 								<details class="snapshot-details">
@@ -348,46 +371,48 @@ templ TaskPage(data TaskPageData) {
 										</div>
 									</dl>
 								</details>
-							</div>
+							}
 						</section>
 						if data.ScheduleAt != "" {
 							<p class="font-semibold">Scheduled start: { data.ScheduleAt } ({ data.ScheduleState })</p>
 							if data.ScheduleState == "missed" {
 								<p class="text-warning">The scheduled time passed without starting. Review this task and schedule a new start.</p>
 							} else if data.ScheduleState == "fired" {
-								<p class="text-sm text-base-content/70">This schedule started the task once.</p>
+								<p class="text-sm text-muted-foreground">This schedule started the task once.</p>
 							}
 						}
 						if data.Stale {
-							<div class="alert alert-warning" role="alert">
+							@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
 								<div>
 									<p class="font-semibold">The campaign content changed after this task was validated</p>
 									<p>Revalidate this task to rebuild the snapshot against the current revision.</p>
 								</div>
 								<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate" }>
-									<button class="btn btn-warning btn-sm" type="submit">Revalidate</button>
+									@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeSm, Class: "status-warning"}) {
+										Revalidate
+									}
 								</form>
-							</div>
+							}
 						}
 					}
 					@workspaceTabPanel("task", "rows", "review") {
-						<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="download-heading">
-							<div class="card-body gap-2">
-								<h2 id="download-heading" class="card-title">Exclusion report</h2>
-								<p class="text-sm text-base-content/60">Every held row with its original columns, available even when no row is eligible.</p>
-								<div class="card-actions">
-									<a class="btn btn-outline" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download exclusion report</a>
+						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="download-heading">
+							@card.Content(card.ContentProps{Class: "gap-2"}) {
+								<h2 id="download-heading" class="cn-card-title">Exclusion report</h2>
+								<p class="text-sm text-muted-foreground">Every held row with its original columns, available even when no row is eligible.</p>
+								<div class="app-card-actions">
+									<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download exclusion report</a>
 								</div>
-							</div>
+							}
 						</section>
-						<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="held-heading">
-							<div class="card-body">
-								<h2 id="held-heading" class="card-title">Held rows</h2>
+						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="held-heading">
+							@card.Content(card.ContentProps{}) {
+								<h2 id="held-heading" class="cn-card-title">Held rows</h2>
 								if len(data.HeldRows) == 0 {
-									<p class="text-base-content/60">No held rows: every candidate row was admitted.</p>
+									<p class="text-muted-foreground">No held rows: every candidate row was admitted.</p>
 								} else {
 									<div class="table-scroll">
-										<table class="table table-sm">
+										@table.Table(table.Props{Class: "cn-table-compact"}) {
 											<thead>
 												<tr>
 													<th>Worksheet row</th>
@@ -402,19 +427,19 @@ templ TaskPage(data TaskPageData) {
 													</tr>
 												}
 											</tbody>
-										</table>
+										}
 									</div>
 								}
-							</div>
+							}
 						</section>
-						<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="rows-heading">
-							<div class="card-body">
-								<h2 id="rows-heading" class="card-title">Admitted rows</h2>
+						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="rows-heading">
+							@card.Content(card.ContentProps{}) {
+								<h2 id="rows-heading" class="cn-card-title">Admitted rows</h2>
 								if len(data.Rows) == 0 {
-									<p class="text-base-content/60">No admitted rows in this snapshot.</p>
+									<p class="text-muted-foreground">No admitted rows in this snapshot.</p>
 								} else {
 									<div class="table-scroll">
-										<table class="table table-sm">
+										@table.Table(table.Props{Class: "cn-table-compact"}) {
 											<thead>
 												<tr>
 													<th>Worksheet row</th>
@@ -431,40 +456,44 @@ templ TaskPage(data TaskPageData) {
 													</tr>
 												}
 											</tbody>
-										</table>
+										}
 									</div>
 								}
-							</div>
+							}
 						</section>
 					}
 					if len(data.Rows) > 0 {
 						@workspaceTabPanel("task", "preview", "review") {
-							<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="preview-heading">
-								<div class="card-body gap-4">
-									<h2 id="preview-heading" class="card-title">Row preview</h2>
-									<p class="text-sm text-base-content/60">Render one admitted row through the pinned revision. Nothing is stored and nothing is sent.</p>
+							<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="preview-heading">
+								@card.Content(card.ContentProps{Class: "gap-4"}) {
+									<h2 id="preview-heading" class="cn-card-title">Row preview</h2>
+									<p class="text-sm text-muted-foreground">Render one admitted row through the pinned revision. Nothing is stored and nothing is sent.</p>
 									<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-post={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-target="#task-preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
-										<label class="label" for="preview-row">Row</label>
-										<select class="select select-bordered w-full" id="preview-row" name="row">
+										@label.Label(label.Props{For: "preview-row"}) {
+											Row
+										}
+										@nativeselect.NativeSelect(nativeselect.Props{ID: "preview-row", Name: "row", Class: "w-full"}) {
 											for _, row := range data.Rows {
 												<option value={ row.ID }>Worksheet row { row.Row } ({ row.State })</option>
 											}
-										</select>
+										}
 										<div class="action-bar">
-											<button class="btn btn-primary" type="submit">Render preview</button>
+											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+												Render preview
+											}
 										</div>
 									</form>
 									<div id="task-preview-result" role="status" aria-live="polite">
-										<p class="text-base-content/60">Submit a row to render its pinned email here.</p>
+										<p class="text-muted-foreground">Submit a row to render its pinned email here.</p>
 									</div>
-								</div>
+								}
 							</section>
 						}
 					}
 					@workspaceTabPanel("task", "results", "review") {
-						<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="results-heading">
-							<div class="card-body gap-4">
-								<h2 id="results-heading" class="card-title">Task results workbook</h2>
+						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="results-heading">
+							@card.Content(card.ContentProps{Class: "gap-4"}) {
+								<h2 id="results-heading" class="cn-card-title">Task results workbook</h2>
 								<p>The workbook keeps every original worksheet, row and cell, and adds the result columns after the source columns. It is built from retained records only; generating it never sends or retries an email.</p>
 								if data.ResultsReady {
 									<dl class="space-y-1 text-sm">
@@ -473,22 +502,28 @@ templ TaskPage(data TaskPageData) {
 											<dd>{ data.ResultsAsOf }</dd>
 										</div>
 									</dl>
-									<div class="card-actions">
-										<a class="btn btn-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results.xlsx" }>Download results</a>
+									<div class="app-card-actions">
+										<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results.xlsx" }>Download results</a>
 										<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results" }>
-											<button class="btn btn-ghost" type="submit">Regenerate</button>
+											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantGhost, Size: button.SizeDefault}) {
+												Regenerate
+											}
 										</form>
 										<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results/delete#results" }>
-											<button class="btn btn-ghost" type="submit">Remove generated file</button>
+											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantGhost, Size: button.SizeDefault}) {
+												Remove generated file
+											}
 										</form>
 									</div>
-									<p class="text-sm text-base-content/60">Removing this file deletes only the generated workbook. Candidate eligibility, uploads and attempt history stay unchanged, and the workbook can be generated again.</p>
+									<p class="text-sm text-muted-foreground">Removing this file deletes only the generated workbook. Candidate eligibility, uploads and attempt history stay unchanged, and the workbook can be generated again.</p>
 								} else {
 									if data.ResultsState == "generating" {
 										<p>Generating the workbook now. Reload this page shortly.</p>
 									} else if data.ResultsState == "failed" {
 										if data.ResultsError != "" {
-											<div class="alert alert-error" role="alert">{ data.ResultsError }</div>
+											@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+												{ data.ResultsError }
+											}
 										}
 										<p>The last generation did not finish, so no download is presented. Retrying rebuilds the file from retained records.</p>
 									} else if data.Status == "completed" || data.Status == "stopped" || data.Status == "interrupted" {
@@ -498,11 +533,13 @@ templ TaskPage(data TaskPageData) {
 									}
 									if data.Status == "completed" || data.Status == "stopped" || data.Status == "interrupted" {
 										<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results" }>
-											<button class="btn btn-primary" type="submit">Generate results workbook</button>
+											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+												Generate results workbook
+											}
 										</form>
 									}
 								}
-							</div>
+							}
 						</section>
 					}
 				}
@@ -528,7 +565,9 @@ templ TaskPreviewResult(data TaskPreviewData) {
 	<div class="subtle-panel space-y-4">
 		<h3 class="section-heading">Preview result</h3>
 		if data.Error != "" {
-			<div class="alert alert-error" role="alert">{ data.Error }</div>
+			@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+				{ data.Error }
+			}
 		} else {
 			<dl class="space-y-1 text-sm">
 				<div class="flex gap-2">
@@ -547,21 +586,21 @@ templ TaskPreviewResult(data TaskPreviewData) {
 				</div>
 			</dl>
 			<div class="space-y-1">
-				<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">To</p>
+				<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">To</p>
 				<p class="font-semibold">{ data.Recipient }</p>
 			</div>
 			<div class="space-y-1">
-				<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Subject</p>
+				<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Subject</p>
 				<p class="font-semibold">{ data.Subject }</p>
 			</div>
 			<div class="space-y-1">
-				<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Body</p>
-				<div class="email-body rounded-box border border-base-300 p-4">
+				<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Body</p>
+				<div class="email-body rounded-card border border-border p-4">
 					@templ.Raw(data.Body)
 				</div>
 			</div>
 			<div class="table-scroll">
-				<table class="table table-sm">
+				@table.Table(table.Props{Class: "cn-table-compact"}) {
 					<thead>
 						<tr>
 							<th>Variable</th>
@@ -580,7 +619,7 @@ templ TaskPreviewResult(data TaskPreviewData) {
 							</tr>
 						}
 					</tbody>
-				</table>
+				}
 			</div>
 		}
 	</div>
@@ -593,9 +632,13 @@ func joinLabels(labels []string) string {
 
 templ taskStatusBadge(status string) {
 	if status == "ready" {
-		<span class="badge badge-success">Ready</span>
+		@badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: "status-success"}) {
+			{ "Ready" }
+		}
 	} else {
-		<span class="badge badge-warning">Staging</span>
+		@badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: "status-warning"}) {
+			{ "Staging" }
+		}
 	}
 }
 

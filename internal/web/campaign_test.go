@@ -364,7 +364,7 @@ func TestCampaignPreview(t *testing.T) {
 			"Revision:",
 			"<dd>1</dd>",
 			hash,
-			`badge-warning">Not approved`,
+			`status-warning">Not approved`,
 			"Raw value",
 			"Used value",
 			"yash   kumar",
@@ -383,7 +383,7 @@ func TestCampaignPreview(t *testing.T) {
 			t.Fatalf("missing sample rendered a server error: status=%d body=%.400s", rec.Code, rec.Body.String())
 		}
 		body := rec.Body.String()
-		if !strings.Contains(body, "missing required value(s): candidate_name") || !strings.Contains(body, `class="alert alert-error"`) {
+		if !strings.Contains(body, "missing required value(s): candidate_name") || !strings.Contains(body, `data-slot="alert"`) || !strings.Contains(body, `role="alert"`) {
 			t.Fatalf("inline missing-value message absent: %.600s", body)
 		}
 		// The revision metadata stays visible on the error path.
@@ -423,8 +423,8 @@ func TestCampaignDetailApprovalAndHistory(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		`badge-success">Approved`,
-		`badge-warning">Not approved`,
+		`status-success">Approved`,
+		`status-warning">Not approved`,
 		"Revision 1",
 		"Revision 2",
 		firstHash,

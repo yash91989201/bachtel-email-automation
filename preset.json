@@ -1,0 +1,14 @@
+{
+  "preset": "b870VEw0in",
+  "shadcnTemplVersion": "v2.0.0-beta.15",
+  "style": "base-luma",
+  "baseColor": "mist",
+  "theme": "cyan",
+  "chartColor": "lime",
+  "font": "noto-sans",
+  "fontHeading": "eb-garamond",
+  "iconLibrary": "remixicon",
+  "radius": "small",
+  "menuAccent": "bold",
+  "menuColor": "inverted"
+}

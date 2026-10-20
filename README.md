@@ -1,6 +1,6 @@
 # Bachtel Email Automation
 
-A Go application using templ, htmx, Alpine.js, Tailwind CSS, daisyUI, and
+A Go application using templ, htmx, Alpine.js, Tailwind CSS, locally owned shadcn-templ components, and
 PocketBase. One executable serves the UI, static assets, PocketBase API, and
 admin dashboard on one port. PocketBase runs in-process with SQLite; there is
 no separate database service or frontend server.
@@ -245,12 +245,15 @@ internal/
     task.go                     Task intake pages: upload, worksheet selection, review, downloads
     ratelimit.go                Fixed-window login rate limiter
     web_test.go                 Route, auth, CSRF, rate-limit, and DB integration tests
-    views/                      templ layouts and pages (layout, home, login, connection, campaign, task)
+    views/                      Page view models, layouts and templates
+    ui/                         Locally owned shadcn-templ components and class utilities
     static/                     Embedded files and generated CSS/JS
 docs/campaign-templates.md      Placeholder syntax, mapping/formatting rules, DOCX support and limits
 docs/task-intake.md             Task workbook support, header matching, duplicate handling and limits
 docs/microsoft-setup.md         Microsoft app registration and first-time connection setup
-web/css/app.css                 Tailwind and daisyUI source
+web/css/app.css                 Tailwind entry and application layout styles
+web/css/theme.css               Bachtel theme tokens
+web/css/components.css          Bachtel styling for owned UI primitives
 scripts/copy-assets.mjs         Copy pinned Alpine/htmx distributions locally
 Dockerfile                     Frontend build, Go build, non-root runtime
 compose.yaml                   One service, application environment, persistent data volume
@@ -266,7 +269,7 @@ The existing OpenSpec configuration and skills are preserved.
 
 ```sh
 make generate    # go generate -> module-pinned go tool templ
-make assets      # copy Alpine/htmx and compile Tailwind/daisyUI
+make assets      # copy Alpine/htmx and compile Tailwind CSS
 make fmt         # format Go and templ sources
 make test        # regenerate, build assets, go test, go vet
 make build       # build bin/bachtel with assets embedded
@@ -279,10 +282,11 @@ keep the database location stable. The default data directory is `./pb_data`.
 All frontend libraries are served locally, with no runtime CDN dependencies.
 
 The templ CLI is pinned with Go's `tool` directive so its generator matches
-the runtime library. Tailwind and its CLI are pinned to 4.3.0: npm audit flagged
-the newer 4.3.3 CLI's pinned transitive watcher dependency during scaffolding.
-The 4.3.0 CLI permits the patched watcher 2.6.0, recorded in the lockfile;
-`npm audit` is clean. Recheck the audit when upgrading.
+the runtime library. Tailwind and its CLI are pinned in `package.json` and
+`package-lock.json`. UI component sources are pinned to shadcn-templ
+`v2.0.0-beta.15`, copied into `internal/web/ui` and adapted to preserve application structure and workflows. The active theme is
+shadcn-templ preset `b870VEw0in` (Luma, Mist/Cyan, Noto Sans and EB Garamond). See [UI component maintenance](docs/ui-components.md)
+before adding or upgrading components.
 
 ## Database migrations
 
@@ -361,6 +365,7 @@ Researched with Firecrawl against the official documentation:
 - [PocketBase routing and standard handler adapters](https://pocketbase.io/docs/go-routing/)
 - [PocketBase Go migrations](https://pocketbase.io/docs/go-migrations/)
 - [templ generation](https://templ.guide/core-concepts/template-generation/)
-- [daisyUI with htmx and Tailwind CLI](https://daisyui.com/docs/install/htmx/)
+- [shadcn-templ components](https://shadcn-templ.com/docs)
+- [UI component structure and maintenance](docs/ui-components.md)
 - [Alpine installation](https://alpinejs.dev/essentials/installation)
 - [htmx installation and HTML responses](https://htmx.org/docs/)

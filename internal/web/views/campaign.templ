@@ -1,6 +1,17 @@
 package views
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alert"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/badge"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/input"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/label"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/table"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/textarea"
+)
 
 // CampaignListData is the safe view model for the campaign list. The
 // converter message is a fixed operator-facing instruction, never a path.
@@ -26,26 +37,26 @@ templ CampaignList(data CampaignListData) {
 				<p class="eyebrow">Campaigns</p>
 				<h1 class="text-4xl font-bold tracking-tight">Email campaigns</h1>
 				<p class="page-description">Manage templates, recipient workbooks and submission history for each campaign.</p>
-			</div><a class="btn btn-primary" href="/campaigns/new">New campaign <span aria-hidden="true">+</span></a>
+			</div><a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href="/campaigns/new">New campaign <span aria-hidden="true">+</span></a>
 		</div>
 		if data.ConverterError != "" {
-			<div class="alert alert-warning" role="alert">
+			@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
 				<div>
 					<p class="font-semibold">Body document conversion is unavailable</p>
 					<p>{ data.ConverterError }</p>
 				</div>
-			</div>
+			}
 		}
 		if len(data.Campaigns) == 0 {
-			<section class="card border border-base-300 bg-base-100 shadow-sm">
-				<div class="card-body">
-					<h2 class="card-title">No campaigns yet</h2>
+			<section class="cn-card border border-border bg-card shadow-sm">
+				@card.Content(card.ContentProps{}) {
+					<h2 class="cn-card-title">No campaigns yet</h2>
 					<p>Create a campaign to define its source headers, subject, body document and result labels.</p>
-				</div>
+				}
 			</section>
 		} else {
 			<div class="table-scroll">
-				<table class="table" aria-label="Campaigns">
+				@table.Table(table.Props{Attributes: templ.Attributes{"aria-label": "Campaigns"}}) {
 					<thead>
 						<tr>
 							<th class="min-w-64"><span class="sr-only">Name</span></th>
@@ -57,7 +68,7 @@ templ CampaignList(data CampaignListData) {
 					<tbody>
 						for _, row := range data.Campaigns {
 							<tr>
-								<td class="font-semibold"><a class="link link-primary" href={ "/campaigns/" + row.ID }>{ row.Name } <span aria-hidden="true">↗</span></a></td>
+								<td class="font-semibold"><a class="app-link text-primary" href={ "/campaigns/" + row.ID }>{ row.Name } <span aria-hidden="true">↗</span></a></td>
 								<td><code>{ row.SourceHeaders }</code></td>
 								<td>
 									if row.HasRevision {
@@ -70,7 +81,7 @@ templ CampaignList(data CampaignListData) {
 							</tr>
 						}
 					</tbody>
-				</table>
+				}
 			</div>
 		}
 	}
@@ -95,30 +106,40 @@ templ CampaignForm(data CampaignFormData) {
 			</div>
 		</div>
 		if data.Error != "" {
-			<div class="alert alert-error" role="alert">{ data.Error }</div>
+			@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+				{ data.Error }
+			}
 		}
-		<form method="post" action="/campaigns" class="card form-card">
-			<div class="card-body gap-4">
-				<h2 class="card-title">Campaign details</h2>
+		<form method="post" action="/campaigns" class="cn-card form-card">
+			@card.Content(card.ContentProps{Class: "gap-4"}) {
+				<h2 class="cn-card-title">Campaign details</h2>
 				<div class="space-y-2">
-					<label class="label" for="campaign-name">Campaign name</label>
-					<input class="input w-full" id="campaign-name" type="text" name="name" value={ data.Name } maxlength="200" required/>
-				</div>
-				<div class="space-y-2">
-					<label class="label" for="campaign-headers">Source headers for mapping draft</label>
-					<input class="input w-full" id="campaign-headers" type="text" name="source_headers" value={ data.SourceHeaders } required/>
-					<p class="text-sm text-base-content/60">Example: <code>Candidate Name, Candidate Email, Department</code>. Use comma-separated source worksheet headers, including the candidate email column. These generate the draft mapping table; mark one row as recipient when creating a revision.</p>
+					@label.Label(label.Props{For: "campaign-name"}) {
+						Campaign name
+					}
+					@input.Input(input.Props{ID: "campaign-name", Name: "name", Type: "text", Value: data.Name, Required: true, Attributes: templ.Attributes{"maxlength": "200"}})
 				</div>
 				<div class="space-y-2">
-					<label class="label" for="campaign-labels">Result column labels</label>
-					<input class="input w-full" id="campaign-labels" type="text" name="result_labels" value={ data.ResultLabels }/>
-					<p class="text-sm text-base-content/60">Comma-separated labels for the downloadable result columns. The defaults are pre-filled; changing them later never invalidates content approval.</p>
+					@label.Label(label.Props{For: "campaign-headers"}) {
+						Source headers for mapping draft
+					}
+					@input.Input(input.Props{ID: "campaign-headers", Name: "source_headers", Type: "text", Value: data.SourceHeaders, Required: true})
+					<p class="text-sm text-muted-foreground">Example: <code>Candidate Name, Candidate Email, Department</code>. Use comma-separated source worksheet headers, including the candidate email column. These generate the draft mapping table; mark one row as recipient when creating a revision.</p>
 				</div>
-				<div class="card-actions">
-					<button class="btn btn-primary" type="submit">Create campaign</button>
-					<a class="btn btn-ghost" href="/campaigns">Cancel</a>
+				<div class="space-y-2">
+					@label.Label(label.Props{For: "campaign-labels"}) {
+						Result column labels
+					}
+					@input.Input(input.Props{ID: "campaign-labels", Name: "result_labels", Type: "text", Value: data.ResultLabels})
+					<p class="text-sm text-muted-foreground">Comma-separated labels for the downloadable result columns. The defaults are pre-filled; changing them later never invalidates content approval.</p>
 				</div>
-			</div>
+				<div class="app-card-actions">
+					@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+						Create campaign
+					}
+					<a class={ button.Variants(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault}) } href="/campaigns">Cancel</a>
+				</div>
+			}
 		</form>
 	}
 }
@@ -191,19 +212,25 @@ type RevisionRow struct {
 templ CampaignPage(data CampaignPageData) {
 	@Layout(data.Name, true, "campaigns") {
 		<div class="page-header">
-			<div><a class="link text-sm text-base-content/60" href="/campaigns">← All campaigns</a><p class="eyebrow mt-4">Campaign workspace</p><h1>{ data.Name }</h1><p class="page-description">Prepare your email content, then open email tasks to upload recipients, test and send.</p></div>
+			<div><a class="app-link text-sm text-muted-foreground" href="/campaigns">← All campaigns</a><p class="eyebrow mt-4">Campaign workspace</p><h1>{ data.Name }</h1><p class="page-description">Prepare your email content, then open email tasks to upload recipients, test and send.</p></div>
 		</div>
 		if data.RevisionError != "" {
-			<div class="alert alert-error" role="alert">{ data.RevisionError }</div>
+			@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+				{ data.RevisionError }
+			}
 		}
 		if data.LabelsError != "" {
-			<div class="alert alert-error" role="alert">{ data.LabelsError }</div>
+			@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+				{ data.LabelsError }
+			}
 		}
 		if data.DeleteError != "" {
-			<div class="alert alert-error" role="alert">{ data.DeleteError }</div>
+			@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+				{ data.DeleteError }
+			}
 		}
 		if len(data.Warnings) > 0 {
-			<div class="alert alert-warning" role="alert">
+			@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
 				<div>
 					<p class="font-semibold">The last conversion dropped unsupported content:</p>
 					<ul class="list-inside list-disc">
@@ -212,11 +239,11 @@ templ CampaignPage(data CampaignPageData) {
 						}
 					</ul>
 				</div>
-			</div>
+			}
 		}
 		<div class="campaign-workspace" x-data={ "{ tab: '" + campaignInitialTab(data) + "' }" } data-has-error={ strconv.FormatBool(data.RevisionError != "" || data.LabelsError != "" || data.DeleteError != "") } data-has-preview={ strconv.FormatBool(data.HasRevision) } x-init="if ($el.dataset.hasError !== 'true') { const selected = location.hash.slice(1); if (['template', 'preview', 'history', 'settings'].includes(selected) && (selected !== 'preview' || $el.dataset.hasPreview === 'true')) tab = selected; }">
 			<aside class="workspace-sidebar" aria-label="Campaign navigation">
-				<a class="btn btn-primary workspace-task-link" href={ "/campaigns/" + data.ID + "/tasks" }>Email tasks <span aria-hidden="true">→</span></a>
+				<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault, Class: "workspace-task-link"}) } href={ "/campaigns/" + data.ID + "/tasks" }>Email tasks <span aria-hidden="true">→</span></a>
 				<p class="workspace-nav-heading">Content & preparation</p>
 				<div role="tablist" aria-label="Campaign sections" aria-orientation="vertical" x-on:keydown="if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes($event.key)) { $event.preventDefault(); const items = Array.from($el.querySelectorAll('[role=tab]')); const index = items.indexOf($event.target); const next = $event.key === 'Home' ? 0 : $event.key === 'End' ? items.length - 1 : (index + (['ArrowDown', 'ArrowRight'].includes($event.key) ? 1 : -1) + items.length) % items.length; items[next].focus(); items[next].click(); }">
 					@workspaceSidebarTab("campaign", "template", "Template", "Subject, document & mappings", campaignInitialTab(data))
@@ -230,11 +257,11 @@ templ CampaignPage(data CampaignPageData) {
 			</aside>
 			<div class="workspace-content">
 				@workspaceTabPanel("campaign", "template", campaignInitialTab(data)) {
-					<details class="card card-disclosure border border-base-300 bg-base-100 shadow-sm">
+					<details class="cn-card card-disclosure border border-border bg-card shadow-sm">
 						<summary>
-							<h2 id="revision-heading" class="card-title">Current revision</h2>
+							<h2 id="revision-heading" class="cn-card-title">Current revision</h2>
 						</summary>
-						<div class="card-body gap-4">
+						@card.Content(card.ContentProps{Class: "gap-4"}) {
 							if data.HasRevision {
 								<dl class="space-y-1 text-sm">
 									<div class="flex gap-2">
@@ -251,7 +278,7 @@ templ CampaignPage(data CampaignPageData) {
 									</div>
 								</dl>
 								<details class="text-sm">
-									<summary class="cursor-pointer text-base-content/60">Conversion details</summary>
+									<summary class="cursor-pointer text-muted-foreground">Conversion details</summary>
 									<dl class="mt-3 space-y-2">
 										<div class="flex gap-2">
 											<dt class="font-semibold">Converter:</dt>
@@ -264,24 +291,24 @@ templ CampaignPage(data CampaignPageData) {
 									</dl>
 								</details>
 							} else {
-								<p class="text-base-content/70">No content revision yet. Upload a body document below to create the first one.</p>
+								<p class="text-muted-foreground">No content revision yet. Upload a body document below to create the first one.</p>
 							}
-						</div>
+						}
 					</details>
-					<details class="card card-disclosure border border-base-300 bg-base-100 shadow-sm">
+					<details class="cn-card card-disclosure border border-border bg-card shadow-sm">
 						<summary>
-							<h2 id="mapping-reference-heading" class="card-title">Mapping reference</h2>
+							<h2 id="mapping-reference-heading" class="cn-card-title">Mapping reference</h2>
 						</summary>
-						<div class="card-body gap-4 text-sm">
-							<p class="text-base-content/70">Revisions are immutable: a valid upload becomes the current revision, and the history is never edited.</p>
-							<div class="rounded-box border border-base-300 bg-base-200/50 p-4">
-								<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">Source headers for mapping draft</p>
+						@card.Content(card.ContentProps{Class: "gap-4 text-sm"}) {
+							<p class="text-muted-foreground">Revisions are immutable: a valid upload becomes the current revision, and the history is never edited.</p>
+							<div class="rounded-card border border-border bg-muted/50 p-4">
+								<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Source headers for mapping draft</p>
 								<code class="break-words">{ data.SourceHeaders }</code>
 							</div>
-							<div class="overflow-x-auto rounded-box border border-base-300">
-								<table class="table table-sm">
-									<caption class="p-3 text-left font-medium">Column order <span class="font-normal text-base-content/60">— separate each column with <code>|</code></span></caption>
-									<thead class="bg-base-200/50"><tr><th>Column</th><th>What to enter</th></tr></thead>
+							<div class="overflow-x-auto rounded-card border border-border">
+								@table.Table(table.Props{Class: "cn-table-compact"}) {
+									<caption class="p-3 text-left font-medium">Column order <span class="font-normal text-muted-foreground">— separate each column with <code>|</code></span></caption>
+									<thead class="bg-muted/50"><tr><th>Column</th><th>What to enter</th></tr></thead>
 									<tbody>
 										<tr><td>1 · Variable</td><td><code>{ data.ExampleVariable }</code></td></tr>
 										<tr><td>2 · Source header</td><td><code>{ data.ExampleHeader }</code></td></tr>
@@ -289,56 +316,62 @@ templ CampaignPage(data CampaignPageData) {
 										<tr><td>4 · Format</td><td><code>text</code>, <code>name</code>, <code>designation</code> or <code>email</code></td></tr>
 										<tr><td>5 · Fallback</td><td>Optional rows only; leave blank otherwise.</td></tr>
 									</tbody>
-								</table>
+								}
 							</div>
-							<div class="flex flex-wrap items-center gap-2 text-base-content/70">
+							<div class="flex flex-wrap items-center gap-2 text-muted-foreground">
 								<span>Formats:</span>
-								<code class="badge badge-ghost badge-sm">text</code>
-								<code class="badge badge-ghost badge-sm">name</code>
-								<code class="badge badge-ghost badge-sm">designation</code>
-								<code class="badge badge-ghost badge-sm">email</code>
+								<code class="cn-badge cn-badge-variant-ghost">text</code>
+								<code class="cn-badge cn-badge-variant-ghost">name</code>
+								<code class="cn-badge cn-badge-variant-ghost">designation</code>
+								<code class="cn-badge cn-badge-variant-ghost">email</code>
 								<span class="text-xs">Defaults to text, or email for recipient rows. Fallback is only for optional rows.</span>
 							</div>
-							<div class="rounded-box border border-primary/20 bg-primary/5 p-4">
+							<div class="rounded-card border border-primary/20 bg-primary/5 p-4">
 								<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">Example line</p>
 								<code class="break-words">{ data.ExampleVariable + " | " + data.ExampleHeader + " | required | text" }</code>
 							</div>
-						</div>
+						}
 					</details>
-					<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="upload-heading">
-						<div class="card-body gap-4">
-							<h2 id="upload-heading" class="card-title">Create a new content revision</h2>
-							<p class="text-sm text-base-content/70">Upload the body document, its subject and the recipient mapping. A valid upload becomes the current revision.</p>
+					<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="upload-heading">
+						@card.Content(card.ContentProps{Class: "gap-4"}) {
+							<h2 id="upload-heading" class="cn-card-title">Create a new content revision</h2>
+							<p class="text-sm text-muted-foreground">Upload the body document, its subject and the recipient mapping. A valid upload becomes the current revision.</p>
 							<form method="post" action={ "/campaigns/" + data.ID + "/revisions" } enctype="multipart/form-data" class="space-y-4">
 								<div class="space-y-2">
 									<p class="eyebrow">Step 1 · Email content</p>
 									<div class="space-y-2">
 										<div class="space-y-2">
 											<div class="field-hint-row">
-												<label class="label" for="revision-subject">Subject</label>
+												@label.Label(label.Props{For: "revision-subject"}) {
+													Subject
+												}
 												@hintTrigger("revision-subject-help", "Subject help") {
 													The subject line of the email. It may use the same placeholders as the document, for example <code>{ "{{" + data.ExampleVariable + "}}" }</code>.
 												}
 											</div>
-											<input class="input input-bordered w-full" id="revision-subject" type="text" name="subject" maxlength="998" aria-describedby="revision-subject-help" required/>
+											@input.Input(input.Props{ID: "revision-subject", Name: "subject", Type: "text", Required: true, Attributes: templ.Attributes{"maxlength": "998", "aria-describedby": "revision-subject-help"}})
 										</div>
 										<div class="space-y-2">
 											<div class="field-hint-row">
-												<label class="label" for="revision-document">Body document (DOCX)</label>
+												@label.Label(label.Props{For: "revision-document"}) {
+													Body document (DOCX)
+												}
 												@hintTrigger("revision-document-help", "Body document help") {
 													The Word document that becomes the email body. Put placeholders in it wherever a value should appear, for example <code>{ "{{" + data.ExampleVariable + "}}" }</code>, and use the same names in your mapping.
 												}
 											</div>
-											<input class="file-input file-input-bordered w-full" id="revision-document" type="file" name="document" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-describedby="revision-document-help" required/>
+											@input.Input(input.Props{ID: "revision-document", Name: "document", Type: "file", Accept: ".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document", Required: true, Attributes: templ.Attributes{"aria-describedby": "revision-document-help"}})
 										</div>
 									</div>
 								</div>
 								<div class="space-y-2">
 									<p class="eyebrow">Step 2 · Recipient mapping</p>
-									<p class="text-sm text-base-content/70">Place <code>{ "{{" + data.ExampleVariable + "}}" }</code> in the subject or Word document wherever its value should appear. Use the same variable name in your mapping below.</p>
+									<p class="text-sm text-muted-foreground">Place <code>{ "{{" + data.ExampleVariable + "}}" }</code> in the subject or Word document wherever its value should appear. Use the same variable name in your mapping below.</p>
 									<div class="space-y-2">
 										<div class="field-hint-row">
-											<label class="label" for="revision-mappings">Mapping table</label>
+											@label.Label(label.Props{For: "revision-mappings"}) {
+												Mapping table
+											}
 											@hintTrigger("revision-mappings-help", "Mapping table help") {
 												Enter your mappings one per line: <code>variable | source header | role | format | fallback</code>.
 												<br/>
@@ -347,81 +380,89 @@ templ CampaignPage(data CampaignPageData) {
 												The recipient needs no placeholder. Every other row must match the placeholders in the subject or body.
 											}
 										</div>
-										<textarea class="textarea textarea-bordered w-full min-h-64 font-mono" id="revision-mappings" name="mappings" rows="8" aria-describedby="revision-mappings-hint revision-mappings-help">{ data.MappingDraft }</textarea>
-										<p id="revision-mappings-hint" class="text-sm text-base-content/60">One row per line. Mark exactly one row as <code>recipient</code> to select the sending address.</p>
+										@textarea.Textarea(textarea.Props{ID: "revision-mappings", Name: "mappings", Rows: 8, Class: "min-h-64 font-mono", Attributes: templ.Attributes{"aria-describedby": "revision-mappings-hint revision-mappings-help"}, Value: data.MappingDraft})
+										<p id="revision-mappings-hint" class="text-sm text-muted-foreground">One row per line. Mark exactly one row as <code>recipient</code> to select the sending address.</p>
 									</div>
 								</div>
-								<div class="card-actions">
-									<button class="btn btn-primary" type="submit">Create revision</button>
+								<div class="app-card-actions">
+									@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+										Create revision
+									}
 								</div>
 							</form>
-						</div>
+						}
 					</section>
 				}
 				if data.HasRevision {
 					@workspaceTabPanel("campaign", "preview", campaignInitialTab(data)) {
 						if data.HasRevision {
-							<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="preview-heading">
-								<div class="card-body gap-4">
-									<h2 id="preview-heading" class="card-title">Sample preview</h2>
+							<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="preview-heading">
+								@card.Content(card.ContentProps{Class: "gap-4"}) {
+									<h2 id="preview-heading" class="cn-card-title">Sample preview</h2>
 									<p>Fill one sample value per variable to render the email exactly as a candidate row would. Nothing is sent and nothing is stored.</p>
 									<form method="post" action={ "/campaigns/" + data.ID + "/preview" } hx-post={ "/campaigns/" + data.ID + "/preview" } hx-target="#preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
 										<div class="field-grid">
 											for _, variable := range data.Variables {
 												<div class="space-y-2">
-													<label class="label" for={ "sample-" + variable }>Sample value for { variable }</label>
-													<input class="input input-bordered w-full" id={ "sample-" + variable } type="text" name={ variable }/>
+													@label.Label(label.Props{For: "sample-" + variable}) {
+														Sample value for { variable }
+													}
+													@input.Input(input.Props{ID: "sample-" + variable, Name: variable, Type: "text"})
 												</div>
 											}
 										</div>
-										<div class="card-actions">
-											<button class="btn btn-primary" type="submit">Render preview</button>
+										<div class="app-card-actions">
+											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+												Render preview
+											}
 										</div>
 									</form>
 									<div id="preview-result" role="status" aria-live="polite">
-										<p class="text-base-content/60">Submit sample values to render the preview here.</p>
+										<p class="text-muted-foreground">Submit sample values to render the preview here.</p>
 									</div>
-								</div>
+								}
 							</section>
 						}
 					}
 				}
 				@workspaceTabPanel("campaign", "history", campaignInitialTab(data)) {
-					<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="exports-heading">
-						<div class="card-body gap-4">
-							<h2 id="exports-heading" class="card-title">History and downloads</h2>
+					<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="exports-heading">
+						@card.Content(card.ContentProps{Class: "gap-4"}) {
+							<h2 id="exports-heading" class="cn-card-title">History and downloads</h2>
 							<p>Download a candidate summary and complete attempt history. Each export records its as-of time. Generating downloads never sends or retries email, and tests stay separate from candidate totals.</p>
 							<form method="post" action={ "/campaigns/" + data.ID + "/exports#history" }>
-								<button class="btn btn-primary" type="submit">Generate or refresh downloads</button>
+								@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+									Generate or refresh downloads
+								}
 							</form>
 							<div class="grid gap-4 md:grid-cols-2">
-								<div class="rounded-box border border-base-300 p-4">
+								<div class="rounded-card border border-border p-4">
 									<h3 class="font-semibold">Campaign report (XLSX)</h3>
-									<p class="text-sm text-base-content/60">Candidate summary and a separate history of every attempt.</p>
+									<p class="text-sm text-muted-foreground">Candidate summary and a separate history of every attempt.</p>
 									if data.ReportReady {
-										<p class="text-sm text-base-content/60">As of { data.ReportAsOf }</p>
-										<a class="btn btn-outline btn-sm" href={ "/campaigns/" + data.ID + "/exports/report.xlsx" }>Download report</a>
+										<p class="text-sm text-muted-foreground">As of { data.ReportAsOf }</p>
+										<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ "/campaigns/" + data.ID + "/exports/report.xlsx" }>Download report</a>
 									} else if data.ReportState == "generating" {
 										<p>Generating now. Reload this page shortly.</p>
 									} else if data.ReportState == "failed" {
 										if data.ReportError != "" {
-											<p class="text-error">{ data.ReportError }</p>
+											<p class="text-destructive">{ data.ReportError }</p>
 										}
 									} else {
 										<p>Not generated yet.</p>
 									}
 								</div>
-								<div class="rounded-box border border-base-300 p-4">
+								<div class="rounded-card border border-border p-4">
 									<h3 class="font-semibold">Campaign package (ZIP)</h3>
-									<p class="text-sm text-base-content/60">The report, recorded HTML emails and a CSV index.</p>
+									<p class="text-sm text-muted-foreground">The report, recorded HTML emails and a CSV index.</p>
 									if data.PackageReady {
-										<p class="text-sm text-base-content/60">As of { data.PackageAsOf }</p>
-										<a class="btn btn-outline btn-sm" href={ "/campaigns/" + data.ID + "/exports/package.zip" }>Download package</a>
+										<p class="text-sm text-muted-foreground">As of { data.PackageAsOf }</p>
+										<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ "/campaigns/" + data.ID + "/exports/package.zip" }>Download package</a>
 									} else if data.PackageState == "generating" {
 										<p>Generating now. Reload this page shortly.</p>
 									} else if data.PackageState == "failed" {
 										if data.PackageError != "" {
-											<p class="text-error">{ data.PackageError }</p>
+											<p class="text-destructive">{ data.PackageError }</p>
 										}
 									} else {
 										<p>Not generated yet.</p>
@@ -429,12 +470,14 @@ templ CampaignPage(data CampaignPageData) {
 								</div>
 							</div>
 							<form method="post" action={ "/campaigns/" + data.ID + "/exports/delete#history" }>
-								<button class="btn btn-ghost btn-sm" type="submit">Remove generated downloads</button>
+								@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantGhost, Size: button.SizeSm}) {
+									Remove generated downloads
+								}
 							</form>
-							<p class="text-sm text-base-content/60">Removing generated downloads deletes only those files. Campaign records, uploads, candidate eligibility and attempt history stay unchanged, and the downloads can be generated again.</p>
+							<p class="text-sm text-muted-foreground">Removing generated downloads deletes only those files. Campaign records, uploads, candidate eligibility and attempt history stay unchanged, and the downloads can be generated again.</p>
 							<div class="overflow-x-auto">
-								<table class="table table-sm">
-									<caption class="p-2 text-left text-sm text-base-content/60">Most recent 100 attempts. Every attempt keeps its own row, including retries and manual resolutions.</caption>
+								@table.Table(table.Props{Class: "cn-table-compact"}) {
+									<caption class="p-2 text-left text-sm text-muted-foreground">Most recent 100 attempts. Every attempt keeps its own row, including retries and manual resolutions.</caption>
 									<thead>
 										<tr>
 											<th>Attempt</th>
@@ -454,29 +497,33 @@ templ CampaignPage(data CampaignPageData) {
 													<td><code>{ attempt.ID }</code></td>
 													<td>
 														if attempt.Test {
-															<span class="badge badge-warning badge-sm">Test</span>
+															@badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: "status-warning"}) {
+																{ "Test" }
+															}
 														} else {
-															<span class="badge badge-ghost badge-sm">Candidate</span>
+															@badge.Badge(badge.Props{Variant: badge.VariantGhost, Class: "status-muted"}) {
+																{ "Candidate" }
+															}
 														}
 													</td>
 													<td>{ attempt.Recipient }</td>
 													<td>{ attempt.State }</td>
 													<td>{ attempt.FinishedAt }</td>
-													<td><a class="link link-primary" href={ "/campaigns/" + data.ID + "/attempts/" + attempt.ID + "/email.html" }>HTML</a></td>
+													<td><a class="app-link text-primary" href={ "/campaigns/" + data.ID + "/attempts/" + attempt.ID + "/email.html" }>HTML</a></td>
 												</tr>
 											}
 										}
 									</tbody>
-								</table>
+								}
 							</div>
-						</div>
+						}
 					</section>
 					<details class="disclosure">
 						<summary id="history-heading">Revision history</summary>
 						<div class="disclosure-body space-y-4">
 							<p>Revisions are immutable. Older revisions stay for audit and have no edit controls.</p>
 							if len(data.History) == 0 {
-								<p class="text-base-content/60">No revisions yet.</p>
+								<p class="text-muted-foreground">No revisions yet.</p>
 							} else {
 								<ol class="space-y-2">
 									for _, entry := range data.History {
@@ -494,33 +541,39 @@ templ CampaignPage(data CampaignPageData) {
 				@workspaceTabPanel("campaign", "settings", campaignInitialTab(data)) {
 					<div id="campaign-settings" class="space-y-4">
 						<h2 class="section-heading">Campaign settings</h2>
-						<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="labels-heading">
-							<div class="card-body gap-4">
-								<h2 id="labels-heading" class="card-title">Result column labels</h2>
+						<section class="cn-card border border-border bg-card shadow-sm" aria-labelledby="labels-heading">
+							@card.Content(card.ContentProps{Class: "gap-4"}) {
+								<h2 id="labels-heading" class="cn-card-title">Result column labels</h2>
 								<form method="post" action={ "/campaigns/" + data.ID + "/labels#settings" } class="space-y-4">
-									<label class="label" for="labels-input">Labels</label>
-									<input class="input input-bordered w-full" id="labels-input" type="text" name="result_labels" value={ data.ResultLabels } required/>
-									<p class="text-sm text-base-content/60">Comma-separated labels for the downloadable result columns. Changing them never invalidates content approval.</p>
-									<div class="card-actions">
-										<button class="btn btn-primary" type="submit">Save labels</button>
+									@label.Label(label.Props{For: "labels-input"}) {
+										Labels
+									}
+									@input.Input(input.Props{ID: "labels-input", Name: "result_labels", Type: "text", Value: data.ResultLabels, Required: true})
+									<p class="text-sm text-muted-foreground">Comma-separated labels for the downloadable result columns. Changing them never invalidates content approval.</p>
+									<div class="app-card-actions">
+										@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+											Save labels
+										}
 									</div>
 								</form>
-							</div>
+							}
 						</section>
-						<section class="card danger-card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="delete-heading">
-							<div class="card-body gap-4">
-								<h2 id="delete-heading" class="card-title">Delete campaign & all history</h2>
+						<section class="cn-card danger-card border border-border bg-card shadow-sm" aria-labelledby="delete-heading">
+							@card.Content(card.ContentProps{Class: "gap-4"}) {
+								<h2 id="delete-heading" class="cn-card-title">Delete campaign & all history</h2>
 								<p>Deleting this campaign removes its revisions and uploaded documents, tasks and retained workbooks, candidate identities, attempts, approvals, manual resolutions and generated downloads. Deleting it also removes its duplicate-prevention history, so a future campaign can send to the same recipients again. There is no automatic expiry: nothing is removed until you confirm here.</p>
 								<p>Deleting live records never rewrites backups that already exist. Any backup retains its own copy until you remove that backup separately.</p>
 								<p>Deletion is refused while a task is running or stopping, while a candidate is reserved or in flight, or while an attempt is queued or in flight.</p>
 								<form method="post" action={ "/campaigns/" + data.ID + "/delete#settings" } class="flex flex-col gap-4" x-data={ "{ confirmed: false }" }>
-									<label class="label cursor-pointer justify-start gap-3">
-										<input class="checkbox checkbox-error" type="checkbox" name="confirm" value="delete" x-model="confirmed"/>
+									@label.Label(label.Props{Class: "cursor-pointer justify-start gap-3"}) {
+										<input class="app-checkbox app-checkbox-error" type="checkbox" name="confirm" value="delete" x-model="confirmed"/>
 										<span>I understand that this deletes the campaign's records, files and duplicate-prevention history.</span>
-									</label>
-									<button class="btn btn-error self-start" type="submit" x-bind:disabled="!confirmed">Delete campaign</button>
+									}
+									@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDestructive, Size: button.SizeDefault, Class: "self-start", Attributes: templ.Attributes{"x-bind:disabled": "!confirmed"}}) {
+										Delete campaign
+									}
 								</form>
-							</div>
+							}
 						</section>
 					</div>
 				}
@@ -563,9 +616,9 @@ type PreviewValue struct {
 }
 
 templ PreviewResult(data PreviewData) {
-	<div class="card border border-base-300 bg-base-100 shadow-sm">
-		<div class="card-body gap-4">
-			<h3 class="card-title">Preview result</h3>
+	<div class="cn-card border border-border bg-card shadow-sm">
+		@card.Content(card.ContentProps{Class: "gap-4"}) {
+			<h3 class="cn-card-title">Preview result</h3>
 			if data.HasRevision {
 				<dl class="space-y-1 text-sm">
 					<div class="flex gap-2">
@@ -583,22 +636,24 @@ templ PreviewResult(data PreviewData) {
 				</dl>
 			}
 			if data.Error != "" {
-				<div class="alert alert-error" role="alert">{ data.Error }</div>
+				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+					{ data.Error }
+				}
 			} else {
 				<div class="space-y-1">
-					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">To</p>
+					<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">To</p>
 					<p class="font-semibold">{ data.Recipient }</p>
 				</div>
 				<div class="space-y-1">
-					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Subject</p>
+					<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Subject</p>
 					<p class="font-semibold">{ data.Subject }</p>
 				</div>
 				<div class="space-y-1">
-					<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Body</p>
-					<div class="email-body rounded-box border border-base-300 p-4">@templ.Raw(data.Body)</div>
+					<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Body</p>
+					<div class="email-body rounded-card border border-border p-4">@templ.Raw(data.Body)</div>
 				</div>
 				<div class="table-scroll">
-					<table class="table table-sm">
+					@table.Table(table.Props{Class: "cn-table-compact"}) {
 						<thead>
 							<tr>
 								<th>Variable</th>
@@ -617,10 +672,10 @@ templ PreviewResult(data PreviewData) {
 								</tr>
 							}
 						</tbody>
-					</table>
+					}
 				</div>
 			}
-		</div>
+		}
 	</div>
 }
 
@@ -644,10 +699,16 @@ templ hintTrigger(id string, label string) {
 // approved nor unapproved, an approval is bound to the shown content hash.
 templ revisionState(hasRevision, approved bool) {
 	if !hasRevision {
-		<span class="badge badge-ghost">No revision</span>
+		@badge.Badge(badge.Props{Variant: badge.VariantGhost, Class: "status-muted"}) {
+			{ "No revision" }
+		}
 	} else if approved {
-		<span class="badge badge-success">Approved</span>
+		@badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: "status-success"}) {
+			{ "Approved" }
+		}
 	} else {
-		<span class="badge badge-warning">Not approved</span>
+		@badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: "status-warning"}) {
+			{ "Not approved" }
+		}
 	}
 }

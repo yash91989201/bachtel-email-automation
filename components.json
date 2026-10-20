@@ -1,0 +1,21 @@
+{
+  "$schema": "https://shadcn-templ.com/schema/components.json",
+  "style": "base-luma",
+  "tailwind": {
+    "css": "web/css/app.css",
+    "baseColor": "mist",
+    "cssVariables": true
+  },
+  "aliases": {
+    "components": "github.com/yash91989201/bachtel-email-automation/internal/web/ui",
+    "utils": "github.com/yash91989201/bachtel-email-automation/internal/web/ui/utils"
+  },
+  "scripts": {
+    "dir": "internal/web/static",
+    "path": "/static"
+  },
+  "rtl": false,
+  "iconLibrary": "remixicon",
+  "menuColor": "inverted",
+  "menuAccent": "bold"
+}

@@ -1,13 +1,19 @@
 package views
 
+import (
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alert"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
+)
+
 templ Home() {
 	@Layout("Bachtel Email Automation", true, "overview") {
 		<div class="page-header">
 			<div><p class="eyebrow">Your workspace</p><h1>Email operations, organized.</h1><p class="page-description">Prepare personalized campaigns, review your recipients and manage every submission in one place.</p></div>
-			<a class="btn btn-primary" href="/campaigns/new">New campaign <span aria-hidden="true">+</span></a>
+			<a class={ button.Variants(button.Props{}) } href="/campaigns/new">New campaign <span aria-hidden="true">+</span></a>
 		</div>
 		<section class="overview-hero" aria-labelledby="start-heading">
-			<div><p class="eyebrow">From template to submission</p><h2 id="start-heading">Ready for your next campaign?</h2><p>Open a campaign to manage its template, upload a recipient workbook or continue an existing email task.</p><a class="btn btn-primary" href="/campaigns">Open campaigns <span aria-hidden="true">→</span></a></div>
+			<div><p class="eyebrow">From template to submission</p><h2 id="start-heading">Ready for your next campaign?</h2><p>Open a campaign to manage its template, upload a recipient workbook or continue an existing email task.</p><a class={ button.Variants(button.Props{}) } href="/campaigns">Open campaigns <span aria-hidden="true">→</span></a></div>
 			<div class="hero-note"><span class="hero-note-mark" aria-hidden="true">✓</span><h3>Review before you send</h3><p>Preview personalized content, send a formatting test and approve the revision before starting candidate emails.</p></div>
 		</section>
 		<section aria-labelledby="workflow-heading" class="space-y-4">
@@ -19,12 +25,29 @@ templ Home() {
 			</ol>
 		</section>
 		<div class="workflow-grid">
-			<section class="card" aria-labelledby="connection-heading"><div class="card-body"><p class="eyebrow">Microsoft 365</p><h2 id="connection-heading" class="card-title">Connect your sender</h2><p class="section-description">Manage the HR mailbox connection used for diagnostic tests and candidate submissions.</p><div class="card-actions"><a class="btn btn-outline" href="/connection">Manage mailbox <span aria-hidden="true">→</span></a></div></div></section>
-			<section class="card" aria-labelledby="database-heading"><div class="card-body"><p class="eyebrow">Workspace health</p><h2 id="database-heading" class="card-title">Database status</h2><p class="section-description">Check that this workspace can reach its database.</p><div id="database-status" role="status" aria-live="polite"><p class="text-sm text-base-content/60">No check run yet.</p></div><div class="card-actions"><a class="btn btn-outline" href="/status" hx-get="/status" hx-target="#database-status" hx-swap="innerHTML" hx-disabled-elt="this">Check database</a></div></div></section>
+			<section class="cn-card" aria-labelledby="connection-heading">
+				@card.Content() {
+					<p class="eyebrow">Microsoft 365</p>
+					<h2 id="connection-heading" class="cn-card-title">Connect your sender</h2>
+					<p class="section-description">Manage the HR mailbox connection used for diagnostic tests and candidate submissions.</p>
+					<div class="app-card-actions"><a class={ button.Variants(button.Props{Variant: button.VariantOutline}) } href="/connection">Manage mailbox <span aria-hidden="true">→</span></a></div>
+				}
+			</section>
+			<section class="cn-card" aria-labelledby="database-heading">
+				@card.Content() {
+					<p class="eyebrow">Workspace health</p>
+					<h2 id="database-heading" class="cn-card-title">Database status</h2>
+					<p class="section-description">Check that this workspace can reach its database.</p>
+					<div id="database-status" role="status" aria-live="polite"><p class="text-sm text-muted-foreground">No check run yet.</p></div>
+					<div class="app-card-actions"><a class={ button.Variants(button.Props{Variant: button.VariantOutline}) } href="/status" hx-get="/status" hx-target="#database-status" hx-swap="innerHTML" hx-disabled-elt="this">Check database</a></div>
+				}
+			</section>
 		</div>
 	}
 }
 
 templ DatabaseStatus(checkedAt string) {
-	<div class="alert alert-success"><span>Database connected. Checked at <time datetime={ checkedAt }>{ checkedAt }</time>.</span></div>
+	@alert.Alert(alert.Props{Class: "status-success", Attributes: templ.Attributes{"role": "status"}}) {
+		<span>Database connected. Checked at <time datetime={ checkedAt }>{ checkedAt }</time>.</span>
+	}
 }
