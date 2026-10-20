@@ -10,9 +10,9 @@ import (
 
 templ LoginPage(errorMessage string) {
 	@Layout("Sign in", false, "") {
-		<div class="login-layout space-y-6">
+		<div class="max-w-[440px] mx-auto my-12 max-[760px]:my-6 space-y-6">
 			<div class="space-y-2 text-center">
-				<p class="eyebrow">Welcome back</p>
+				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Welcome back</p>
 				<h1>Sign in to your workspace</h1>
 				<p class="text-muted-foreground">Manage campaigns and email operations securely.</p>
 			</div>
@@ -23,7 +23,7 @@ templ LoginPage(errorMessage string) {
 			}
 			<form method="post" action="/login">
 				@card.Card(card.Props{}) {
-					@card.Content(card.ContentProps{Class: "gap-4"}) {
+					@card.Content(card.ContentProps{Class: "gap-4 p-8!"}) {
 						@field.Field(field.Props{}) {
 							@field.Label(field.LabelProps{For: "email"}) {
 								Email

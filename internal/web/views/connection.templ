@@ -24,11 +24,11 @@ type ConnectionData struct {
 
 templ ConnectionPage(data ConnectionData) {
 	@Layout("Microsoft connection", true, "mailbox") {
-		<div class="page-header">
+		<div class="flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
 			<div>
 				<p class="text-sm font-medium uppercase tracking-widest text-primary">Microsoft 365</p>
 				<h1 class="text-4xl font-bold tracking-tight">Mailbox connection</h1>
-				<p class="page-description">Connect the HR mailbox used for all outgoing email. Check the sender and connection status here.</p>
+				<p class="max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]">Connect the HR mailbox used for all outgoing email. Check the sender and connection status here.</p>
 			</div>
 		</div>
 		if len(data.MissingSettings) > 0 {
@@ -62,7 +62,7 @@ templ ConnectionPage(data ConnectionData) {
 				<div class="flex items-center gap-3">
 					@statusBadge(data.Status)
 				</div>
-				<dl class="connection-details text-sm">
+				<dl class="grid grid-cols-2 gap-5 p-5 bg-muted rounded-[.65rem] [&>div]:block [&_dt]:mb-[.3rem] [&_dt]:text-[.72rem] [&_dd]:font-semibold [&_dd]:[overflow-wrap:anywhere] max-[760px]:grid-cols-1 text-sm">
 					if data.AccountEmail != "" {
 						<div class="flex gap-2">
 							<dt class="font-semibold">Account:</dt>

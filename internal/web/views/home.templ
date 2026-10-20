@@ -9,20 +9,20 @@ import (
 
 templ Home() {
 	@Layout("Bachtel Email Automation", true, "overview") {
-		<div class="page-header">
-			<div><p class="eyebrow">Your workspace</p><h1>Email operations, organized.</h1><p class="page-description">Prepare personalized campaigns, review your recipients and manage every submission in one place.</p></div>
+		<div class="flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
+			<div><p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Your workspace</p><h1>Email operations, organized.</h1><p class="max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]">Prepare personalized campaigns, review your recipients and manage every submission in one place.</p></div>
 			<a class={ button.Variants(button.Props{}) } href="/campaigns/new">New campaign <span aria-hidden="true">+</span></a>
 		</div>
-		<section class="overview-hero" aria-labelledby="start-heading">
-			<div><p class="eyebrow">From template to submission</p><h2 id="start-heading">Ready for your next campaign?</h2><p>Open a campaign to manage its template, upload a recipient workbook or continue an existing email task.</p><a class={ button.Variants(button.Props{}) } href="/campaigns">Open campaigns <span aria-hidden="true">→</span></a></div>
-			<div class="hero-note"><span class="hero-note-mark" aria-hidden="true">✓</span><h3>Review before you send</h3><p>Preview personalized content, send a formatting test and approve the revision before starting candidate emails.</p></div>
+		<section class="p-10 border border-border rounded-[1rem] grid grid-cols-[1.5fr_1fr] items-center gap-16 bg-muted [&_h2]:text-[1.75rem] [&_h2]:font-bold [&_h2]:tracking-[-.03em] [&_p]:max-w-[490px] [&_p]:text-muted-foreground [&_p]:mt-3 [&_p]:mb-[1.4rem] [&_p]:text-[.875rem] max-[760px]:grid-cols-1 max-[760px]:p-6 max-[760px]:gap-6" aria-labelledby="start-heading">
+			<div><p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">From template to submission</p><h2 id="start-heading">Ready for your next campaign?</h2><p>Open a campaign to manage its template, upload a recipient workbook or continue an existing email task.</p><a class={ button.Variants(button.Props{}) } href="/campaigns">Open campaigns <span aria-hidden="true">→</span></a></div>
+			<div class="border-l border-l-border pl-10 [&_h3]:font-bold [&_h3]:text-[1rem] [&_p]:mb-0! [&_p]:text-[.8125rem]! max-[760px]:p-[1.25rem_0_0] max-[760px]:border-l-0 max-[760px]:border-t max-[760px]:border-t-border"><span class="grid size-9 place-items-center bg-[#d4e9df] text-primary rounded-full mb-4" aria-hidden="true">✓</span><h3>Review before you send</h3><p>Preview personalized content, send a formatting test and approve the revision before starting candidate emails.</p></div>
 		</section>
 		<section aria-labelledby="workflow-heading" class="space-y-4">
-			<div><p class="eyebrow">How it works</p><h2 id="workflow-heading" class="section-heading">A clear path for every email</h2></div>
-			@item.Group(item.GroupProps{Class: "workflow-steps"}) {
+			<div><p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">How it works</p><h2 id="workflow-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">A clear path for every email</h2></div>
+			@item.Group(item.GroupProps{Class: "grid! gap-0! grid-cols-3 border border-border rounded-[.85rem] bg-card max-[760px]:grid-cols-1 [&>[data-slot=item]]:border-0! [&>[data-slot=item]]:rounded-none! [&>[data-slot=item]]:p-7! [&>[data-slot=item]]:items-start! [&>[data-slot=item]+[data-slot=item]]:border-l! [&>[data-slot=item]+[data-slot=item]]:border-l-border! [&_h3]:font-bold [&_h3]:text-[.9375rem] [&_h3]:mb-2 [&_p]:text-[.8125rem] [&_p]:text-[#71808d]"}) {
 				@item.Item(item.Props{Variant: item.VariantOutline}) {
 					@item.Media(item.MediaProps{}) {
-						<span class="step-number">01</span>
+						<span class="text-[.75rem] font-bold text-primary block mb-4">01</span>
 					}
 					@item.Content(item.ContentProps{}) {
 						@item.Title(item.TitleProps{}) {
@@ -35,7 +35,7 @@ templ Home() {
 				}
 				@item.Item(item.Props{Variant: item.VariantOutline}) {
 					@item.Media(item.MediaProps{}) {
-						<span class="step-number">02</span>
+						<span class="text-[.75rem] font-bold text-primary block mb-4">02</span>
 					}
 					@item.Content(item.ContentProps{}) {
 						@item.Title(item.TitleProps{}) {
@@ -48,7 +48,7 @@ templ Home() {
 				}
 				@item.Item(item.Props{Variant: item.VariantOutline}) {
 					@item.Media(item.MediaProps{}) {
-						<span class="step-number">03</span>
+						<span class="text-[.75rem] font-bold text-primary block mb-4">03</span>
 					}
 					@item.Content(item.ContentProps{}) {
 						@item.Title(item.TitleProps{}) {
@@ -61,20 +61,20 @@ templ Home() {
 				}
 			}
 		</section>
-		<div class="workflow-grid">
+		<div class="grid grid-cols-2 gap-6 items-start [&>*]:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1">
 			@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "connection-heading"}}) {
 				@card.Content() {
-					<p class="eyebrow">Microsoft 365</p>
+					<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Microsoft 365</p>
 					<h2 id="connection-heading" class="cn-card-title">Connect your sender</h2>
-					<p class="section-description">Manage the HR mailbox connection used for diagnostic tests and candidate submissions.</p>
+					<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Manage the HR mailbox connection used for diagnostic tests and candidate submissions.</p>
 					<div class="app-card-actions"><a class={ button.Variants(button.Props{Variant: button.VariantOutline}) } href="/connection">Manage mailbox <span aria-hidden="true">→</span></a></div>
 				}
 			}
 			@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "database-heading"}}) {
 				@card.Content() {
-					<p class="eyebrow">Workspace health</p>
+					<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Workspace health</p>
 					<h2 id="database-heading" class="cn-card-title">Database status</h2>
-					<p class="section-description">Check that this workspace can reach its database.</p>
+					<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Check that this workspace can reach its database.</p>
 					<div id="database-status" role="status" aria-live="polite"><p class="text-sm text-muted-foreground">No check run yet.</p></div>
 					<div class="app-card-actions"><a class={ button.Variants(button.Props{Variant: button.VariantOutline}) } href="/status" hx-get="/status" hx-target="#database-status" hx-swap="innerHTML" hx-disabled-elt="this">Check database</a></div>
 				}

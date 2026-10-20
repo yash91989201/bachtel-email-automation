@@ -74,11 +74,11 @@ func sendingHasRecovery(rows []SendingRow) bool {
 
 templ SendingPage(data SendingData) {
 	@Layout("Sending", true, "campaigns") {
-		<header class="page-header">
+		<header class="flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
 			<div>
-				<p class="eyebrow">Task workflow · Step 4</p>
+				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Task workflow · Step 4</p>
 				<h1>Test, approve and manage sending</h1>
-				<p class="page-description">Test your email, approve the received formatting, then send or schedule recipients.</p>
+				<p class="max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]">Test your email, approve the received formatting, then send or schedule recipients.</p>
 				<p class="text-sm text-muted-foreground">Fixed sender: <strong>{ data.Sender }</strong></p>
 			</div>
 			<div class="action-bar"><a class={ button.Variants(button.Props{Variant: button.VariantGhost}) } href={ data.TaskURL }>Back to task snapshot and exclusions</a></div>
@@ -98,8 +98,8 @@ templ SendingPage(data SendingData) {
 				{ data.Error }
 			}
 		}
-		@tabs.Tabs(tabs.Props{ID: "sending", Class: "campaign-workspace", Orientation: tabs.OrientationVertical, DefaultValue: "test", Attributes: templ.Attributes{"data-workspace-tabs": true}}) {
-			<aside class="workspace-sidebar" aria-label="Sending navigation">
+		@tabs.Tabs(tabs.Props{ID: "sending", Class: "grid grid-cols-[240px_minmax(0,1fr)] gap-8 items-start max-[760px]:grid-cols-1 max-[760px]:gap-5", Orientation: tabs.OrientationVertical, DefaultValue: "test", Attributes: templ.Attributes{"data-workspace-tabs": true}}) {
+			<aside class="sticky top-6 max-[760px]:static [&_[data-slot=tabs-list]]:grid! [&_[data-slot=tabs-list]]:w-full! [&_[data-slot=tabs-list]]:gap-[.6rem] [&_[data-slot=tabs-list]]:p-0! [&_[data-slot=tabs-list]]:bg-transparent [&_[data-slot=tabs-list]]:rounded-none! [&_[data-slot=tabs-trigger]]:w-full! [&_[data-slot=tabs-trigger]]:h-auto! [&_[data-slot=tabs-trigger]]:whitespace-normal! [&_[data-slot=tabs-trigger]]:[overflow-wrap:anywhere] [&_[data-slot=tabs-trigger]]:p-[.9rem_.75rem]! [&_[data-slot=tabs-trigger]]:rounded-[.5rem]! [&_[data-slot=tabs-trigger]]:border-transparent [&_[data-slot=tabs-trigger]]:text-left [&_[data-slot=tabs-trigger]]:block! [&_[data-slot=tabs-trigger]]:cursor-pointer [&_[data-slot=tabs-trigger]]:text-foreground! [&_[data-slot=tabs-trigger]]:bg-transparent! [&_[data-slot=tabs-trigger]:hover]:bg-accent! [&_[data-slot=tabs-trigger]:hover]:text-accent-foreground! [&_[data-slot=tabs-trigger][data-active]]:bg-accent! [&_[data-slot=tabs-trigger][data-active]]:text-accent-foreground! [&_[data-slot=tabs-trigger]>span]:block [&_[data-slot=tabs-trigger]>span]:text-[.84rem] [&_[data-slot=tabs-trigger]>span]:font-bold [&_[data-slot=tabs-trigger]>small]:block [&_[data-slot=tabs-trigger]>small]:text-[.7rem] [&_[data-slot=tabs-trigger]>small]:mt-[.2rem] [&_[data-slot=tabs-trigger]>small]:text-muted-foreground [&_[data-slot=tabs-trigger]:is(:hover,[data-active])>small]:text-inherit max-[760px]:[&_[data-slot=tabs-list]]:grid-cols-2" aria-label="Sending navigation">
 				@tabs.List(tabs.ListProps{Attributes: templ.Attributes{"aria-label": "Sending workflow"}}) {
 					@tabs.Trigger(tabs.TriggerProps{Value: "test"}) {
 						<span>Test & approval</span><small>Check received formatting</small>
@@ -107,7 +107,7 @@ templ SendingPage(data SendingData) {
 					@tabs.Trigger(tabs.TriggerProps{Value: "send"}) {
 						<span>Send & schedule</span><small>Start, stop & schedule</small>
 					}
-					<div class="workspace-group-separator" aria-hidden="true"></div>
+					<div class="border-t border-t-border mt-[.65rem] pt-[.4rem] max-[760px]:col-span-full" aria-hidden="true"></div>
 					@tabs.Trigger(tabs.TriggerProps{Value: "recovery"}) {
 						<span>Recovery</span><small>Review failures & uncertainty</small>
 					}
@@ -117,18 +117,18 @@ templ SendingPage(data SendingData) {
 					@tabs.Trigger(tabs.TriggerProps{Value: "results"}) {
 						<span>Results workbook</span><small>Generate & download results</small>
 					}
-					<div class="workspace-group-separator" aria-hidden="true"></div>
+					<div class="border-t border-t-border mt-[.65rem] pt-[.4rem] max-[760px]:col-span-full" aria-hidden="true"></div>
 					@tabs.Trigger(tabs.TriggerProps{Value: "pacing"}) {
 						<span>Mailbox pacing</span><small>Shared mailbox rate</small>
 					}
 				}
 			</aside>
-			<div class="workspace-content">
+			<div class="min-w-0 [&_[data-slot=tabs-content]]:min-w-0">
 				@SendingProgress(data)
 				@tabs.Content(tabs.ContentProps{Value: "results", Class: "space-y-6"}) {
 					@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "artifacts-heading"}}) {
 						@card.Content(card.ContentProps{Class: "gap-4"}) {
-							<h2 class="section-heading" id="artifacts-heading">Result workbook</h2>
+							<h2 class="font-bold text-[1.2rem] tracking-[-.02em]" id="artifacts-heading">Result workbook</h2>
 							<form method="post" action={ data.Base + "/artifacts#results" }>
 								<input type="hidden" name="action_id" value={ data.ActionID + "artifacts" }/>
 								<input type="hidden" name="expected_count" value="0"/>
@@ -137,7 +137,7 @@ templ SendingPage(data SendingData) {
 									{ "Generate results workbook" }
 								}
 							</form>
-							<p class="section-description">Generate the workbook from retained records. This never submits or retries email, and a generation failure never changes eligibility.</p>
+							<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Generate the workbook from retained records. This never submits or retries email, and a generation failure never changes eligibility.</p>
 							if data.ResultsReady {
 								<a class={ button.Variants(button.Props{}) } href={ data.TaskURL + "/results.xlsx" }>Download results workbook</a>
 							} else if data.ResultsState == "generating" {
@@ -151,9 +151,9 @@ templ SendingPage(data SendingData) {
 				@tabs.Content(tabs.ContentProps{Value: "pacing", Class: "space-y-6"}) {
 					@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "pacing-heading"}}) {
 						@card.Content(card.ContentProps{Class: "gap-4"}) {
-							<h2 class="section-heading" id="pacing-heading">Mailbox pacing</h2>
-							<p class="section-description">Default 25 starts per minute; maximum 30 and four in flight across candidates, tests and retries. Microsoft throttling may reduce throughput. Other Outlook clients consume mailbox capacity outside this app's observations.</p>
-							<form method="post" action={ data.Base + "/rate#pacing" } class="field-grid">
+							<h2 class="font-bold text-[1.2rem] tracking-[-.02em]" id="pacing-heading">Mailbox pacing</h2>
+							<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Default 25 starts per minute; maximum 30 and four in flight across candidates, tests and retries. Microsoft throttling may reduce throughput. Other Outlook clients consume mailbox capacity outside this app's observations.</p>
+							<form method="post" action={ data.Base + "/rate#pacing" } class="grid grid-cols-2 gap-4 [&>*]:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1">
 								<input type="hidden" name="action_id" value={ data.ActionID + "rate" }/>
 								@field.Field(field.Props{}) {
 									@field.Label(field.LabelProps{For: "sending-rate"}) {
@@ -178,9 +178,9 @@ templ SendingPage(data SendingData) {
 templ SendingDiagnostics(data SendingData) {
 	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "sending-test-heading"}}) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
-			<p class="eyebrow">Step 1 · Test</p>
-			<h2 class="section-heading" id="sending-test-heading">Send a formatting test</h2>
-			<p class="section-description">Choose a valid sample row and enter the test address. Tests use a separate attempt and never submit a candidate.</p>
+			<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 1 · Test</p>
+			<h2 class="font-bold text-[1.2rem] tracking-[-.02em]" id="sending-test-heading">Send a formatting test</h2>
+			<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Choose a valid sample row and enter the test address. Tests use a separate attempt and never submit a candidate.</p>
 			<form id="sending-diagnostic-test" hx-preserve method="post" action={ data.Base + "/test#test" } class="space-y-3">
 				<input type="hidden" name="action_id" value={ data.ActionID + "test" }/>
 				@field.Field(field.Props{}) {
@@ -213,8 +213,8 @@ templ SendingDiagnostics(data SendingData) {
 	}
 	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "sending-approval-heading"}}) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
-			<p class="eyebrow">Step 2 · Approve</p>
-			<h2 class="section-heading" id="sending-approval-heading">Approve the received formatting</h2>
+			<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 2 · Approve</p>
+			<h2 class="font-bold text-[1.2rem] tracking-[-.02em]" id="sending-approval-heading">Approve the received formatting</h2>
 			<p>Exact configuration content hash: <code class="break-all">{ data.Hash }</code></p>
 			if data.Approved {
 				<p class="text-success">Received formatting approved for this hash.</p>
@@ -255,23 +255,23 @@ templ SendingDiagnostics(data SendingData) {
 templ SendingProgress(data SendingData) {
 	{{ ctx = tabs.Panels(ctx, "sending", tabs.OrientationVertical) }}
 	<section id="sending-progress" class="space-y-4" hx-get={ data.Base + "/progress" } hx-trigger="every 2s" hx-swap="outerHTML">
-		<div class="subtle-panel" aria-live="polite">
-			<h2 class="section-heading">Progress · { data.Status }</h2>
+		<div class="p-5 border border-border rounded-[.65rem] bg-muted col-span-full" aria-live="polite">
+			<h2 class="font-bold text-[1.2rem] tracking-[-.02em]">Progress · { data.Status }</h2>
 			if data.Reason!="" {
 				@alert.Alert(alert.Props{Class: "status-warning"}) {
 					{ data.Reason }
 				}
 			}
-			<dl class="metric-grid">
-				<div class="metric"><dt>Safe remaining</dt><dd>{ data.Remaining }</dd></div>
-				<div class="metric"><dt>Submitted</dt><dd>{ data.Submitted }</dd></div>
-				<div class="metric"><dt>Definite failures</dt><dd>{ data.Failed }</dd></div>
-				<div class="metric"><dt>Held for review</dt><dd>{ data.Held }</dd></div>
-				<div class="metric"><dt>In flight</dt><dd>{ data.InFlight }</dd></div>
-				<div class="metric"><dt>Reserved</dt><dd>{ data.Reserved }</dd></div>
+			<dl class="grid grid-cols-6 gap-3 my-4 max-[1100px]:grid-cols-3 max-[760px]:grid-cols-2">
+				<div class="p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground"><dt>Safe remaining</dt><dd>{ data.Remaining }</dd></div>
+				<div class="p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground"><dt>Submitted</dt><dd>{ data.Submitted }</dd></div>
+				<div class="p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground"><dt>Definite failures</dt><dd>{ data.Failed }</dd></div>
+				<div class="p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground"><dt>Held for review</dt><dd>{ data.Held }</dd></div>
+				<div class="p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground"><dt>In flight</dt><dd>{ data.InFlight }</dd></div>
+				<div class="p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground"><dt>Reserved</dt><dd>{ data.Reserved }</dd></div>
 			</dl>
-			@collapsible.Collapsible(collapsible.Props{ID: "sending-guidance", Class: "snapshot-details", Attributes: templ.Attributes{"data-workspace-persist": true}}) {
-				<button class="snapshot-details-summary" { collapsible.Trigger(ctx)... }>Exclusions, mailbox status & sending guidance</button>
+			@collapsible.Collapsible(collapsible.Props{ID: "sending-guidance", Class: "text-[.8125rem] border-t border-t-border pt-4 [&_dl]:mt-4", Attributes: templ.Attributes{"data-workspace-persist": true}}) {
+				<button class="cursor-pointer text-muted-foreground font-semibold bg-transparent border-0 p-0" { collapsible.Trigger(ctx)... }>Exclusions, mailbox status & sending guidance</button>
 				@collapsible.Content(collapsible.ContentProps{Class: "space-y-2 text-sm text-muted-foreground"}) {
 					<p>Exclusions: invalid { data.Invalid }, duplicate { data.Duplicate }, ineligible { data.Ineligible }. Counts refresh before each action; changed exclusions require another confirmation.</p>
 					if data.ArtifactNeeded {
@@ -294,8 +294,8 @@ templ SendingProgress(data SendingData) {
 			@SendingRecovery(data)
 		}
 		@tabs.Content(tabs.ContentProps{Value: "recent", Class: "space-y-6"}) {
-			<section class="subtle-panel" aria-labelledby="recent-outcomes-heading">
-				<h3 class="section-heading" id="recent-outcomes-heading">Recent outcomes · +05:30</h3>
+			<section class="p-[1.1rem] border border-border rounded-[.65rem] bg-muted" aria-labelledby="recent-outcomes-heading">
+				<h3 class="font-bold text-[1.2rem] tracking-[-.02em]" id="recent-outcomes-heading">Recent outcomes · +05:30</h3>
 				@item.Group(item.GroupProps{}) {
 					if len(data.Recent) == 0 {
 						@item.Item(item.Props{}) {
@@ -341,14 +341,14 @@ templ sendingAction(data SendingData, kind string, label string, count int) {
 templ sendingSchedule(data SendingData) {
 	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "schedule-heading"}}) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
-			<h3 class="section-heading" id="schedule-heading">Scheduled start</h3>
+			<h3 class="font-bold text-[1.2rem] tracking-[-.02em]" id="schedule-heading">Scheduled start</h3>
 			if data.ScheduleAt != "" {
 				<p>Stored start: { data.ScheduleAt } · state { data.ScheduleState }.</p>
 			} else {
 				<p>No stored start · state { data.ScheduleState }.</p>
 			}
-			<p class="section-description">Enabling is this task's explicit start authorization. Only candidates free at that moment start, and a time that passed while the server was down pauses for review.</p>
-			<form id={ "sending-schedule-" + sendingControlKey(data) } hx-preserve method="post" action={ data.Base + "/schedule#send" } class="field-grid">
+			<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Enabling is this task's explicit start authorization. Only candidates free at that moment start, and a time that passed while the server was down pauses for review.</p>
+			<form id={ "sending-schedule-" + sendingControlKey(data) } hx-preserve method="post" action={ data.Base + "/schedule#send" } class="grid grid-cols-2 gap-4 [&>*]:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1">
 				<input type="hidden" name="action_id" value={ data.ActionID + "schedule" }/>
 				<input type="hidden" name="expected_count" value={ strconv.Itoa(data.Remaining) }/>
 				@field.Field(field.Props{}) {
@@ -412,10 +412,10 @@ templ sendingRowFields(row SendingRow) {
 templ SendingControls(data SendingData) {
 	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "controls-heading"}}) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
-			<p class="eyebrow">Step 3 · Start or recover</p>
-			<h2 class="section-heading" id="controls-heading">Candidate actions</h2>
-			<p class="section-description">Confirm the fresh counts for each action. If progress changes them before submission, reload and confirm again.</p>
-			<div class="sending-actions">
+			<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 3 · Start or recover</p>
+			<h2 class="font-bold text-[1.2rem] tracking-[-.02em]" id="controls-heading">Candidate actions</h2>
+			<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Confirm the fresh counts for each action. If progress changes them before submission, reload and confirm again.</p>
+			<div class="grid grid-cols-2 gap-4 items-start [&>form]:border [&>form]:border-[#e3e9ed] [&>form]:p-4 [&>form]:rounded-[.6rem] [&>form]:min-w-0 [&_label]:text-[.8rem] max-[440px]:grid-cols-1">
 				@sendingAction(data, "start", "Start", data.Remaining)
 				@sendingAction(data, "resume", "Resume safe remainder", data.Remaining)
 				@sendingAction(data, "retry_all", "Retry all definite failures", data.RetryableFailed)
@@ -435,13 +435,13 @@ templ SendingControls(data SendingData) {
 templ SendingRecovery(data SendingData) {
 	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "recovery-heading"}}) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
-			<h2 class="section-heading" id="recovery-heading">Individual recovery</h2>
+			<h2 class="font-bold text-[1.2rem] tracking-[-.02em]" id="recovery-heading">Individual recovery</h2>
 			if !sendingHasRecovery(data.Rows) {
 				<p>No rows currently need individual recovery.</p>
 			}
 			for _,row:=range data.Rows {
 				if sendingNeedsRecovery(row) {
-					<div class="subtle-panel space-y-2">
+					<div class="p-[1.1rem] border border-border rounded-[.65rem] bg-muted space-y-2">
 						<h3 class="font-semibold">Recovery · worksheet row { row.Number }</h3>
 						<p>{ row.State } · { row.Reason }</p>
 						if row.Attempt.ID!="" {

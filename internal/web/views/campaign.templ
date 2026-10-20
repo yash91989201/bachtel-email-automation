@@ -38,11 +38,11 @@ type CampaignListRow struct {
 
 templ CampaignList(data CampaignListData) {
 	@Layout("Campaigns", true, "campaigns") {
-		<div class="page-header">
+		<div class="flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
 			<div>
-				<p class="eyebrow">Campaigns</p>
+				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Campaigns</p>
 				<h1 class="text-4xl font-bold tracking-tight">Email campaigns</h1>
-				<p class="page-description">Manage templates, recipient workbooks and submission history for each campaign.</p>
+				<p class="max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]">Manage templates, recipient workbooks and submission history for each campaign.</p>
 			</div><a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href="/campaigns/new">New campaign <span aria-hidden="true">+</span></a>
 		</div>
 		if data.ConverterError != "" {
@@ -112,11 +112,11 @@ type CampaignFormData struct {
 
 templ CampaignForm(data CampaignFormData) {
 	@Layout("New campaign", true, "campaigns") {
-		<div class="page-header">
+		<div class="flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
 			<div>
-				<p class="eyebrow">Campaigns</p>
+				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Campaigns</p>
 				<h1 class="text-4xl font-bold tracking-tight">New campaign</h1>
-				<p class="page-description">Start with a name and your Excel column headers. You’ll add the email template next.</p>
+				<p class="max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]">Start with a name and your Excel column headers. You’ll add the email template next.</p>
 			</div>
 		</div>
 		if data.Error != "" {
@@ -125,7 +125,7 @@ templ CampaignForm(data CampaignFormData) {
 			}
 		}
 		<form method="post" action="/campaigns">
-			@card.Card(card.Props{Class: "form-card"}) {
+			@card.Card(card.Props{Class: "max-w-[880px]"}) {
 				@card.Content(card.ContentProps{Class: "gap-4"}) {
 					<h2 class="cn-card-title">Campaign details</h2>
 					@field.Field(field.Props{}) {
@@ -239,7 +239,7 @@ type RevisionRow struct {
 
 templ CampaignPage(data CampaignPageData) {
 	@Layout(data.Name, true, "campaigns") {
-		<div class="page-header">
+		<div class="flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
 			<div>
 				@breadcrumb.Breadcrumb(breadcrumb.Props{Class: "text-sm"}) {
 					@breadcrumb.List(breadcrumb.ListProps{}) {
@@ -250,9 +250,9 @@ templ CampaignPage(data CampaignPageData) {
 						}
 					}
 				}
-				<p class="eyebrow mt-4">Campaign workspace</p>
+				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem] mt-4">Campaign workspace</p>
 				<h1>{ data.Name }</h1>
-				<p class="page-description">Prepare your email content, then open email tasks to upload recipients, test and send.</p>
+				<p class="max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]">Prepare your email content, then open email tasks to upload recipients, test and send.</p>
 			</div>
 		</div>
 		if data.RevisionError != "" {
@@ -284,9 +284,9 @@ templ CampaignPage(data CampaignPageData) {
 				}
 			}
 		}
-		@tabs.Tabs(tabs.Props{ID: "campaign", Class: "campaign-workspace", Orientation: tabs.OrientationVertical, DefaultValue: campaignInitialTab(data), Attributes: campaignTabAttributes(data)}) {
-			<aside class="workspace-sidebar" aria-label="Campaign navigation">
-				<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault, Class: "workspace-task-link"}) } href={ "/campaigns/" + data.ID + "/tasks" }>Email tasks <span aria-hidden="true">→</span></a>
+		@tabs.Tabs(tabs.Props{ID: "campaign", Class: "grid grid-cols-[240px_minmax(0,1fr)] gap-8 items-start max-[760px]:grid-cols-1 max-[760px]:gap-5", Orientation: tabs.OrientationVertical, DefaultValue: campaignInitialTab(data), Attributes: campaignTabAttributes(data)}) {
+			<aside class="sticky top-6 max-[760px]:static [&_[data-slot=tabs-list]]:grid! [&_[data-slot=tabs-list]]:w-full! [&_[data-slot=tabs-list]]:gap-[.6rem] [&_[data-slot=tabs-list]]:p-0! [&_[data-slot=tabs-list]]:bg-transparent [&_[data-slot=tabs-list]]:rounded-none! [&_[data-slot=tabs-trigger]]:w-full! [&_[data-slot=tabs-trigger]]:h-auto! [&_[data-slot=tabs-trigger]]:whitespace-normal! [&_[data-slot=tabs-trigger]]:[overflow-wrap:anywhere] [&_[data-slot=tabs-trigger]]:p-[.9rem_.75rem]! [&_[data-slot=tabs-trigger]]:rounded-[.5rem]! [&_[data-slot=tabs-trigger]]:border-transparent [&_[data-slot=tabs-trigger]]:text-left [&_[data-slot=tabs-trigger]]:block! [&_[data-slot=tabs-trigger]]:cursor-pointer [&_[data-slot=tabs-trigger]]:text-foreground! [&_[data-slot=tabs-trigger]]:bg-transparent! [&_[data-slot=tabs-trigger]:hover]:bg-accent! [&_[data-slot=tabs-trigger]:hover]:text-accent-foreground! [&_[data-slot=tabs-trigger][data-active]]:bg-accent! [&_[data-slot=tabs-trigger][data-active]]:text-accent-foreground! [&_[data-slot=tabs-trigger]>span]:block [&_[data-slot=tabs-trigger]>span]:text-[.84rem] [&_[data-slot=tabs-trigger]>span]:font-bold [&_[data-slot=tabs-trigger]>small]:block [&_[data-slot=tabs-trigger]>small]:text-[.7rem] [&_[data-slot=tabs-trigger]>small]:mt-[.2rem] [&_[data-slot=tabs-trigger]>small]:text-muted-foreground [&_[data-slot=tabs-trigger]:is(:hover,[data-active])>small]:text-inherit max-[760px]:[&_[data-slot=tabs-list]]:grid-cols-2" aria-label="Campaign navigation">
+				<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault, Class: "flex w-full justify-between min-h-12 mb-5 text-[.875rem]"}) } href={ "/campaigns/" + data.ID + "/tasks" }>Email tasks <span aria-hidden="true">→</span></a>
 				@tabs.List(tabs.ListProps{Attributes: templ.Attributes{"aria-label": "Campaign sections"}}) {
 					@tabs.Trigger(tabs.TriggerProps{Value: "template"}) {
 						<span>Template</span><small>Subject, document & mappings</small>
@@ -296,7 +296,7 @@ templ CampaignPage(data CampaignPageData) {
 							<span>Sample preview</span><small>Check personalized content</small>
 						}
 					}
-					<div class="workspace-group-separator" aria-hidden="true"></div>
+					<div class="border-t border-t-border mt-[.65rem] pt-[.4rem] max-[760px]:col-span-full" aria-hidden="true"></div>
 					@tabs.Trigger(tabs.TriggerProps{Value: "history"}) {
 						<span>History & downloads</span><small>Reports & recorded emails</small>
 					}
@@ -305,7 +305,7 @@ templ CampaignPage(data CampaignPageData) {
 					}
 				}
 			</aside>
-			<div class="workspace-content">
+			<div class="min-w-0 [&_[data-slot=tabs-content]]:min-w-0">
 				@tabs.Content(tabs.ContentProps{Value: "template", Class: "space-y-6"}) {
 					@accordion.Accordion(accordion.Props{Class: "bg-card shadow-sm"}) {
 						@accordion.Item(accordion.ItemProps{ID: "revision-section", Value: "revision"}) {
@@ -396,9 +396,9 @@ templ CampaignPage(data CampaignPageData) {
 							<p class="text-sm text-muted-foreground">Upload the body document, its subject and the recipient mapping. A valid upload becomes the current revision.</p>
 							<form method="post" action={ "/campaigns/" + data.ID + "/revisions" } enctype="multipart/form-data" class="space-y-4">
 								@field.Group(field.GroupProps{}) {
-									<p class="eyebrow">Step 1 · Email content</p>
+									<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 1 · Email content</p>
 									@field.Field(field.Props{}) {
-										<div class="field-hint-row">
+										<div class="relative flex items-center gap-[.45rem]">
 											@field.Label(field.LabelProps{For: "revision-subject"}) {
 												Subject
 											}
@@ -409,7 +409,7 @@ templ CampaignPage(data CampaignPageData) {
 										@input.Input(input.Props{ID: "revision-subject", Name: "subject", Type: "text", Required: true, Attributes: templ.Attributes{"maxlength": "998", "aria-describedby": "revision-subject-help"}})
 									}
 									@field.Field(field.Props{}) {
-										<div class="field-hint-row">
+										<div class="relative flex items-center gap-[.45rem]">
 											@field.Label(field.LabelProps{For: "revision-document"}) {
 												Body document (DOCX)
 											}
@@ -422,10 +422,10 @@ templ CampaignPage(data CampaignPageData) {
 								}
 								@separator.Separator(separator.Props{Class: "my-1"})
 								@field.Group(field.GroupProps{}) {
-									<p class="eyebrow">Step 2 · Recipient mapping</p>
+									<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 2 · Recipient mapping</p>
 									<p class="text-sm text-muted-foreground">Place <code>{ "{{" + data.ExampleVariable + "}}" }</code> in the subject or Word document wherever its value should appear. Use the same variable name in your mapping below.</p>
 									@field.Field(field.Props{}) {
-										<div class="field-hint-row">
+										<div class="relative flex items-center gap-[.45rem]">
 											@field.Label(field.LabelProps{For: "revision-mappings"}) {
 												Mapping table
 											}
@@ -472,7 +472,7 @@ templ CampaignPage(data CampaignPageData) {
 										x-init="sync()"
 										x-on:input="sync()"
 									>
-										<div class="field-grid">
+										<div class="grid grid-cols-2 gap-4 [&>*]:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1">
 											for _, variable := range data.Variables {
 												<div class="space-y-2">
 													{{ sampleLabel := "Sample value for " + variable.Name }}
@@ -622,7 +622,7 @@ templ CampaignPage(data CampaignPageData) {
 				}
 				@tabs.Content(tabs.ContentProps{Value: "settings", Class: "space-y-6"}) {
 					<div id="campaign-settings" class="space-y-4">
-						<h2 class="section-heading">Campaign settings</h2>
+						<h2 class="font-bold text-[1.2rem] tracking-[-.02em]">Campaign settings</h2>
 						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "labels-heading"}}) {
 							@card.Content(card.ContentProps{Class: "gap-4"}) {
 								<h2 id="labels-heading" class="cn-card-title">Result column labels</h2>
@@ -644,9 +644,9 @@ templ CampaignPage(data CampaignPageData) {
 								</form>
 							}
 						}
-						@card.Card(card.Props{Class: "danger-card", Attributes: templ.Attributes{"role": "region", "aria-labelledby": "delete-heading"}}) {
+						@card.Card(card.Props{Class: "border-[#ecd4d2]!", Attributes: templ.Attributes{"role": "region", "aria-labelledby": "delete-heading"}}) {
 							@card.Content(card.ContentProps{Class: "gap-4"}) {
-								<h2 id="delete-heading" class="cn-card-title">Delete campaign & all history</h2>
+								<h2 id="delete-heading" class="cn-card-title text-[#a13d39]!">Delete campaign & all history</h2>
 								<p>Deleting this campaign removes its revisions and uploaded documents, tasks and retained workbooks, candidate identities, attempts, approvals, manual resolutions and generated downloads. Deleting it also removes its duplicate-prevention history, so a future campaign can send to the same recipients again. There is no automatic expiry: nothing is removed until you confirm here.</p>
 								<p>Deleting live records never rewrites backups that already exist. Any backup retains its own copy until you remove that backup separately.</p>
 								<p>Deletion is refused while a task is running or stopping, while a candidate is reserved or in flight, or while an attempt is queued or in flight.</p>
@@ -791,7 +791,7 @@ templ PreviewResult(data PreviewData) {
 				</div>
 				<div class="space-y-1">
 					<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Body</p>
-					<div class="email-body rounded-card border border-border p-4">
+					<div class="rounded-card border border-border p-4 leading-[1.65] [overflow-wrap:anywhere] [&_p+p]:mt-[1em] [&_h1]:mt-[1em] [&_h1]:mb-[.5em] [&_h1]:text-[1.75rem]! [&_h2]:mt-[1em] [&_h2]:mb-[.5em] [&_h2]:text-[1.4rem]! [&_h2]:font-bold [&_h3]:mt-[1em] [&_h3]:mb-[.5em] [&_h3]:text-[1.15rem]! [&_h3]:font-bold [&_ul]:list-disc [&_ul]:pl-[1.5em] [&_ol]:list-decimal [&_ol]:pl-[1.5em] [&_a]:text-primary [&_a]:underline">
 						@templ.Raw(data.Body)
 					</div>
 				</div>
@@ -827,12 +827,12 @@ templ PreviewResult(data PreviewData) {
 // technology announces it; the panel itself is revealed on hover and on
 // keyboard focus, and its text stays selectable so it can be copied.
 templ hintTrigger(id string, label string) {
-	<span class="hint">
-		<button class="hint-trigger" type="button" aria-describedby={ id }>
+	<span class="group inline-flex">
+		<button class="inline-flex items-center justify-center w-[1.15rem] h-[1.15rem] border border-[#b9c8d4] rounded-full bg-card text-muted-foreground text-[.7rem] font-bold leading-none cursor-help hover:border-primary hover:text-primary focus-visible:border-primary focus-visible:text-primary" type="button" aria-describedby={ id }>
 			<span aria-hidden="true">?</span>
 			<span class="sr-only">{ label }</span>
 		</button>
-		<span class="hint-popover" id={ id } role="note">
+		<span class="absolute top-[calc(100%+.4rem)] left-0 z-30 w-max max-w-[min(24rem,78vw)] p-[.6rem_.75rem] rounded-[.55rem] bg-foreground text-muted text-[.78rem] font-normal leading-[1.55] text-left shadow-[0_10px_26px_#2437472e] opacity-0 pointer-events-none transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 [&_code]:bg-[#ffffff24] [&_code]:rounded-[.25rem] [&_code]:px-[.2rem]" id={ id } role="note">
 			{ children... }
 		</span>
 	</span>

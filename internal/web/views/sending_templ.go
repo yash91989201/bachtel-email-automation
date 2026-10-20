@@ -113,7 +113,7 @@ func SendingPage(data SendingData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<header class=\"page-header\"><div><p class=\"eyebrow\">Task workflow · Step 4</p><h1>Test, approve and manage sending</h1><p class=\"page-description\">Test your email, approve the received formatting, then send or schedule recipients.</p><p class=\"text-sm text-muted-foreground\">Fixed sender: <strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<header class=\"flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Task workflow · Step 4</p><h1>Test, approve and manage sending</h1><p class=\"max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]\">Test your email, approve the received formatting, then send or schedule recipients.</p><p class=\"text-sm text-muted-foreground\">Fixed sender: <strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -266,7 +266,7 @@ func SendingPage(data SendingData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<aside class=\"workspace-sidebar\" aria-label=\"Sending navigation\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<aside class=\"sticky top-6 max-[760px]:static [&_[data-slot=tabs-list]]:grid! [&_[data-slot=tabs-list]]:w-full! [&_[data-slot=tabs-list]]:gap-[.6rem] [&_[data-slot=tabs-list]]:p-0! [&_[data-slot=tabs-list]]:bg-transparent [&_[data-slot=tabs-list]]:rounded-none! [&_[data-slot=tabs-trigger]]:w-full! [&_[data-slot=tabs-trigger]]:h-auto! [&_[data-slot=tabs-trigger]]:whitespace-normal! [&_[data-slot=tabs-trigger]]:[overflow-wrap:anywhere] [&_[data-slot=tabs-trigger]]:p-[.9rem_.75rem]! [&_[data-slot=tabs-trigger]]:rounded-[.5rem]! [&_[data-slot=tabs-trigger]]:border-transparent [&_[data-slot=tabs-trigger]]:text-left [&_[data-slot=tabs-trigger]]:block! [&_[data-slot=tabs-trigger]]:cursor-pointer [&_[data-slot=tabs-trigger]]:text-foreground! [&_[data-slot=tabs-trigger]]:bg-transparent! [&_[data-slot=tabs-trigger]:hover]:bg-accent! [&_[data-slot=tabs-trigger]:hover]:text-accent-foreground! [&_[data-slot=tabs-trigger][data-active]]:bg-accent! [&_[data-slot=tabs-trigger][data-active]]:text-accent-foreground! [&_[data-slot=tabs-trigger]>span]:block [&_[data-slot=tabs-trigger]>span]:text-[.84rem] [&_[data-slot=tabs-trigger]>span]:font-bold [&_[data-slot=tabs-trigger]>small]:block [&_[data-slot=tabs-trigger]>small]:text-[.7rem] [&_[data-slot=tabs-trigger]>small]:mt-[.2rem] [&_[data-slot=tabs-trigger]>small]:text-muted-foreground [&_[data-slot=tabs-trigger]:is(:hover,[data-active])>small]:text-inherit max-[760px]:[&_[data-slot=tabs-list]]:grid-cols-2\" aria-label=\"Sending navigation\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -326,7 +326,7 @@ func SendingPage(data SendingData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<div class=\"workspace-group-separator\" aria-hidden=\"true\"></div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<div class=\"border-t border-t-border mt-[.65rem] pt-[.4rem] max-[760px]:col-span-full\" aria-hidden=\"true\"></div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -396,7 +396,7 @@ func SendingPage(data SendingData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div class=\"workspace-group-separator\" aria-hidden=\"true\"></div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<div class=\"border-t border-t-border mt-[.65rem] pt-[.4rem] max-[760px]:col-span-full\" aria-hidden=\"true\"></div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -428,7 +428,7 @@ func SendingPage(data SendingData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</aside><div class=\"workspace-content\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</aside><div class=\"min-w-0 [&_[data-slot=tabs-content]]:min-w-0\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -472,7 +472,7 @@ func SendingPage(data SendingData) templ.Component {
 								}()
 							}
 							ctx = templ.InitializeContext(ctx)
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<h2 class=\"section-heading\" id=\"artifacts-heading\">Result workbook</h2><form method=\"post\" action=\"")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<h2 class=\"font-bold text-[1.2rem] tracking-[-.02em]\" id=\"artifacts-heading\">Result workbook</h2><form method=\"post\" action=\"")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -529,7 +529,7 @@ func SendingPage(data SendingData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</form><p class=\"section-description\">Generate the workbook from retained records. This never submits or retries email, and a generation failure never changes eligibility.</p>")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</form><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Generate the workbook from retained records. This never submits or retries email, and a generation failure never changes eligibility.</p>")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -634,7 +634,7 @@ func SendingPage(data SendingData) templ.Component {
 								}()
 							}
 							ctx = templ.InitializeContext(ctx)
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<h2 class=\"section-heading\" id=\"pacing-heading\">Mailbox pacing</h2><p class=\"section-description\">Default 25 starts per minute; maximum 30 and four in flight across candidates, tests and retries. Microsoft throttling may reduce throughput. Other Outlook clients consume mailbox capacity outside this app's observations.</p><form method=\"post\" action=\"")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<h2 class=\"font-bold text-[1.2rem] tracking-[-.02em]\" id=\"pacing-heading\">Mailbox pacing</h2><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Default 25 starts per minute; maximum 30 and four in flight across candidates, tests and retries. Microsoft throttling may reduce throughput. Other Outlook clients consume mailbox capacity outside this app's observations.</p><form method=\"post\" action=\"")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -647,7 +647,7 @@ func SendingPage(data SendingData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" class=\"field-grid\"><input type=\"hidden\" name=\"action_id\" value=\"")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" class=\"grid grid-cols-2 gap-4 [&>*]:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1\"><input type=\"hidden\" name=\"action_id\" value=\"")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -767,7 +767,7 @@ func SendingPage(data SendingData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = tabs.Tabs(tabs.Props{ID: "sending", Class: "campaign-workspace", Orientation: tabs.OrientationVertical, DefaultValue: "test", Attributes: templ.Attributes{"data-workspace-tabs": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = tabs.Tabs(tabs.Props{ID: "sending", Class: "grid grid-cols-[240px_minmax(0,1fr)] gap-8 items-start max-[760px]:grid-cols-1 max-[760px]:gap-5", Orientation: tabs.OrientationVertical, DefaultValue: "test", Attributes: templ.Attributes{"data-workspace-tabs": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -826,7 +826,7 @@ func SendingDiagnostics(data SendingData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<p class=\"eyebrow\">Step 1 · Test</p><h2 class=\"section-heading\" id=\"sending-test-heading\">Send a formatting test</h2><p class=\"section-description\">Choose a valid sample row and enter the test address. Tests use a separate attempt and never submit a candidate.</p><form id=\"sending-diagnostic-test\" hx-preserve method=\"post\" action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Step 1 · Test</p><h2 class=\"font-bold text-[1.2rem] tracking-[-.02em]\" id=\"sending-test-heading\">Send a formatting test</h2><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Choose a valid sample row and enter the test address. Tests use a separate attempt and never submit a candidate.</p><form id=\"sending-diagnostic-test\" hx-preserve method=\"post\" action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1064,7 +1064,7 @@ func SendingDiagnostics(data SendingData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<p class=\"eyebrow\">Step 2 · Approve</p><h2 class=\"section-heading\" id=\"sending-approval-heading\">Approve the received formatting</h2><p>Exact configuration content hash: <code class=\"break-all\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Step 2 · Approve</p><h2 class=\"font-bold text-[1.2rem] tracking-[-.02em]\" id=\"sending-approval-heading\">Approve the received formatting</h2><p>Exact configuration content hash: <code class=\"break-all\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1409,14 +1409,14 @@ func SendingProgress(data SendingData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "\" hx-trigger=\"every 2s\" hx-swap=\"outerHTML\"><div class=\"subtle-panel\" aria-live=\"polite\"><h2 class=\"section-heading\">Progress · ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "\" hx-trigger=\"every 2s\" hx-swap=\"outerHTML\"><div class=\"p-5 border border-border rounded-[.65rem] bg-muted col-span-full\" aria-live=\"polite\"><h2 class=\"font-bold text-[1.2rem] tracking-[-.02em]\">Progress · ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var73 string
 		templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(data.Status)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 259, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 259, Col: 82}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 		if templ_7745c5c3_Err != nil {
@@ -1455,79 +1455,79 @@ func SendingProgress(data SendingData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "<dl class=\"metric-grid\"><div class=\"metric\"><dt>Safe remaining</dt><dd>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "<dl class=\"grid grid-cols-6 gap-3 my-4 max-[1100px]:grid-cols-3 max-[760px]:grid-cols-2\"><div class=\"p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt>Safe remaining</dt><dd>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var76 string
 		templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(data.Remaining)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 266, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 266, Col: 293}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</dd></div><div class=\"metric\"><dt>Submitted</dt><dd>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</dd></div><div class=\"p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt>Submitted</dt><dd>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var77 string
 		templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs(data.Submitted)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 267, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 267, Col: 288}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "</dd></div><div class=\"metric\"><dt>Definite failures</dt><dd>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "</dd></div><div class=\"p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt>Definite failures</dt><dd>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var78 string
 		templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs(data.Failed)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 268, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 268, Col: 293}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "</dd></div><div class=\"metric\"><dt>Held for review</dt><dd>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "</dd></div><div class=\"p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt>Held for review</dt><dd>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var79 string
 		templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(data.Held)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 269, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 269, Col: 289}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</dd></div><div class=\"metric\"><dt>In flight</dt><dd>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</dd></div><div class=\"p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt>In flight</dt><dd>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var80 string
 		templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(data.InFlight)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 270, Col: 61}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 270, Col: 287}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "</dd></div><div class=\"metric\"><dt>Reserved</dt><dd>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "</dd></div><div class=\"p-[.65rem_.75rem] bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.5rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt>Reserved</dt><dd>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var81 string
 		templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(data.Reserved)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 271, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/sending.templ`, Line: 271, Col: 286}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 		if templ_7745c5c3_Err != nil {
@@ -1549,7 +1549,7 @@ func SendingProgress(data SendingData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "<button class=\"snapshot-details-summary\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "<button class=\"cursor-pointer text-muted-foreground font-semibold bg-transparent border-0 p-0\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1673,7 +1673,7 @@ func SendingProgress(data SendingData) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = collapsible.Collapsible(collapsible.Props{ID: "sending-guidance", Class: "snapshot-details", Attributes: templ.Attributes{"data-workspace-persist": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var82), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = collapsible.Collapsible(collapsible.Props{ID: "sending-guidance", Class: "text-[.8125rem] border-t border-t-border pt-4 [&_dl]:mt-4", Attributes: templ.Attributes{"data-workspace-persist": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var82), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1763,7 +1763,7 @@ func SendingProgress(data SendingData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "<section class=\"subtle-panel\" aria-labelledby=\"recent-outcomes-heading\"><h3 class=\"section-heading\" id=\"recent-outcomes-heading\">Recent outcomes · +05:30</h3>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "<section class=\"p-[1.1rem] border border-border rounded-[.65rem] bg-muted\" aria-labelledby=\"recent-outcomes-heading\"><h3 class=\"font-bold text-[1.2rem] tracking-[-.02em]\" id=\"recent-outcomes-heading\">Recent outcomes · +05:30</h3>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2172,7 +2172,7 @@ func sendingSchedule(data SendingData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 103, "<h3 class=\"section-heading\" id=\"schedule-heading\">Scheduled start</h3>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 103, "<h3 class=\"font-bold text-[1.2rem] tracking-[-.02em]\" id=\"schedule-heading\">Scheduled start</h3>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2226,7 +2226,7 @@ func sendingSchedule(data SendingData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, " <p class=\"section-description\">Enabling is this task's explicit start authorization. Only candidates free at that moment start, and a time that passed while the server was down pauses for review.</p><form id=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, " <p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Enabling is this task's explicit start authorization. Only candidates free at that moment start, and a time that passed while the server was down pauses for review.</p><form id=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2252,7 +2252,7 @@ func sendingSchedule(data SendingData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 111, "\" class=\"field-grid\"><input type=\"hidden\" name=\"action_id\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 111, "\" class=\"grid grid-cols-2 gap-4 [&>*]:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1\"><input type=\"hidden\" name=\"action_id\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2773,7 +2773,7 @@ func SendingControls(data SendingData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, "<p class=\"eyebrow\">Step 3 · Start or recover</p><h2 class=\"section-heading\" id=\"controls-heading\">Candidate actions</h2><p class=\"section-description\">Confirm the fresh counts for each action. If progress changes them before submission, reload and confirm again.</p><div class=\"sending-actions\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 133, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Step 3 · Start or recover</p><h2 class=\"font-bold text-[1.2rem] tracking-[-.02em]\" id=\"controls-heading\">Candidate actions</h2><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Confirm the fresh counts for each action. If progress changes them before submission, reload and confirm again.</p><div class=\"grid grid-cols-2 gap-4 items-start [&>form]:border [&>form]:border-[#e3e9ed] [&>form]:p-4 [&>form]:rounded-[.6rem] [&>form]:min-w-0 [&_label]:text-[.8rem] max-[440px]:grid-cols-1\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2924,7 +2924,7 @@ func SendingRecovery(data SendingData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 139, "<h2 class=\"section-heading\" id=\"recovery-heading\">Individual recovery</h2>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 139, "<h2 class=\"font-bold text-[1.2rem] tracking-[-.02em]\" id=\"recovery-heading\">Individual recovery</h2>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -2936,7 +2936,7 @@ func SendingRecovery(data SendingData) templ.Component {
 				}
 				for _, row := range data.Rows {
 					if sendingNeedsRecovery(row) {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "<div class=\"subtle-panel space-y-2\"><h3 class=\"font-semibold\">Recovery · worksheet row ")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 141, "<div class=\"p-[1.1rem] border border-border rounded-[.65rem] bg-muted space-y-2\"><h3 class=\"font-semibold\">Recovery · worksheet row ")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}

@@ -48,7 +48,7 @@ func Home() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-header\"><div><p class=\"eyebrow\">Your workspace</p><h1>Email operations, organized.</h1><p class=\"page-description\">Prepare personalized campaigns, review your recipients and manage every submission in one place.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Your workspace</p><h1>Email operations, organized.</h1><p class=\"max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]\">Prepare personalized campaigns, review your recipients and manage every submission in one place.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -70,7 +70,7 @@ func Home() templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" href=\"/campaigns/new\">New campaign <span aria-hidden=\"true\">+</span></a></div><section class=\"overview-hero\" aria-labelledby=\"start-heading\"><div><p class=\"eyebrow\">From template to submission</p><h2 id=\"start-heading\">Ready for your next campaign?</h2><p>Open a campaign to manage its template, upload a recipient workbook or continue an existing email task.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" href=\"/campaigns/new\">New campaign <span aria-hidden=\"true\">+</span></a></div><section class=\"p-10 border border-border rounded-[1rem] grid grid-cols-[1.5fr_1fr] items-center gap-16 bg-muted [&_h2]:text-[1.75rem] [&_h2]:font-bold [&_h2]:tracking-[-.03em] [&_p]:max-w-[490px] [&_p]:text-muted-foreground [&_p]:mt-3 [&_p]:mb-[1.4rem] [&_p]:text-[.875rem] max-[760px]:grid-cols-1 max-[760px]:p-6 max-[760px]:gap-6\" aria-labelledby=\"start-heading\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">From template to submission</p><h2 id=\"start-heading\">Ready for your next campaign?</h2><p>Open a campaign to manage its template, upload a recipient workbook or continue an existing email task.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -92,7 +92,7 @@ func Home() templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" href=\"/campaigns\">Open campaigns <span aria-hidden=\"true\">→</span></a></div><div class=\"hero-note\"><span class=\"hero-note-mark\" aria-hidden=\"true\">✓</span><h3>Review before you send</h3><p>Preview personalized content, send a formatting test and approve the revision before starting candidate emails.</p></div></section><section aria-labelledby=\"workflow-heading\" class=\"space-y-4\"><div><p class=\"eyebrow\">How it works</p><h2 id=\"workflow-heading\" class=\"section-heading\">A clear path for every email</h2></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" href=\"/campaigns\">Open campaigns <span aria-hidden=\"true\">→</span></a></div><div class=\"border-l border-l-border pl-10 [&_h3]:font-bold [&_h3]:text-[1rem] [&_p]:mb-0! [&_p]:text-[.8125rem]! max-[760px]:p-[1.25rem_0_0] max-[760px]:border-l-0 max-[760px]:border-t max-[760px]:border-t-border\"><span class=\"grid size-9 place-items-center bg-[#d4e9df] text-primary rounded-full mb-4\" aria-hidden=\"true\">✓</span><h3>Review before you send</h3><p>Preview personalized content, send a formatting test and approve the revision before starting candidate emails.</p></div></section><section aria-labelledby=\"workflow-heading\" class=\"space-y-4\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">How it works</p><h2 id=\"workflow-heading\" class=\"font-bold text-[1.2rem] tracking-[-.02em]\">A clear path for every email</h2></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -132,7 +132,7 @@ func Home() templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<span class=\"step-number\">01</span>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<span class=\"text-[.75rem] font-bold text-primary block mb-4\">01</span>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -234,7 +234,7 @@ func Home() templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<span class=\"step-number\">02</span>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<span class=\"text-[.75rem] font-bold text-primary block mb-4\">02</span>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -336,7 +336,7 @@ func Home() templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<span class=\"step-number\">03</span>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<span class=\"text-[.75rem] font-bold text-primary block mb-4\">03</span>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -416,11 +416,11 @@ func Home() templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = item.Group(item.GroupProps{Class: "workflow-steps"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = item.Group(item.GroupProps{Class: "grid! gap-0! grid-cols-3 border border-border rounded-[.85rem] bg-card max-[760px]:grid-cols-1 [&>[data-slot=item]]:border-0! [&>[data-slot=item]]:rounded-none! [&>[data-slot=item]]:p-7! [&>[data-slot=item]]:items-start! [&>[data-slot=item]+[data-slot=item]]:border-l! [&>[data-slot=item]+[data-slot=item]]:border-l-border! [&_h3]:font-bold [&_h3]:text-[.9375rem] [&_h3]:mb-2 [&_p]:text-[.8125rem] [&_p]:text-[#71808d]"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var7), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</section><div class=\"workflow-grid\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</section><div class=\"grid grid-cols-2 gap-6 items-start [&>*]:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -448,7 +448,7 @@ func Home() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<p class=\"eyebrow\">Microsoft 365</p><h2 id=\"connection-heading\" class=\"cn-card-title\">Connect your sender</h2><p class=\"section-description\">Manage the HR mailbox connection used for diagnostic tests and candidate submissions.</p><div class=\"app-card-actions\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Microsoft 365</p><h2 id=\"connection-heading\" class=\"cn-card-title\">Connect your sender</h2><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Manage the HR mailbox connection used for diagnostic tests and candidate submissions.</p><div class=\"app-card-actions\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -510,7 +510,7 @@ func Home() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<p class=\"eyebrow\">Workspace health</p><h2 id=\"database-heading\" class=\"cn-card-title\">Database status</h2><p class=\"section-description\">Check that this workspace can reach its database.</p><div id=\"database-status\" role=\"status\" aria-live=\"polite\"><p class=\"text-sm text-muted-foreground\">No check run yet.</p></div><div class=\"app-card-actions\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Workspace health</p><h2 id=\"database-heading\" class=\"cn-card-title\">Database status</h2><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Check that this workspace can reach its database.</p><div id=\"database-status\" role=\"status\" aria-live=\"polite\"><p class=\"text-sm text-muted-foreground\">No check run yet.</p></div><div class=\"app-card-actions\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

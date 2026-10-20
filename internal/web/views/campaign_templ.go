@@ -77,7 +77,7 @@ func CampaignList(data CampaignListData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-header\"><div><p class=\"eyebrow\">Campaigns</p><h1 class=\"text-4xl font-bold tracking-tight\">Email campaigns</h1><p class=\"page-description\">Manage templates, recipient workbooks and submission history for each campaign.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Campaigns</p><h1 class=\"text-4xl font-bold tracking-tight\">Email campaigns</h1><p class=\"max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]\">Manage templates, recipient workbooks and submission history for each campaign.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -422,7 +422,7 @@ func CampaignForm(data CampaignFormData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<div class=\"page-header\"><div><p class=\"eyebrow\">Campaigns</p><h1 class=\"text-4xl font-bold tracking-tight\">New campaign</h1><p class=\"page-description\">Start with a name and your Excel column headers. You’ll add the email template next.</p></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<div class=\"flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Campaigns</p><h1 class=\"text-4xl font-bold tracking-tight\">New campaign</h1><p class=\"max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]\">Start with a name and your Excel column headers. You’ll add the email template next.</p></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -719,7 +719,7 @@ func CampaignForm(data CampaignFormData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = card.Card(card.Props{Class: "form-card"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var22), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = card.Card(card.Props{Class: "max-w-[880px]"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var22), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -843,7 +843,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<div class=\"page-header\"><div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<div class=\"flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -923,7 +923,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<p class=\"eyebrow mt-4\">Campaign workspace</p><h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem] mt-4\">Campaign workspace</p><h1>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -936,7 +936,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</h1><p class=\"page-description\">Prepare your email content, then open email tasks to upload recipients, test and send.</p></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</h1><p class=\"max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]\">Prepare your email content, then open email tasks to upload recipients, test and send.</p></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1142,11 +1142,11 @@ func CampaignPage(data CampaignPageData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<aside class=\"workspace-sidebar\" aria-label=\"Campaign navigation\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<aside class=\"sticky top-6 max-[760px]:static [&_[data-slot=tabs-list]]:grid! [&_[data-slot=tabs-list]]:w-full! [&_[data-slot=tabs-list]]:gap-[.6rem] [&_[data-slot=tabs-list]]:p-0! [&_[data-slot=tabs-list]]:bg-transparent [&_[data-slot=tabs-list]]:rounded-none! [&_[data-slot=tabs-trigger]]:w-full! [&_[data-slot=tabs-trigger]]:h-auto! [&_[data-slot=tabs-trigger]]:whitespace-normal! [&_[data-slot=tabs-trigger]]:[overflow-wrap:anywhere] [&_[data-slot=tabs-trigger]]:p-[.9rem_.75rem]! [&_[data-slot=tabs-trigger]]:rounded-[.5rem]! [&_[data-slot=tabs-trigger]]:border-transparent [&_[data-slot=tabs-trigger]]:text-left [&_[data-slot=tabs-trigger]]:block! [&_[data-slot=tabs-trigger]]:cursor-pointer [&_[data-slot=tabs-trigger]]:text-foreground! [&_[data-slot=tabs-trigger]]:bg-transparent! [&_[data-slot=tabs-trigger]:hover]:bg-accent! [&_[data-slot=tabs-trigger]:hover]:text-accent-foreground! [&_[data-slot=tabs-trigger][data-active]]:bg-accent! [&_[data-slot=tabs-trigger][data-active]]:text-accent-foreground! [&_[data-slot=tabs-trigger]>span]:block [&_[data-slot=tabs-trigger]>span]:text-[.84rem] [&_[data-slot=tabs-trigger]>span]:font-bold [&_[data-slot=tabs-trigger]>small]:block [&_[data-slot=tabs-trigger]>small]:text-[.7rem] [&_[data-slot=tabs-trigger]>small]:mt-[.2rem] [&_[data-slot=tabs-trigger]>small]:text-muted-foreground [&_[data-slot=tabs-trigger]:is(:hover,[data-active])>small]:text-inherit max-[760px]:[&_[data-slot=tabs-list]]:grid-cols-2\" aria-label=\"Campaign navigation\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var53 = []any{button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault, Class: "workspace-task-link"})}
+				var templ_7745c5c3_Var53 = []any{button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault, Class: "flex w-full justify-between min-h-12 mb-5 text-[.875rem]"})}
 				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var53...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -1171,7 +1171,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 				var templ_7745c5c3_Var55 templ.SafeURL
 				templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.ID + "/tasks")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/campaign.templ`, Line: 289, Col: 176}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/campaign.templ`, Line: 289, Col: 213}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 				if templ_7745c5c3_Err != nil {
@@ -1239,7 +1239,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, " <div class=\"workspace-group-separator\" aria-hidden=\"true\"></div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, " <div class=\"border-t border-t-border mt-[.65rem] pt-[.4rem] max-[760px]:col-span-full\" aria-hidden=\"true\"></div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -1293,7 +1293,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</aside><div class=\"workspace-content\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</aside><div class=\"min-w-0 [&_[data-slot=tabs-content]]:min-w-0\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1657,7 +1657,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 									}()
 								}
 								ctx = templ.InitializeContext(ctx)
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "<p class=\"eyebrow\">Step 1 · Email content</p>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Step 1 · Email content</p>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1673,7 +1673,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "<div class=\"field-hint-row\">")
+									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "<div class=\"relative flex items-center gap-[.45rem]\">")
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
@@ -1760,7 +1760,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "<div class=\"field-hint-row\">")
+									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "<div class=\"relative flex items-center gap-[.45rem]\">")
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
@@ -1857,7 +1857,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 									}()
 								}
 								ctx = templ.InitializeContext(ctx)
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "<p class=\"eyebrow\">Step 2 · Recipient mapping</p><p class=\"text-sm text-muted-foreground\">Place <code>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Step 2 · Recipient mapping</p><p class=\"text-sm text-muted-foreground\">Place <code>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1886,7 +1886,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "<div class=\"field-hint-row\">")
+									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "<div class=\"relative flex items-center gap-[.45rem]\">")
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
@@ -2106,7 +2106,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
-									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 101, "\" x-init=\"sync()\" x-on:input=\"sync()\"><div class=\"field-grid\">")
+									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 101, "\" x-init=\"sync()\" x-on:input=\"sync()\"><div class=\"grid grid-cols-2 gap-4 [&>*]:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1\">")
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
@@ -2847,7 +2847,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 157, "<div id=\"campaign-settings\" class=\"space-y-4\"><h2 class=\"section-heading\">Campaign settings</h2>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 157, "<div id=\"campaign-settings\" class=\"space-y-4\"><h2 class=\"font-bold text-[1.2rem] tracking-[-.02em]\">Campaign settings</h2>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -3024,7 +3024,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 								}()
 							}
 							ctx = templ.InitializeContext(ctx)
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 165, "<h2 id=\"delete-heading\" class=\"cn-card-title\">Delete campaign & all history</h2><p>Deleting this campaign removes its revisions and uploaded documents, tasks and retained workbooks, candidate identities, attempts, approvals, manual resolutions and generated downloads. Deleting it also removes its duplicate-prevention history, so a future campaign can send to the same recipients again. There is no automatic expiry: nothing is removed until you confirm here.</p><p>Deleting live records never rewrites backups that already exist. Any backup retains its own copy until you remove that backup separately.</p><p>Deletion is refused while a task is running or stopping, while a candidate is reserved or in flight, or while an attempt is queued or in flight.</p><form id=\"campaign-delete-form\" method=\"post\" action=\"")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 165, "<h2 id=\"delete-heading\" class=\"cn-card-title text-[#a13d39]!\">Delete campaign & all history</h2><p>Deleting this campaign removes its revisions and uploaded documents, tasks and retained workbooks, candidate identities, attempts, approvals, manual resolutions and generated downloads. Deleting it also removes its duplicate-prevention history, so a future campaign can send to the same recipients again. There is no automatic expiry: nothing is removed until you confirm here.</p><p>Deleting live records never rewrites backups that already exist. Any backup retains its own copy until you remove that backup separately.</p><p>Deletion is refused while a task is running or stopping, while a candidate is reserved or in flight, or while an attempt is queued or in flight.</p><form id=\"campaign-delete-form\" method=\"post\" action=\"")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -3261,7 +3261,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = card.Card(card.Props{Class: "danger-card", Attributes: templ.Attributes{"role": "region", "aria-labelledby": "delete-heading"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var147), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = card.Card(card.Props{Class: "border-[#ecd4d2]!", Attributes: templ.Attributes{"role": "region", "aria-labelledby": "delete-heading"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var147), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -3281,7 +3281,7 @@ func CampaignPage(data CampaignPageData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = tabs.Tabs(tabs.Props{ID: "campaign", Class: "campaign-workspace", Orientation: tabs.OrientationVertical, DefaultValue: campaignInitialTab(data), Attributes: campaignTabAttributes(data)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var52), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = tabs.Tabs(tabs.Props{ID: "campaign", Class: "grid grid-cols-[240px_minmax(0,1fr)] gap-8 items-start max-[760px]:grid-cols-1 max-[760px]:gap-5", Orientation: tabs.OrientationVertical, DefaultValue: campaignInitialTab(data), Attributes: campaignTabAttributes(data)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var52), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -3530,7 +3530,7 @@ func PreviewResult(data PreviewData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 186, "</p></div><div class=\"space-y-1\"><p class=\"text-sm font-semibold uppercase tracking-widest text-muted-foreground\">Body</p><div class=\"email-body rounded-card border border-border p-4\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 186, "</p></div><div class=\"space-y-1\"><p class=\"text-sm font-semibold uppercase tracking-widest text-muted-foreground\">Body</p><div class=\"rounded-card border border-border p-4 leading-[1.65] [overflow-wrap:anywhere] [&_p+p]:mt-[1em] [&_h1]:mt-[1em] [&_h1]:mb-[.5em] [&_h1]:text-[1.75rem]! [&_h2]:mt-[1em] [&_h2]:mb-[.5em] [&_h2]:text-[1.4rem]! [&_h2]:font-bold [&_h3]:mt-[1em] [&_h3]:mb-[.5em] [&_h3]:text-[1.15rem]! [&_h3]:font-bold [&_ul]:list-disc [&_ul]:pl-[1.5em] [&_ol]:list-decimal [&_ol]:pl-[1.5em] [&_a]:text-primary [&_a]:underline\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -3672,14 +3672,14 @@ func hintTrigger(id string, label string) templ.Component {
 			templ_7745c5c3_Var175 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "<span class=\"hint\"><button class=\"hint-trigger\" type=\"button\" aria-describedby=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "<span class=\"group inline-flex\"><button class=\"inline-flex items-center justify-center w-[1.15rem] h-[1.15rem] border border-[#b9c8d4] rounded-full bg-card text-muted-foreground text-[.7rem] font-bold leading-none cursor-help hover:border-primary hover:text-primary focus-visible:border-primary focus-visible:text-primary\" type=\"button\" aria-describedby=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var176 string
 		templ_7745c5c3_Var176, templ_7745c5c3_Err = templ.ResolveAttributeValue(id)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/campaign.templ`, Line: 831, Col: 66}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/campaign.templ`, Line: 831, Col: 328}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var176)
 		if templ_7745c5c3_Err != nil {
@@ -3698,14 +3698,14 @@ func hintTrigger(id string, label string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "</span></button> <span class=\"hint-popover\" id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "</span></button> <span class=\"absolute top-[calc(100%+.4rem)] left-0 z-30 w-max max-w-[min(24rem,78vw)] p-[.6rem_.75rem] rounded-[.55rem] bg-foreground text-muted text-[.78rem] font-normal leading-[1.55] text-left shadow-[0_10px_26px_#2437472e] opacity-0 pointer-events-none transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 [&_code]:bg-[#ffffff24] [&_code]:rounded-[.25rem] [&_code]:px-[.2rem]\" id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var178 string
 		templ_7745c5c3_Var178, templ_7745c5c3_Err = templ.ResolveAttributeValue(id)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/campaign.templ`, Line: 835, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/campaign.templ`, Line: 835, Col: 483}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var178)
 		if templ_7745c5c3_Err != nil {

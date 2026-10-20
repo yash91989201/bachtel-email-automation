@@ -272,7 +272,9 @@ func TestPreviewResultCanBeClosed(t *testing.T) {
 		t.Errorf("close click = %q, want %q", got, want)
 	}
 	// Closing dismisses the rendered content too, not only the heading.
-	if workspaceNode(card, "class", "email-body rounded-card border border-border p-4") == nil {
+	if findViewNode(card, func(n *html.Node) bool {
+		return strings.Contains(workspaceAttr(n, "class"), "rounded-card border border-border p-4")
+	}) == nil {
 		t.Error("the rendered body sits outside the dismissible card")
 	}
 	for _, want := range []string{"Preview result", "candidate@example.com", "Hello", "Hi there"} {

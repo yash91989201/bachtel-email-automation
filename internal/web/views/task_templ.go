@@ -74,14 +74,14 @@ func TaskList(data TaskListData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<header class=\"page-header\"><div><p class=\"eyebrow\">Tasks</p><h1>Email tasks</h1><p class=\"page-description\">Upload an Excel workbook, confirm its worksheet and header row, then review the validated snapshot for ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<header class=\"flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Tasks</p><h1>Email tasks</h1><p class=\"max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]\">Upload an Excel workbook, confirm its worksheet and header row, then review the validated snapshot for ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(data.CampaignName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 42, Col: 154}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 42, Col: 194}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -462,14 +462,14 @@ func TaskUpload(data TaskUploadData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<header class=\"page-header\"><div><p class=\"eyebrow\">Step 1 · Upload</p><h1>Upload a task workbook</h1><p class=\"page-description\">Uploading stores the workbook as a staging task for ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<header class=\"flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Step 1 · Upload</p><h1>Upload a task workbook</h1><p class=\"max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]\">Uploading stores the workbook as a staging task for ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var26 string
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(data.CampaignName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 113, Col: 103}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 113, Col: 143}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {
@@ -584,7 +584,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<h2 class=\"section-heading\">Choose a workbook</h2><p class=\"section-description\">Select the XLSX file to create a staging task.</p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<h2 class=\"font-bold text-[1.2rem] tracking-[-.02em]\">Choose a workbook</h2><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Select the XLSX file to create a staging task.</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -674,7 +674,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</form><section class=\"subtle-panel\" aria-labelledby=\"constraints-heading\"><div class=\"space-y-2\"><h2 id=\"constraints-heading\" class=\"section-heading\">Workbook requirements</h2><ul class=\"list-inside list-disc space-y-1 text-sm text-muted-foreground\"><li>Format: <code>.xlsx</code> only, with no password and no legacy <code>.xls</code> file; password-protected and macro containers are rejected.</li><li>Upload size limit: ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</form><section class=\"p-[1.1rem] border border-border rounded-[.65rem] bg-muted\" aria-labelledby=\"constraints-heading\"><div class=\"space-y-2\"><h2 id=\"constraints-heading\" class=\"font-bold text-[1.2rem] tracking-[-.02em]\">Workbook requirements</h2><ul class=\"list-inside list-disc space-y-1 text-sm text-muted-foreground\"><li>Format: <code>.xlsx</code> only, with no password and no legacy <code>.xls</code> file; password-protected and macro containers are rejected.</li><li>Upload size limit: ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -831,14 +831,14 @@ func TaskPage(data TaskPageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<header class=\"page-header\"><div><p class=\"eyebrow\">Task · ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<header class=\"flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Task · ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var43 string
 			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(data.Status)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 235, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 235, Col: 112}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
@@ -862,12 +862,12 @@ func TaskPage(data TaskPageData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if data.Status == "staging" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<p class=\"page-description\">Choose the worksheet and header row to validate your recipient workbook.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<p class=\"max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]\">Choose the worksheet and header row to validate your recipient workbook.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<p class=\"page-description\">Review the recipient snapshot and exclusions before continuing to test and approval.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<p class=\"max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]\">Review the recipient snapshot and exclusions before continuing to test and approval.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -956,12 +956,12 @@ func TaskPage(data TaskPageData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<aside class=\"workspace-sidebar\" aria-label=\"Task navigation\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<aside class=\"sticky top-6 max-[760px]:static [&_[data-slot=tabs-list]]:grid! [&_[data-slot=tabs-list]]:w-full! [&_[data-slot=tabs-list]]:gap-[.6rem] [&_[data-slot=tabs-list]]:p-0! [&_[data-slot=tabs-list]]:bg-transparent [&_[data-slot=tabs-list]]:rounded-none! [&_[data-slot=tabs-trigger]]:w-full! [&_[data-slot=tabs-trigger]]:h-auto! [&_[data-slot=tabs-trigger]]:whitespace-normal! [&_[data-slot=tabs-trigger]]:[overflow-wrap:anywhere] [&_[data-slot=tabs-trigger]]:p-[.9rem_.75rem]! [&_[data-slot=tabs-trigger]]:rounded-[.5rem]! [&_[data-slot=tabs-trigger]]:border-transparent [&_[data-slot=tabs-trigger]]:text-left [&_[data-slot=tabs-trigger]]:block! [&_[data-slot=tabs-trigger]]:cursor-pointer [&_[data-slot=tabs-trigger]]:text-foreground! [&_[data-slot=tabs-trigger]]:bg-transparent! [&_[data-slot=tabs-trigger]:hover]:bg-accent! [&_[data-slot=tabs-trigger]:hover]:text-accent-foreground! [&_[data-slot=tabs-trigger][data-active]]:bg-accent! [&_[data-slot=tabs-trigger][data-active]]:text-accent-foreground! [&_[data-slot=tabs-trigger]>span]:block [&_[data-slot=tabs-trigger]>span]:text-[.84rem] [&_[data-slot=tabs-trigger]>span]:font-bold [&_[data-slot=tabs-trigger]>small]:block [&_[data-slot=tabs-trigger]>small]:text-[.7rem] [&_[data-slot=tabs-trigger]>small]:mt-[.2rem] [&_[data-slot=tabs-trigger]>small]:text-muted-foreground [&_[data-slot=tabs-trigger]:is(:hover,[data-active])>small]:text-inherit max-[760px]:[&_[data-slot=tabs-list]]:grid-cols-2\" aria-label=\"Task navigation\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if data.Status != "staging" && (data.Counts.Eligible > 0 || data.Status != "ready") {
-					var templ_7745c5c3_Var51 = []any{button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault, Class: "workspace-task-link"})}
+					var templ_7745c5c3_Var51 = []any{button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault, Class: "flex w-full justify-between min-h-12 mb-5 text-[.875rem]"})}
 					templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var51...)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -986,7 +986,7 @@ func TaskPage(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var53 templ.SafeURL
 					templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 255, Col: 213}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 255, Col: 250}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 					if templ_7745c5c3_Err != nil {
@@ -1079,7 +1079,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								return templ_7745c5c3_Err
 							}
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, " <div class=\"workspace-group-separator\" aria-hidden=\"true\"></div>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, " <div class=\"border-t border-t-border mt-[.65rem] pt-[.4rem] max-[760px]:col-span-full\" aria-hidden=\"true\"></div>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -1134,7 +1134,7 @@ func TaskPage(data TaskPageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</aside><div class=\"workspace-content\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</aside><div class=\"min-w-0 [&_[data-slot=tabs-content]]:min-w-0\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1208,14 +1208,14 @@ func TaskPage(data TaskPageData) templ.Component {
 									}()
 								}
 								ctx = templ.InitializeContext(ctx)
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<p class=\"eyebrow\">Step 2 · Configure</p><h2 id=\"selection-heading\" class=\"section-heading\">Choose the worksheet and header row</h2><p class=\"section-description\">Confirm which worksheet contains recipients and which row names its columns. Current default: <code>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Step 2 · Configure</p><h2 id=\"selection-heading\" class=\"font-bold text-[1.2rem] tracking-[-.02em]\">Choose the worksheet and header row</h2><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Confirm which worksheet contains recipients and which row names its columns. Current default: <code>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
 								var templ_7745c5c3_Var65 string
 								templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinStringErrs(data.DefaultSheet)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 293, Col: 158}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 293, Col: 188}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 								if templ_7745c5c3_Err != nil {
@@ -1228,7 +1228,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								var templ_7745c5c3_Var66 string
 								templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(data.HeaderRow)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 293, Col: 189}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 293, Col: 219}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
 								if templ_7745c5c3_Err != nil {
@@ -1247,7 +1247,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "\" class=\"field-grid\">")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "\" class=\"grid grid-cols-2 gap-4 [&>*]:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1\">")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1493,7 +1493,7 @@ func TaskPage(data TaskPageData) templ.Component {
 									}()
 								}
 								ctx = templ.InitializeContext(ctx)
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "<p class=\"eyebrow\">Step 3 · Review</p><div class=\"action-bar\"><h2 id=\"counts-heading\" class=\"section-heading\">Validation snapshot</h2>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Step 3 · Review</p><div class=\"action-bar\"><h2 id=\"counts-heading\" class=\"font-bold text-[1.2rem] tracking-[-.02em]\">Validation snapshot</h2>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1501,7 +1501,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "</div><dl class=\"metric-grid\"><div class=\"metric\"><dt class=\"font-semibold\">Total rows:</dt><dd>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "</div><dl class=\"grid grid-cols-4 gap-3 max-[760px]:grid-cols-2\"><div class=\"p-4 bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt class=\"font-semibold\">Total rows:</dt><dd>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1514,7 +1514,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "</dd></div><div class=\"metric\"><dt class=\"font-semibold\">Eligible:</dt><dd>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "</dd></div><div class=\"p-4 bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt class=\"font-semibold\">Eligible:</dt><dd>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1527,7 +1527,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "</dd></div><div class=\"metric\"><dt class=\"font-semibold\">Ineligible:</dt><dd>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "</dd></div><div class=\"p-4 bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt class=\"font-semibold\">Ineligible:</dt><dd>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1540,7 +1540,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "</dd></div><div class=\"metric\"><dt class=\"font-semibold\">Duplicate:</dt><dd>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "</dd></div><div class=\"p-4 bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt class=\"font-semibold\">Duplicate:</dt><dd>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1553,7 +1553,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "</dd></div><div class=\"metric\"><dt class=\"font-semibold\">Invalid address:</dt><dd>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "</dd></div><div class=\"p-4 bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt class=\"font-semibold\">Invalid address:</dt><dd>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1566,7 +1566,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "</dd></div><div class=\"metric\"><dt class=\"font-semibold\">Already submitted:</dt><dd>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "</dd></div><div class=\"p-4 bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt class=\"font-semibold\">Already submitted:</dt><dd>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1579,7 +1579,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</dd></div><div class=\"metric\"><dt class=\"font-semibold\">Already scheduled:</dt><dd>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "</dd></div><div class=\"p-4 bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt class=\"font-semibold\">Already scheduled:</dt><dd>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1592,7 +1592,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</dd></div><div class=\"metric\"><dt class=\"font-semibold\">Review required:</dt><dd>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "</dd></div><div class=\"p-4 bg-muted border border-border rounded-[.65rem] [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground\"><dt class=\"font-semibold\">Review required:</dt><dd>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1615,7 +1615,7 @@ func TaskPage(data TaskPageData) templ.Component {
 										return templ_7745c5c3_Err
 									}
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, " <p class=\"text-sm text-muted-foreground\">Candidate sending requires completed production release verification. Tests, approval, progress and recovery controls are available on the sending page.</p><div class=\"subtle-panel\"><p class=\"text-sm font-semibold uppercase tracking-widest text-muted-foreground\">Result labels</p><p>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, " <p class=\"text-sm text-muted-foreground\">Candidate sending requires completed production release verification. Tests, approval, progress and recovery controls are available on the sending page.</p><div class=\"p-[1.1rem] border border-border rounded-[.65rem] bg-muted\"><p class=\"text-sm font-semibold uppercase tracking-widest text-muted-foreground\">Result labels</p><p>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1628,7 +1628,7 @@ func TaskPage(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "</p></div><details class=\"snapshot-details\"><summary>Snapshot details · revision ")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "</p></div><details class=\"text-[.8125rem] border-t border-t-border pt-4 [&_dl]:mt-4\"><summary>Snapshot details · revision ")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -1724,7 +1724,7 @@ func TaskPage(data TaskPageData) templ.Component {
 							}
 							switch data.ScheduleState {
 							case "missed":
-								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "<p class=\"text-warning\">The scheduled time passed without starting. Review this task and schedule a new start.</p>")
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 95, "<p class=\"text-warning-foreground\">The scheduled time passed without starting. Review this task and schedule a new start.</p>")
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -2717,7 +2717,7 @@ func TaskPage(data TaskPageData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = tabs.Tabs(tabs.Props{ID: "task", Class: "campaign-workspace", Orientation: tabs.OrientationVertical, DefaultValue: "review", Attributes: templ.Attributes{"data-workspace-tabs": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var50), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = tabs.Tabs(tabs.Props{ID: "task", Class: "grid grid-cols-[240px_minmax(0,1fr)] gap-8 items-start max-[760px]:grid-cols-1 max-[760px]:gap-5", Orientation: tabs.OrientationVertical, DefaultValue: "review", Attributes: templ.Attributes{"data-workspace-tabs": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var50), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -2765,7 +2765,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			templ_7745c5c3_Var143 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 162, "<div class=\"subtle-panel space-y-4\"><h3 class=\"section-heading\">Preview result</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 162, "<div class=\"p-[1.1rem] border border-border rounded-[.65rem] bg-muted space-y-4\"><h3 class=\"font-bold text-[1.2rem] tracking-[-.02em]\">Preview result</h3>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2858,7 +2858,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 168, "</p></div><div class=\"space-y-1\"><p class=\"text-sm font-semibold uppercase tracking-widest text-muted-foreground\">Body</p><div class=\"email-body rounded-card border border-border p-4\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 168, "</p></div><div class=\"space-y-1\"><p class=\"text-sm font-semibold uppercase tracking-widest text-muted-foreground\">Body</p><div class=\"rounded-card border border-border p-4 leading-[1.65] [overflow-wrap:anywhere] [&_p+p]:mt-[1em] [&_h1]:mt-[1em] [&_h1]:mb-[.5em] [&_h1]:text-[1.75rem]! [&_h2]:mt-[1em] [&_h2]:mb-[.5em] [&_h2]:text-[1.4rem]! [&_h2]:font-bold [&_h3]:mt-[1em] [&_h3]:mb-[.5em] [&_h3]:text-[1.15rem]! [&_h3]:font-bold [&_ul]:list-disc [&_ul]:pl-[1.5em] [&_ol]:list-decimal [&_ol]:pl-[1.5em] [&_a]:text-primary [&_a]:underline\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
