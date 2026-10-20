@@ -44,40 +44,34 @@ templ CampaignList(data CampaignListData) {
 				</div>
 			</section>
 		} else {
-			<section class="card border border-base-300 bg-base-100 shadow-sm" aria-label="Campaigns">
-				<div class="card-body">
-					<div class="table-scroll">
-						<table class="table">
-							<thead>
-								<tr>
-									<th>Name</th>
-									<th>Source headers</th>
-									<th>Current revision</th>
-									<th>Approval</th>
-									<th><span class="sr-only">Actions</span></th>
-								</tr>
-							</thead>
-							<tbody>
-								for _, row := range data.Campaigns {
-									<tr>
-										<td class="font-semibold"><a class="link link-primary" href={ "/campaigns/" + row.ID }>{ row.Name }</a></td>
-										<td><code>{ row.SourceHeaders }</code></td>
-										<td>
-											if row.HasRevision {
-												Revision { row.Revision }
-											} else {
-												No revision yet
-											}
-										</td>
-										<td>@revisionState(row.HasRevision, row.Approved)</td>
-										<td><a class="btn btn-outline btn-sm" href={ "/campaigns/" + row.ID }>Open campaign</a></td>
-									</tr>
-								}
-							</tbody>
-						</table>
-					</div>
-				</div>
-			</section>
+			<div class="table-scroll">
+				<table class="table" aria-label="Campaigns">
+					<thead>
+						<tr>
+							<th class="min-w-64"><span class="sr-only">Name</span></th>
+							<th>Source headers</th>
+							<th class="min-w-36">Current revision</th>
+							<th class="min-w-32">Approval</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range data.Campaigns {
+							<tr>
+								<td class="font-semibold"><a class="link link-primary" href={ "/campaigns/" + row.ID }>{ row.Name } <span aria-hidden="true">↗</span></a></td>
+								<td><code>{ row.SourceHeaders }</code></td>
+								<td>
+									if row.HasRevision {
+										Revision { row.Revision }
+									} else {
+										No revision yet
+									}
+								</td>
+								<td>@revisionState(row.HasRevision, row.Approved)</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
 		}
 	}
 }
@@ -272,9 +266,9 @@ templ CampaignPage(data CampaignPageData) {
 							}
 						</div>
 					</section>
-					<details class="disclosure" open?={ !data.HasRevision || data.RevisionError != "" }>
-						<summary id="upload-heading">Create a new content revision</summary>
-						<div class="disclosure-body space-y-4">
+					<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="upload-heading">
+						<div class="card-body gap-4">
+							<h2 id="upload-heading" class="card-title">Create a new content revision</h2>
 							<p>Upload the DOCX body document with its subject and mapping table. Revisions are immutable: a valid upload becomes the current revision, and the history below is never edited.</p>
 							<form method="post" action={ "/campaigns/" + data.ID + "/revisions" } enctype="multipart/form-data" class="space-y-4">
 								<div class="field-grid">
@@ -335,7 +329,7 @@ templ CampaignPage(data CampaignPageData) {
 								</div>
 							</form>
 						</div>
-					</details>
+					</section>
 				}
 				if data.HasRevision {
 					@workspaceTabPanel("campaign", "preview", campaignInitialTab(data)) {
@@ -473,9 +467,9 @@ templ CampaignPage(data CampaignPageData) {
 				@workspaceTabPanel("campaign", "settings", campaignInitialTab(data)) {
 					<div id="campaign-settings" class="space-y-4">
 						<h2 class="section-heading">Campaign settings</h2>
-						<details class="disclosure" open?={ data.LabelsError != "" }>
-							<summary id="labels-heading">Result column labels</summary>
-							<div class="disclosure-body space-y-4">
+						<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="labels-heading">
+							<div class="card-body gap-4">
+								<h2 id="labels-heading" class="card-title">Result column labels</h2>
 								<form method="post" action={ "/campaigns/" + data.ID + "/labels#settings" } class="space-y-4">
 									<label class="label" for="labels-input">Labels</label>
 									<input class="input input-bordered w-full" id="labels-input" type="text" name="result_labels" value={ data.ResultLabels } required/>
@@ -485,22 +479,22 @@ templ CampaignPage(data CampaignPageData) {
 									</div>
 								</form>
 							</div>
-						</details>
-						<details class="disclosure danger-disclosure" open?={ data.DeleteError != "" }>
-							<summary id="delete-heading">Delete campaign & all history</summary>
-							<div class="disclosure-body space-y-4">
+						</section>
+						<section class="card danger-card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="delete-heading">
+							<div class="card-body gap-4">
+								<h2 id="delete-heading" class="card-title">Delete campaign & all history</h2>
 								<p>Deleting this campaign removes its revisions and uploaded documents, tasks and retained workbooks, candidate identities, attempts, approvals, manual resolutions and generated downloads. Deleting it also removes its duplicate-prevention history, so a future campaign can send to the same recipients again. There is no automatic expiry: nothing is removed until you confirm here.</p>
 								<p>Deleting live records never rewrites backups that already exist. Any backup retains its own copy until you remove that backup separately.</p>
 								<p>Deletion is refused while a task is running or stopping, while a candidate is reserved or in flight, or while an attempt is queued or in flight.</p>
-								<form method="post" action={ "/campaigns/" + data.ID + "/delete#settings" } class="space-y-3">
+								<form method="post" action={ "/campaigns/" + data.ID + "/delete#settings" } class="flex flex-col gap-4" x-data={ "{ confirmed: false }" }>
 									<label class="label cursor-pointer justify-start gap-3">
-										<input class="checkbox checkbox-error" type="checkbox" name="confirm" value="delete"/>
+										<input class="checkbox checkbox-error" type="checkbox" name="confirm" value="delete" x-model="confirmed"/>
 										<span>I understand that this deletes the campaign's records, files and duplicate-prevention history.</span>
 									</label>
-									<button class="btn btn-error" type="submit">Delete campaign</button>
+									<button class="btn btn-error self-start" type="submit" x-bind:disabled="!confirmed">Delete campaign</button>
 								</form>
 							</div>
-						</details>
+						</section>
 					</div>
 				}
 			</div>

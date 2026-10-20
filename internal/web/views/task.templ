@@ -57,7 +57,9 @@ templ TaskList(data TaskListData) {
 						<tbody>
 							for _, row := range data.Tasks {
 								<tr>
-									<td>@taskStatusBadge(row.Status)</td>
+									<td>
+										@taskStatusBadge(row.Status)
+									</td>
 									<td><code>{ row.Sheet }</code></td>
 									<td>{ row.HeaderRow }</td>
 									<td>{ row.Total }</td>
@@ -255,9 +257,13 @@ templ TaskPage(data TaskPageData) {
 										<select class="select select-bordered w-full" id="select-sheet" name="sheet">
 											for _, sheet := range data.Sheets {
 												if sheet.Selected {
-													<option value={ sheet.Name } selected>@sheetLabel(sheet)</option>
+													<option value={ sheet.Name } selected>
+														@sheetLabel(sheet)
+													</option>
 												} else {
-													<option value={ sheet.Name }>@sheetLabel(sheet)</option>
+													<option value={ sheet.Name }>
+														@sheetLabel(sheet)
+													</option>
 												}
 											}
 										</select>
@@ -278,7 +284,9 @@ templ TaskPage(data TaskPageData) {
 						<section class="card border border-base-300 bg-base-100 shadow-sm" aria-labelledby="counts-heading">
 							<div class="card-body gap-4">
 								<p class="eyebrow">Step 3 · Review</p>
-								<div class="action-bar"><h2 id="counts-heading" class="section-heading">Validation snapshot</h2>@revisionState(true, data.Approved)</div>
+								<div class="action-bar">
+									<h2 id="counts-heading" class="section-heading">Validation snapshot</h2>@revisionState(true, data.Approved)
+								</div>
 								<dl class="metric-grid">
 									<div class="metric">
 										<dt class="font-semibold">Total rows:</dt>
@@ -334,7 +342,9 @@ templ TaskPage(data TaskPageData) {
 										</div>
 										<div class="flex gap-2">
 											<dt class="font-semibold">Approval:</dt>
-											<dd>@revisionState(true, data.Approved)</dd>
+											<dd>
+												@revisionState(true, data.Approved)
+											</dd>
 										</div>
 									</dl>
 								</details>
@@ -531,7 +541,9 @@ templ TaskPreviewResult(data TaskPreviewData) {
 				</div>
 				<div class="flex gap-2">
 					<dt class="font-semibold">Approval:</dt>
-					<dd>@revisionState(true, data.Approved)</dd>
+					<dd>
+						@revisionState(true, data.Approved)
+					</dd>
 				</div>
 			</dl>
 			<div class="space-y-1">
@@ -544,7 +556,9 @@ templ TaskPreviewResult(data TaskPreviewData) {
 			</div>
 			<div class="space-y-1">
 				<p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">Body</p>
-				<div class="email-body rounded-box border border-base-300 p-4">@templ.Raw(data.Body)</div>
+				<div class="email-body rounded-box border border-base-300 p-4">
+					@templ.Raw(data.Body)
+				</div>
 			</div>
 			<div class="table-scroll">
 				<table class="table table-sm">
