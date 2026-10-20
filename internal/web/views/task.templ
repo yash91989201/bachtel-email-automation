@@ -37,13 +37,12 @@ templ TaskList(data TaskListData) {
 	@Layout("Tasks", true, "campaigns") {
 		<header class="flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
 			<div>
-				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Tasks</p>
+				@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Email tasks"})
 				<h1>Email tasks</h1>
 				<p class="max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]">Upload an Excel workbook, confirm its worksheet and header row, then review the validated snapshot for { data.CampaignName }. Nothing on this page sends email.</p>
 			</div>
 			<div class="action-bar">
 				<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/new" }>Upload workbook</a>
-				<a class={ button.Variants(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID }>Back to campaign</a>
 			</div>
 		</header>
 		if len(data.Tasks) == 0 {
@@ -232,7 +231,7 @@ templ TaskPage(data TaskPageData) {
 	@Layout("Task", true, "campaigns") {
 		<header class="flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
 			<div>
-				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Task · { data.Status }</p>
+				@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Email tasks", Href: "/campaigns/" + data.CampaignID + "/tasks"}, breadcrumbEntry{Label: "Task"})
 				<h1>Task for { data.CampaignName }</h1>
 				if data.Status == "staging" {
 					<p class="max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]">Choose the worksheet and header row to validate your recipient workbook.</p>
@@ -241,7 +240,7 @@ templ TaskPage(data TaskPageData) {
 				}
 			</div>
 			<div class="action-bar">
-				<a class={ button.Variants(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks" }>Back to task list</a>
+				@taskStatusBadge(data.Status)
 			</div>
 		</header>
 		if data.Error != "" {

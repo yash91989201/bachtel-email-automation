@@ -1,0 +1,31 @@
+package views
+
+import "github.com/yash91989201/bachtel-email-automation/internal/web/ui/breadcrumb"
+
+type breadcrumbEntry struct {
+	Label string
+	Href  string
+}
+
+templ pageBreadcrumbs(entries ...breadcrumbEntry) {
+	@breadcrumb.Breadcrumb(breadcrumb.Props{Class: "mb-[.6rem]"}) {
+		@breadcrumb.List(breadcrumb.ListProps{Class: "text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary"}) {
+			for i, entry := range entries {
+				if i > 0 {
+					@breadcrumb.Separator()
+				}
+				@breadcrumb.Item(breadcrumb.ItemProps{Class: "min-w-0 [overflow-wrap:anywhere]"}) {
+					if entry.Href != "" {
+						@breadcrumb.Link(breadcrumb.LinkProps{Href: entry.Href, Class: "app-link text-primary hover:text-primary"}) {
+							{ entry.Label }
+						}
+					} else {
+						@breadcrumb.Page(breadcrumb.ItemProps{Class: "text-primary font-[750]"}) {
+							{ entry.Label }
+						}
+					}
+				}
+			}
+		}
+	}
+}

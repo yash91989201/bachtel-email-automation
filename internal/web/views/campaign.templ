@@ -5,7 +5,6 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alert"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alertdialog"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/badge"
-	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/breadcrumb"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/checkbox"
@@ -40,7 +39,7 @@ templ CampaignList(data CampaignListData) {
 	@Layout("Campaigns", true, "campaigns") {
 		<div class="flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
 			<div>
-				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Campaigns</p>
+				@pageBreadcrumbs(breadcrumbEntry{Label: "Overview", Href: "/"}, breadcrumbEntry{Label: "Campaigns"})
 				<h1 class="text-4xl font-bold tracking-tight">Email campaigns</h1>
 				<p class="max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]">Manage templates, recipient workbooks and submission history for each campaign.</p>
 			</div><a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href="/campaigns/new">New campaign <span aria-hidden="true">+</span></a>
@@ -241,16 +240,7 @@ templ CampaignPage(data CampaignPageData) {
 	@Layout(data.Name, true, "campaigns") {
 		<div class="flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
 			<div>
-				@breadcrumb.Breadcrumb(breadcrumb.Props{Class: "text-sm"}) {
-					@breadcrumb.List(breadcrumb.ListProps{}) {
-						@breadcrumb.Item(breadcrumb.ItemProps{}) {
-							@breadcrumb.Link(breadcrumb.LinkProps{Href: "/campaigns", Class: "app-link text-muted-foreground"}) {
-								← All campaigns
-							}
-						}
-					}
-				}
-				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem] mt-4">Campaign workspace</p>
+				@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.Name})
 				<h1>{ data.Name }</h1>
 				<p class="max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]">Prepare your email content, then open email tasks to upload recipients, test and send.</p>
 			</div>
