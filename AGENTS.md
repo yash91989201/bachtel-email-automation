@@ -36,6 +36,12 @@
 - Follow Go Code Review Comments (https://go.dev/wiki/CodeReviewComments).
   Format with gofmt and the pinned templ formatter. Edit `.templ` sources and
   regenerate committed `*_templ.go` output; never hand-edit generated output.
+- When only some `.templ` files change, regenerate just those files with
+  `go tool templ generate -f <file>` (after `go tool templ fmt <file>`), so
+  unrelated `*_templ.go` output is not rewritten in the same change.
+- Keep analyzer diagnostics clean in `.templ` sources: use tagged `switch` for
+  multi-branch comparisons on one value, `maps.Copy` for attribute merges, and
+  `slices.Contains`/`slices.ContainsFunc` for membership scans.
 - Handle returned errors; explain intentional exceptions. Propagate cancellable
   contexts, bound outbound request time, close resources, and give each goroutine
   an owner and exit condition. Server-owned background jobs must not inherit a
