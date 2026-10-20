@@ -77,7 +77,9 @@ templ CampaignList(data CampaignListData) {
 										No revision yet
 									}
 								</td>
-								<td>@revisionState(row.HasRevision, row.Approved)</td>
+								<td>
+									@revisionState(row.HasRevision, row.Approved)
+								</td>
 							</tr>
 						}
 					</tbody>
@@ -168,7 +170,7 @@ type CampaignPageData struct {
 	Approved    bool
 	Warnings    []string
 
-	Variables []string
+	Variables []PreviewVariable
 
 	RevisionError string
 	LabelsError   string
@@ -187,6 +189,14 @@ type CampaignPageData struct {
 	PackageReady bool
 
 	Attempts []AttemptRow
+}
+
+// PreviewVariable is one sample input in the campaign preview form. Required
+// inputs gate the render button until every one has a value; the server still
+// rejects empty required values with an inline message.
+type PreviewVariable struct {
+	Name     string
+	Required bool
 }
 
 // AttemptRow is one recorded attempt in the campaign history list. Test
@@ -274,7 +284,9 @@ templ CampaignPage(data CampaignPageData) {
 									</div>
 									<div class="flex gap-2">
 										<dt class="font-semibold">Approval:</dt>
-										<dd>@revisionState(true, data.Approved)</dd>
+										<dd>
+											@revisionState(true, data.Approved)
+										</dd>
 									</div>
 								</dl>
 								<details class="text-sm">
@@ -303,7 +315,7 @@ templ CampaignPage(data CampaignPageData) {
 							<p class="text-muted-foreground">Revisions are immutable: a valid upload becomes the current revision, and the history is never edited.</p>
 							<div class="rounded-card border border-border bg-muted/50 p-4">
 								<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Source headers for mapping draft</p>
-								<code class="break-words">{ data.SourceHeaders }</code>
+								<code class="wrap-break-words">{ data.SourceHeaders }</code>
 							</div>
 							<div class="overflow-x-auto rounded-card border border-border">
 								@table.Table(table.Props{Class: "cn-table-compact"}) {
@@ -328,7 +340,7 @@ templ CampaignPage(data CampaignPageData) {
 							</div>
 							<div class="rounded-card border border-primary/20 bg-primary/5 p-4">
 								<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">Example line</p>
-								<code class="break-words">{ data.ExampleVariable + " | " + data.ExampleHeader + " | required | text" }</code>
+								<code class="wrap-break-words">{ data.ExampleVariable + " | " + data.ExampleHeader + " | required | text" }</code>
 							</div>
 						}
 					</details>
@@ -400,28 +412,45 @@ templ CampaignPage(data CampaignPageData) {
 								@card.Content(card.ContentProps{Class: "gap-4"}) {
 									<h2 id="preview-heading" class="cn-card-title">Sample preview</h2>
 									<p>Fill one sample value per variable to render the email exactly as a candidate row would. Nothing is sent and nothing is stored.</p>
-									<form method="post" action={ "/campaigns/" + data.ID + "/preview" } hx-post={ "/campaigns/" + data.ID + "/preview" } hx-target="#preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
+									{{ hasRequired := previewHasRequired(data.Variables) }}
+									<form
+										method="post"
+										action={ "/campaigns/" + data.ID + "/preview" }
+										hx-post={ "/campaigns/" + data.ID + "/preview" }
+										hx-target="#preview-result"
+										hx-swap="innerHTML"
+										hx-disabled-elt="this"
+										class="space-y-4"
+										x-data={ previewReadyState }
+										x-init="sync()"
+										x-on:input="sync()"
+									>
 										<div class="field-grid">
 											for _, variable := range data.Variables {
 												<div class="space-y-2">
-													@label.Label(label.Props{For: "sample-" + variable}) {
-														Sample value for { variable }
+													{{ sampleLabel := "Sample value for " + variable.Name }}
+													if variable.Required {
+														{{ sampleLabel += " (required)" }}
 													}
-													@input.Input(input.Props{ID: "sample-" + variable, Name: variable, Type: "text"})
+													@label.Label(label.Props{For: "sample-" + variable.Name}) {
+														{ sampleLabel }
+													}
+													@input.Input(input.Props{ID: "sample-" + variable.Name, Name: variable.Name, Type: "text", Required: variable.Required})
 												</div>
 											}
 										</div>
 										<div class="app-card-actions">
-											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+											if hasRequired {
+												<p class="text-muted-foreground" x-show="!ready">Fill every required sample value to render the preview.</p>
+											}
+											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault, Disabled: hasRequired, Attributes: templ.Attributes{"x-bind:disabled": "!ready"}}) {
 												Render preview
 											}
 										</div>
 									</form>
-									<div id="preview-result" role="status" aria-live="polite">
-										<p class="text-muted-foreground">Submit sample values to render the preview here.</p>
-									</div>
 								}
 							</section>
+							<div id="preview-result" role="status" aria-live="polite"></div>
 						}
 					}
 				}
@@ -590,6 +619,24 @@ func campaignInitialTab(data CampaignPageData) string {
 	return "template"
 }
 
+// previewReadyState is the Alpine scope of the sample preview form. sync keeps
+// ready true only while every required sample input carries a value, which is
+// what enables the render button. The gate is convenience: the server rejects
+// missing required values on its own.
+const previewReadyState = "{ ready: false, sync() { this.ready = Array.from(this.$el.querySelectorAll('input[required]')).every((input) => input.value.trim() !== '') } }"
+
+// previewHasRequired reports whether any sample input is required. A fresh page
+// load fills nothing, so a required variable means the render button has to
+// start disabled rather than wait for Alpine to agree.
+func previewHasRequired(variables []PreviewVariable) bool {
+	for _, variable := range variables {
+		if variable.Required {
+			return true
+		}
+	}
+	return false
+}
+
 // PreviewData is the view model for the sample preview partial. The error is
 // a fixed campaign render message that names the offending variable; it is
 // shown instead of a rendered email, never as a server error page.
@@ -616,9 +663,14 @@ type PreviewValue struct {
 }
 
 templ PreviewResult(data PreviewData) {
-	<div class="cn-card border border-border bg-card shadow-sm">
+	<div class="cn-card border border-border bg-card shadow-sm" x-data="{ open: true }" x-show="open">
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
-			<h3 class="cn-card-title">Preview result</h3>
+			<div class="flex items-start justify-between gap-4">
+				<h3 class="cn-card-title">Preview result</h3>
+				@button.Button(button.Props{Type: button.TypeButton, Variant: button.VariantGhost, Size: button.SizeSm, Attributes: templ.Attributes{"x-on:click": "open = false"}}) {
+					Close
+				}
+			</div>
 			if data.HasRevision {
 				<dl class="space-y-1 text-sm">
 					<div class="flex gap-2">
@@ -631,7 +683,9 @@ templ PreviewResult(data PreviewData) {
 					</div>
 					<div class="flex gap-2">
 						<dt class="font-semibold">Approval:</dt>
-						<dd>@revisionState(true, data.Approved)</dd>
+						<dd>
+							@revisionState(true, data.Approved)
+						</dd>
 					</div>
 				</dl>
 			}
@@ -650,7 +704,9 @@ templ PreviewResult(data PreviewData) {
 				</div>
 				<div class="space-y-1">
 					<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Body</p>
-					<div class="email-body rounded-card border border-border p-4">@templ.Raw(data.Body)</div>
+					<div class="email-body rounded-card border border-border p-4">
+						@templ.Raw(data.Body)
+					</div>
 				</div>
 				<div class="table-scroll">
 					@table.Table(table.Props{Class: "cn-table-compact"}) {

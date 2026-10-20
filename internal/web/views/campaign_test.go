@@ -197,6 +197,108 @@ func TestCampaignRevisionFormRevealsItsReferenceOnDemand(t *testing.T) {
 	}
 }
 
+// The sample preview shows its result only after the operator renders one, and
+// the render button stays disabled while a required sample value is missing.
+func TestCampaignSamplePreviewGatesOnRequiredValues(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		variables    []PreviewVariable
+		wantDisabled bool
+	}{
+		{name: "required values start empty", variables: []PreviewVariable{{Name: "recipient", Required: true}, {Name: "first_name", Required: true}}, wantDisabled: true},
+		{name: "optional values only", variables: []PreviewVariable{{Name: "nickname"}}, wantDisabled: false},
+		{name: "no variables", wantDisabled: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := parseView(t, CampaignPage(CampaignPageData{
+				ID: "camp1", Name: "Test campaign", HasRevision: true, Variables: tc.variables,
+			}))
+			form := workspaceNode(doc, "action", "/campaigns/camp1/preview")
+			if form == nil || form.Data != "form" {
+				t.Fatal("the campaign page has no sample preview form")
+			}
+			if workspaceAttr(form, "x-data") != previewReadyState || workspaceAttr(form, "x-init") != "sync()" || workspaceAttr(form, "x-on:input") != "sync()" {
+				t.Errorf("preview form lost its required-value gate: x-data=%q x-init=%q input=%q", workspaceAttr(form, "x-data"), workspaceAttr(form, "x-init"), workspaceAttr(form, "x-on:input"))
+			}
+			if workspaceAttr(form, "hx-target") != "#preview-result" || workspaceAttr(form, "hx-swap") != "innerHTML" {
+				t.Error("the preview must stay an in-place swap into its own result region")
+			}
+
+			// Nothing renders before the operator asks for a preview.
+			result := workspaceNode(doc, "id", "preview-result")
+			if result == nil {
+				t.Fatal("preview result region is missing")
+			}
+			if result.FirstChild != nil {
+				t.Errorf("preview result must start empty, got %q", viewText(result))
+			}
+
+			// Every required input says so and carries the constraint the gate reads.
+			for _, variable := range tc.variables {
+				sample := workspaceNode(form, "id", "sample-"+variable.Name)
+				if sample == nil || sample.Data != "input" || workspaceAttr(sample, "name") != variable.Name {
+					t.Fatalf("missing sample input for %s", variable.Name)
+				}
+				if got := hasViewAttr(sample, "required"); got != variable.Required {
+					t.Errorf("sample %s required=%t, want %t", variable.Name, got, variable.Required)
+				}
+				fieldLabel := workspaceNode(form, "for", "sample-"+variable.Name)
+				if fieldLabel == nil {
+					t.Fatalf("sample input for %s has no label", variable.Name)
+				}
+				if label := viewText(fieldLabel); !strings.Contains(label, "Sample value for "+variable.Name) {
+					t.Errorf("label %q does not name the variable", label)
+				}
+				if label := viewText(fieldLabel); variable.Required && !strings.Contains(label, "(required)") {
+					t.Errorf("label %q does not mark the variable required", label)
+				}
+			}
+
+			render := findViewNode(form, func(n *html.Node) bool {
+				return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Render preview"
+			})
+			if render == nil || workspaceAttr(render, "type") != "submit" {
+				t.Fatal("missing the render preview submit button")
+			}
+			if got := workspaceAttr(render, "x-bind:disabled"); got != "!ready" {
+				t.Errorf("render button x-bind:disabled = %q, want %q", got, "!ready")
+			}
+			if got := hasViewAttr(render, "disabled"); got != tc.wantDisabled {
+				t.Errorf("render button disabled=%t, want %t", got, tc.wantDisabled)
+			}
+		})
+	}
+}
+
+// The rendered preview is dismissible from the same page, without a reload.
+func TestPreviewResultCanBeClosed(t *testing.T) {
+	doc := parseView(t, PreviewResult(PreviewData{
+		HasRevision: true, Revision: 3, Recipient: "candidate@example.com", Subject: "Hello", Body: "<p>Hi there</p>",
+	}))
+	card := workspaceNode(doc, "x-data", "{ open: true }")
+	if card == nil || workspaceAttr(card, "x-show") != "open" {
+		t.Fatal("the preview result card must own the state that dismisses it")
+	}
+	closeButton := findViewNode(card, func(n *html.Node) bool {
+		return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Close"
+	})
+	if closeButton == nil || workspaceAttr(closeButton, "type") != "button" {
+		t.Fatal("the preview result card has no non-submitting close button")
+	}
+	if got, want := workspaceAttr(closeButton, "x-on:click"), "open = false"; got != want {
+		t.Errorf("close click = %q, want %q", got, want)
+	}
+	// Closing dismisses the rendered content too, not only the heading.
+	if workspaceNode(card, "class", "email-body rounded-card border border-border p-4") == nil {
+		t.Error("the rendered body sits outside the dismissible card")
+	}
+	for _, want := range []string{"Preview result", "candidate@example.com", "Hello", "Hi there"} {
+		if !strings.Contains(viewText(card), want) {
+			t.Errorf("preview card is missing %q", want)
+		}
+	}
+}
+
 // findCard returns the card that holds the heading with the given id.
 func findCard(node *html.Node, headingID string) *html.Node {
 	if node.Type == html.ElementNode && node.Data == "h2" {

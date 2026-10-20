@@ -436,7 +436,7 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 		data.ContentHash = configuration.ContentHash
 		data.Approved = configuration.ApprovalCurrent()
 		for _, mapping := range configuration.Mappings {
-			data.Variables = append(data.Variables, mapping.Variable)
+			data.Variables = append(data.Variables, views.PreviewVariable{Name: mapping.Variable, Required: mapping.Required})
 		}
 	} else {
 		// A campaign without a revision has no operator mappings yet: offer the
