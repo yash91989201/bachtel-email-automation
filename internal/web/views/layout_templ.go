@@ -55,7 +55,7 @@ func Layout(title string, signedIn bool, active string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</head><body class=\"app-body style-luma\"><a class=\"skip-link\" href=\"#main-content\">Skip to content</a><header class=\"app-header\"><a class=\"brand\" href=\"/\" aria-label=\"Bachtel home\"><span class=\"brand-mark\" aria-hidden=\"true\">b.</span><span>Bachtel<span class=\"brand-caption\">Email workspace</span></span></a> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<script defer src=\"/static/workspace.js\"></script></head><body class=\"app-body style-luma\"><a class=\"skip-link\" href=\"#main-content\">Skip to content</a><header class=\"app-header\"><a class=\"brand\" href=\"/\" aria-label=\"Bachtel home\"><span class=\"brand-mark\" aria-hidden=\"true\">b.</span><span>Bachtel<span class=\"brand-caption\">Email workspace</span></span></a> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

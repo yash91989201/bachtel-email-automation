@@ -260,7 +260,8 @@ components.json                 shadcn-templ component and asset paths
 preset.json                     Pinned shadcn-templ preset selection
 web/css/fonts.css               Font-face declarations for local preset fonts
 web/css/vendor/                 Pinned upstream component and animation styles
-scripts/copy-assets.mjs         Copy pinned Alpine/htmx and licensed fonts locally
+web/js/workspace.js            Tracked workspace adapter: URL fragment, disclosures, htmx swaps
+scripts/copy-assets.mjs         Copy pinned Alpine/htmx, licensed fonts and the adapter locally
 Dockerfile                     Frontend build, Go build, non-root runtime
 compose.yaml                   One service, application environment, persistent data volume
 ```
@@ -275,7 +276,7 @@ The existing OpenSpec configuration and skills are preserved.
 
 ```sh
 make generate    # go generate -> module-pinned go tool templ
-make assets      # copy Alpine/htmx and local fonts; compile Tailwind CSS
+make assets      # bundle component JS, copy Alpine/htmx, fonts and web/js; compile Tailwind CSS
 make fmt         # format Go and templ sources
 make test        # regenerate, build assets, go test, go vet
 make build       # build bin/bachtel with assets embedded
@@ -290,7 +291,8 @@ All frontend libraries are served locally, with no runtime CDN dependencies.
 The templ CLI is pinned with Go's `tool` directive so its generator matches
 the runtime library. Tailwind and its CLI are pinned in `package.json` and
 `package-lock.json`. UI component sources are pinned to shadcn-templ
-`v2.0.0-beta.15`, copied into `internal/web/ui` and adapted to preserve application structure and workflows. The active theme is
+`v2.0.0-beta.15`, copied into `internal/web/ui` and adapted to preserve application structure and workflows. Workspaces use the owned
+`tabs`/`collapsible` primitives with the tracked `web/js/workspace.js` adapter, and confirmations use `checkbox` and `alertdialog`. The active theme is
 shadcn-templ preset `b870VEw0in` (Luma, Mist/Cyan, Noto Sans and EB Garamond). See [UI component maintenance](docs/ui-components.md)
 before adding or upgrading components.
 

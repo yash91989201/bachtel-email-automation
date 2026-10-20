@@ -137,11 +137,21 @@ func TestPublicSurface(t *testing.T) {
 		t.Fatalf("/robots.txt: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	for _, path := range []string{"/static/app.css", "/static/alpine.min.js", "/static/htmx.min.js"} {
+	for _, path := range []string{"/static/app.css", "/static/alpine.min.js", "/static/htmx.min.js", "/static/workspace.js"} {
 		rec = do(t, handler, http.MethodGet, path, nil, nil)
 		if rec.Code != http.StatusOK || rec.Body.Len() == 0 {
 			t.Fatalf("%s: status=%d", path, rec.Code)
 		}
+		// The adapter ships through the asset pipeline and is embedded, so a
+		// production build serves the same file the workspace markup expects.
+		if path == "/static/workspace.js" && !strings.Contains(rec.Body.String(), "data-workspace-tabs") {
+			t.Fatal("/static/workspace.js is served but does not contain the workspace adapter")
+		}
+	}
+
+	rec = do(t, handler, http.MethodGet, "/login", nil, nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `src="/static/workspace.js"`) {
+		t.Fatalf("/login must load the workspace adapter: status=%d", rec.Code)
 	}
 
 	rec = do(t, handler, http.MethodPost, "/status", nil, nil)
