@@ -260,7 +260,7 @@ templ Progress(props ...ProgressProps) {
 			aria-valuenow={ fmt.Sprint(s.current) }
 			aria-valuetext={ progressLabel(s) }
 		}
-		class={ utils.CN("text-xs min-h-[1lh] w-fit min-w-[14ch] font-medium text-muted-foreground tabular-nums", p.Class) }
+		class={ utils.CN("text-xs min-h-lh w-fit min-w-[14ch] font-medium text-muted-foreground tabular-nums", p.Class) }
 		{ p.Attributes... }
 	>
 		@childrenOr(progressLabel(s)) {
@@ -610,7 +610,7 @@ templ Choice(props ...ChoiceProps) {
 			} else {
 				hidden
 			}
-			class="border-primary/10 bg-background/80 text-muted-foreground size-5 translate-y-[--spacing(0.45)] group-has-data-[slot=questionnaire-choice-description]/questionnaire-choice:translate-y-0.5 items-center justify-center rounded-full border font-mono text-[0.625rem] font-medium leading-none pointer-events-none ms-auto hidden shrink-0 group-data-[shortcut]/questionnaire-choice:inline-flex"
+			class="border-primary/10 bg-background/80 text-muted-foreground size-5 translate-y-[--spacing(0.45)] group-has-data-[slot=questionnaire-choice-description]/questionnaire-choice:translate-y-0.5 items-center justify-center rounded-full border font-mono text-[0.625rem] font-medium leading-none pointer-events-none ms-auto hidden shrink-0 group-data-shortcut/questionnaire-choice:inline-flex"
 		>{ shortcut }</span>
 	</label>
 }

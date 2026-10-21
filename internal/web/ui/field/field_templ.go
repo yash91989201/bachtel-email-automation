@@ -645,7 +645,7 @@ func Label(props ...LabelProps) templ.Component {
 			// 1:1 base/ui/field.tsx FieldLabel: it composes Label, so the
 			// base string comes first, then the field-label strings.
 			"gap-2 text-sm leading-none font-medium group-data-[disabled=true]:opacity-50 peer-disabled:opacity-50 flex items-center select-none group-data-[disabled=true]:pointer-events-none peer-disabled:cursor-not-allowed",
-			"has-data-checked:bg-input/30 gap-2 leading-snug group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-2xl has-[>[data-slot=field]]:border has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-input/40 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/50 has-[>[data-slot=field]]:has-[:focus-visible]:ring-3 *:data-[slot=field]:p-4 group/field-label peer/field-label flex w-fit",
+			"has-data-checked:bg-input/30 gap-2 leading-snug group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-2xl has-[>[data-slot=field]]:border has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-input/40 has-[>[data-slot=field]]:has-focus-visible:border-ring has-[>[data-slot=field]]:has-focus-visible:ring-ring/50 has-[>[data-slot=field]]:has-focus-visible:ring-3 *:data-[slot=field]:p-4 group/field-label peer/field-label flex w-fit",
 			"has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col",
 			p.Class,
 		),

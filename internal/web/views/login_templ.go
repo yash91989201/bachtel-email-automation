@@ -49,7 +49,7 @@ func LoginPage(errorMessage string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"max-w-[440px] mx-auto my-12 max-[760px]:my-6 space-y-6\"><div class=\"space-y-2 text-center\"><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Welcome back</p><h1>Sign in to your workspace</h1><p class=\"text-muted-foreground\">Manage campaigns and email operations securely.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"max-w-110 mx-auto my-12 max-[760px]:my-6 space-y-6\"><div class=\"space-y-2 text-center\"><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Welcome back</p><h1>Sign in to your workspace</h1><p class=\"text-muted-foreground\">Manage campaigns and email operations securely.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

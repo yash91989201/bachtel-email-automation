@@ -63,7 +63,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div><p class=\"text-sm font-medium uppercase tracking-widest text-primary\">Microsoft 365</p><h1 class=\"text-4xl font-bold tracking-tight\">Mailbox connection</h1><p class=\"max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]\">Connect the HR mailbox used for all outgoing email. Check the sender and connection status here.</p></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"flex items-center justify-between gap-6 pt-1 pb-2.5 [&>div]:min-w-0 max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div><p class=\"text-sm font-medium uppercase tracking-widest text-primary\">Microsoft 365</p><h1 class=\"text-4xl font-bold tracking-tight\">Mailbox connection</h1><p class=\"max-w-170 mt-3 text-muted-foreground text-[.9375rem]\">Connect the HR mailbox used for all outgoing email. Check the sender and connection status here.</p></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -256,7 +256,7 @@ func ConnectionPage(data ConnectionData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div><dl class=\"grid grid-cols-2 gap-5 p-5 bg-muted rounded-[.65rem] [&>div]:block [&_dt]:mb-[.3rem] [&_dt]:text-[.72rem] [&_dd]:font-semibold [&_dd]:[overflow-wrap:anywhere] max-[760px]:grid-cols-1 text-sm\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div><dl class=\"grid grid-cols-2 gap-5 p-5 bg-muted rounded-4xl [&>div]:block [&_dt]:mb-[.3rem] [&_dt]:text-[.72rem] [&_dd]:font-semibold [&_dd]:wrap-anywhere max-[760px]:grid-cols-1 text-sm\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

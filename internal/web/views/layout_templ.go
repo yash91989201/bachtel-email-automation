@@ -166,7 +166,7 @@ func Layout(title string, signedIn bool, active string) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</header><main id=\"main-content\" tabindex=\"-1\" class=\"max-w-[1240px] mx-auto px-8 pt-10 pb-16 min-h-[calc(100vh-160px)] [&>*+*]:mt-6 [&>*]:min-w-0 [&_.cn-card]:py-0! [&_.cn-card]:overflow-visible! max-[760px]:px-[18px] max-[760px]:pt-7 max-[760px]:pb-[44px]\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</header><main id=\"main-content\" tabindex=\"-1\" class=\"max-w-310 mx-auto px-8 pt-10 pb-16 min-h-[calc(100vh-160px)] [&>*+*]:mt-6 *:min-w-0 [&_.cn-card]:py-0! [&_.cn-card]:overflow-visible! max-[760px]:px-4.5 max-[760px]:pt-7 max-[760px]:pb-11\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -174,7 +174,7 @@ func Layout(title string, signedIn bool, active string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</main><footer class=\"max-w-[1176px] mx-auto py-5 border-t border-border text-muted-foreground text-xs flex justify-between gap-4 max-[760px]:mx-[18px] max-[760px]:flex-wrap\"><span>Bachtel Corporation</span><span>Email operations workspace</span></footer></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</main><footer class=\"max-w-294 mx-auto py-5 border-t border-border text-muted-foreground text-xs flex justify-between gap-4 max-[760px]:mx-4.5 max-[760px]:flex-wrap\"><span>Bachtel Corporation</span><span>Email operations workspace</span></footer></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

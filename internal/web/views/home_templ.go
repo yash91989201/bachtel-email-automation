@@ -48,7 +48,7 @@ func Home() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"flex items-center justify-between gap-6 pt-[4px] pb-[10px] [&>div]:min-w-0 max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Your workspace</p><h1>Email operations, organized.</h1><p class=\"max-w-[680px] mt-3 text-muted-foreground text-[.9375rem]\">Prepare personalized campaigns, review your recipients and manage every submission in one place.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"flex items-center justify-between gap-6 pt-1 pb-2.5 [&>div]:min-w-0 max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Your workspace</p><h1>Email operations, organized.</h1><p class=\"max-w-170 mt-3 text-muted-foreground text-[.9375rem]\">Prepare personalized campaigns, review your recipients and manage every submission in one place.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -70,7 +70,7 @@ func Home() templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" href=\"/campaigns/new\">New campaign <span aria-hidden=\"true\">+</span></a></div><section class=\"p-10 border border-border rounded-[1rem] grid grid-cols-[1.5fr_1fr] items-center gap-16 bg-muted [&_h2]:text-[1.75rem] [&_h2]:font-bold [&_h2]:tracking-[-.03em] [&_p]:max-w-[490px] [&_p]:text-muted-foreground [&_p]:mt-3 [&_p]:mb-[1.4rem] [&_p]:text-[.875rem] max-[760px]:grid-cols-1 max-[760px]:p-6 max-[760px]:gap-6\" aria-labelledby=\"start-heading\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">From template to submission</p><h2 id=\"start-heading\">Ready for your next campaign?</h2><p>Open a campaign to manage its template, upload a recipient workbook or continue an existing email task.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" href=\"/campaigns/new\">New campaign <span aria-hidden=\"true\">+</span></a></div><section class=\"p-10 border border-border rounded-[1rem] grid grid-cols-[1.5fr_1fr] items-center gap-16 bg-muted [&_h2]:text-[1.75rem] [&_h2]:font-bold [&_h2]:tracking-[-.03em] [&_p]:max-w-122.5 [&_p]:text-muted-foreground [&_p]:mt-3 [&_p]:mb-[1.4rem] [&_p]:text-[.875rem] max-[760px]:grid-cols-1 max-[760px]:p-6 max-[760px]:gap-6\" aria-labelledby=\"start-heading\"><div><p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">From template to submission</p><h2 id=\"start-heading\">Ready for your next campaign?</h2><p>Open a campaign to manage its template, upload a recipient workbook or continue an existing email task.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -420,7 +420,7 @@ func Home() templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</section><div class=\"grid grid-cols-2 gap-6 items-start [&>*]:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</section><div class=\"grid grid-cols-2 gap-6 items-start *:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
