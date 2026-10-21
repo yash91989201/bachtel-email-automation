@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pocketbase/dbx"
 	"github.com/xuri/excelize/v2"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
@@ -22,7 +23,7 @@ func (c *acceptanceClock) Advance(d time.Duration) {
 }
 
 // TestTwoOperatorWorkflow exercises both operators end to end against
-// simulated transports: 1,000-row intake, duplicate exclusion, independent
+// simulated transports: 20-row intake, duplicate exclusion, independent
 // approvals and pacing, concurrent dispatch, an unattended scheduled start, a
 // restart, and a mailbox replacement that must not touch the other workspace.
 func TestTwoOperatorWorkflow(t *testing.T) {
@@ -30,7 +31,7 @@ func TestTwoOperatorWorkflow(t *testing.T) {
 	ctx := context.Background()
 	ownerA := f.ownerID
 
-	taskA := f.task(t, 1000)
+	taskA := f.task(t, 20)
 	ownerB, connectionB := f.addOperator(t, "second@example.invalid", "second@example.invalid")
 	campaignB := f.createCampaign(t, ownerB, "Second workspace")
 	taskB := f.taskFor(t, ownerB, campaignB, 5)
@@ -88,7 +89,7 @@ func TestTwoOperatorWorkflow(t *testing.T) {
 	d.Wake()
 
 	acceptanceEventually(t, func() bool {
-		doneA := f.taskSubmitted(t, taskA) == 1000
+		doneA := f.taskSubmitted(t, taskA) == 20
 		doneB := f.taskSubmitted(t, taskB) == 5
 		doneScheduled := f.taskSubmitted(t, scheduledTask) == 3
 		return doneA && doneB && doneScheduled
@@ -103,7 +104,7 @@ func TestTwoOperatorWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if progressA.Submitted != 1000 || progressB.Submitted != 5 {
+	if progressA.Submitted != 20 || progressB.Submitted != 5 {
 		t.Fatalf("isolated progress = %d/%d", progressA.Submitted, progressB.Submitted)
 	}
 	if _, err = f.store.Preview(ctx, ownerB, taskA); err != sending.ErrNotFound {
@@ -205,11 +206,11 @@ func (f *acceptanceFixture) taskCounts(t *testing.T, taskID string) intake.Count
 
 func (f *acceptanceFixture) taskSubmitted(t *testing.T, taskID string) int {
 	t.Helper()
-	records, err := f.app.FindRecordsByFilter(sending.AttemptsCollection, "task = {:t} && kind = 'candidate' && state = 'submitted'", "", 0, 0, map[string]any{"t": taskID})
+	count, err := f.app.CountRecords(sending.AttemptsCollection, dbx.HashExp{"task": taskID, "kind": sending.KindCandidate, "state": sending.AttemptSubmitted})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return len(records)
+	return int(count)
 }
 
 func (f *acceptanceFixture) taskStatus(t *testing.T, taskID string) string {

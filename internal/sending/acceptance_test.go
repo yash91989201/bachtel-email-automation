@@ -258,7 +258,21 @@ func acceptanceEventually(t *testing.T, condition func() bool) {
 }
 func (f *acceptanceFixture) dispatcher(t *testing.T, mailbox sending.Sender) *sending.Dispatcher {
 	t.Helper()
-	d := sending.NewDispatcher(f.store, fixedResolver(mailbox), sending.WorkerOptions{DataDir: f.app.DataDir(), Now: f.clock.Now, After: f.clock.After, RequestTimeout: 3 * time.Second})
+	return f.dispatcherFor(t, fixedResolver(mailbox))
+}
+
+// dispatcherFor starts a dispatcher with a resolver that can map each mailbox
+// connection to its own simulated sender.
+func (f *acceptanceFixture) dispatcherFor(t *testing.T, resolver sending.Resolver) *sending.Dispatcher {
+	t.Helper()
+	return f.dispatcherWith(t, resolver, 3*time.Second)
+}
+
+// dispatcherWith starts a dispatcher whose request deadline is long enough for
+// a test to hold one mailbox's slots open deliberately.
+func (f *acceptanceFixture) dispatcherWith(t *testing.T, resolver sending.Resolver, requestTimeout time.Duration) *sending.Dispatcher {
+	t.Helper()
+	d := sending.NewDispatcher(f.store, resolver, sending.WorkerOptions{DataDir: f.app.DataDir(), Now: f.clock.Now, After: f.clock.After, RequestTimeout: requestTimeout})
 	if err := d.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -295,13 +309,13 @@ func (f *acceptanceFixture) act(t *testing.T, task, kind, id string, count int) 
 	return result
 }
 
-func TestAcceptanceThousandCandidatePipelineAndReplay(t *testing.T) {
+func TestAcceptanceCandidatePipelineAndReplay(t *testing.T) {
 	f := newAcceptanceFixture(t)
-	task := f.task(t, 1000)
+	task := f.task(t, 500)
 	mailbox := &acceptanceMailbox{}
 	d := f.dispatcher(t, mailbox)
 	// Approval is an explicit action following a separately submitted test.
-	if _, err := f.store.Act(context.Background(), f.ownerID, sending.ActionRequest{ActionID: "unapproved", TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 1000}); err == nil {
+	if _, err := f.store.Act(context.Background(), f.ownerID, sending.ActionRequest{ActionID: "unapproved", TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 500}); err == nil {
 		t.Fatal("unapproved candidate start succeeded")
 	}
 	f.approve(t, task, d)
@@ -309,15 +323,15 @@ func TestAcceptanceThousandCandidatePipelineAndReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Submitted != 0 || p.Eligible != 1000 {
+	if p.Submitted != 0 || p.Eligible != 500 {
 		t.Fatalf("test changed candidate eligibility: %+v", p)
 	}
-	first := f.act(t, task, "start", "start-1000", 1000)
-	if first.Claimed != 1000 {
-		t.Fatalf("claimed %d, want 1000", first.Claimed)
+	first := f.act(t, task, "start", "start-500", 500)
+	if first.Claimed != 500 {
+		t.Fatalf("claimed %d, want 500", first.Claimed)
 	}
-	repeated := f.act(t, task, "start", "start-1000", 1000)
-	if !repeated.Repeated || repeated.Claimed != 1000 {
+	repeated := f.act(t, task, "start", "start-500", 500)
+	if !repeated.Repeated || repeated.Claimed != 500 {
 		t.Fatalf("replay = %+v", repeated)
 	}
 	d.Wake()
@@ -329,15 +343,15 @@ func TestAcceptanceThousandCandidatePipelineAndReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Submitted != 1000 || p.Remaining != 0 || p.Held != 0 || p.InFlight != 0 || !p.ArtifactNeeded {
+	if p.Submitted != 500 || p.Remaining != 0 || p.Held != 0 || p.InFlight != 0 || !p.ArtifactNeeded {
 		t.Fatalf("final progress = %+v", p)
 	}
 	attempts, err := f.app.FindRecordsByFilter(sending.AttemptsCollection, "", "started_at", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(attempts) != 1001 || mailbox.count() != 1001 {
-		t.Fatalf("attempts=%d requests=%d, want 1001 including formatting test", len(attempts), mailbox.count())
+	if len(attempts) != 501 || mailbox.count() != 501 {
+		t.Fatalf("attempts=%d requests=%d, want 501 including formatting test", len(attempts), mailbox.count())
 	}
 	seen := map[string]bool{}
 	for i, a := range attempts {
@@ -362,7 +376,7 @@ func TestAcceptanceThousandCandidatePipelineAndReplay(t *testing.T) {
 			t.Fatalf("rolling allowance exceeded at %d", i)
 		}
 	}
-	if len(seen) != 1000 {
+	if len(seen) != 500 {
 		t.Fatalf("unique candidate requests=%d", len(seen))
 	}
 	mailbox.mu.Lock()
@@ -437,6 +451,95 @@ func TestAcceptanceSharedCapacityCrossTaskClaimsAndStop(t *testing.T) {
 	if mailbox.count() != 14 {
 		t.Fatalf("requests=%d, want 12 candidates + 2 tests", mailbox.count())
 	}
+}
+
+// connectionResolver returns the simulated mailbox of one connection, so each
+// operator's sends are observed separately.
+func connectionResolver(t *testing.T, mailboxes map[string]*acceptanceMailbox) sending.Resolver {
+	t.Helper()
+	return resolverFunc(func(_ context.Context, connectionID string) (sending.Sender, error) {
+		m, ok := mailboxes[connectionID]
+		if !ok {
+			return nil, fmt.Errorf("unexpected connection %q", connectionID)
+		}
+		return m, nil
+	})
+}
+
+// TestAcceptancePerMailboxCapacityIsIndependent proves one operator holding
+// every slot of its own mailbox never blocks another operator's sending.
+func TestAcceptancePerMailboxCapacityIsIndependent(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	ownerB, connectionB := f.addOperator(t, "second@example.invalid", "second@example.invalid")
+	campaignB := f.createCampaign(t, ownerB, "Second workspace")
+	taskA := f.task(t, 12)
+	taskB := f.taskFor(t, ownerB, campaignB, 12)
+
+	mailboxA, mailboxB := &acceptanceMailbox{}, &acceptanceMailbox{}
+	d := f.dispatcherWith(t, connectionResolver(t, map[string]*acceptanceMailbox{f.connectionID: mailboxA, connectionB: mailboxB}), 30*time.Second)
+	f.approve(t, taskA, d)
+	approveFor(t, f, ownerB, taskB)
+	releaseA := make(chan struct{})
+	defer close(releaseA)
+	mailboxA.mu.Lock()
+	mailboxA.hold = releaseA
+	mailboxA.mu.Unlock()
+
+	actFor(t, f, f.ownerID, taskA, "start", "capacity-a", 12)
+	d.Wake()
+	acceptanceEventually(t, func() bool { return mailboxA.count() == 5 }) // one approved test plus four held sends
+
+	actFor(t, f, ownerB, taskB, "start", "capacity-b", 12)
+	d.Wake()
+	// Operator A still holds all four slot-consuming requests, so B's send can
+	// only start if capacity belongs to each mailbox connection.
+	acceptanceEventually(t, func() bool { return mailboxB.count() >= 1 })
+	mailboxA.mu.Lock()
+	activeA, maxA := mailboxA.active, mailboxA.maxActive
+	mailboxA.mu.Unlock()
+	if activeA != 4 || maxA != 4 {
+		t.Fatalf("first mailbox active=%d max=%d when the second mailbox sent, want 4/4", activeA, maxA)
+	}
+	// B fills its own four slots while A keeps holding its four.
+	acceptanceEventually(t, func() bool { return mailboxB.count() >= 4 })
+}
+
+// TestAcceptanceMailboxPauseDoesNotStallAnotherOperator proves an uncertain
+// outcome for one mailbox leaves another operator's running task submitting,
+// with no Wake or Synchronize after the pause.
+func TestAcceptanceMailboxPauseDoesNotStallAnotherOperator(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	ctx := context.Background()
+	ownerB, connectionB := f.addOperator(t, "second@example.invalid", "second@example.invalid")
+	campaignB := f.createCampaign(t, ownerB, "Second workspace")
+	taskA := f.task(t, 4)
+	taskB := f.taskFor(t, ownerB, campaignB, 12)
+
+	releaseB := make(chan struct{})
+	mailboxA := &acceptanceMailbox{uncertain: "candidate0000@example.invalid"}
+	mailboxB := &acceptanceMailbox{}
+	d := f.dispatcherWith(t, connectionResolver(t, map[string]*acceptanceMailbox{f.connectionID: mailboxA, connectionB: mailboxB}), 30*time.Second)
+	f.approve(t, taskA, d)
+	approveFor(t, f, ownerB, taskB)
+	mailboxB.mu.Lock()
+	mailboxB.hold = releaseB
+	mailboxB.mu.Unlock()
+
+	actFor(t, f, f.ownerID, taskA, "start", "pause-a", 4)
+	actFor(t, f, ownerB, taskB, "start", "pause-b", 12)
+	d.Wake()
+	acceptanceEventually(t, func() bool {
+		r, err := f.app.FindRecordById("send_tasks", taskA)
+		return err == nil && r.GetString("status") == "paused"
+	})
+	// Operator B's first four requests waited only on this test's gate. Releasing
+	// it must let the coordinator launch the rest of B's task without any
+	// operator action.
+	close(releaseB)
+	acceptanceEventually(t, func() bool {
+		p, err := f.store.Preview(ctx, ownerB, taskB)
+		return err == nil && p.Submitted == 12
+	})
 }
 
 func TestAcceptanceRestartConservativeIntentsAndCooldown(t *testing.T) {

@@ -148,7 +148,7 @@ templ SendingPage(data SendingData) {
 					@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "pacing-heading"}}) {
 						@card.Content(card.ContentProps{Class: "gap-4"}) {
 							<h2 class="font-bold text-[1.2rem] tracking-[-.02em]" id="pacing-heading">Mailbox pacing</h2>
-							<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Default 25 starts per minute; maximum 30 and four in flight across candidates, tests and retries. This mailbox has its own pacing and cooldown; a provider throttle pauses only this mailbox. Its own mail clients consume mailbox capacity outside this app's observations.</p>
+							<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Default 25 starts per minute; maximum 30 and four in flight for this mailbox across candidates, tests and retries. This mailbox has its own pacing and cooldown; a provider throttle pauses only this mailbox. Its own mail clients consume mailbox capacity outside this app's observations.</p>
 							<form method="post" action={ data.Base + "/rate#pacing" } class="grid grid-cols-2 gap-4 *:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1">
 								<input type="hidden" name="action_id" value={ data.ActionID + "rate" }/>
 								@field.Field(field.Props{}) {

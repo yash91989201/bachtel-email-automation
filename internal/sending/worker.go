@@ -15,7 +15,7 @@ import (
 // one connection, while a shared storage failure stops every launch.
 type DispatchStore interface {
 	DispatcherState(context.Context, string, string) (Settings, error)
-	NextWork(context.Context) (*Work, error)
+	NextWork(context.Context, ...string) (*Work, error)
 	NextWorkDeadline(context.Context) (time.Time, error)
 	FireScheduled(context.Context) (bool, error)
 	BeginAttempt(context.Context, *Work, time.Time, time.Time) (*Attempt, error)
@@ -38,7 +38,8 @@ type WorkerOptions struct {
 
 // Dispatcher is the single owner of the datastore's sending state. It resolves
 // each work item's mailbox connection to a concrete sender, paces that mailbox
-// independently, and keeps at most four simultaneous requests overall.
+// independently, and keeps at most four simultaneous requests per mailbox
+// connection. There is no application-wide submission cap.
 type Dispatcher struct {
 	store                     DispatchStore
 	resolver                  Resolver
@@ -188,7 +189,7 @@ func (d *Dispatcher) run() {
 			return
 		}
 		delay := time.Duration(0)
-		if !d.stopping && !d.paused && d.inflight < 4 {
+		if !d.stopping && !d.paused {
 			var err error
 			delay, err = d.launch()
 			if err != nil {
@@ -247,6 +248,31 @@ func (d *Dispatcher) launch() (time.Duration, error) {
 	return d.launchPrepared(nil, nil, false)
 }
 
+// nextWork selects the next opportunity, skipping mailboxes that already have
+// four requests in flight. A saturated mailbox therefore never delays another
+// mailbox's launch; saturated reports that only full mailboxes were skipped, so
+// the caller waits for a completion instead of rescanning.
+func (d *Dispatcher) nextWork(ctx context.Context) (work *Work, saturated bool, err error) {
+	var exhausted []string
+	seen := make(map[string]bool)
+	for {
+		work, err = d.store.NextWork(ctx, exhausted...)
+		if err != nil || work == nil {
+			return work, len(exhausted) > 0, err
+		}
+		if seen[work.ConnectionID] {
+			// The store cannot offer another connection; report the work and let
+			// the caller keep the single per-mailbox bound.
+			return work, false, nil
+		}
+		if d.inflightByConnection[work.ConnectionID] < 4 {
+			return work, false, nil
+		}
+		seen[work.ConnectionID] = true
+		exhausted = append(exhausted, work.ConnectionID)
+	}
+}
+
 // launchPrepared launches one opportunity. A prepared sender skips the
 // authorization step that must run outside the start barrier.
 func (d *Dispatcher) launchPrepared(sender Sender, work *Work, prepared bool) (time.Duration, error) {
@@ -260,13 +286,19 @@ func (d *Dispatcher) launchPrepared(sender Sender, work *Work, prepared bool) (t
 	if fired && work == nil {
 		return -1, nil
 	}
+	saturated := false
 	if work == nil {
-		work, err = d.store.NextWork(ctx)
+		work, saturated, err = d.nextWork(ctx)
 		if err != nil {
 			return 0, err
 		}
 	}
 	if work == nil {
+		if saturated {
+			// Every selectable mailbox already holds four requests; wait for one
+			// of them to complete instead of rescanning due work.
+			return 0, nil
+		}
 		deadline, err := d.store.NextWorkDeadline(ctx)
 		if err != nil {
 			return 0, err
@@ -300,8 +332,8 @@ func (d *Dispatcher) launchPrepared(sender Sender, work *Work, prepared bool) (t
 		return next.Sub(now), nil
 	}
 	if d.inflightByConnection[work.ConnectionID] >= 4 {
-		// The global cap already bounds this; keep the per-mailbox bound
-		// explicit for the documented contract.
+		// This is the only submission bound: each mailbox connection owns four
+		// slots, and another connection's requests never consume them.
 		return 0, nil
 	}
 
@@ -408,10 +440,8 @@ func (d *Dispatcher) send(sender Sender, attempt *Attempt, work *Work) {
 		outcome.State = AttemptReview
 		outcome.PauseMailbox = true
 	}
-	// Pause the in-process coordinator before any persistence call can fail.
-	if outcome.PauseMailbox {
-		d.paused = true
-	}
+	// A provider failure pauses only the affected mailbox. The durable pause is
+	// committed by CompleteAttempt below; other mailboxes keep launching.
 	if err := d.store.CompleteAttempt(context.Background(), attempt.ID, outcome); err != nil {
 		d.pause("Sending stopped because a submission outcome could not be saved. Review unfinished attempts after restarting.")
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -45,14 +46,19 @@ func (f *workerFixture) DispatcherState(context.Context, string, string) (Settin
 	defer f.mu.Unlock()
 	return f.settings, nil
 }
-func (f *workerFixture) NextWork(context.Context) (*Work, error) {
+func (f *workerFixture) NextWork(_ context.Context, exhausted ...string) (*Work, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.nextWorkCalls++
 	if len(f.queue) == 0 || (!f.retryReadyAt.IsZero() && f.now.Before(f.retryReadyAt)) {
 		return nil, nil
 	}
-	return f.queue[0], nil
+	for _, w := range f.queue {
+		if !slices.Contains(exhausted, w.ConnectionID) {
+			return w, nil
+		}
+	}
+	return nil, nil
 }
 func (f *workerFixture) NextWorkDeadline(context.Context) (time.Time, error) {
 	f.mu.Lock()
@@ -90,10 +96,11 @@ func (f *workerFixture) BeginAttempt(_ context.Context, w *Work, start, next tim
 	}
 	// A durable Stop clears the queue; a launch that raced past it must see the
 	// same refusal the real store reports for work that is no longer eligible.
-	if len(f.queue) == 0 {
+	selected := slices.Index(f.queue, w)
+	if selected < 0 {
 		return nil, ErrNoWork
 	}
-	f.queue = f.queue[1:]
+	f.queue = slices.Delete(f.queue, selected, selected+1)
 	f.intents++
 	return &Attempt{ID: fmt.Sprint(f.intents), Work: *w}, nil
 }
@@ -119,9 +126,22 @@ func (f *workerFixture) SetCooldown(_ context.Context, _, _ string, until time.T
 	f.settings.CooldownUntil = until
 	return nil
 }
-func (f *workerFixture) Recover(context.Context) error                      { f.recovered = true; return nil }
-func (f *workerFixture) PauseMailbox(context.Context, string, string) error { return nil }
-func (f *workerFixture) PauseAll(context.Context, string) error             { return nil }
+func (f *workerFixture) Recover(context.Context) error { f.recovered = true; return nil }
+func (f *workerFixture) PauseMailbox(_ context.Context, ownerID, _ string) error {
+	// The real store pauses that operator's tasks, so no further queued work for
+	// the mailbox exists. Mirror that contract instead of a process-wide stop.
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	kept := f.queue[:0]
+	for _, w := range f.queue {
+		if w.OwnerID != ownerID {
+			kept = append(kept, w)
+		}
+	}
+	f.queue = kept
+	return nil
+}
+func (f *workerFixture) PauseAll(context.Context, string) error { return nil }
 func (f *workerFixture) PauseTask(context.Context, string, string, string) error {
 	return nil
 }
@@ -372,7 +392,7 @@ const (
 )
 
 // TestWorkerInFlightForCountsOnlyOwnerRequests proves the dispatcher tracks
-// in-flight requests per owner: two mailboxes filling the four global slots are
+// in-flight requests per owner: two mailboxes filling their own slots are
 // counted separately, and one owner's requests never inflate another's total.
 func TestWorkerInFlightForCountsOnlyOwnerRequests(t *testing.T) {
 	f := newWorkerFixture(0)
@@ -437,27 +457,38 @@ func TestWorkerIntentFailureSendsNothingAndCannotWakePastStorageBarrier(t *testi
 	}
 }
 
-func TestWorkerManualMailboxPauseSleepsUntilExplicitAction(t *testing.T) {
+// A provider failure pauses only the affected mailbox: its durable pause ends
+// that mailbox's queued work, but the dispatcher-wide stop stays clear so other
+// mailboxes keep launching.
+func TestWorkerMailboxPauseStopsOnlyItsOwnWork(t *testing.T) {
 	f := newWorkerFixture(10)
 	d := startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
 		return SendResult{Kind: OutcomeAuthFailure, PauseMailbox: true}
 	}))
 	eventually(t, func() bool {
 		d.mu.Lock()
-		paused, inflight := d.paused, d.inflight
+		inflight, paused := d.inflight, d.paused
 		d.mu.Unlock()
 		f.mu.Lock()
 		defer f.mu.Unlock()
-		return paused && inflight == 0 && f.results >= 1 && f.settleCalls >= 2
+		return inflight == 0 && !paused && f.results >= 1 && len(f.queue) == 0
 	})
 	f.mu.Lock()
-	workCalls, deadlineCalls, settles := f.nextWorkCalls, f.deadlineCalls, f.settleCalls
+	results, nextWorkCalls := f.results, f.nextWorkCalls
 	f.mu.Unlock()
 	time.Sleep(30 * time.Millisecond)
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if workCalls != f.nextWorkCalls || deadlineCalls != f.deadlineCalls || settles != f.settleCalls {
-		t.Fatal("manually paused dispatcher continued querying SQLite")
+	if results != f.results {
+		t.Fatal("paused mailbox sent work after its tasks were paused")
+	}
+	if nextWorkCalls > f.nextWorkCalls+1 {
+		t.Fatal("paused mailbox kept querying SQLite")
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.paused || d.fatalStorage {
+		t.Fatal("a mailbox-scoped pause stopped the whole dispatcher")
 	}
 }
 
@@ -479,6 +510,48 @@ func TestWorkerOutcomeSaveFailureHaltsFutureStarts(t *testing.T) {
 	}
 	if f.intents >= 5 {
 		t.Fatal("continued launching after storage failure")
+	}
+}
+
+// When every mailbox is full, due queued work must not make the coordinator
+// rescan SQLite in a loop; it waits for a request to complete.
+func TestWorkerSaturatedMailboxesWaitWithoutRescanning(t *testing.T) {
+	f := newWorkerFixture(0)
+	f.mu.Lock()
+	f.retryReadyAt = f.now.Add(-time.Minute)
+	for i := range 12 {
+		owner, connection := fixtureOwner, fixtureConnection
+		if i%2 == 1 {
+			owner, connection = fixtureOwnerTwo, fixtureConnectionTwo
+		}
+		f.queue = append(f.queue, &Work{Kind: KindTest, OwnerID: owner, ConnectionID: connection, Recipient: fmt.Sprintf("%d@example.com", i), Subject: "frozen", Body: "<p>body</p>"})
+	}
+	f.mu.Unlock()
+	entered := make(chan struct{}, 12)
+	release := make(chan struct{})
+	startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		entered <- struct{}{}
+		<-release
+		return SendResult{Kind: OutcomeSubmitted}
+	}))
+	for range 8 {
+		select {
+		case <-entered:
+		case <-time.After(time.Second):
+			t.Fatal("both mailboxes did not fill their four slots")
+		}
+	}
+	time.Sleep(30 * time.Millisecond)
+	f.mu.Lock()
+	workCalls, deadlineCalls, settles := f.nextWorkCalls, f.deadlineCalls, f.settleCalls
+	f.mu.Unlock()
+	time.Sleep(30 * time.Millisecond)
+	f.mu.Lock()
+	rescanned := workCalls != f.nextWorkCalls || deadlineCalls != f.deadlineCalls || settles != f.settleCalls
+	f.mu.Unlock()
+	close(release)
+	if rescanned {
+		t.Fatal("fully saturated dispatcher kept querying SQLite")
 	}
 }
 

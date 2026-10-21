@@ -633,7 +633,7 @@ func SendingPage(data SendingData) templ.Component {
 								}()
 							}
 							ctx = templ.InitializeContext(ctx)
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<h2 class=\"font-bold text-[1.2rem] tracking-[-.02em]\" id=\"pacing-heading\">Mailbox pacing</h2><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Default 25 starts per minute; maximum 30 and four in flight across candidates, tests and retries. This mailbox has its own pacing and cooldown; a provider throttle pauses only this mailbox. Its own mail clients consume mailbox capacity outside this app's observations.</p><form method=\"post\" action=\"")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<h2 class=\"font-bold text-[1.2rem] tracking-[-.02em]\" id=\"pacing-heading\">Mailbox pacing</h2><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Default 25 starts per minute; maximum 30 and four in flight for this mailbox across candidates, tests and retries. This mailbox has its own pacing and cooldown; a provider throttle pauses only this mailbox. Its own mail clients consume mailbox capacity outside this app's observations.</p><form method=\"post\" action=\"")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}

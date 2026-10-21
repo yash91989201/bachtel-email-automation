@@ -238,7 +238,7 @@ count and confirmation; browser closure and logout do not stop accepted work.
 
 Pacing is per mailbox with a default rate of 25 starts per minute (integer
 settings 1–30), persisted pacing and provider cooldowns. At most four
-submission requests run at once overall and at most four per mailbox.
+submission requests run at once per mailbox; there is no application-wide cap.
 Cooldowns, throttling, authorization failures and service pauses affect only
 the affected mailbox; a shared storage failure stops all launches.
 **SUBMITTED** means the provider accepted the request, not that it was

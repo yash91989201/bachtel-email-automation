@@ -114,9 +114,9 @@ Local attempt IDs are audit identifiers, not Microsoft idempotency guarantees.
 ## Pacing and provider responses
 
 Each mailbox has one coordinator using `golang.org/x/time/rate` with burst 1.
-At most four submission requests run at once overall and at most four per
-mailbox. A mailbox defaults to 25 starts per minute; browser, server and
-stored settings accept only integers 1 through 30. Starts are evenly
+At most four submission requests run at once per mailbox; there is no
+application-wide cap. A mailbox defaults to 25 starts per minute; browser,
+server and stored settings accept only integers 1 through 30. Starts are evenly
 spaced, and persisted recent starts enforce the rolling allowance after rate
 changes and restarts. When there is no eligible work, the coordinator waits for
 an operator action, a submission result or the earliest persisted retry time.

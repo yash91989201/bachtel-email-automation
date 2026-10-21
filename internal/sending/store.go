@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/pocketbase/dbx"
@@ -250,8 +251,9 @@ func workFrom(app core.App, task, member, connection *core.Record) (*Work, error
 
 // NextWork selects one due unit of work for a usable mailbox. Tasks rotate so
 // one busy campaign cannot monopolize opportunities, and work only exists for
-// connections that are currently connected.
-func (s *Store) NextWork(ctx context.Context) (*Work, error) {
+// connections that are currently connected. Connection IDs passed as exhausted
+// are skipped so a mailbox with no free slots cannot delay another mailbox.
+func (s *Store) NextWork(ctx context.Context, exhausted ...string) (*Work, error) {
 	if s.options.RestoreReview {
 		return nil, nil
 	}
@@ -265,6 +267,9 @@ func (s *Store) NextWork(ctx context.Context) (*Work, error) {
 			continue
 		}
 		work := attemptFrom(r).Work
+		if slices.Contains(exhausted, work.ConnectionID) {
+			continue
+		}
 		if err := s.workConnectionUsable(work.OwnerID, work.ConnectionID); err != nil {
 			continue
 		}
@@ -303,6 +308,9 @@ func (s *Store) NextWork(ctx context.Context) (*Work, error) {
 		}
 		if e != nil {
 			return nil, e
+		}
+		if slices.Contains(exhausted, connection.Id) {
+			continue
 		}
 		members, e := s.app.FindRecordsByFilter(intake.TaskCandidatesCollection, "task={:task} && dispatch_state='reserved' && (retry_at='' || retry_at <= {:now})", "source_row", 1, 0, dbx.Params{"task": task.Id, "now": now})
 		if e != nil {
