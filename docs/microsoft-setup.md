@@ -1,18 +1,28 @@
 # Microsoft connection setup
 
-First-time setup for the confidential Microsoft connection: register the
-application in Entra ID, configure the server, provision each operator, and
-have each operator connect their own Microsoft 365 mailbox in the configured
-tenant.
+Each operator connects their own Microsoft 365 mailbox. The application
+registration belongs to the operator, not to the deployment: every operator
+creates — or is given — an Entra app registration in their own tenant, saves
+its Tenant ID, Client ID and Client Secret on `/connection`, and then signs in.
+The deployment supplies only the public origin and the credential-encryption
+key; it holds no Microsoft credentials.
+
+The callback URI is fixed and derived from the deployment origin: exactly
+`APP_ORIGIN` + `/connection/callback`, for example
+`https://mail.example.com/connection/callback`. The connection page displays
+the exact URI to register.
 
 ## 1. Register the application in Entra ID
+
+The provider or tenant administrator creates the app registration in the
+operator's own tenant:
 
 1. Open the Entra ID admin portal (**Microsoft Entra ID > App registrations**)
    and choose **New registration**.
 2. Name it (for example `bachtel-email-automation`).
 3. Supported account types: **Accounts in this organizational directory only**
-   (single tenant). Note the **Directory (tenant) ID** — this is
-   `MS_TENANT_ID`.
+   (single tenant) in the operator's own tenant. Note the **Directory (tenant)
+   ID** — the operator saves this as **Tenant ID** on `/connection`.
 4. Platform: **Web**. Do not use the mobile/SPA platforms: the flow is a
    confidential server-side web client.
 5. Redirect URI: exactly `<APP_ORIGIN>/connection/callback`, for example
@@ -21,7 +31,12 @@ tenant.
    scheme (`https`), host, port, and path. An `http` callback is rejected when
    `APP_ORIGIN` is `https`.
 
-Record the **Application (client) ID** — this is `MS_CLIENT_ID`.
+Record the **Application (client) ID** — the operator saves this as **Client
+ID** on `/connection`.
+
+Each operator may use a separate single-tenant registration in their own
+tenant. There is no deployment-wide tenant restriction: one operator's tenant
+never limits another operator's, and no shared registration is required.
 
 ## 2. Delegated permissions
 
@@ -47,11 +62,14 @@ Do **not** add:
 ## 3. Client secret
 
 1. **Certificates & secrets > New client secret**. Record the secret
-   **Value** immediately — it is shown once. This is `MS_CLIENT_SECRET`.
+   **Value** immediately — it is shown once. The operator saves it as
+   **Client Secret** on `/connection`.
 2. Set an expiry your operations team can rotate before it lapses. When
-   rotation happens, update `MS_CLIENT_SECRET` and restart the server; a
-   stale secret surfaces as `reconnect_required` once refresh is rejected.
-3. Never commit the secret. It lives only in the server environment.
+   rotation happens, save the new secret on `/connection` and sign in again;
+   see [Rotate the application settings](#8-rotate-the-application-settings-for-the-same-mailbox).
+   A stale secret surfaces as `reconnect_required` once refresh is rejected.
+3. Never commit the secret. It is stored encrypted under the deployment's
+   `APP_ENCRYPTION_KEY`, is never displayed again, and is never pre-filled.
 
 ## 4. Admin consent and Conditional Access
 
@@ -63,41 +81,38 @@ admin-consent or Conditional Access requirements. Conditional Access policies
 `login.microsoftonline.com`) apply to this sign-in like any other — if policy
 blocks or later revokes the session, the connection moves to
 `reconnect_required` and requires an interactive reconnect that satisfies the
-policy. Do not weaken tenant policy to make the connection work.
+policy. Do not weaken tenant policy to make the connection work. Consent and
+policy are per tenant, so one operator's policy never blocks another
+operator's sign-in.
 
-## 5. Server configuration
+## 5. Save the settings on the connection page
 
-Set the environment variables documented in `.env.example` (see the
-configuration table in `README.md`):
+1. Sign in at `<APP_ORIGIN>/login` with the operator account.
+2. Open **`/connection`** and use the **Microsoft 365** section.
+3. Enter the **Tenant ID** — the directory UUID of the operator's tenant.
+   Shared aliases such as `common` or `organizations` are rejected: the tenant
+   must be explicit, so the verified identity stays tenant-qualified.
+4. Enter the **Client ID** — the application UUID.
+5. Enter the **Client Secret** — write-only. It is never shown again and
+   never pre-filled into the form.
+6. Save. The page confirms the saved registration and displays the callback
+   URI to register in Entra ID.
 
-```sh
-# Generate the credential-encryption key; back it up separately from the
-# database. Losing it keeps the stored ciphertext but forces a reconnect.
-openssl rand -base64 32   # -> APP_ENCRYPTION_KEY
+The Tenant ID and Client ID must both be UUIDs and the Client Secret must not
+be empty; the form refuses anything else before it is stored.
 
-export APP_ORIGIN="https://mail.example.com"
-export APP_ENCRYPTION_KEY="..."     # SECRET
-export MS_TENANT_ID="00000000-0000-0000-0000-000000000000"
-export MS_CLIENT_ID="00000000-0000-0000-0000-000000000000"
-export MS_CLIENT_SECRET="..."       # SECRET
-# MS_REDIRECT_URL defaults to APP_ORIGIN + /connection/callback; set it only
-# to override that default.
-```
+### Staged registration
 
-`APP_ENCRYPTION_KEY` is distinct from PocketBase's own `--encryptionEnv`
-settings key and from `MS_CLIENT_SECRET`; each protects different material.
-With Docker Compose, put these in `.env` — `compose.yaml` passes them into the
-container. `make dev` reads the same `.env` (copy `.env.example` to `.env`); a
-plain `go run` needs the variables exported in the shell instead.
+Saving stages the registration. The staged settings become **active only after
+a successful sign-in under them**. Until then the previously active
+registration and its credentials stay untouched, and a failed sign-in changes
+nothing. A sign-in attempt that started before the save cannot install tokens
+under the changed registration either: its callback is refused and the
+operator starts a fresh attempt.
 
-Missing or incorrect settings never crash the server: the connection page
-names the missing variables, or (for a wrong/missing encryption key) reports
-an actionable credential error. While the connection is unusable, no email
-can be sent and the stored ciphertext is never overwritten or exposed. Missing
-Microsoft settings disable only Microsoft readiness; GoDaddy Titan mailboxes
-still connect (see [titan-setup.md](titan-setup.md)). Reconnecting the same
-mailbox or replacing it with a different one is documented in
-[mailbox-replacement.md](mailbox-replacement.md).
+The secret is verified by Microsoft at sign-in, not locally. A rejected secret
+therefore appears as a failed sign-in, and the previous registration remains
+active.
 
 ## 6. Provision the operator
 
@@ -132,35 +147,66 @@ limiting and cookie protection.
 1. Start the server and open `<APP_ORIGIN>/login`.
 2. Sign in with the operator credentials.
 3. Open **`/connection`** and choose **Connect**. You are redirected to
-   Microsoft; sign in with **that operator's own mailbox address** in the
-   configured tenant.
+   Microsoft; sign in with **that operator's own mailbox address** in their
+   own tenant.
 4. Approve the delegated permissions. You are redirected back to
    `/connection/callback`.
 5. The connection page now shows **connected** and the verified mailbox
    address. The identity is verified against Microsoft's `/me` response
-   (stable account id and verified address), and that address becomes the
-   operator's exclusive mailbox claim. Every operator repeats this flow for
-   their own mailbox; a mailbox already claimed by any other operator (even
-   while disconnected) is refused.
+   (stable account id and verified address) and is qualified by the operator's
+   tenant, and that address becomes the operator's exclusive mailbox claim.
+   Every operator repeats this flow for their own mailbox; a mailbox already
+   claimed by any other operator (even while disconnected) is refused.
 
-## 8. Failure table
+## 8. Rotate the application settings for the same mailbox
+
+Rotating the client secret, or moving to a new client id, for the **same**
+verified mailbox:
+
+1. Create the new client secret in Entra ID, or record the new application
+   id.
+2. Save the new **Tenant ID**, **Client ID** and **Client Secret** on
+   `/connection`. The staged registration waits; the active registration and
+   its credentials are untouched.
+3. Sign in again from `/connection` under the staged registration.
+
+The result:
+
+- The new registration becomes active only with that successful sign-in.
+- Active submissions drain first, so nothing is sent under half-changed
+  credentials.
+- History, candidates, campaigns, templates and a still-applicable
+  received-format approval are preserved.
+- Work never resumes automatically: paused or interrupted tasks stay paused
+  until the operator resumes the safe remainder explicitly on the sending
+  page.
+- A sign-in that verifies a **different** mailbox is not a rotation. It goes
+  through the explicit replacement flow in
+  [mailbox-replacement.md](mailbox-replacement.md).
+
+## 9. Failure table
 
 | Operator-visible state | Cause | Fix |
 |---|---|---|
+| **no saved Microsoft settings** | The operator has not saved a Tenant ID, Client ID and Client Secret on `/connection`. | Enter the three values on `/connection`, save, then sign in. |
+| **invalid settings** | The Tenant ID or Client ID is not a UUID (shared aliases such as `common` or `organizations` are rejected), or the Client Secret is empty. | Correct the field on `/connection` and save again. |
+| **settings changed / stale** | The registration changed after the sign-in attempt started, so the callback cannot install tokens under it. | Start a fresh sign-in from `/connection`. Nothing was changed. |
 | **disconnected** | Never connected, or the operator disconnected the mailbox. | Connect from `/connection`. |
 | **connected** | Working. | None. |
-| **reconnect_required** | Microsoft rejected refresh (revoked consent, rotated/expired client secret, Conditional Access change), or authorization definitively failed. | Rotate/verify `MS_CLIENT_SECRET` and tenant policy if needed, then reconnect from `/connection`. |
-| **missing configuration** (names `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, ...) | Required environment variables absent or empty. | Set the named variables (`.env` for Compose), restart, reconnect. |
-| **sign-in attempt expired, already used, or cleared by a restart** | Sign-in attempts last 10 minutes, are single-use even after a failed token exchange, and are held in server memory. Restarting after an environment change clears pending attempts. | Open `/connection` and click **Connect** or **Reconnect** for a fresh sign-in. Do not refresh or reuse an old `/connection/callback?...` URL. Keep the server running until sign-in finishes. |
+| **reconnect_required** | Microsoft rejected refresh (revoked consent, rotated or expired client secret, Conditional Access change), or authorization definitively failed. | Save fresh settings if the secret expired, then sign in again from `/connection`. |
+| **sign-in attempt expired, already used, or cleared by a restart** | Sign-in attempts last 10 minutes, are single-use even after a failed token exchange, and are held in server memory. Restarting the server clears pending attempts. | Open `/connection` and click **Connect** or **Reconnect** for a fresh sign-in. Do not refresh or reuse an old `/connection/callback?...` URL. Keep the server running until sign-in finishes. |
 | **unreadable credentials / encryption key error** | `APP_ENCRYPTION_KEY` missing or not base64 for 32 bytes; or the key changed. Ciphertext is preserved. | Restore the original key (`APP_ENCRYPTION_KEY`), or reconnect the mailbox under the new key. |
 | **disconnect refused while submissions are in flight** | Submissions are in progress; disconnect is blocked so active work can settle. | Wait for the in-flight submissions to settle, then disconnect again. |
 
-## 9. Session and lifecycle semantics
+## 10. Session and lifecycle semantics
 
-- **Reconnect or disconnect never resumes interrupted candidate tasks.**
-  Tasks interrupted by a connection change stay interrupted; history and
-  attempts are unchanged.
+- **Reconnect, rotation or disconnect never resumes interrupted candidate
+  tasks.** Tasks interrupted by a connection change stay interrupted; history
+  and attempts are unchanged.
 - **Sign-out ends only the browser session.** It does not cancel any
   server-side work already running.
 - **Disconnect is refused while submissions are in flight**; dispatch stops
   launching new requests and settles or classifies the active ones first.
+- **Settings are private to their owner.** Another operator cannot read or use
+  them, and one operator's missing, invalid or expired registration never
+  disables another operator's Microsoft or Titan connection.

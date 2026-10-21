@@ -33,6 +33,33 @@ the current connection — is a reconnect, not a replacement:
 Disconnect is refused while that operator's submissions are in flight:
 dispatch stops launching new requests and settles the active ones first.
 
+## Rotate the application settings for the same mailbox
+
+Rotating the Microsoft client secret, or moving to a new client id, for the
+**same** verified mailbox is a settings change, not a replacement. The
+operator does it on `/connection`:
+
+1. Save the new Tenant ID, Client ID and Client Secret on `/connection`. The
+   new registration is staged; the active registration and its credentials
+   stay untouched.
+2. Sign in again from `/connection` under the staged registration.
+
+What that means:
+
+- **No data is lost.** History, candidates, campaigns, templates and a
+  still-applicable received-format approval are preserved.
+- **Active submissions drain first**, so nothing is sent under half-changed
+  credentials.
+- **Work never resumes automatically.** Paused or interrupted tasks stay
+  paused until the operator resumes the safe remainder explicitly on the
+  sending page.
+- The mailbox claim and the sender identity do not change.
+
+If the sign-in under the new settings verifies a **different** mailbox, it is
+not a rotation: the application requires the explicit replacement flow below
+before anything changes. Provider setup and rotation are documented in
+[microsoft-setup.md](microsoft-setup.md).
+
 ## Replace with a different mailbox
 
 Connecting a different mailbox (either provider) always goes through an

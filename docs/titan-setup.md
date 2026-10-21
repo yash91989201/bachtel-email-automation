@@ -1,8 +1,8 @@
 # GoDaddy Titan connection setup
 
-Titan mailboxes need no provider registration and no Microsoft settings. The
-operator connects their own mailbox from `/connection`; the deployment needs
-only `APP_ENCRYPTION_KEY` to store the password encrypted.
+Titan mailboxes need no provider registration. The operator connects their own
+mailbox from `/connection`; the deployment needs only `APP_ENCRYPTION_KEY` to
+store the password encrypted.
 
 ## Provider endpoint
 
@@ -21,9 +21,7 @@ only. Leave it unset in production.
 
 `APP_ENCRYPTION_KEY` is required: it encrypts every operator's stored mailbox
 credentials, including Titan passwords. Generate and back it up as described
-in the configuration table in `README.md`. Missing Microsoft settings
-(`MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_REDIRECT_URL`) do not
-affect Titan; they disable only Microsoft readiness.
+in the configuration table in `README.md`.
 
 ## Connect the mailbox
 

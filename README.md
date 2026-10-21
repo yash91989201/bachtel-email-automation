@@ -132,37 +132,43 @@ of PocketBase's password verification.
 
 ## Configuration
 
-All application settings are read from the environment (documented with
+All deployment settings are read from the environment (documented with
 placeholders in `.env.example`; Compose maps them into the container, and
-`make dev` sources a local `.env`).
-Microsoft settings may be absent at startup: the server starts anyway and the
-connection reports an actionable configuration error instead.
+`make dev` sources a local `.env`). The environment holds deployment settings:
+the public origin, the credential-encryption key, restore review, the converter
+path, the intake bounds and the Titan test endpoint.
+
+There are no Microsoft environment credentials. Each operator saves their own
+Microsoft **Tenant ID**, **Client ID** and **Client Secret** on the protected
+`/connection` page before signing in; the Client Secret is write-only and is
+never shown or pre-filled again. The callback URI is fixed and derived from
+`APP_ORIGIN`: exactly `APP_ORIGIN` + `/connection/callback`. The connection
+page displays it for registration.
 
 | Variable | Purpose |
 |---|---|
-| `APP_ORIGIN` | Public `https` origin, no trailing slash (e.g. `https://mail.example.com`). Drives cookie security, trusted-origin checks, and the default callback URL. |
-| `APP_ENCRYPTION_KEY` | **Secret.** Base64 encoding of exactly 32 bytes; encrypts every operator's mailbox credentials at rest. Generate with `openssl rand -base64 32`. |
-| `MS_TENANT_ID` | Microsoft Entra tenant (directory) id. |
-| `MS_CLIENT_ID` | Application (client) id from the app registration. |
-| `MS_CLIENT_SECRET` | **Secret.** Client secret from the app registration. |
-| `MS_REDIRECT_URL` | Redirect URI sent to Microsoft. Defaults to `APP_ORIGIN` + `/connection/callback` and must match the app registration exactly. |
-| `MS_AUTHORITY_URL`, `MS_GRAPH_BASE_URL` | Advanced overrides for simulated authorization/Graph servers; leave unset in production. |
+| `APP_ORIGIN` | Public `https` origin, no trailing slash (e.g. `https://mail.example.com`). Drives cookie security, trusted-origin checks, and the derived callback URL (`APP_ORIGIN` + `/connection/callback`). |
+| `APP_ENCRYPTION_KEY` | **Secret.** Base64 encoding of exactly 32 bytes; encrypts every operator's mailbox credentials at rest — Microsoft tokens, Titan passwords and saved Microsoft client secrets. Generate with `openssl rand -base64 32`. |
+| `PANDOC_PATH` | Optional converter executable; defaults to the packaged `pandoc`. |
+| `APP_RESTORE_REVIEW` | Optional; `true` disables sending, scheduling, retries and resends until a restored instance is reconciled. |
 | `TITAN_SMTP_ADDRESS` | Advanced override of the Titan SMTP endpoint for simulated servers. Leave unset in production; the fixed provider endpoint is `smtpout.secureserver.net:465`. |
 | `INTAKE_MAX_UPLOAD_BYTES` | Upload limit for one task workbook, in bytes. Defaults to 10 MiB, which is also the supported ceiling. |
 | `INTAKE_UNZIP_SIZE_LIMIT`, `INTAKE_UNZIP_XML_SIZE_LIMIT` | Expanded workbook archive and single-part limits, in bytes. Default to 64 MiB and 16 MiB. |
 
 `APP_ENCRYPTION_KEY` is separate from PocketBase's own `--encryptionEnv`
-settings key and separate from `MS_CLIENT_SECRET`; each protects different
-material. Back it up independently of the database: losing it leaves the
-stored ciphertext intact but requires reconnecting affected mailboxes. A
-missing or wrong key does not crash the server — affected connections report an actionable
+settings key; each protects different material. It protects both the stored
+mailbox credentials (Microsoft tokens, Titan passwords) and every operator's
+saved Microsoft client secret. Back it up independently of the database:
+losing it leaves the stored ciphertext intact but requires reconnecting
+affected mailboxes. A missing or wrong key does not crash the server — affected connections report an actionable
 error and no email can be sent.
 
-See [docs/microsoft-setup.md](docs/microsoft-setup.md) for the full first-time
+See [docs/microsoft-setup.md](docs/microsoft-setup.md) for the full per-operator
 Microsoft setup, [docs/titan-setup.md](docs/titan-setup.md) for connecting a
 GoDaddy Titan mailbox, and
 [docs/mailbox-replacement.md](docs/mailbox-replacement.md) for reconnecting the
-same mailbox or replacing it with a different one.
+same mailbox, rotating its application settings, or replacing it with a
+different one.
 
 ## DOCX converter
 
@@ -255,7 +261,7 @@ approval workflow, scheduling, retry and review actions, and shutdown behavior.
 cmd/server/main.go              Application entrypoint and PocketBase setup
 cmd/server/provision.go         One-time operator provisioning command
 internal/
-  config/                       Environment configuration (origin, Microsoft and Titan settings, encryption key)
+  config/                       Deployment configuration (origin, encryption key, restore review, intake bounds, provider endpoints)
   campaign/                     Campaign revisions, mapping validation, normalization and the single render path
   convert/                      Sandboxed DOCX-to-HTML conversion (pinned Pandoc) and document inspection
   intake/                       Task workbook validation, candidate identity, membership snapshots and reservations
@@ -292,9 +298,9 @@ internal/
     static/                     Embedded files and generated CSS/JS
 docs/campaign-templates.md      Placeholder syntax, mapping/formatting rules, DOCX support and limits
 docs/task-intake.md             Task workbook support, header matching, duplicate handling and limits
-docs/microsoft-setup.md         Microsoft app registration and first-time connection setup
+docs/microsoft-setup.md         Per-operator Microsoft app registration and connection setup
 docs/titan-setup.md             GoDaddy Titan mailbox connection setup
-docs/mailbox-replacement.md     Reconnecting the same mailbox and replacing it with a different one
+docs/mailbox-replacement.md     Reconnecting the same mailbox, rotating its application settings, and replacing it with a different one
 web/css/app.css                 Tailwind entry and application layout styles
 web/css/theme.css               Resolved preset tokens and application status colors
 web/css/components.css          Bachtel styling for owned UI primitives

@@ -74,26 +74,27 @@ runtime container.
 6. Health check path: `/health`. Start period: at least 10 seconds.
 7. Set the stop grace period to `45` seconds.
 8. Register the Microsoft redirect URI exactly as `APP_ORIGIN` +
-   `/connection/callback` (unless `MS_REDIRECT_URL` overrides it) on the Entra
-   app registration.
+   `/connection/callback` on each operator's own Entra app registration. The
+   connection page displays the same URI for the operator to copy.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `APP_ORIGIN` | yes | Public HTTPS origin: cookie security, origin checks, callback default |
-| `APP_ENCRYPTION_KEY` | yes for mailbox use | Base64 of 32 random bytes; encrypts stored mailbox credentials (Microsoft tokens and Titan passwords) |
-| `MS_TENANT_ID` | yes for mailbox use | Entra tenant id |
-| `MS_CLIENT_ID` | yes for mailbox use | Entra application id |
-| `MS_CLIENT_SECRET` | yes for mailbox use | Entra client secret |
-| `MS_REDIRECT_URL` | optional | Exact callback override; must match the registration |
+| `APP_ORIGIN` | yes | Public HTTPS origin: cookie security, origin checks, derived callback URI |
+| `APP_ENCRYPTION_KEY` | yes for mailbox use | Base64 of 32 random bytes; encrypts stored mailbox credentials (Microsoft tokens and Titan passwords) and every operator's saved Microsoft client secret |
 | `PANDOC_PATH` | optional | Converter executable; defaults to the packaged `pandoc` |
 | `APP_RESTORE_REVIEW` | only after a restore | `true` disables sending, scheduling, retries and resends |
 | `INTAKE_*` | optional | Upload and expanded-archive bounds |
+| `TITAN_SMTP_ADDRESS` | optional | Titan SMTP endpoint override for simulated servers only; leave unset in production |
 
-Missing Microsoft settings do not prevent startup: the connection page reports
-the missing names without showing values, Microsoft readiness stays disabled,
-and GoDaddy Titan mailboxes still connect with no Microsoft settings at all.
-Dispatch cannot proceed until the operator has a connected mailbox and an
-approved test. A malformed origin or callback fails startup.
+These are the deployment settings. There are no Microsoft tenant, client id,
+client secret or redirect environment variables: each operator saves their own
+Tenant ID, Client ID and Client Secret on the protected `/connection` page, and
+the callback URI is derived from `APP_ORIGIN`. Missing operator
+settings affect only that operator: the connection page reports them without
+showing values, other operators' connections stay usable, and GoDaddy Titan
+mailboxes connect without any Microsoft setup. Dispatch cannot proceed until
+the operator has a connected mailbox and an approved test. A malformed origin
+fails startup.
 
 ### Proxy trust
 
@@ -115,17 +116,36 @@ Back up `APP_ENCRYPTION_KEY` separately from the backup. Losing it leaves the
 stored connection ciphertext intact but requires reconnecting every affected
 operator's mailbox.
 
+Two different things are backed up, and they are protected differently:
+
+- **Deployment settings** — `APP_ORIGIN` and `APP_ENCRYPTION_KEY`. The origin
+  is public configuration and is re-entered on the new instance. The
+  encryption key is a secret: store it apart from the backup archive and from
+  source control.
+- **Operator-owned data** — each operator's saved provider settings (Microsoft
+  Tenant ID, Client ID and the encrypted client secret), the encrypted
+  mailbox credentials (Microsoft tokens, Titan passwords), mailbox claims,
+  campaigns, uploads, approvals and attempt history. This lives in the data
+  directory and is part of the backup archive. It is encrypted with
+  `APP_ENCRYPTION_KEY`, so it is only readable with that key.
+
+A backup therefore does not contain the key, and the key alone does not
+contain operator settings. Both are needed to restore a working instance.
+
 ## Restore
 
 1. Restore into an isolated instance with no production traffic. A restore
    preserves every operator account, mailbox claim, connection and attempt
    history as of the backup.
 2. Restore the matching `APP_ENCRYPTION_KEY` separately. A matching key makes
-   the stored connections usable again without re-consent; a missing key leaves
-   connections unreadable and sending disabled.
-3. Set `APP_RESTORE_REVIEW=true` and start the instance. Sending, scheduling,
-   retries and resends are refused; stop, history resolution and exports remain
-   available.
+   the stored connections usable again without re-consent, and keeps every
+   operator's saved provider settings readable — different tenants, different
+   client registrations, Titan settings, owners and exclusive mailbox claims
+   are all preserved. A missing or different key leaves connections and saved
+   provider settings unreadable and sending disabled.
+3. Set `APP_RESTORE_REVIEW=true` and start the instance. Dispatch starts
+   paused: sending, scheduling, retries and resends are refused; stop, history
+   resolution and exports remain available.
 4. Compare the backup's as-of time with any mailbox or provider evidence
    collected since that time. Recipients submitted after the backup are absent
    from the restored database, and a restored row that says "never submitted"
@@ -133,6 +153,10 @@ operator's mailbox.
    verified submissions as already submitted).
 5. Remove `APP_RESTORE_REVIEW` and restart only after reconciliation. Review
    recovered tasks on their sending page before resuming any remainder.
+
+A restored instance never resumes work on its own, and it never reassigns
+credentials: each operator's connection stays on their own saved
+registration.
 
 ## Rollback
 
