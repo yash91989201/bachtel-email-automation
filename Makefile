@@ -34,7 +34,13 @@ fmt:
 	go tool templ fmt internal/web
 
 # Keep local verification and CI on the same commands. No .env is sourced.
-.PHONY: check check-format check-generated lint vulncheck
+.PHONY: check check-format check-generated lint lint-tailwind fix-tailwind vulncheck
+
+lint-tailwind:
+	npm run lint:tailwind
+
+fix-tailwind:
+	npm run fix:tailwind
 
 check-format:
 	bash scripts/check-format.sh

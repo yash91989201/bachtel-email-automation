@@ -279,10 +279,27 @@ The existing OpenSpec configuration and skills are preserved.
 make generate    # go generate -> module-pinned go tool templ
 make assets      # bundle component JS, copy Alpine/htmx, fonts and web/js; compile Tailwind CSS
 make fmt         # format Go and templ sources
+make lint-tailwind # check all tracked and non-ignored new .templ files for Tailwind diagnostics
+make fix-tailwind # apply Tailwind canonical-class code actions, then check remaining diagnostics
 make test        # regenerate, build assets, go test, go vet
 make build       # build bin/bachtel with assets embedded
 ./bin/bachtel serve --http=127.0.0.1:8090 --dir=./pb_data
 ```
+
+Run `npm ci` first to install the pinned development tools. `npm run lint:tailwind`
+is equivalent to `make lint-tailwind` and needs no editor. It uses Tailwind's
+language server with `web/css/app.css`, including canonical-class suggestions,
+and prints `file:line:column` diagnostics. It checks source without changing it.
+For the npm command, exit 0 means clean, 1 means diagnostics were found, and 2
+means the check could not complete. Run `npm run test:tailwind` to verify it against temporary
+clean and warning-producing templates. This is a separate check from `make check`.
+
+Use `npm run fix:tailwind` (or `npm run lint:tailwind -- --fix`) to apply the
+language server's canonical-class code actions, as an editor would. It only
+applies canonical suggestions with one replacement, then checks the changed
+text again; other warnings remain visible and keep the exit code nonzero.
+Review the diff, format changed `.templ` sources and regenerate their committed
+`*_templ.go` output before running `make check`.
 
 Node.js is build tooling only. The binary can be copied to another compatible
 machine and run from any working directory; use an absolute `--dir` path to
