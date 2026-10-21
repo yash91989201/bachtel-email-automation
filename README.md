@@ -5,9 +5,10 @@ PocketBase. One executable serves the UI, static assets, PocketBase API, and
 admin dashboard on one port. PocketBase runs in-process with SQLite; there is
 no separate database service or frontend server.
 
-The application includes operator sign-in, a Microsoft connection for the fixed
-HR mailbox, campaign templates, Excel intake, and durable background sending
-and recovery controls. Candidate starts require explicit operator authorization
+The application includes operator sign-in, operator-owned mailbox connections
+(Microsoft 365 delegated OAuth or GoDaddy Titan SMTP), campaign templates,
+Excel intake, and durable background sending and recovery controls. Candidate
+starts require explicit operator authorization
 and received-format approval for a successfully submitted test of the exact
 configuration. Explicit diagnostic test emails are available through the
 connected mailbox.
@@ -31,7 +32,7 @@ Health endpoints:
   it exposes no application state.
 - `GET /api/health` — PocketBase's own public health endpoint.
 
-The application UI requires the operator account: provision it (see below),
+The application UI requires an operator account: provision one per operator (see below),
 then sign in at <http://127.0.0.1:8090/login>. Anonymous visitors can only
 reach the sign-in page, `/health`, and the public static assets. The
 PocketBase dashboard at <http://127.0.0.1:8090/_/> is a separate
@@ -62,7 +63,7 @@ are committed; edit the `.templ` sources instead.
 | `GET /status` | Operator session (HTML fragment) |
 | `GET /campaigns`, `POST /campaigns`, `POST /campaigns/{id}/…` | Operator session; campaign authoring (create, revision upload, labels, sample preview) |
 | `GET /campaigns/{id}/tasks…`, `POST /campaigns/{id}/tasks/{task}/…` | Operator session; task intake (upload, validation, review, duplicate and exclusion downloads) |
-| `GET /connection`, `POST /connection/connect`, `GET /connection/callback`, `POST /connection/disconnect` | Operator session (the callback must match an in-flight authorization attempt) |
+| `GET /connection`, `POST /connection/microsoft/connect`, `GET /connection/callback`, `POST /connection/titan`, `POST /connection/disconnect`, `GET /connection/replace`, `POST /connection/replace/confirm`, `POST /connection/replace/cancel` | Operator session; only the signed-in operator's own mailbox can be connected, reconnected, disconnected or replaced (the Microsoft callback must match an in-flight authorization attempt) |
 | `GET /static/`, `GET /robots.txt` | Public assets; `robots.txt` disallows everything |
 | `GET /api/health` | Public PocketBase health probe |
 | other `/api/*` | PocketBase API; the application's private collections are locked down (see below) |
@@ -72,8 +73,10 @@ Custom UI routes and the private collections are unreachable anonymously.
 
 ## Operator provisioning
 
-Provision the single operator account once, using the same `--dir` as the
-server so it writes to the same database:
+Provision one account per operator, using the same `--dir` as the server so it
+writes to the same database. Each account gets an independent private workspace
+with its own campaigns, uploads, history and mailbox connection; accounts cannot
+read each other's records:
 
 ```sh
 ./bin/bachtel provision-operator --email operator@example.com --dir=./pb_data
@@ -87,8 +90,28 @@ The password is read from the terminal without echo, or piped on stdin:
 echo "$PASSWORD" | ./bin/bachtel provision-operator --email operator@example.com --dir=./pb_data
 ```
 
-No credentials are seeded anywhere. A second invocation fails with
-`an operator is already provisioned`.
+No credentials are seeded anywhere, public registration stays disabled, and an
+already used login identity is refused without changing that account's password.
+Operators cannot create or administer peer accounts.
+
+### Local schema reset
+
+This branch changes the schema from one fixed mailbox to operator-owned
+mailbox connections. Local data written by the previous schema is not migrated.
+For local development only, stop the server (and any worker) and reset the
+selected data directory explicitly:
+
+```sh
+./bin/bachtel reset-local-data --data-dir ./pb_data --yes
+```
+
+The command refuses a directory another dispatcher owns and requires the path to
+look like a PocketBase data directory. It deletes the local database, uploads,
+generated downloads, connections and encrypted credentials in that directory.
+Start the server afterwards to create the final schema, provision each operator,
+and reconnect each mailbox. It is never run by startup or by automated checks;
+CI always uses throwaway data directories. There is no production compatibility
+migration for the old singleton schema.
 
 ## Administrator versus operator access
 
@@ -118,25 +141,28 @@ connection reports an actionable configuration error instead.
 | Variable | Purpose |
 |---|---|
 | `APP_ORIGIN` | Public `https` origin, no trailing slash (e.g. `https://mail.example.com`). Drives cookie security, trusted-origin checks, and the default callback URL. |
-| `APP_ENCRYPTION_KEY` | **Secret.** Base64 encoding of exactly 32 bytes; encrypts stored Microsoft credentials at rest. Generate with `openssl rand -base64 32`. |
+| `APP_ENCRYPTION_KEY` | **Secret.** Base64 encoding of exactly 32 bytes; encrypts every operator's mailbox credentials at rest. Generate with `openssl rand -base64 32`. |
 | `MS_TENANT_ID` | Microsoft Entra tenant (directory) id. |
 | `MS_CLIENT_ID` | Application (client) id from the app registration. |
 | `MS_CLIENT_SECRET` | **Secret.** Client secret from the app registration. |
 | `MS_REDIRECT_URL` | Redirect URI sent to Microsoft. Defaults to `APP_ORIGIN` + `/connection/callback` and must match the app registration exactly. |
-| `MS_SENDER_ADDRESS` | The single mailbox allowed to connect. Defaults to `hr@bachtelcorporation.com`. |
 | `MS_AUTHORITY_URL`, `MS_GRAPH_BASE_URL` | Advanced overrides for simulated authorization/Graph servers; leave unset in production. |
+| `TITAN_SMTP_ADDRESS` | Advanced override of the Titan SMTP endpoint for simulated servers. Leave unset in production; the fixed provider endpoint is `smtpout.secureserver.net:465`. |
 | `INTAKE_MAX_UPLOAD_BYTES` | Upload limit for one task workbook, in bytes. Defaults to 10 MiB, which is also the supported ceiling. |
 | `INTAKE_UNZIP_SIZE_LIMIT`, `INTAKE_UNZIP_XML_SIZE_LIMIT` | Expanded workbook archive and single-part limits, in bytes. Default to 64 MiB and 16 MiB. |
 
 `APP_ENCRYPTION_KEY` is separate from PocketBase's own `--encryptionEnv`
 settings key and separate from `MS_CLIENT_SECRET`; each protects different
 material. Back it up independently of the database: losing it leaves the
-stored ciphertext intact but requires reconnecting the mailbox. A missing or
-wrong key does not crash the server — the connection reports an actionable
+stored ciphertext intact but requires reconnecting affected mailboxes. A
+missing or wrong key does not crash the server — affected connections report an actionable
 error and no email can be sent.
 
 See [docs/microsoft-setup.md](docs/microsoft-setup.md) for the full first-time
-Microsoft setup.
+Microsoft setup, [docs/titan-setup.md](docs/titan-setup.md) for connecting a
+GoDaddy Titan mailbox, and
+[docs/mailbox-replacement.md](docs/mailbox-replacement.md) for reconnecting the
+same mailbox or replacing it with a different one.
 
 ## DOCX converter
 
@@ -204,9 +230,13 @@ approve that exact content hash. A successful Graph response alone does not
 approve a campaign. Starting or resuming a task requires a fresh recipient
 count and confirmation; browser closure and logout do not stop accepted work.
 
-All sends share a default rate of 25 starts per minute (integer settings 1–30),
-four in-flight requests, persisted pacing and provider cooldowns. **SUBMITTED**
-means Microsoft accepted the request, not that it was delivered. Uncertain
+Pacing is per mailbox with a default rate of 25 starts per minute (integer
+settings 1–30), persisted pacing and provider cooldowns. At most four
+submission requests run at once overall and at most four per mailbox.
+Cooldowns, throttling, authorization failures and service pauses affect only
+the affected mailbox; a shared storage failure stops all launches.
+**SUBMITTED** means the provider accepted the request, not that it was
+delivered. Uncertain
 attempts are held for review and never automatically resent. Stop drains
 requests already started; restart requires explicit resume of safe work.
 
@@ -225,26 +255,36 @@ approval workflow, scheduling, retry and review actions, and shutdown behavior.
 cmd/server/main.go              Application entrypoint and PocketBase setup
 cmd/server/provision.go         One-time operator provisioning command
 internal/
-  config/                       Environment configuration (origin, Microsoft settings, encryption key)
+  config/                       Environment configuration (origin, Microsoft and Titan settings, encryption key)
   campaign/                     Campaign revisions, mapping validation, normalization and the single render path
   convert/                      Sandboxed DOCX-to-HTML conversion (pinned Pandoc) and document inspection
   intake/                       Task workbook validation, candidate identity, membership snapshots and reservations
+  mailbox/                      Operator-owned mailbox claims, connection status and encrypted credentials
   microsoft/                    Microsoft connection service (OAuth flow, encrypted credentials)
-  operator/                     Single-operator provisioning
+  operator/                     Operator account provisioning
+  reset/                        Destructive mailbox replacement reset (durable, per operator)
+  sending/                      Dispatcher, pacing, Microsoft Graph and Titan senders, schedules, approvals
+  exports/                      Task workbooks, campaign reports and packages
+  retention/                    Campaign deletion scope and active-work refusal
   migrations/
     1792233000_initial_settings.go      App name and PocketBase rate limiter
-    1792233010_operator_collection.go   Single-operator auth collection with locked rules
-    1792233020_microsoft_connection.go  Microsoft connection metadata collection
+    1792233010_operator_collection.go   Operator auth collection with locked rules
+    1792233020_mail_connections.go      Operator-owned mailbox connections and claims
     1792233040_campaign_collections.go  Campaigns and immutable configuration revisions
     1792233050_intake_collections.go    Tasks, campaign candidate identity and membership snapshots
+    1792320000_recipient_mapping.go     Recipient source-header mapping
+    1792320010_sending.go               Attempts, approvals, actions, resolutions, dispatcher state
+    1792320020_task_schedule.go         Single-shot task schedules
+    1792320030_exports.go               Generated download artifacts
   web/
     web.go                      Route table, handler assembly, render helper
                                 (/health, /robots.txt, /static, GET /{$}, GET /status)
     session.go                  Operator session cookie creation/validation and authorization middleware
     login.go                    GET /login, POST /login, POST /logout
-    connection.go               GET /connection, connect, callback, and disconnect handlers
+    connection.go               GET /connection, Microsoft connect/callback, Titan connect, disconnect, replacement handlers
     campaign.go                 /campaigns pages: create, revision upload, labels, sample preview
     task.go                     Task intake pages: upload, worksheet selection, review, downloads
+    sending.go                  Sending and recovery pages and actions
     ratelimit.go                Fixed-window login rate limiter
     web_test.go                 Route, auth, CSRF, rate-limit, and DB integration tests
     views/                      Page view models, layouts and templates
@@ -253,6 +293,8 @@ internal/
 docs/campaign-templates.md      Placeholder syntax, mapping/formatting rules, DOCX support and limits
 docs/task-intake.md             Task workbook support, header matching, duplicate handling and limits
 docs/microsoft-setup.md         Microsoft app registration and first-time connection setup
+docs/titan-setup.md             GoDaddy Titan mailbox connection setup
+docs/mailbox-replacement.md     Reconnecting the same mailbox and replacing it with a different one
 web/css/app.css                 Tailwind entry and application layout styles
 web/css/theme.css               Resolved preset tokens and application status colors
 web/css/components.css          Bachtel styling for owned UI primitives

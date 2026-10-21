@@ -4,13 +4,14 @@ There is no global release unlock or environment switch for candidate sending.
 Each candidate start requires explicit operator authorization and approval of
 the received formatting for a successfully submitted test of that exact
 configuration. Diagnostic test emails are explicit real submissions when a
-usable Microsoft connection is configured; automated checks use simulated
+usable mailbox connection is configured; automated checks use simulated
 senders and never send real email.
 
 ## Test, approve and start
 
 1. Validate an Excel task and open its **Sending and recovery** page. Review
-   the fixed sender, pinned configuration hash, eligible count and exclusions.
+   the connected mailbox address, pinned configuration hash, eligible count
+   and exclusions.
 2. Choose a valid sample row and enter the test recipient. The subject and HTML
    use the pinned campaign renderer; only the recipient is overridden. A test
    has its own attempt record and never changes campaign candidate eligibility.
@@ -110,23 +111,26 @@ SUBMITTED means acceptance for processing, never delivery. A manual resolution
 does not fabricate a provider acceptance timestamp or provider message ID.
 Local attempt IDs are audit identifiers, not Microsoft idempotency guarantees.
 
-## Shared pacing and provider responses
+## Pacing and provider responses
 
-The mailbox has one coordinator using `golang.org/x/time/rate` with burst 1 and
-at most four active requests. It defaults to 25 starts per minute; browser,
-server and stored settings accept only integers 1 through 30. Starts are evenly
+Each mailbox has one coordinator using `golang.org/x/time/rate` with burst 1.
+At most four submission requests run at once overall and at most four per
+mailbox. A mailbox defaults to 25 starts per minute; browser, server and
+stored settings accept only integers 1 through 30. Starts are evenly
 spaced, and persisted recent starts enforce the rolling allowance after rate
 changes and restarts. When there is no eligible work, the coordinator waits for
 an operator action, a submission result or the earliest persisted retry time.
 Tests receive a normal paced opportunity before queued candidate work.
 Candidate tasks receive round-robin opportunities.
 
-Microsoft `429` responses establish a shared cooldown from Retry-After seconds
+Microsoft `429` responses establish a mailbox cooldown from Retry-After seconds
 or HTTP date. Missing headers use bounded exponential backoff with jitter.
 Only explicit throttling and proven pre-submission failures permit automatic
 retries, with at most three retries. Authorization and permission failures
-pause mailbox tasks. Generic service failures, timeouts and disconnects that
-might follow transmission require review, never an automatic resend.
+pause the affected mailbox's tasks. Generic service failures, timeouts and
+disconnects that might follow transmission require review, never an automatic
+resend. Cooldowns, throttling, authorization failures and service pauses affect
+only the affected mailbox; a shared storage failure stops all launches.
 
 The adapter sends one HTML email to one recipient through `/me/sendMail`, with
 no attachments, no redirect replay, no hidden send-POST retry and a bounded
@@ -161,7 +165,8 @@ task with a missed-schedule reason and creates no attempt. The operator
 resumes the safe remainder explicitly, which clears the schedule state, or
 reschedules. A restart before the stored instant keeps the same stored time.
 
-Reconnect Microsoft when needed, then explicitly Resume the safe remainder.
+Reconnect the mailbox (Microsoft 365 or Titan) when needed, then explicitly
+Resume the safe remainder.
 Held recipients do not block safe rows. A successful diagnostic test or
 reconnection never resumes a candidate task automatically.
 

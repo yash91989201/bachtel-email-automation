@@ -80,19 +80,20 @@ runtime container.
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `APP_ORIGIN` | yes | Public HTTPS origin: cookie security, origin checks, callback default |
-| `APP_ENCRYPTION_KEY` | yes for mailbox use | Base64 of 32 random bytes; encrypts stored Microsoft credentials |
+| `APP_ENCRYPTION_KEY` | yes for mailbox use | Base64 of 32 random bytes; encrypts stored mailbox credentials (Microsoft tokens and Titan passwords) |
 | `MS_TENANT_ID` | yes for mailbox use | Entra tenant id |
 | `MS_CLIENT_ID` | yes for mailbox use | Entra application id |
 | `MS_CLIENT_SECRET` | yes for mailbox use | Entra client secret |
 | `MS_REDIRECT_URL` | optional | Exact callback override; must match the registration |
-| `MS_SENDER_ADDRESS` | optional | Allowed mailbox; defaults to `hr@bachtelcorporation.com` |
 | `PANDOC_PATH` | optional | Converter executable; defaults to the packaged `pandoc` |
 | `APP_RESTORE_REVIEW` | only after a restore | `true` disables sending, scheduling, retries and resends |
 | `INTAKE_*` | optional | Upload and expanded-archive bounds |
 
 Missing Microsoft settings do not prevent startup: the connection page reports
-the missing names without showing values, and dispatch cannot proceed until a
-mailbox is connected and approved. A malformed origin or callback fails startup.
+the missing names without showing values, Microsoft readiness stays disabled,
+and GoDaddy Titan mailboxes still connect with no Microsoft settings at all.
+Dispatch cannot proceed until the operator has a connected mailbox and an
+approved test. A malformed origin or callback fails startup.
 
 ### Proxy trust
 
@@ -111,14 +112,17 @@ outside that facility, stop the application and copy the complete `pb_data`
 volume instead. Never copy only the live SQLite database file.
 
 Back up `APP_ENCRYPTION_KEY` separately from the backup. Losing it leaves the
-stored connection ciphertext intact but requires reconnecting the mailbox.
+stored connection ciphertext intact but requires reconnecting every affected
+operator's mailbox.
 
 ## Restore
 
-1. Restore into an isolated instance with no production traffic.
+1. Restore into an isolated instance with no production traffic. A restore
+   preserves every operator account, mailbox claim, connection and attempt
+   history as of the backup.
 2. Restore the matching `APP_ENCRYPTION_KEY` separately. A matching key makes
-   the stored connection usable again without re-consent; a missing key leaves
-   the connection unreadable and sending disabled.
+   the stored connections usable again without re-consent; a missing key leaves
+   connections unreadable and sending disabled.
 3. Set `APP_RESTORE_REVIEW=true` and start the instance. Sending, scheduling,
    retries and resends are refused; stop, history resolution and exports remain
    available.

@@ -1,8 +1,9 @@
 # Microsoft connection setup
 
 First-time setup for the confidential Microsoft connection: register the
-application in Entra ID, configure the server, provision the operator, sign
-in, and connect `hr@bachtelcorporation.com`.
+application in Entra ID, configure the server, provision each operator, and
+have each operator connect their own Microsoft 365 mailbox in the configured
+tenant.
 
 ## 1. Register the application in Entra ID
 
@@ -39,8 +40,8 @@ Do **not** add:
   delegated send is requested).
 - `Mail.Read` or any other mailbox-reading permission — mail is sent, never
   read.
-- Shared-mailbox or `Mail.Send.Shared` delegation — the fixed mailbox signs in
-  directly; no shared-mailbox delegation is required.
+- Shared-mailbox or `Mail.Send.Shared` delegation — each operator signs in
+  with their own mailbox; there is no alias or shared-mailbox send-as.
 - Any Google or non-Microsoft permission — none are used.
 
 ## 3. Client secret
@@ -92,7 +93,11 @@ plain `go run` needs the variables exported in the shell instead.
 Missing or incorrect settings never crash the server: the connection page
 names the missing variables, or (for a wrong/missing encryption key) reports
 an actionable credential error. While the connection is unusable, no email
-can be sent and the stored ciphertext is never overwritten or exposed.
+can be sent and the stored ciphertext is never overwritten or exposed. Missing
+Microsoft settings disable only Microsoft readiness; GoDaddy Titan mailboxes
+still connect (see [titan-setup.md](titan-setup.md)). Reconnecting the same
+mailbox or replacing it with a different one is documented in
+[mailbox-replacement.md](mailbox-replacement.md).
 
 ## 6. Provision the operator
 
@@ -110,8 +115,9 @@ The password is read from the terminal without echo, or piped on stdin:
 echo "$PASSWORD" | ./bin/bachtel provision-operator --email operator@example.com --dir=./pb_data
 ```
 
-No credentials are seeded anywhere. A second invocation fails with
-`an operator is already provisioned`.
+No credentials are seeded anywhere. Reusing an existing normalized email is
+refused with `an operator with that email already exists` and never changes
+that account's password.
 
 The PocketBase superuser (dashboard `/_/`, created from the one-time
 installer link on a fresh database) is an **administrative** account for
@@ -126,14 +132,16 @@ limiting and cookie protection.
 1. Start the server and open `<APP_ORIGIN>/login`.
 2. Sign in with the operator credentials.
 3. Open **`/connection`** and choose **Connect**. You are redirected to
-   Microsoft; sign in **as `hr@bachtelcorporation.com`**.
+   Microsoft; sign in with **that operator's own mailbox address** in the
+   configured tenant.
 4. Approve the delegated permissions. You are redirected back to
    `/connection/callback`.
-5. The connection page now shows **connected**, the verified account identity,
-   and the fixed sender address `hr@bachtelcorporation.com`. The identity is
-   verified against Microsoft's `/me` response (stable account id and verified
-   address); a sign-in with any other mailbox is rejected and does not replace
-   an existing valid connection.
+5. The connection page now shows **connected** and the verified mailbox
+   address. The identity is verified against Microsoft's `/me` response
+   (stable account id and verified address), and that address becomes the
+   operator's exclusive mailbox claim. Every operator repeats this flow for
+   their own mailbox; a mailbox already claimed by any other operator (even
+   while disconnected) is refused.
 
 ## 8. Failure table
 

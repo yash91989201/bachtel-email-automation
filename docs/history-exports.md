@@ -105,6 +105,11 @@ operator action. Two scopes are separate:
   while a candidate is reserved or in flight, or while an attempt is queued or
   in flight.
 
+A third, separate deletion path is the mailbox replacement reset, which
+deletes an operator's sending data across all campaigns when a different
+mailbox is connected; its exact scope is documented in
+[mailbox-replacement.md](mailbox-replacement.md).
+
 The confirmation UI states both consequences before submission. Sources
 referenced by retained tasks are not independently deletable: removing them
 would break audit and regeneration, so they are only removed with the campaign.
