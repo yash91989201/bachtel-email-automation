@@ -1,17 +1,22 @@
-// Package microsoft owns the single Microsoft 365 mailbox connection: the
-// OAuth 2.0 authorization-code flow with PKCE, Microsoft Graph identity
-// verification, encrypted credential storage, and token refresh.
+// Package microsoft owns the operator-scoped Microsoft 365 mailbox connection:
+// the OAuth 2.0 authorization-code flow with PKCE, Microsoft Graph identity
+// verification, and token refresh on top of mailbox.Store.
+//
+// There is no fixed sender address: every operator signs in with their own
+// mailbox. The verified mailbox becomes an exclusive claim through
+// mailbox.Store. Signing in a different mailbox while one is connected stages
+// a replacement claim and reports ReplacementRequired; the current connection
+// is never silently replaced.
 //
 // Secret material (access tokens, refresh tokens, PKCE verifiers, the client
-// secret) never leaves the server. Stored credentials are sealed with
-// AES-256-GCM before they touch the database, and errors name settings and
-// outcomes, never values.
+// secret) never leaves the server. Credential ciphertext is sealed and
+// unsealed exclusively by mailbox.Store. Errors name settings and outcomes,
+// never values.
 package microsoft
 
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -23,63 +28,37 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"golang.org/x/oauth2"
 )
-
-// CollectionName is the PocketBase collection holding the single connection
-// record.
-const CollectionName = "microsoft_connection"
-
-// Status is the connection state stored on the record and shown to the
-// operator.
-type Status string
-
-const (
-	// StatusDisconnected means no connection record exists yet.
-	StatusDisconnected Status = "disconnected"
-	// StatusConnected means a verified, decryptable credential is stored.
-	StatusConnected Status = "connected"
-	// StatusReconnectRequired means stored credentials are unusable (rejected
-	// by Microsoft or undecryptable) and the operator must sign in again.
-	StatusReconnectRequired Status = "reconnect_required"
-)
-
-// Connection is the operator-visible state of the mailbox connection. It
-// never carries token values.
-type Connection struct {
-	Status        Status
-	AccountID     string
-	AccountEmail  string
-	TenantID      string
-	SenderAddress string
-	ConnectedAt   time.Time
-	ExpiresAt     time.Time
-	LastError     string
-}
 
 // Errors reported by the connection service.
 var (
 	// ErrNotConfigured wraps ConfigError: the required Microsoft settings are
 	// incomplete, so no flow can start.
 	ErrNotConfigured = errors.New("microsoft connection is not configured")
-	// ErrInFlight guards BeginAuth and Disconnect against racing an active
-	// mail dispatch.
-	ErrInFlight = errors.New("a mail dispatch is in flight")
-	// ErrIdentityMismatch reports a sign-in whose verified mailbox is not the
-	// configured sender; nothing is changed when it happens.
-	ErrIdentityMismatch = errors.New("the signed-in Microsoft account is not the configured sender mailbox")
 	// ErrAuthorizationState reports an unknown, expired, already-used, or
 	// operator-mismatched OAuth state parameter.
 	ErrAuthorizationState = errors.New("the Microsoft sign-in attempt is unknown, expired, or already used")
-	// ErrCredentialsUnreadable reports stored credentials that cannot be
-	// decrypted or parsed; the stored ciphertext is never overwritten.
-	ErrCredentialsUnreadable = errors.New("the stored Microsoft credentials cannot be read")
+	// ErrNoMailbox reports a sign-in whose Graph identity has no mailbox
+	// address; nothing is changed when it happens.
+	ErrNoMailbox = errors.New("the signed-in Microsoft account has no usable mailbox address")
+	// ErrRefreshRejected reports Microsoft refusing the stored refresh token.
+	// The connection is marked reconnect required; the operator must sign in
+	// again.
+	ErrRefreshRejected = errors.New("the stored mailbox credentials were rejected; reconnect the mailbox")
 )
 
-// DispatchGuard reports how many mail dispatches are currently in flight so
-// the connection cannot change underneath an active send.
-type DispatchGuard interface {
-	InFlight(ctx context.Context) (int, error)
+// ReplacementRequired reports a sign-in whose verified mailbox differs from
+// the operator's current connection. The new mailbox is staged as a
+// replacement claim and the current connection is untouched; the web layer
+// redirects to the replacement confirmation instead of silently switching.
+type ReplacementRequired struct {
+	Reset *mailbox.Reset
+}
+
+func (e *ReplacementRequired) Error() string {
+	return "the signed-in mailbox is different from the connected one; confirm the replacement to finish connecting it"
 }
 
 const (
@@ -94,7 +73,7 @@ const (
 
 // scopes: offline_access yields the refresh token, Mail.Send is the only
 // write scope the dispatcher needs, and User.Read verifies the signed-in
-// mailbox against the configured sender address.
+// mailbox against the Graph identity. Nothing more is requested.
 var scopes = []string{
 	"offline_access",
 	"https://graph.microsoft.com/Mail.Send",
@@ -103,45 +82,35 @@ var scopes = []string{
 
 // pendingAttempt is one in-memory OAuth sign-in attempt.
 type pendingAttempt struct {
-	operatorID string
-	verifier   string
-	expiresAt  time.Time
+	ownerID   string
+	verifier  string
+	expiresAt time.Time
 }
 
-// Service implements the mailbox connection against a PocketBase app.
+// Service implements the operator-scoped Microsoft mailbox connection against
+// a PocketBase app and the shared mailbox store.
 type Service struct {
-	app core.App
-	cfg config.Config
+	app   core.App
+	cfg   config.Config
+	store *mailbox.Store
 
 	mu       sync.Mutex
 	attempts map[string]pendingAttempt
 
-	// A context-aware semaphore serializes refresh and persistence. Initialize
-	// lazily so directly constructed services retain the same safe behavior.
-	refreshOnce sync.Once
-	refreshSlot chan struct{}
-
-	guardMu sync.RWMutex
-	guard   DispatchGuard
+	refreshMu sync.Mutex
+	refreshes map[string]chan struct{}
 }
 
-// NewService builds the connection service for the app and configuration.
-func NewService(app core.App, cfg config.Config) *Service {
-	return &Service{app: app, cfg: cfg, attempts: make(map[string]pendingAttempt)}
-}
-
-// SetDispatchGuard binds the mail-dispatch guard. A nil guard disables the
-// in-flight checks until the dispatcher is wired in.
-func (s *Service) SetDispatchGuard(guard DispatchGuard) {
-	s.guardMu.Lock()
-	defer s.guardMu.Unlock()
-	s.guard = guard
-}
-
-func (s *Service) dispatchGuard() DispatchGuard {
-	s.guardMu.RLock()
-	defer s.guardMu.RUnlock()
-	return s.guard
+// NewService builds the Microsoft connection service for the app, its
+// configuration, and the shared mailbox connection store.
+func NewService(app core.App, cfg config.Config, connections *mailbox.Store) *Service {
+	return &Service{
+		app:       app,
+		cfg:       cfg,
+		store:     connections,
+		attempts:  make(map[string]pendingAttempt),
+		refreshes: make(map[string]chan struct{}),
+	}
 }
 
 // ConfigError reports the required settings that are absent, naming only
@@ -154,57 +123,13 @@ func (s *Service) ConfigError() error {
 	return fmt.Errorf("%w: set %s", ErrNotConfigured, strings.Join(missing, ", "))
 }
 
-// Status returns the operator-visible connection state. It is read-only: an
-// undecryptable credential is reported as reconnect required without
-// touching the stored record.
-func (s *Service) Status(ctx context.Context) (Connection, error) {
-	conn := Connection{Status: StatusDisconnected, SenderAddress: s.cfg.Microsoft.SenderAddress}
-	record, err := s.app.FindFirstRecordByFilter(CollectionName, "1=1")
-	if errors.Is(err, sql.ErrNoRows) {
-		return conn, nil
-	}
-	if err != nil {
-		return Connection{}, fmt.Errorf("reading the microsoft connection failed: %w", err)
-	}
-
-	conn.AccountID = record.GetString("account_id")
-	conn.AccountEmail = record.GetString("account_email")
-	conn.TenantID = record.GetString("tenant_id")
-	conn.LastError = record.GetString("last_error")
-	conn.ConnectedAt = record.GetDateTime("created").Time()
-	conn.ExpiresAt = record.GetDateTime("credential_expires_at").Time()
-
-	if Status(record.GetString("status")) == StatusReconnectRequired {
-		conn.Status = StatusReconnectRequired
-		return conn, nil
-	}
-	if _, err := s.openCredential(record.GetString("credential")); err != nil {
-		// Read-only on purpose: only CompleteAuth may rewrite the record.
-		conn.Status = StatusReconnectRequired
-		conn.LastError = "the stored credentials cannot be decrypted; check APP_ENCRYPTION_KEY and reconnect the mailbox"
-		return conn, nil
-	}
-	conn.Status = StatusConnected
-	return conn, nil
-}
-
 // BeginAuth starts the authorization-code flow and returns the Microsoft
 // consent URL. The returned state binds the eventual callback to this
 // operator for a single use within attemptTTL.
-func (s *Service) BeginAuth(ctx context.Context, operatorID string) (string, error) {
+func (s *Service) BeginAuth(ctx context.Context, ownerID string) (string, error) {
 	if err := s.ConfigError(); err != nil {
 		return "", err
 	}
-	if guard := s.dispatchGuard(); guard != nil {
-		n, err := guard.InFlight(ctx)
-		if err != nil {
-			return "", fmt.Errorf("checking in-flight dispatches failed: %w", err)
-		}
-		if n > 0 {
-			return "", fmt.Errorf("%w (%d in flight)", ErrInFlight, n)
-		}
-	}
-
 	state, err := randomToken()
 	if err != nil {
 		return "", err
@@ -223,84 +148,118 @@ func (s *Service) BeginAuth(ctx context.Context, operatorID string) (string, err
 			delete(s.attempts, key)
 		}
 	}
-	s.attempts[state] = pendingAttempt{operatorID: operatorID, verifier: verifier, expiresAt: now.Add(attemptTTL)}
+	s.attempts[state] = pendingAttempt{ownerID: ownerID, verifier: verifier, expiresAt: now.Add(attemptTTL)}
 	s.mu.Unlock()
 
 	return s.oauthConfig().AuthCodeURL(state,
 		oauth2.S256ChallengeOption(verifier),
 		oauth2.AccessTypeOffline,
-		oauth2.SetAuthURLParam("login_hint", s.cfg.Microsoft.SenderAddress),
 	), nil
 }
 
 // CompleteAuth consumes the sign-in attempt for state, exchanges the code,
-// verifies the signed-in mailbox against the configured sender, and upserts
-// the single connection record. The attempt is consumed even when a later
-// step fails, so a replayed callback can never install credentials.
-func (s *Service) CompleteAuth(ctx context.Context, operatorID, state, code string) (Connection, error) {
+// verifies the signed-in mailbox through Microsoft Graph, and routes it to
+// the owner's mailbox operation: first install, same-identity reconnect, or a
+// staged replacement for a different mailbox. The attempt is consumed even
+// when a later step fails, so a replayed callback can never install
+// credentials.
+func (s *Service) CompleteAuth(ctx context.Context, ownerID, state, code string) (*mailbox.Connection, error) {
 	if err := s.ConfigError(); err != nil {
-		return Connection{}, err
+		return nil, err
 	}
-	attempt, ok := s.consumeAttempt(state, operatorID)
+	attempt, ok := s.consumeAttempt(state, ownerID)
 	if !ok {
-		return Connection{}, ErrAuthorizationState
+		return nil, ErrAuthorizationState
 	}
 
 	token, err := s.oauthConfig().Exchange(ctx, code, oauth2.VerifierOption(attempt.verifier))
 	if err != nil {
-		return Connection{}, fmt.Errorf("the Microsoft token exchange failed: %w", err)
+		return nil, fmt.Errorf("the Microsoft token exchange failed: %w", err)
 	}
 
-	accountID, address, err := s.graphIdentity(ctx, token.AccessToken)
+	graphID, address, err := s.graphIdentity(ctx, token.AccessToken)
 	if err != nil {
-		return Connection{}, err
+		return nil, err
 	}
-	address = strings.ToLower(strings.TrimSpace(address))
-	if accountID == "" || address != strings.ToLower(s.cfg.Microsoft.SenderAddress) {
-		s.app.Logger().WarnContext(ctx, "microsoft sign-in identity mismatch; existing connection unchanged")
-		return Connection{}, ErrIdentityMismatch
+	sender := mailbox.CanonicalSender(address)
+	if graphID == "" || sender == "" {
+		s.app.Logger().WarnContext(ctx, "microsoft sign-in without a mailbox identity; nothing changed")
+		return nil, ErrNoMailbox
+	}
+	// The identity carries the configured tenant so one account cannot be
+	// claimed under two different tenants.
+	candidate := mailbox.Candidate{
+		OwnerID:  ownerID,
+		Provider: mailbox.ProviderMicrosoft,
+		Sender:   sender,
+		Identity: graphID + "@" + s.cfg.Microsoft.TenantID,
+		Credential: mailbox.Credential{
+			Provider:     mailbox.ProviderMicrosoft,
+			AccessToken:  token.AccessToken,
+			RefreshToken: token.RefreshToken,
+			ExpiresAt:    token.Expiry,
+		},
 	}
 
-	credential, err := s.sealToken(token)
+	current, err := s.store.Current(ctx, ownerID)
+	if errors.Is(err, mailbox.ErrNotConnected) {
+		installed, err := s.store.Install(ctx, candidate)
+		if err != nil {
+			// ErrClaimed (mailbox owned by another operator) surfaces as-is
+			// and never discloses the other owner.
+			return nil, err
+		}
+		s.app.Logger().InfoContext(ctx, "microsoft mailbox connected", "owner", ownerID)
+		return installed, nil
+	}
 	if err != nil {
-		return Connection{}, err
+		return nil, err
 	}
-	if err := s.saveConnection(accountID, address, s.cfg.Microsoft.TenantID, credential, token.Expiry); err != nil {
-		return Connection{}, fmt.Errorf("persisting the microsoft connection failed: %w", err)
+
+	if current.Identity == candidate.Identity {
+		// Same verified account: refresh credentials in place. The generation
+		// is preserved, so exact-content approvals remain valid.
+		if err := s.store.Reconnect(ctx, current, candidate.Credential); err != nil {
+			return nil, fmt.Errorf("refreshing the microsoft connection failed: %w", err)
+		}
+		s.app.Logger().InfoContext(ctx, "microsoft mailbox reconnected", "owner", ownerID)
+		return s.store.ByID(ctx, current.ID)
 	}
-	s.app.Logger().InfoContext(ctx, "microsoft mailbox connected")
-	return s.Status(ctx)
+
+	// A different mailbox: stage the claim and require an explicit
+	// replacement confirmation. The current connection stays untouched.
+	reset, err := s.store.StageReplacement(ctx, candidate)
+	if err != nil {
+		return nil, err
+	}
+	s.app.Logger().InfoContext(ctx, "microsoft mailbox replacement staged", "owner", ownerID)
+	return nil, &ReplacementRequired{Reset: reset}
 }
 
-// AccessToken returns a usable access token, refreshing the stored credential
-// when it is close to expiry. A credential Microsoft rejects is marked
-// reconnect required; unreadable ciphertext is never overwritten.
-func (s *Service) AccessToken(ctx context.Context) (string, error) {
+// AccessToken returns a usable access token for the connection, refreshing
+// the stored credential when it is close to expiry. Refreshes are serialized
+// per connection, so unrelated mailboxes refresh independently. A refresh
+// Microsoft rejects marks only this connection reconnect required; unreadable
+// ciphertext is reported and never overwritten.
+func (s *Service) AccessToken(ctx context.Context, connection *mailbox.Connection) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, tokenAccessTimeout)
 	defer cancel()
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
 	// Fast path: a comfortably valid stored token needs no lock and no
 	// network call.
-	if _, token, err := s.storedToken(); err == nil && time.Until(token.Expiry) > refreshSkew {
+	if token, err := s.storedToken(ctx, connection); err == nil && time.Until(token.Expiry) > refreshSkew {
 		return token.AccessToken, nil
 	}
 
-	s.refreshOnce.Do(func() { s.refreshSlot = make(chan struct{}, 1) })
+	slot := s.refreshSlot(connection.ID)
 	select {
-	case s.refreshSlot <- struct{}{}:
-		defer func() { <-s.refreshSlot }()
+	case slot <- struct{}{}:
+		defer func() { <-slot }()
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
 
-	// Double-check: another goroutine may have refreshed while we waited for
-	// the mutex.
-	record, token, err := s.storedToken()
+	// Double-check: another goroutine may have refreshed while we waited.
+	token, err := s.storedToken(ctx, connection)
 	if err != nil {
 		return "", err
 	}
@@ -308,18 +267,12 @@ func (s *Service) AccessToken(ctx context.Context) (string, error) {
 		return token.AccessToken, nil
 	}
 
-	_, tokenURL := s.cfg.Microsoft.Endpoints()
-	oauthCfg := &oauth2.Config{
-		ClientID:     s.cfg.Microsoft.ClientID,
-		ClientSecret: s.cfg.Microsoft.ClientSecret,
-		Endpoint:     oauth2.Endpoint{TokenURL: tokenURL},
-	}
-	// An already-expired token forces TokenSource to use the refresh grant.
-	source := oauthCfg.TokenSource(ctx, &oauth2.Token{RefreshToken: token.RefreshToken, Expiry: time.Now().Add(-time.Minute)})
-	refreshed, err := source.Token()
+	refreshed, err := s.refreshGrant(ctx, token.RefreshToken)
 	if err != nil {
 		if refreshRejected(err) {
-			s.markReconnectRequired(ctx, "Microsoft rejected the stored refresh token; reconnect the mailbox")
+			s.app.Logger().WarnContext(ctx, "microsoft refresh token rejected", "connection", connection.ID)
+			s.MarkReconnectRequired(ctx, connection, "Microsoft rejected the stored refresh token; reconnect the mailbox")
+			return "", ErrRefreshRejected
 		}
 		return "", fmt.Errorf("the Microsoft token refresh failed: %w", err)
 	}
@@ -328,44 +281,28 @@ func (s *Service) AccessToken(ctx context.Context) (string, error) {
 		refreshed.RefreshToken = token.RefreshToken
 	}
 
-	credential, err := s.sealToken(refreshed)
-	if err != nil {
-		return "", err
-	}
-	record.Set("credential", string(credential))
-	record.Set("credential_expires_at", refreshed.Expiry)
 	// Persist before returning: a rotated token the database never saw must
-	// not be used, or the next start would silently hold a stale credential.
-	if err := s.app.SaveWithContext(ctx, record); err != nil {
+	// not be used, or the next request would silently hold a stale credential.
+	// Reconnect keeps the connection generation.
+	err = s.store.Reconnect(ctx, connection, mailbox.Credential{
+		Provider:     mailbox.ProviderMicrosoft,
+		AccessToken:  refreshed.AccessToken,
+		RefreshToken: refreshed.RefreshToken,
+		ExpiresAt:    refreshed.Expiry,
+	})
+	if err != nil {
 		return "", fmt.Errorf("persisting the refreshed Microsoft credentials failed: %w", err)
 	}
 	return refreshed.AccessToken, nil
 }
 
-// Disconnect deletes the connection record. An in-flight dispatch blocks it
-// so mail never loses its credential mid-send.
-func (s *Service) Disconnect(ctx context.Context) error {
-	if guard := s.dispatchGuard(); guard != nil {
-		n, err := guard.InFlight(ctx)
-		if err != nil {
-			return fmt.Errorf("checking in-flight dispatches failed: %w", err)
-		}
-		if n > 0 {
-			return fmt.Errorf("%w (%d in flight)", ErrInFlight, n)
-		}
+// MarkReconnectRequired records that stored credentials are unusable and the
+// owner must sign in again. Failures are logged, never fatal: the caller
+// already holds the error that triggered the mark.
+func (s *Service) MarkReconnectRequired(ctx context.Context, connection *mailbox.Connection, reason string) {
+	if err := s.store.SetStatus(ctx, connection, mailbox.StatusReconnectRequired, reason); err != nil {
+		s.app.Logger().WarnContext(ctx, "cannot mark the mailbox connection for reconnect", "connection", connection.ID, "error", err.Error())
 	}
-	record, err := s.app.FindFirstRecordByFilter(CollectionName, "1=1")
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("reading the microsoft connection failed: %w", err)
-	}
-	if err := s.app.Delete(record); err != nil {
-		return fmt.Errorf("deleting the microsoft connection failed: %w", err)
-	}
-	s.app.Logger().InfoContext(ctx, "microsoft mailbox disconnected")
-	return nil
 }
 
 // oauthConfig builds the tenant-specific OAuth config from the service
@@ -383,7 +320,7 @@ func (s *Service) oauthConfig() *oauth2.Config {
 
 // consumeAttempt removes the attempt for state, single use. Unknown,
 // expired, and operator-mismatched attempts all report false.
-func (s *Service) consumeAttempt(state, operatorID string) (pendingAttempt, bool) {
+func (s *Service) consumeAttempt(state, ownerID string) (pendingAttempt, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	attempt, ok := s.attempts[state]
@@ -393,7 +330,7 @@ func (s *Service) consumeAttempt(state, operatorID string) (pendingAttempt, bool
 	// Consume before validating so neither a mismatch nor a later failure
 	// leaves the state reusable.
 	delete(s.attempts, state)
-	if attempt.operatorID != operatorID || time.Now().After(attempt.expiresAt) {
+	if attempt.ownerID != ownerID || time.Now().After(attempt.expiresAt) {
 		return pendingAttempt{}, false
 	}
 	return attempt, true
@@ -435,64 +372,53 @@ func (s *Service) graphIdentity(ctx context.Context, accessToken string) (id, ad
 	return me.ID, address, nil
 }
 
-// saveConnection upserts the single connection record as connected.
-func (s *Service) saveConnection(accountID, accountEmail, tenantID string, credential []byte, expiresAt time.Time) error {
-	return s.app.RunInTransaction(func(txApp core.App) error {
-		collection, err := txApp.FindCollectionByNameOrId(CollectionName)
-		if err != nil {
-			return err
+// storedToken unseals the connection's credential and returns it as an OAuth
+// token. Unreadable ciphertext produces an actionable error and leaves the
+// stored value untouched.
+func (s *Service) storedToken(ctx context.Context, connection *mailbox.Connection) (*oauth2.Token, error) {
+	credential, err := s.store.Credential(ctx, connection)
+	if err != nil {
+		if errors.Is(err, mailbox.ErrCredentialsUnreadable) {
+			return nil, fmt.Errorf("%w: reconnect the mailbox; the stored value was not changed", err)
 		}
-		record, err := txApp.FindFirstRecordByFilter(CollectionName, "1=1")
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		if record == nil {
-			record = core.NewRecord(collection)
-		}
-		record.Set("status", string(StatusConnected))
-		record.Set("account_id", accountID)
-		record.Set("account_email", accountEmail)
-		record.Set("tenant_id", tenantID)
-		record.Set("credential", string(credential))
-		record.Set("credential_expires_at", expiresAt)
-		record.Set("last_error", "")
-		return txApp.Save(record)
-	})
+		return nil, err
+	}
+	if credential.AccessToken == "" {
+		return nil, fmt.Errorf("%w: reconnect the mailbox; the stored value was not changed", mailbox.ErrCredentialsUnreadable)
+	}
+	return &oauth2.Token{
+		AccessToken:  credential.AccessToken,
+		RefreshToken: credential.RefreshToken,
+		Expiry:       credential.ExpiresAt,
+	}, nil
 }
 
-// storedToken loads and unseals the stored credential together with its
-// record. Any storage problem reports ErrCredentialsUnreadable and leaves the
-// record untouched.
-func (s *Service) storedToken() (*core.Record, *oauth2.Token, error) {
-	record, err := s.app.FindFirstRecordByFilter(CollectionName, "1=1")
-	if err != nil {
-		return nil, nil, ErrCredentialsUnreadable
+// refreshSlot returns the per-connection serialization slot for refreshes,
+// created on first use. One mailbox waiting on Microsoft never blocks
+// another.
+func (s *Service) refreshSlot(connectionID string) chan struct{} {
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	slot, ok := s.refreshes[connectionID]
+	if !ok {
+		slot = make(chan struct{}, 1)
+		s.refreshes[connectionID] = slot
 	}
-	plaintext, err := s.openCredential(record.GetString("credential"))
-	if err != nil {
-		return nil, nil, err
-	}
-	var token oauth2.Token
-	if err := json.Unmarshal(plaintext, &token); err != nil || token.AccessToken == "" {
-		return nil, nil, ErrCredentialsUnreadable
-	}
-	return record, &token, nil
+	return slot
 }
 
-// markReconnectRequired flags the record after Microsoft rejected the stored
-// refresh token. Failures are logged, never fatal: the returned error is the
-// refresh failure itself.
-func (s *Service) markReconnectRequired(ctx context.Context, reason string) {
-	record, err := s.app.FindFirstRecordByFilter(CollectionName, "1=1")
-	if err != nil {
-		s.app.Logger().WarnContext(ctx, "cannot mark the microsoft connection for reconnect", "error", err.Error())
-		return
+// refreshGrant exchanges the refresh token at the tenant-specific token
+// endpoint.
+func (s *Service) refreshGrant(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
+	_, tokenURL := s.cfg.Microsoft.Endpoints()
+	oauthCfg := &oauth2.Config{
+		ClientID:     s.cfg.Microsoft.ClientID,
+		ClientSecret: s.cfg.Microsoft.ClientSecret,
+		Endpoint:     oauth2.Endpoint{TokenURL: tokenURL},
 	}
-	record.Set("status", string(StatusReconnectRequired))
-	record.Set("last_error", reason)
-	if err := s.app.Save(record); err != nil {
-		s.app.Logger().WarnContext(ctx, "cannot mark the microsoft connection for reconnect", "error", err.Error())
-	}
+	// An already-expired token forces TokenSource to use the refresh grant.
+	source := oauthCfg.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken, Expiry: time.Now().Add(-time.Minute)})
+	return source.Token()
 }
 
 // refreshRejected reports whether Microsoft refused the refresh grant

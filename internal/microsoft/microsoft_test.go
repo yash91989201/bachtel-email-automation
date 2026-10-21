@@ -2,36 +2,37 @@ package microsoft
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
-	"golang.org/x/oauth2"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
+	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 )
 
-const testOperator = "op-1"
+// testKey is the fixed deployment key the tests seal credentials under; it
+// stands in for APP_ENCRYPTION_KEY.
+var testKey = []byte("0123456789abcdef0123456789abcdef")
 
-// bootApp opens a PocketBase app on dir and ensures the connection collection
-// exists. It mirrors the connection creation and credential expansion migrations;
-// the real migration package cannot be imported here without an import cycle.
-func bootApp(t *testing.T, dir string) *pocketbase.PocketBase {
+// bootApp opens a PocketBase app on a temporary directory and mirrors the
+// operator, mail connection and reset collections from the migrations; the
+// real migration package cannot be imported here because sibling packages it
+// pulls in are mid-migration.
+func bootApp(t *testing.T) *pocketbase.PocketBase {
 	t.Helper()
-	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: dir})
+	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
 	if err := app.Bootstrap(); err != nil {
 		t.Fatal(err)
 	}
@@ -40,40 +41,75 @@ func bootApp(t *testing.T, dir string) *pocketbase.PocketBase {
 			t.Error(err)
 		}
 	})
-	if _, err := app.FindCollectionByNameOrId(CollectionName); err != nil {
-		collection := core.NewBaseCollection(CollectionName)
-		collection.Fields.Add(
-			&core.TextField{Name: "status", Required: true, Max: 32},
-			&core.TextField{Name: "account_id", Max: 255},
-			&core.TextField{Name: "account_email", Max: 255},
-			&core.TextField{Name: "tenant_id", Max: 255},
-			&core.TextField{Name: "last_error", Max: 255},
-			&core.TextField{Name: "credential", Max: 1 << 20},
-			&core.DateField{Name: "credential_expires_at"},
-			&core.AutodateField{Name: "created", OnCreate: true},
-			&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
-		)
-		if err := app.Save(collection); err != nil {
-			t.Fatal(err)
-		}
+
+	operators := core.NewBaseCollection(operator.CollectionName)
+	operators.Fields.Add(&core.TextField{Name: "email", Required: true, Max: 255})
+	if err := app.Save(operators); err != nil {
+		t.Fatal(err)
+	}
+
+	connections := core.NewBaseCollection(mailbox.ConnectionsCollection)
+	connections.Fields.Add(
+		&core.RelationField{Name: "owner", Required: true, MaxSelect: 1, CollectionId: operators.Id},
+		&core.TextField{Name: "provider", Required: true, Max: 32},
+		&core.TextField{Name: "sender", Required: true, Max: 320},
+		&core.TextField{Name: "identity", Max: 320},
+		&core.TextField{Name: "status", Required: true, Max: 32},
+		&core.NumberField{Name: "generation", Required: true, OnlyInt: true, Min: new(1.0)},
+		&core.BoolField{Name: "current"},
+		&core.TextField{Name: "credential", Max: 1 << 20},
+		&core.DateField{Name: "credential_expires_at"},
+		&core.TextField{Name: "last_error", Max: 500},
+		&core.AutodateField{Name: "created", OnCreate: true},
+		&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
+	)
+	connections.AddIndex("idx_mail_connections_owner", true, "owner", "current = true")
+	connections.AddIndex("idx_mail_connections_sender", true, "sender", "")
+	connections.AddIndex("idx_mail_connections_identity", true, "identity", "identity != ''")
+	if err := app.Save(connections); err != nil {
+		t.Fatal(err)
+	}
+
+	resets := core.NewBaseCollection(mailbox.ResetsCollection)
+	resets.Fields.Add(
+		&core.RelationField{Name: "owner", Required: true, MaxSelect: 1, CollectionId: operators.Id},
+		&core.RelationField{Name: "from_connection", MaxSelect: 1, CollectionId: connections.Id},
+		&core.RelationField{Name: "to_connection", Required: true, MaxSelect: 1, CollectionId: connections.Id},
+		&core.TextField{Name: "status", Required: true, Max: 32},
+		&core.JSONField{Name: "manifest", MaxSize: 256 << 10},
+		&core.TextField{Name: "error", Max: 500},
+		&core.AutodateField{Name: "created", OnCreate: true},
+		&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
+	)
+	resets.AddIndex("idx_connection_resets_active", true, "owner", "status != 'completed'")
+	if err := app.Save(resets); err != nil {
+		t.Fatal(err)
 	}
 	return app
 }
 
-// testEnv points the Microsoft settings at the given mock servers and sets a
-// random encryption key.
-func testEnv(t *testing.T, authorityURL, graphBaseURL string) config.Config {
+// provision creates an operator record and returns its id.
+func provision(t *testing.T, app core.App, email string) string {
 	t.Helper()
-	key := make([]byte, config.EncryptionKeySize)
-	if _, err := rand.Read(key); err != nil {
+	collection, err := app.FindCollectionByNameOrId(operator.CollectionName)
+	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv(config.EnvEncryptionKey, base64.StdEncoding.EncodeToString(key))
+	record := core.NewRecord(collection)
+	record.Set("email", email)
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	return record.Id
+}
+
+// testEnv points the Microsoft settings at the given mock servers.
+func testEnv(t *testing.T, authorityURL, graphBaseURL string) config.Config {
+	t.Helper()
 	t.Setenv(config.EnvTenantID, "tenant-1")
 	t.Setenv(config.EnvClientID, "client-1")
 	t.Setenv(config.EnvClientSecret, "client-secret-1")
 	t.Setenv(config.EnvRedirectURL, "https://mail.example.test/connection/callback")
-	t.Setenv(config.EnvSenderAddress, "hr@bachtelcorporation.com")
 	t.Setenv(config.EnvAuthorityURL, authorityURL)
 	t.Setenv(config.EnvGraphBaseURL, graphBaseURL)
 	cfg, err := config.Load()
@@ -83,31 +119,47 @@ func testEnv(t *testing.T, authorityURL, graphBaseURL string) config.Config {
 	return cfg
 }
 
-// mockMicrosoft stands in for the Microsoft token endpoint and Graph /me.
-type mockMicrosoft struct {
-	t                *testing.T
-	mu               sync.Mutex
-	refreshTokens    int
-	omitRefreshToken bool
-	rejectRefresh    bool
-	meID             string
-	meMail           string
-	meUPN            string
-	expectBearer     string
-	srv              *httptest.Server
+// newService builds the service over a store sealed with the fixed test key.
+func newService(t *testing.T, app core.App, cfg config.Config) (*Service, *mailbox.Store) {
+	t.Helper()
+	store := mailbox.NewStore(app, func() ([]byte, error) { return testKey, nil })
+	return NewService(app, cfg, store), store
 }
 
-func newMockMicrosoft(t *testing.T) *mockMicrosoft {
+// mockMicrosoft stands in for the Microsoft token endpoint and Graph /me.
+type mockMicrosoft struct {
+	t      *testing.T
+	mu     sync.Mutex
+	meID   string
+	meMail string
+	meUPN  string
+
+	exchanges    int
+	refreshes    int
+	codeVerifier string
+
+	rejectedRefresh map[string]bool
+
+	// Refresh barrier: while armed, every refresh grant waits until
+	// barrierN refreshes have arrived, proving they are concurrent.
+	barrierN       int
+	barrierRelease chan struct{}
+
+	refreshConcurrent    int
+	maxRefreshConcurrent int
+
+	srv *httptest.Server
+}
+
+func newMockMicrosoft(t *testing.T, id, upn string) *mockMicrosoft {
 	t.Helper()
-	m := &mockMicrosoft{t: t}
+	m := &mockMicrosoft{t: t, meID: id, meUPN: upn, rejectedRefresh: map[string]bool{}}
 	m.srv = httptest.NewServer(http.HandlerFunc(m.serve))
 	t.Cleanup(m.srv.Close)
 	return m
 }
 
 func (m *mockMicrosoft) serve(w http.ResponseWriter, r *http.Request) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	switch {
 	case strings.HasSuffix(r.URL.Path, "/oauth2/v2.0/token"):
 		if err := r.ParseForm(); err != nil {
@@ -116,40 +168,57 @@ func (m *mockMicrosoft) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		switch r.PostForm.Get("grant_type") {
 		case "authorization_code":
-			if r.PostForm.Get("code") == "" {
-				http.Error(w, `{"error":"invalid_grant"}`, http.StatusBadRequest)
-				return
-			}
+			m.mu.Lock()
+			m.exchanges++
+			n := m.exchanges
+			m.codeVerifier = r.PostForm.Get("code_verifier")
+			m.mu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
-			if _, err := fmt.Fprint(w, `{"access_token":"at-c1","refresh_token":"rt-c1","token_type":"Bearer","expires_in":3600}`); err != nil {
+			if _, err := fmt.Fprintf(w, `{"access_token":"at-c%d","refresh_token":"rt-c%d","token_type":"Bearer","expires_in":3600}`, n, n); err != nil {
 				m.t.Errorf("write mock response: %v", err)
 			}
 		case "refresh_token":
-			m.refreshTokens++
-			if m.rejectRefresh {
+			m.mu.Lock()
+			m.refreshes++
+			n := m.refreshes
+			reject := m.rejectedRefresh[r.PostForm.Get("refresh_token")]
+			m.refreshConcurrent++
+			if m.refreshConcurrent > m.maxRefreshConcurrent {
+				m.maxRefreshConcurrent = m.refreshConcurrent
+			}
+			release := m.barrierRelease
+			if m.barrierN > 0 && n == m.barrierN && release != nil {
+				close(release)
+				m.barrierRelease = nil
+			}
+			m.mu.Unlock()
+			if release != nil {
+				select {
+				case <-release:
+				case <-time.After(3 * time.Second):
+				}
+			}
+			m.mu.Lock()
+			m.refreshConcurrent--
+			m.mu.Unlock()
+			if reject {
 				http.Error(w, `{"error":"invalid_grant","error_description":"token revoked"}`, http.StatusBadRequest)
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			n := m.refreshTokens
-			if m.omitRefreshToken {
-				if _, err := fmt.Fprintf(w, `{"access_token":"at-r%d","token_type":"Bearer","expires_in":3600}`, n); err != nil {
-					m.t.Errorf("write mock response: %v", err)
-				}
-			} else {
-				if _, err := fmt.Fprintf(w, `{"access_token":"at-r%d","refresh_token":"rt-r%d","token_type":"Bearer","expires_in":3600}`, n, n); err != nil {
-					m.t.Errorf("write mock response: %v", err)
-				}
+			rt := r.PostForm.Get("refresh_token")
+			if _, err := fmt.Fprintf(w, `{"access_token":"at-of-%s","refresh_token":"rt-of-%s","token_type":"Bearer","expires_in":3600}`, rt, rt); err != nil {
+				m.t.Errorf("write mock response: %v", err)
 			}
 		default:
 			http.Error(w, `{"error":"unsupported_grant_type"}`, http.StatusBadRequest)
 		}
 	case strings.HasSuffix(r.URL.Path, "/me"):
-		if m.expectBearer != "" && r.Header.Get("Authorization") != "Bearer "+m.expectBearer {
-			http.Error(w, `{"error":{"code":"InvalidAuthenticationToken"}}`, http.StatusUnauthorized)
-			return
-		}
-		if _, err := fmt.Fprintf(w, `{"id":%q,"mail":%q,"userPrincipalName":%q}`, m.meID, m.meMail, m.meUPN); err != nil {
+		m.mu.Lock()
+		id, mail, upn := m.meID, m.meMail, m.meUPN
+		m.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]string{"id": id, "mail": mail, "userPrincipalName": upn}); err != nil {
 			m.t.Errorf("write mock response: %v", err)
 		}
 	default:
@@ -157,773 +226,511 @@ func (m *mockMicrosoft) serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (m *mockMicrosoft) refreshCount() int {
+func (m *mockMicrosoft) setIdentity(id, upn string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.refreshTokens
+	m.meID, m.meUPN = id, upn
 }
 
-func stateFromURL(t *testing.T, raw string) string {
+func (m *mockMicrosoft) setMail(upn, mail string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.meUPN, m.meMail = upn, mail
+}
+
+func (m *mockMicrosoft) verifier() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.codeVerifier
+}
+
+func (m *mockMicrosoft) maxConcurrentRefresh() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.maxRefreshConcurrent
+}
+
+func stateAndChallenge(t *testing.T, authURL string) (state, challenge string) {
 	t.Helper()
-	parsed, err := url.Parse(raw)
+	parsed, err := url.Parse(authURL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := parsed.Query().Get("state")
-	if state == "" {
-		t.Fatal("authorization URL has no state")
+	query := parsed.Query()
+	state, challenge = query.Get("state"), query.Get("code_challenge")
+	if state == "" || challenge == "" {
+		t.Fatalf("authorization URL lacks state or PKCE challenge: %s", authURL)
 	}
-	return state
-}
-
-func connectionRecord(t *testing.T, app core.App) *core.Record {
-	t.Helper()
-	record, err := app.FindFirstRecordByFilter(CollectionName, "1=1")
-	if err != nil {
-		t.Fatal(err)
+	if got := query.Get("code_challenge_method"); got != "S256" {
+		t.Fatalf("code_challenge_method = %q, want S256", got)
 	}
-	return record
-}
-
-func countConnections(t *testing.T, app core.App) int64 {
-	t.Helper()
-	total, err := app.CountRecords(CollectionName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return total
+	return state, challenge
 }
 
 // connectNow runs BeginAuth + CompleteAuth against the mock, which must
-// already answer with the configured identity.
-func connectNow(t *testing.T, svc *Service, operator string) Connection {
+// already answer with the wanted identity.
+func connectNow(t *testing.T, svc *Service, owner string) *mailbox.Connection {
 	t.Helper()
-	raw, err := svc.BeginAuth(context.Background(), operator)
+	authURL, err := svc.BeginAuth(context.Background(), owner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn, err := svc.CompleteAuth(context.Background(), operator, stateFromURL(t, raw), "code-1")
+	state, _ := stateAndChallenge(t, authURL)
+	conn, err := svc.CompleteAuth(context.Background(), owner, state, "code-1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	return conn
 }
 
-// overwriteCredential replaces the stored token, e.g. to make it expired.
-func overwriteCredential(t *testing.T, app core.App, svc *Service, token oauth2.Token) string {
+// expireToken rewrites the connection credential to an already-expired
+// access token with the given refresh token.
+func expireToken(t *testing.T, store *mailbox.Store, conn *mailbox.Connection, refreshToken string) {
 	t.Helper()
-	credential, err := svc.sealToken(&token)
+	err := store.Reconnect(context.Background(), conn, mailbox.Credential{
+		Provider:     mailbox.ProviderMicrosoft,
+		AccessToken:  "stale-" + refreshToken,
+		RefreshToken: refreshToken,
+		ExpiresAt:    time.Now().Add(-time.Minute),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	record := connectionRecord(t, app)
-	record.Set("credential", string(credential))
-	record.Set("credential_expires_at", token.Expiry)
-	if err := app.Save(record); err != nil {
-		t.Fatal(err)
-	}
-	return string(credential)
 }
 
-func TestConfigError(t *testing.T) {
-	svc := &Service{cfg: testEnv(t, "https://login.example.test", "https://graph.example.test/v1.0")}
-	if err := svc.ConfigError(); err != nil {
-		t.Fatalf("complete settings: unexpected error %v", err)
-	}
+func TestConfigErrorNamesEnvVars(t *testing.T) {
+	app := bootApp(t)
+	cfg := testEnv(t, "https://login.example.test", "https://graph.example.test")
+	cfg.Microsoft.TenantID = ""
+	cfg.Microsoft.ClientID = ""
+	svc, _ := newService(t, app, cfg)
 
-	t.Setenv(config.EnvTenantID, "")
-	t.Setenv(config.EnvClientID, "")
-	t.Setenv(config.EnvClientSecret, "   ")
-	cfg, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
+	err := svc.ConfigError()
+	if err == nil {
+		t.Fatal("expected a configuration error")
 	}
-	svc.cfg = cfg
-	err = svc.ConfigError()
-	if !errors.Is(err, ErrNotConfigured) {
-		t.Fatalf("got %v, want ErrNotConfigured", err)
+	msg := err.Error()
+	if !strings.Contains(msg, config.EnvTenantID) || !strings.Contains(msg, config.EnvClientID) {
+		t.Fatalf("config error must name the env vars, got %q", msg)
 	}
-	for _, name := range []string{config.EnvTenantID, config.EnvClientID, config.EnvClientSecret} {
-		if !strings.Contains(err.Error(), name) {
-			t.Errorf("error %q does not name %s", err, name)
-		}
+	if strings.Contains(msg, "client-secret-1") {
+		t.Fatalf("config error must never contain values, got %q", msg)
+	}
+	if _, err := svc.BeginAuth(context.Background(), "op-1"); !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("BeginAuth with incomplete settings = %v, want ErrNotConfigured", err)
 	}
 }
 
 func TestBeginAuthURL(t *testing.T) {
-	cfg := testEnv(t, "https://login.example.test", "https://graph.example.test/v1.0")
-	svc := NewService(bootApp(t, t.TempDir()), cfg)
+	app := bootApp(t)
+	mock := newMockMicrosoft(t, "graph-1", "user1@tenant1.example.test")
+	cfg := testEnv(t, mock.srv.URL, mock.srv.URL)
+	svc, _ := newService(t, app, cfg)
+	owner := provision(t, app, "op1@bachtelcorporation.com")
 
-	raw, err := svc.BeginAuth(context.Background(), testOperator)
+	authURL, err := svc.BeginAuth(context.Background(), owner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	parsed, err := url.Parse(raw)
+	parsed, err := url.Parse(authURL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.Host != "login.example.test" || parsed.Path != "/tenant-1/oauth2/v2.0/authorize" {
-		t.Fatalf("unexpected authorize target %s%s", parsed.Host, parsed.Path)
+	if !strings.Contains(parsed.Path, "/tenant-1/oauth2/v2.0/authorize") {
+		t.Fatalf("authorize URL is not tenant-specific: %s", authURL)
 	}
-	q := parsed.Query()
-	if q.Get("client_id") != "client-1" || q.Get("redirect_uri") != cfg.Microsoft.RedirectURL || q.Get("response_type") != "code" {
-		t.Fatalf("unexpected auth params: %v", q)
+	query := parsed.Query()
+	if query.Get("redirect_uri") != cfg.Microsoft.RedirectURL {
+		t.Fatalf("redirect_uri = %q, want %q", query.Get("redirect_uri"), cfg.Microsoft.RedirectURL)
 	}
-	if got, want := q.Get("scope"), "offline_access https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/User.Read"; got != want {
-		t.Fatalf("scope = %q, want %q", got, want)
+	if query.Get("login_hint") != "" {
+		t.Fatal("there is no fixed sender; the URL must not carry a login_hint")
 	}
-	if q.Get("access_type") != "offline" || q.Get("login_hint") != cfg.Microsoft.SenderAddress {
-		t.Fatalf("unexpected access_type/login_hint: %v", q)
+	if !strings.Contains(query.Get("scope"), "offline_access") ||
+		!strings.Contains(query.Get("scope"), "Mail.Send") ||
+		!strings.Contains(query.Get("scope"), "User.Read") {
+		t.Fatalf("scopes missing minimum delegated set: %q", query.Get("scope"))
 	}
-	if q.Get("code_challenge_method") != "S256" || q.Get("code_challenge") == "" {
-		t.Fatalf("missing PKCE challenge: %v", q)
+
+	// The exchanged code must carry the PKCE verifier matching the challenge.
+	state, challenge := stateAndChallenge(t, authURL)
+	if _, err := svc.CompleteAuth(context.Background(), owner, state, "code-1"); err != nil {
+		t.Fatal(err)
 	}
-	state := q.Get("state")
+	sum := sha256.Sum256([]byte(mock.verifier()))
+	if got := base64.RawURLEncoding.EncodeToString(sum[:]); got != challenge {
+		t.Fatalf("PKCE verifier does not match challenge: %q vs %q", got, challenge)
+	}
+}
+
+func TestAttemptExpiryReplayAndOperatorBinding(t *testing.T) {
+	app := bootApp(t)
+	mock := newMockMicrosoft(t, "graph-1", "user1@tenant1.example.test")
+	cfg := testEnv(t, mock.srv.URL, mock.srv.URL)
+	svc, _ := newService(t, app, cfg)
+	owner := provision(t, app, "op1@bachtelcorporation.com")
+
+	// Expired attempt: backdate the stored expiry.
+	authURL, err := svc.BeginAuth(context.Background(), owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, _ := stateAndChallenge(t, authURL)
 	svc.mu.Lock()
-	attempt, ok := svc.attempts[state]
+	attempt := svc.attempts[state]
+	attempt.expiresAt = time.Now().Add(-time.Minute)
+	svc.attempts[state] = attempt
 	svc.mu.Unlock()
-	if !ok {
-		t.Fatalf("state %q not stored", state)
+	if _, err := svc.CompleteAuth(context.Background(), owner, state, "code-1"); !errors.Is(err, ErrAuthorizationState) {
+		t.Fatalf("expired attempt = %v, want ErrAuthorizationState", err)
 	}
-	if attempt.operatorID != testOperator {
-		t.Fatalf("attempt bound to %q, want %q", attempt.operatorID, testOperator)
-	}
-	sum := sha256.Sum256([]byte(attempt.verifier))
-	if want := base64.RawURLEncoding.EncodeToString(sum[:]); q.Get("code_challenge") != want {
-		t.Fatalf("challenge = %q, want S256 of the stored verifier", q.Get("code_challenge"))
-	}
-}
 
-func TestBeginAuthGuards(t *testing.T) {
-	svc := &Service{cfg: testEnv(t, "https://login.example.test", "https://graph.example.test/v1.0"), attempts: make(map[string]pendingAttempt)}
-	t.Setenv(config.EnvClientID, "")
-	cfg, err := config.Load()
+	// Operator binding: op-2 cannot consume op-1's attempt.
+	authURL, err = svc.BeginAuth(context.Background(), owner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc.cfg = cfg
-	if _, err := svc.BeginAuth(context.Background(), testOperator); !errors.Is(err, ErrNotConfigured) {
-		t.Fatalf("unconfigured: got %v, want ErrNotConfigured", err)
+	state, _ = stateAndChallenge(t, authURL)
+	other := provision(t, app, "op2@bachtelcorporation.com")
+	if _, err := svc.CompleteAuth(context.Background(), other, state, "code-1"); !errors.Is(err, ErrAuthorizationState) {
+		t.Fatalf("cross-operator attempt = %v, want ErrAuthorizationState", err)
 	}
-	t.Setenv(config.EnvClientID, "client-1")
-	cfg, err = config.Load()
+	// The attempt was consumed by the failed try; the rightful owner is
+	// rejected too.
+	if _, err := svc.CompleteAuth(context.Background(), owner, state, "code-1"); !errors.Is(err, ErrAuthorizationState) {
+		t.Fatalf("replayed attempt = %v, want ErrAuthorizationState", err)
+	}
+
+	// Successful connect, then replay the same state.
+	conn := connectNow(t, svc, owner)
+	if _, err := svc.CompleteAuth(context.Background(), owner, state, "code-1"); !errors.Is(err, ErrAuthorizationState) {
+		t.Fatalf("replay after success = %v, want ErrAuthorizationState", err)
+	}
+	if conn.Generation != 1 || !conn.Current {
+		t.Fatalf("first connect = generation %d current %v, want generation 1 current", conn.Generation, conn.Current)
+	}
+	if conn.Sender != "user1@tenant1.example.test" || conn.Identity != "graph-1@tenant-1" {
+		t.Fatalf("connection identity = %q/%q", conn.Sender, conn.Identity)
+	}
+}
+
+func TestFirstConnectAndGraphFallback(t *testing.T) {
+	app := bootApp(t)
+	mock := newMockMicrosoft(t, "graph-1", "")
+	// userPrincipalName empty: the mail address is the fallback.
+	mock.setMail("", "Fallback@Tenant1.example.test")
+	cfg := testEnv(t, mock.srv.URL, mock.srv.URL)
+	svc, store := newService(t, app, cfg)
+	owner := provision(t, app, "op1@bachtelcorporation.com")
+
+	conn := connectNow(t, svc, owner)
+	if got, want := conn.Sender, "fallback@tenant1.example.test"; got != want {
+		t.Fatalf("canonical sender = %q, want %q", got, want)
+	}
+	token, err := svc.AccessToken(context.Background(), conn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc.cfg = cfg
-
-	svc.SetDispatchGuard(stubGuard{n: 2})
-	if _, err := svc.BeginAuth(context.Background(), testOperator); !errors.Is(err, ErrInFlight) {
-		t.Fatalf("in-flight: got %v, want ErrInFlight", err)
+	if token != "at-c1" {
+		t.Fatalf("access token = %q, want the freshly issued at-c1", token)
 	}
-	svc.mu.Lock()
-	pending := len(svc.attempts)
-	svc.mu.Unlock()
-	if pending != 0 {
-		t.Fatalf("%d attempts stored, want 0", pending)
-	}
-}
-
-func TestCompleteAuthStateHandling(t *testing.T) {
-	ctx := context.Background()
-	t.Run("unknown state", func(t *testing.T) {
-		svc := NewService(bootApp(t, t.TempDir()), testEnv(t, "https://login.example.test", "https://graph.example.test/v1.0"))
-		if _, err := svc.CompleteAuth(ctx, testOperator, "no-such-state", "code"); !errors.Is(err, ErrAuthorizationState) {
-			t.Fatalf("got %v, want ErrAuthorizationState", err)
-		}
-		if total := countConnections(t, svc.app); total != 0 {
-			t.Fatalf("%d records installed, want 0", total)
-		}
-	})
-
-	t.Run("expired attempt", func(t *testing.T) {
-		svc := NewService(bootApp(t, t.TempDir()), testEnv(t, "https://login.example.test", "https://graph.example.test/v1.0"))
-		svc.attempts["stale"] = pendingAttempt{operatorID: testOperator, verifier: "v", expiresAt: time.Now().Add(-time.Minute)}
-		if _, err := svc.CompleteAuth(ctx, testOperator, "stale", "code"); !errors.Is(err, ErrAuthorizationState) {
-			t.Fatalf("got %v, want ErrAuthorizationState", err)
-		}
-		if total := countConnections(t, svc.app); total != 0 {
-			t.Fatalf("%d records installed, want 0", total)
-		}
-	})
-
-	t.Run("operator mismatch", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		svc := NewService(bootApp(t, t.TempDir()), testEnv(t, mock.srv.URL, mock.srv.URL))
-		raw, err := svc.BeginAuth(ctx, "op-1")
-		if err != nil {
-			t.Fatal(err)
-		}
-		state := stateFromURL(t, raw)
-		if _, err := svc.CompleteAuth(ctx, "op-2", state, "code-1"); !errors.Is(err, ErrAuthorizationState) {
-			t.Fatalf("got %v, want ErrAuthorizationState", err)
-		}
-		// The attempt is consumed even on mismatch: the real operator cannot
-		// complete it either.
-		if _, err := svc.CompleteAuth(ctx, testOperator, state, "code-1"); !errors.Is(err, ErrAuthorizationState) {
-			t.Fatalf("replay: got %v, want ErrAuthorizationState", err)
-		}
-		if total := countConnections(t, svc.app); total != 0 {
-			t.Fatalf("%d records installed, want 0", total)
-		}
-	})
-
-	t.Run("replay after failing exchange", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		svc := NewService(bootApp(t, t.TempDir()), testEnv(t, mock.srv.URL, mock.srv.URL))
-		raw, err := svc.BeginAuth(ctx, testOperator)
-		if err != nil {
-			t.Fatal(err)
-		}
-		state := stateFromURL(t, raw)
-		// Empty code makes the token endpoint answer invalid_grant, so the
-		// attempt is consumed on a later-step failure.
-		if _, err := svc.CompleteAuth(ctx, testOperator, state, ""); err == nil {
-			t.Fatal("expected exchange failure")
-		}
-		if _, err := svc.CompleteAuth(ctx, testOperator, state, "code-1"); !errors.Is(err, ErrAuthorizationState) {
-			t.Fatalf("replay: got %v, want ErrAuthorizationState", err)
-		}
-		if total := countConnections(t, svc.app); total != 0 {
-			t.Fatalf("%d records installed, want 0", total)
-		}
-	})
-}
-
-func TestCompleteAuthIdentity(t *testing.T) {
-	ctx := context.Background()
-	const sender = "hr@bachtelcorporation.com"
-
-	t.Run("matching mailbox connects", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		mock.meID, mock.meUPN, mock.expectBearer = "aid-1", "HR@BachtelCorporation.com", "at-c1"
-		cfg := testEnv(t, mock.srv.URL, mock.srv.URL)
-		app := bootApp(t, t.TempDir())
-		svc := NewService(app, cfg)
-
-		conn := connectNow(t, svc, testOperator)
-		if conn.Status != StatusConnected || conn.AccountID != "aid-1" || conn.AccountEmail != sender || conn.TenantID != "tenant-1" {
-			t.Fatalf("unexpected connection %+v", conn)
-		}
-		if conn.ExpiresAt.IsZero() || conn.ConnectedAt.IsZero() {
-			t.Fatalf("expiry/connected timestamps not set: %+v", conn)
-		}
-		if conn.SenderAddress != sender {
-			t.Fatalf("sender = %q, want %q", conn.SenderAddress, sender)
-		}
-		record := connectionRecord(t, app)
-		if record.GetString("status") != string(StatusConnected) || record.GetString("account_id") != "aid-1" ||
-			record.GetString("account_email") != sender || record.GetString("tenant_id") != "tenant-1" ||
-			record.GetString("last_error") != "" || !strings.HasPrefix(record.GetString("credential"), "v1.") {
-			t.Fatalf("record not persisted correctly: %+v", record.FieldsData())
-		}
-	})
-
-	t.Run("mail fallback connects", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		mock.meID, mock.meMail = "aid-2", sender
-		svc := NewService(bootApp(t, t.TempDir()), testEnv(t, mock.srv.URL, mock.srv.URL))
-		conn := connectNow(t, svc, testOperator)
-		if conn.Status != StatusConnected || conn.AccountEmail != sender {
-			t.Fatalf("unexpected connection %+v", conn)
-		}
-	})
-
-	t.Run("different mailbox installs nothing", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		mock.meID, mock.meUPN = "aid-x", "someone@evil.test"
-		svc := NewService(bootApp(t, t.TempDir()), testEnv(t, mock.srv.URL, mock.srv.URL))
-		raw, err := svc.BeginAuth(ctx, testOperator)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := svc.CompleteAuth(ctx, testOperator, stateFromURL(t, raw), "code-1"); !errors.Is(err, ErrIdentityMismatch) {
-			t.Fatalf("got %v, want ErrIdentityMismatch", err)
-		}
-		if total := countConnections(t, svc.app); total != 0 {
-			t.Fatalf("%d records installed, want 0", total)
-		}
-	})
-
-	t.Run("empty account id rejected", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		mock.meUPN = sender // id stays empty
-		svc := NewService(bootApp(t, t.TempDir()), testEnv(t, mock.srv.URL, mock.srv.URL))
-		raw, err := svc.BeginAuth(ctx, testOperator)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := svc.CompleteAuth(ctx, testOperator, stateFromURL(t, raw), "code-1"); !errors.Is(err, ErrIdentityMismatch) {
-			t.Fatalf("got %v, want ErrIdentityMismatch", err)
-		}
-		if total := countConnections(t, svc.app); total != 0 {
-			t.Fatalf("%d records installed, want 0", total)
-		}
-	})
-
-	t.Run("mismatch leaves existing connection byte-identical", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		mock.meID, mock.meUPN = "aid-1", sender
-		app := bootApp(t, t.TempDir())
-		svc := NewService(app, testEnv(t, mock.srv.URL, mock.srv.URL))
-		connectNow(t, svc, testOperator)
-
-		record := connectionRecord(t, app)
-		credentialBefore := record.GetString("credential")
-
-		mock.mu.Lock()
-		mock.meID, mock.meUPN = "aid-x", "someone@evil.test"
-		mock.mu.Unlock()
-
-		raw, err := svc.BeginAuth(ctx, testOperator)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := svc.CompleteAuth(ctx, testOperator, stateFromURL(t, raw), "code-1"); !errors.Is(err, ErrIdentityMismatch) {
-			t.Fatalf("got %v, want ErrIdentityMismatch", err)
-		}
-		record = connectionRecord(t, app)
-		if record.GetString("credential") != credentialBefore {
-			t.Fatal("credential column changed on identity mismatch")
-		}
-		if record.GetString("status") != string(StatusConnected) {
-			t.Fatalf("status = %q, want connected", record.GetString("status"))
-		}
-	})
-}
-
-func TestStatusReconnectRequiredRecord(t *testing.T) {
-	app := bootApp(t, t.TempDir())
-	svc := NewService(app, testEnv(t, "https://login.example.test", "https://graph.example.test/v1.0"))
-
-	conn, err := svc.Status(context.Background())
-	if err != nil || conn.Status != StatusDisconnected || conn.SenderAddress != "hr@bachtelcorporation.com" {
-		t.Fatalf("no record: got %+v err %v", conn, err)
-	}
-
-	collection, err := app.FindCollectionByNameOrId(CollectionName)
+	// The stored credential unseals for the owner through the store.
+	credential, err := store.Credential(context.Background(), conn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	record := core.NewRecord(collection)
-	record.Set("status", string(StatusReconnectRequired))
-	record.Set("last_error", "Microsoft rejected the stored refresh token; reconnect the mailbox")
+	if credential.RefreshToken != "rt-c1" {
+		t.Fatalf("stored refresh token = %q", credential.RefreshToken)
+	}
+}
+
+func TestDuplicateIdentityRefusedWithoutTouchingConnection(t *testing.T) {
+	app := bootApp(t)
+	mock := newMockMicrosoft(t, "graph-1", "user1@tenant1.example.test")
+	cfg := testEnv(t, mock.srv.URL, mock.srv.URL)
+	svc, _ := newService(t, app, cfg)
+	ownerA := provision(t, app, "opa@bachtelcorporation.com")
+	ownerB := provision(t, app, "opb@bachtelcorporation.com")
+
+	first := connectNow(t, svc, ownerA)
+
+	// ownerB signs into the same mailbox.
+	authURL, err := svc.BeginAuth(context.Background(), ownerB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, _ := stateAndChallenge(t, authURL)
+	_, err = svc.CompleteAuth(context.Background(), ownerB, state, "code-1")
+	if !errors.Is(err, mailbox.ErrClaimed) {
+		t.Fatalf("duplicate identity = %v, want mailbox.ErrClaimed", err)
+	}
+	if err.Error() == "" || strings.Contains(err.Error(), ownerA) {
+		t.Fatalf("claim refusal must not disclose the other owner: %q", err)
+	}
+
+	// ownerA's connection is unchanged: same record, still connected,
+	// generation intact, original credential still usable.
+	current, err := svc.store.Current(context.Background(), ownerA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.ID != first.ID || current.Status != mailbox.StatusConnected || current.Generation != 1 {
+		t.Fatalf("owner A connection changed: %+v", current)
+	}
+	token, err := svc.AccessToken(context.Background(), current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "at-c1" {
+		t.Fatalf("owner A token = %q, want at-c1", token)
+	}
+}
+
+func TestSameIdentityReconnectPreservesGeneration(t *testing.T) {
+	app := bootApp(t)
+	mock := newMockMicrosoft(t, "graph-1", "user1@tenant1.example.test")
+	cfg := testEnv(t, mock.srv.URL, mock.srv.URL)
+	svc, store := newService(t, app, cfg)
+	owner := provision(t, app, "op1@bachtelcorporation.com")
+
+	first := connectNow(t, svc, owner)
+	second := connectNow(t, svc, owner)
+
+	if second.ID != first.ID {
+		t.Fatalf("reconnect must keep the connection: %q vs %q", second.ID, first.ID)
+	}
+	if second.Generation != 1 {
+		t.Fatalf("generation = %d, want 1 (approvals for exact content survive)", second.Generation)
+	}
+	if second.Status != mailbox.StatusConnected || !second.Current {
+		t.Fatalf("status = %q current %v", second.Status, second.Current)
+	}
+	// The credential was replaced with the new token.
+	credential, err := store.Credential(context.Background(), second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if credential.AccessToken != "at-c2" {
+		t.Fatalf("access token = %q, want the reissued at-c2", credential.AccessToken)
+	}
+}
+
+func TestDifferentIdentityStagesReplacement(t *testing.T) {
+	app := bootApp(t)
+	mock := newMockMicrosoft(t, "graph-1", "user1@tenant1.example.test")
+	cfg := testEnv(t, mock.srv.URL, mock.srv.URL)
+	svc, store := newService(t, app, cfg)
+	owner := provision(t, app, "op1@bachtelcorporation.com")
+
+	first := connectNow(t, svc, owner)
+
+	// The same operator signs into a different mailbox.
+	mock.setIdentity("graph-2", "user2@tenant1.example.test")
+	authURL, err := svc.BeginAuth(context.Background(), owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, _ := stateAndChallenge(t, authURL)
+	conn, err := svc.CompleteAuth(context.Background(), owner, state, "code-1")
+	if conn != nil {
+		t.Fatalf("replacement must not return a connection: %+v", conn)
+	}
+	var replacement *ReplacementRequired
+	if !errors.As(err, &replacement) {
+		t.Fatalf("different identity = %v, want *ReplacementRequired", err)
+	}
+	if replacement.Reset == nil || replacement.Reset.ID == "" {
+		t.Fatalf("ReplacementRequired must carry the staged reset: %+v", replacement)
+	}
+
+	// A staged claim exists for the new mailbox.
+	reset, err := store.ActiveReset(context.Background(), owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reset.ID != replacement.Reset.ID || reset.Status != mailbox.ResetStaging {
+		t.Fatalf("active reset = %+v, want the staged reset", reset)
+	}
+	target, err := store.ByID(context.Background(), reset.ToConnectionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target.Sender != "user2@tenant1.example.test" || target.Identity != "graph-2@tenant-1" || target.Current {
+		t.Fatalf("staged target = %+v", target)
+	}
+
+	// The current connection is untouched.
+	current, err := store.Current(context.Background(), owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.ID != first.ID || current.Sender != "user1@tenant1.example.test" ||
+		current.Status != mailbox.StatusConnected || current.Generation != 1 {
+		t.Fatalf("current connection changed: %+v", current)
+	}
+	token, err := svc.AccessToken(context.Background(), current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "at-c1" {
+		t.Fatalf("current token = %q, want at-c1", token)
+	}
+}
+
+func TestRefreshesAreSerializedPerConnection(t *testing.T) {
+	app := bootApp(t)
+	mock := newMockMicrosoft(t, "graph-1", "user1@tenant1.example.test")
+	cfg := testEnv(t, mock.srv.URL, mock.srv.URL)
+	svc, store := newService(t, app, cfg)
+	ownerA := provision(t, app, "opa@bachtelcorporation.com")
+	ownerB := provision(t, app, "opb@bachtelcorporation.com")
+
+	connA := connectNow(t, svc, ownerA)
+	mock.setIdentity("graph-2", "user2@tenant1.example.test")
+	connB := connectNow(t, svc, ownerB)
+
+	expireToken(t, store, connA, "rt-a")
+	expireToken(t, store, connB, "rt-b")
+
+	// Arm the barrier: both refresh grants must be in flight simultaneously
+	// or neither returns. A global refresh lock would deadlock them.
+	mock.mu.Lock()
+	mock.barrierN = 2
+	mock.barrierRelease = make(chan struct{})
+	mock.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	tokens := make([]string, 2)
+	errs := make([]error, 2)
+	for i, conn := range []*mailbox.Connection{connA, connB} {
+		wg.Add(1)
+		go func(i int, conn *mailbox.Connection) {
+			defer wg.Done()
+			tokens[i], errs[i] = svc.AccessToken(ctx, conn)
+		}(i, conn)
+	}
+	wg.Wait()
+
+	for i := range errs {
+		if errs[i] != nil {
+			t.Fatalf("concurrent refresh %d failed: %v", i, errs[i])
+		}
+	}
+	if tokens[0] != "at-of-rt-a" || tokens[1] != "at-of-rt-b" {
+		t.Fatalf("tokens = %q/%q, want each connection's own refreshed token", tokens[0], tokens[1])
+	}
+	if got := mock.maxConcurrentRefresh(); got != 2 {
+		t.Fatalf("max concurrent refreshes = %d, want 2 (per-connection serialization)", got)
+	}
+
+	// The rotated credentials were persisted per connection.
+	credentialA, err := store.Credential(context.Background(), connA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if credentialA.AccessToken != "at-of-rt-a" || credentialA.RefreshToken != "rt-of-rt-a" {
+		t.Fatalf("persisted credential A = %+v", credentialA)
+	}
+}
+
+func TestRejectedRefreshMarksOnlyThatConnection(t *testing.T) {
+	app := bootApp(t)
+	mock := newMockMicrosoft(t, "graph-1", "user1@tenant1.example.test")
+	cfg := testEnv(t, mock.srv.URL, mock.srv.URL)
+	svc, store := newService(t, app, cfg)
+	ownerA := provision(t, app, "opa@bachtelcorporation.com")
+	ownerB := provision(t, app, "opb@bachtelcorporation.com")
+
+	connA := connectNow(t, svc, ownerA)
+	mock.setIdentity("graph-2", "user2@tenant1.example.test")
+	connB := connectNow(t, svc, ownerB)
+
+	expireToken(t, store, connA, "rt-a")
+	expireToken(t, store, connB, "rt-bad")
+	mock.mu.Lock()
+	mock.rejectedRefresh["rt-bad"] = true
+	mock.mu.Unlock()
+
+	if _, err := svc.AccessToken(context.Background(), connB); !errors.Is(err, ErrRefreshRejected) {
+		t.Fatalf("rejected refresh = %v, want ErrRefreshRejected", err)
+	}
+
+	// Only connection B is marked; its ciphertext was not overwritten.
+	currentB, err := store.Current(context.Background(), ownerB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if currentB.Status != mailbox.StatusReconnectRequired || currentB.LastError == "" {
+		t.Fatalf("connection B = %+v, want reconnect_required with a reason", currentB)
+	}
+	credentialB, err := store.Credential(context.Background(), currentB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if credentialB.AccessToken != "stale-rt-bad" {
+		t.Fatalf("rejected refresh must not overwrite the credential: %+v", credentialB)
+	}
+
+	// Connection A still refreshes fine and stays connected.
+	tokenA, err := svc.AccessToken(context.Background(), connA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tokenA != "at-of-rt-a" {
+		t.Fatalf("connection A token = %q, want its own refreshed token", tokenA)
+	}
+	currentA, err := store.Current(context.Background(), ownerA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if currentA.Status != mailbox.StatusConnected {
+		t.Fatalf("connection A status = %q, want connected", currentA.Status)
+	}
+}
+
+func TestUnreadableCiphertextIsActionableAndNeverOverwritten(t *testing.T) {
+	app := bootApp(t)
+	mock := newMockMicrosoft(t, "graph-1", "user1@tenant1.example.test")
+	cfg := testEnv(t, mock.srv.URL, mock.srv.URL)
+	svc, store := newService(t, app, cfg)
+	owner := provision(t, app, "op1@bachtelcorporation.com")
+
+	conn := connectNow(t, svc, owner)
+
+	// Corrupt the stored ciphertext directly.
+	record, err := app.FindRecordById(mailbox.ConnectionsCollection, conn.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Set("credential", "garbage-ciphertext")
 	if err := app.Save(record); err != nil {
 		t.Fatal(err)
 	}
-	conn, err = svc.Status(context.Background())
-	if err != nil || conn.Status != StatusReconnectRequired || conn.LastError == "" {
-		t.Fatalf("reconnect record: got %+v err %v", conn, err)
+
+	_, err = svc.AccessToken(context.Background(), conn)
+	if !errors.Is(err, mailbox.ErrCredentialsUnreadable) {
+		t.Fatalf("unreadable ciphertext = %v, want ErrCredentialsUnreadable", err)
 	}
-}
-
-func TestEncryption(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("seal open round trip", func(t *testing.T) {
-		svc := &Service{cfg: testEnv(t, "https://login.example.test", "https://graph.example.test/v1.0")}
-		in := &oauth2.Token{AccessToken: "at-1", RefreshToken: "rt-1", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour).UTC().Truncate(time.Second)}
-		sealed, err := svc.sealToken(in)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.HasPrefix(string(sealed), "v1.") {
-			t.Fatalf("blob %q lacks version prefix", sealed)
-		}
-		plaintext, err := svc.openCredential(string(sealed))
-		if err != nil {
-			t.Fatal(err)
-		}
-		var out oauth2.Token
-		if err := json.Unmarshal(plaintext, &out); err != nil {
-			t.Fatal(err)
-		}
-		if out.AccessToken != in.AccessToken || out.RefreshToken != in.RefreshToken || !out.Expiry.Equal(in.Expiry) {
-			t.Fatalf("round trip mismatch: %+v", out)
-		}
-	})
-
-	t.Run("tamper and truncation fail", func(t *testing.T) {
-		svc := &Service{cfg: testEnv(t, "https://login.example.test", "https://graph.example.test/v1.0")}
-		sealed, err := svc.sealToken(&oauth2.Token{AccessToken: "at-1"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		tampered := []byte(string(sealed))
-		tampered[len(tampered)-1] ^= 1
-		if _, err := svc.openCredential(string(tampered)); !errors.Is(err, ErrCredentialsUnreadable) {
-			t.Fatalf("tampered: got %v, want ErrCredentialsUnreadable", err)
-		}
-		if _, err := svc.openCredential(string(sealed[:len(sealed)-8])); !errors.Is(err, ErrCredentialsUnreadable) {
-			t.Fatalf("truncated: got %v, want ErrCredentialsUnreadable", err)
-		}
-		if _, err := svc.openCredential("v2.AAA="); !errors.Is(err, ErrCredentialsUnreadable) {
-			t.Fatalf("wrong version: got %v, want ErrCredentialsUnreadable", err)
-		}
-	})
-
-	t.Run("wrong and missing key leave record untouched", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		mock.meID, mock.meUPN = "aid-1", "hr@bachtelcorporation.com"
-		app := bootApp(t, t.TempDir())
-		svc := NewService(app, testEnv(t, mock.srv.URL, mock.srv.URL))
-		connectNow(t, svc, testOperator)
-		before := connectionRecord(t, app).GetString("credential")
-
-		other := make([]byte, config.EncryptionKeySize)
-		if _, err := rand.Read(other); err != nil {
-			t.Fatal(err)
-		}
-		t.Setenv(config.EnvEncryptionKey, base64.StdEncoding.EncodeToString(other))
-
-		if _, err := svc.AccessToken(ctx); !errors.Is(err, ErrCredentialsUnreadable) {
-			t.Fatalf("wrong key: got %v, want ErrCredentialsUnreadable", err)
-		}
-		conn, err := svc.Status(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if conn.Status != StatusReconnectRequired || !strings.Contains(conn.LastError, config.EnvEncryptionKey) {
-			t.Fatalf("status = %+v, want reconnect_required naming the key setting", conn)
-		}
-		record := connectionRecord(t, app)
-		if record.GetString("credential") != before || record.GetString("status") != string(StatusConnected) {
-			t.Fatal("record was modified while credentials were unreadable")
-		}
-
-		t.Setenv(config.EnvEncryptionKey, "")
-		if _, err := svc.AccessToken(ctx); !errors.Is(err, ErrCredentialsUnreadable) {
-			t.Fatalf("missing key: got %v, want ErrCredentialsUnreadable", err)
-		}
-		if _, err := svc.sealToken(&oauth2.Token{AccessToken: "x"}); !errors.Is(err, ErrCredentialsUnreadable) {
-			t.Fatalf("seal with missing key: got %v, want ErrCredentialsUnreadable", err)
-		}
-		if connectionRecord(t, app).GetString("credential") != before {
-			t.Fatal("credential column changed")
-		}
-	})
-
-	t.Run("restart recovery", func(t *testing.T) {
-		dir := t.TempDir()
-		mock := newMockMicrosoft(t)
-		mock.meID, mock.meUPN = "aid-1", "hr@bachtelcorporation.com"
-		cfg := testEnv(t, mock.srv.URL, mock.srv.URL)
-
-		app1 := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: dir})
-		if err := app1.Bootstrap(); err != nil {
-			t.Fatal(err)
-		}
-		{
-			collection := core.NewBaseCollection(CollectionName)
-			collection.Fields.Add(
-				&core.TextField{Name: "status", Required: true, Max: 32},
-				&core.TextField{Name: "account_id", Max: 255},
-				&core.TextField{Name: "account_email", Max: 255},
-				&core.TextField{Name: "tenant_id", Max: 255},
-				&core.TextField{Name: "last_error", Max: 255},
-				&core.TextField{Name: "credential", Max: 1 << 20},
-				&core.DateField{Name: "credential_expires_at"},
-				&core.AutodateField{Name: "created", OnCreate: true},
-				&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
-			)
-			if err := app1.Save(collection); err != nil {
-				t.Fatal(err)
-			}
-		}
-		connectNow(t, NewService(app1, cfg), testOperator)
-		if err := app1.ClearBootstrap(); err != nil {
-			t.Fatal(err)
-		}
-
-		// Second process on the same data dir: same key, no new sign-in.
-		app2 := bootApp(t, dir)
-		svc2 := NewService(app2, cfg)
-		conn, err := svc2.Status(ctx)
-		if err != nil || conn.Status != StatusConnected {
-			t.Fatalf("after restart: %+v err %v", conn, err)
-		}
-		token, err := svc2.AccessToken(ctx)
-		if err != nil || token != "at-c1" {
-			t.Fatalf("after restart: token %q err %v", token, err)
-		}
-		if n := mock.refreshCount(); n != 0 {
-			t.Fatalf("restart triggered %d refreshes, want 0", n)
-		}
-	})
-}
-
-func TestRefresh(t *testing.T) {
-	ctx := context.Background()
-	const sender = "hr@bachtelcorporation.com"
-
-	newConnected := func(t *testing.T, mock *mockMicrosoft) (*pocketbase.PocketBase, *Service) {
-		t.Helper()
-		mock.meID, mock.meUPN = "aid-1", sender
-		app := bootApp(t, t.TempDir())
-		svc := NewService(app, testEnv(t, mock.srv.URL, mock.srv.URL))
-		connectNow(t, svc, testOperator)
-		return app, svc
+	if !strings.Contains(err.Error(), "reconnect") {
+		t.Fatalf("unreadable ciphertext error must be actionable: %q", err)
 	}
 
-	t.Run("concurrent refresh happens exactly once", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		app, svc := newConnected(t, mock)
-		overwriteCredential(t, app, svc, oauth2.Token{
-			AccessToken: "at-old", RefreshToken: "rt-old", TokenType: "Bearer", Expiry: time.Now().Add(-time.Hour),
-		})
-
-		const goroutines = 6
-		var wg sync.WaitGroup
-		results := make([]string, goroutines)
-		errs := make([]error, goroutines)
-		for i := range goroutines {
-			wg.Go(func() {
-				results[i], errs[i] = svc.AccessToken(ctx)
-			})
-		}
-		wg.Wait()
-		for i := range goroutines {
-			if errs[i] != nil || results[i] != "at-r1" {
-				t.Fatalf("goroutine %d: token %q err %v, want at-r1", i, results[i], errs[i])
-			}
-		}
-		if n := mock.refreshCount(); n != 1 {
-			t.Fatalf("%d refresh requests, want 1", n)
-		}
-
-		record := connectionRecord(t, app)
-		plaintext, err := svc.openCredential(record.GetString("credential"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		var stored oauth2.Token
-		if err := json.Unmarshal(plaintext, &stored); err != nil {
-			t.Fatal(err)
-		}
-		if stored.AccessToken != "at-r1" || stored.RefreshToken != "rt-r1" || !stored.Expiry.After(time.Now()) {
-			t.Fatalf("rotated token not persisted: %+v", stored)
-		}
-		if record.GetDateTime("credential_expires_at").Time().Before(time.Now()) {
-			t.Fatal("expiry not persisted")
-		}
-
-		// Next call is served from storage without a network round trip.
-		token, err := svc.AccessToken(ctx)
-		if err != nil || token != "at-r1" {
-			t.Fatalf("token %q err %v", token, err)
-		}
-		if n := mock.refreshCount(); n != 1 {
-			t.Fatalf("%d refresh requests after cached call, want 1", n)
-		}
-	})
-
-	t.Run("omitted large refresh token keeps previous", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		mock.omitRefreshToken = true
-		app, svc := newConnected(t, mock)
-		previousRefresh := strings.Repeat("rt-old", 2048)
-		overwriteCredential(t, app, svc, oauth2.Token{
-			AccessToken: "at-old", RefreshToken: previousRefresh, TokenType: "Bearer", Expiry: time.Now().Add(-time.Hour),
-		})
-		if token, err := svc.AccessToken(ctx); err != nil || token != "at-r1" {
-			t.Fatalf("token %q err %v", token, err)
-		}
-		plaintext, err := svc.openCredential(connectionRecord(t, app).GetString("credential"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		var stored oauth2.Token
-		if err := json.Unmarshal(plaintext, &stored); err != nil {
-			t.Fatal(err)
-		}
-		if stored.RefreshToken != previousRefresh {
-			t.Fatal("previous large refresh token was not kept")
-		}
-		if len(connectionRecord(t, app).GetString("credential")) <= 5000 {
-			t.Fatal("refreshed credential must exceed the old storage limit")
-		}
-		if token, err := NewService(app, svc.cfg).AccessToken(ctx); err != nil || token != "at-r1" {
-			t.Fatalf("large refreshed credential was not persisted correctly (err=%v)", err)
-		}
-	})
-
-	t.Run("invalid grant requires reconnect", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		mock.rejectRefresh = true
-		app, svc := newConnected(t, mock)
-		before := overwriteCredential(t, app, svc, oauth2.Token{
-			AccessToken: "at-old", RefreshToken: "rt-old", TokenType: "Bearer", Expiry: time.Now().Add(-time.Hour),
-		})
-		if _, err := svc.AccessToken(ctx); err == nil {
-			t.Fatal("expected refresh failure")
-		}
-		record := connectionRecord(t, app)
-		if record.GetString("status") != string(StatusReconnectRequired) || record.GetString("last_error") == "" {
-			t.Fatalf("record = %+v, want reconnect_required with a reason", record.FieldsData())
-		}
-		if record.GetString("credential") != before {
-			t.Fatal("ciphertext changed on rejected refresh")
-		}
-	})
-
-	t.Run("persistence failure returns error not token", func(t *testing.T) {
-		mock := newMockMicrosoft(t)
-		app, svc := newConnected(t, mock)
-		overwriteCredential(t, app, svc, oauth2.Token{
-			AccessToken: "at-old", RefreshToken: "rt-old", TokenType: "Bearer", Expiry: time.Now().Add(-time.Hour),
-		})
-		failing := &Service{app: failingSaveApp{app}, cfg: svc.cfg, attempts: make(map[string]pendingAttempt)}
-		token, err := failing.AccessToken(ctx)
-		if err == nil || token != "" {
-			t.Fatalf("got token %q err %v, want error and empty token", token, err)
-		}
-		if !strings.Contains(err.Error(), "simulated disk failure") {
-			t.Fatalf("expected bounded persistence failure, got %v", err)
-		}
-		if n := mock.refreshCount(); n != 1 {
-			t.Fatalf("%d refresh requests, want 1", n)
-		}
-	})
-}
-
-func TestDisconnect(t *testing.T) {
-	ctx := context.Background()
-	mock := newMockMicrosoft(t)
-	mock.meID, mock.meUPN = "aid-1", "hr@bachtelcorporation.com"
-	app := bootApp(t, t.TempDir())
-	svc := NewService(app, testEnv(t, mock.srv.URL, mock.srv.URL))
-	connectNow(t, svc, testOperator)
-
-	svc.SetDispatchGuard(stubGuard{n: 1})
-	err := svc.Disconnect(ctx)
-	if !errors.Is(err, ErrInFlight) || !strings.Contains(err.Error(), "1 in flight") {
-		t.Fatalf("got %v, want ErrInFlight naming the count", err)
-	}
-	if total := countConnections(t, app); total != 1 {
-		t.Fatalf("%d records after blocked disconnect, want 1", total)
-	}
-
-	svc.SetDispatchGuard(nil)
-	if err := svc.Disconnect(ctx); err != nil {
+	// The stored value was left alone and the status was not changed behind
+	// the operator's back.
+	record, err = app.FindRecordById(mailbox.ConnectionsCollection, conn.ID)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if total := countConnections(t, app); total != 0 {
-		t.Fatalf("%d records after disconnect, want 0", total)
+	if got := record.GetString("credential"); got != "garbage-ciphertext" {
+		t.Fatalf("stored ciphertext = %q, want it unchanged", got)
 	}
-	conn, err := svc.Status(ctx)
-	if err != nil || conn.Status != StatusDisconnected {
-		t.Fatalf("after disconnect: %+v err %v", conn, err)
-	}
-	// Idempotent: disconnecting twice is not an error.
-	if err := svc.Disconnect(ctx); err != nil {
+	current, err := store.Current(context.Background(), owner)
+	if err != nil {
 		t.Fatal(err)
 	}
-}
-
-type stubGuard struct {
-	n   int
-	err error
-}
-
-func (g stubGuard) InFlight(context.Context) (int, error) { return g.n, g.err }
-
-type failingSaveApp struct{ core.App }
-
-func (a failingSaveApp) Save(core.Model) error { return errors.New("simulated disk failure") }
-
-func (a failingSaveApp) SaveWithContext(ctx context.Context, _ core.Model) error {
-	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > tokenAccessTimeout {
-		return errors.New("refresh persistence lacks bounded context")
-	}
-	return errors.New("simulated disk failure")
-}
-
-type refreshRoundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f refreshRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-
-func TestRefreshWaitHonorsCancellationWithoutLeakingSerialization(t *testing.T) {
-	mock := newMockMicrosoft(t)
-	mock.meID, mock.meUPN = "aid-1", "hr@bachtelcorporation.com"
-	app := bootApp(t, t.TempDir())
-	svc := NewService(app, testEnv(t, mock.srv.URL, mock.srv.URL))
-	connectNow(t, svc, testOperator)
-	expired := oauth2.Token{AccessToken: "old", RefreshToken: "refresh-old", TokenType: "Bearer", Expiry: time.Now().Add(-time.Hour)}
-	overwriteCredential(t, app, svc, expired)
-
-	entered := make(chan struct{}, 2)
-	release := make(chan struct{})
-	defer func() {
-		select {
-		case <-release:
-		default:
-			close(release)
-		}
-	}()
-	var calls atomic.Int32
-	client := &http.Client{Transport: refreshRoundTripFunc(func(r *http.Request) (*http.Response, error) {
-		calls.Add(1)
-		entered <- struct{}{}
-		deadline, ok := r.Context().Deadline()
-		if !ok || time.Until(deadline) > tokenAccessTimeout {
-			t.Error("refresh HTTP request has no bounded token deadline")
-		}
-		select {
-		case <-release:
-			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"access_token":"renewed","refresh_token":"rotated","token_type":"Bearer","expires_in":3600}`))}, nil
-		case <-r.Context().Done():
-			return nil, r.Context().Err()
-		}
-	})}
-	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, client)
-	type result struct {
-		token string
-		err   error
-	}
-	first := make(chan result, 1)
-	go func() { token, err := svc.AccessToken(ctx); first <- result{token, err} }()
-	select {
-	case <-entered:
-	case <-time.After(time.Second):
-		t.Fatal("first refresh did not start")
-	}
-
-	waitCtx, cancel := context.WithCancel(ctx)
-	second := make(chan error, 1)
-	go func() { _, err := svc.AccessToken(waitCtx); second <- err }()
-	select {
-	case err := <-second:
-		t.Fatalf("waiter returned before cancellation or refresh completion: %v", err)
-	case <-time.After(20 * time.Millisecond):
-	}
-	cancel()
-	select {
-	case err := <-second:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("waiter error = %v", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("canceled waiter blocked behind refresh")
-	}
-	if calls.Load() != 1 {
-		t.Fatal("waiter launched a competing refresh")
-	}
-	close(release)
-	select {
-	case got := <-first:
-		if got.err != nil || got.token != "renewed" {
-			t.Fatalf("first refresh = %+v", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("first refresh failed to finish")
-	}
-	if token, err := svc.AccessToken(ctx); err != nil || token != "renewed" || calls.Load() != 1 {
-		t.Fatalf("cached refresh token=%q error=%v requests=%d", token, err, calls.Load())
-	}
-	// A later expired credential still refreshes: canceling the waiter neither
-	// held the semaphore nor released the first caller's slot prematurely.
-	overwriteCredential(t, app, svc, expired)
-	if token, err := svc.AccessToken(ctx); err != nil || token != "renewed" || calls.Load() != 2 {
-		t.Fatalf("later refresh token=%q error=%v requests=%d", token, err, calls.Load())
+	if current.Status != mailbox.StatusConnected {
+		t.Fatalf("status = %q, want unchanged (only CompleteAuth may rewrite)", current.Status)
 	}
 }
