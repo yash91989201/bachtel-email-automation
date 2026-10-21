@@ -55,3 +55,9 @@ The system SHALL require operator authentication for campaign, candidate, task, 
 - **THEN** each sees only their own campaigns, candidates, history, counts and downloads
 - **AND** one operator's work does not alter the other's candidate eligibility
 
+
+
+#### Scenario: Provider settings belong to the operator
+- **WHEN** one operator requests or changes another operator's saved provider setup
+- **THEN** no settings, identifiers or secrets are disclosed and no update occurs
+- **AND** an owner can manage only their own connection settings without permission to administer other operators

@@ -31,6 +31,11 @@ The system SHALL require a successfully submitted test email and the operator's 
 - **THEN** no approval is accepted and no candidate work is reserved or submitted
 
 
+#### Scenario: Same-mailbox application settings rotation
+- **WHEN** the owner validates new provider application credentials for the same verified mailbox
+- **THEN** applicable exact-configuration formatting approvals remain valid for the unchanged mailbox
+- **AND** changing application settings does not create another sender claim or automatically start or resume sending
+
 ### Requirement: Test sends at any time
 The system SHALL let the operator explicitly send a test during setup, normal use and task interruption when authorization is usable. Tests SHALL use the selected sample content with a test-recipient override and SHALL NOT change candidate status or resume a task.
 

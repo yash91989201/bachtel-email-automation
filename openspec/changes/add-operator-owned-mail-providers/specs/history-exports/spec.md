@@ -30,6 +30,11 @@ The system SHALL authorize every original-file and generated-file download again
 - **AND** direct file storage access cannot bypass the owner check
 
 
+#### Scenario: Provider application credentials excluded
+- **WHEN** task reports, campaign reports, historical HTML or ZIP packages are generated after provider setup or application-secret rotation
+- **THEN** no client secret, mailbox password, access token or refresh token is included
+- **AND** same-mailbox settings changes do not erase or relabel existing submission outcomes
+
 ### Requirement: Manual retention and deletion
 The system SHALL retain uploads, revisions, candidate/task history, attempts and generated artifacts without automatic expiry, except for the explicitly confirmed mailbox-replacement reset. Manual deletion SHALL clearly distinguish generated-file removal from deleting campaign records and require confirmation of the chosen scope.
 

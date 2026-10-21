@@ -18,7 +18,7 @@ The system SHALL permit each operator to own at most one current sending mailbox
 - **AND** the refused claim does not disclose the other owner's identity or replace their credentials
 
 #### Scenario: Duplicate address or account identity
-- **WHEN** a proposed connection matches an existing canonical sender address or verified provider account identity, including through another connection method
+- **WHEN** a proposed connection matches an existing canonical sender address or verified provider account identity, including through another connection method or a different application registration
 - **THEN** it cannot be assigned to a different operator
 - **AND** sender aliases and shared-mailbox delegation are not accepted as alternate claims
 
@@ -44,7 +44,7 @@ The system SHALL let an operator connect GoDaddy Titan using their full mailbox 
 - **AND** the app does not downgrade to plaintext or disable certificate verification
 
 ### Requirement: Confidential per-mailbox credentials
-The system SHALL encrypt provider credentials at rest under a deployment-managed secret, restrict their use to the owning connection, and exclude secret values from logs, downloads, HTML and application APIs. A missing or incorrect key SHALL block affected connections without silently overwriting ciphertext.
+The system SHALL encrypt provider credentials at rest under a deployment-managed secret, including application client secrets and authorization tokens, restrict their use to the owning connection, and exclude secret values from logs, downloads, HTML and application APIs. A missing or incorrect key SHALL block affected connections without silently overwriting ciphertext.
 
 #### Scenario: Restart with original secret
 - **WHEN** the server restarts with persistent data and the original encryption key
@@ -107,12 +107,65 @@ The system SHALL require explicit confirmation before replacing a mailbox. It SH
 - **AND** recovery never reports a completed replacement while stale sending data remains accessible
 
 ### Requirement: Provider readiness is independent
-The system SHALL identify supported providers and their connection requirements. Missing Microsoft application configuration SHALL disable Microsoft connection readiness without preventing a correctly configured Titan operator from sending. Unsupported provider selections SHALL be refused before credentials or sending state change.
+The system SHALL report provider setup and authorization readiness per operator and connection. Missing or invalid settings for one operator SHALL NOT disable another operator's usable connection, including connections using the same provider. Unsupported provider selections SHALL be refused before credentials or sending state change.
 
 #### Scenario: Titan without Microsoft registration
-- **WHEN** Titan is usable and Microsoft application configuration is absent
-- **THEN** Titan operations remain available and the UI explains Microsoft's missing setup separately
+- **WHEN** an operator has a usable Titan connection and no Microsoft registration has been configured on the deployment
+- **THEN** Titan operations remain available without Microsoft environment settings
 
 #### Scenario: Unsupported provider
 - **WHEN** an operator submits an unknown provider choice
 - **THEN** no connection is installed and no sending occurs
+
+
+#### Scenario: Incomplete setup for one Microsoft operator
+- **WHEN** one operator has missing or invalid Microsoft application settings and another has a usable Microsoft connection
+- **THEN** only the incomplete connection is reported as not ready
+- **AND** the other operator's provider settings, tokens and sending readiness are unchanged
+
+### Requirement: Operator-managed provider setup
+The system SHALL let each operator enter, validate and save the settings required by their selected supported provider through the protected connection UI. Setup SHALL be owner-scoped and SHALL NOT require deployment-wide mailbox or provider application credentials. The same setup and privacy contract SHALL apply when another provider becomes supported.
+
+#### Scenario: Microsoft setup belongs to its operator
+- **WHEN** an operator selects Microsoft 365
+- **THEN** they can supply their Tenant ID, Client ID and Client Secret before starting Microsoft authorization
+- **AND** the saved settings are private to their connection and secret values are encrypted
+- **AND** another operator can use a different tenant and application registration without changing deployment settings
+
+#### Scenario: Titan setup belongs to its operator
+- **WHEN** an operator selects GoDaddy Titan
+- **THEN** they can save their mailbox address and password through the protected UI
+- **AND** another operator cannot read, change or use those credentials
+
+#### Scenario: Reopen setup after restart
+- **WHEN** an operator returns after the server restarts with persistent data and the encryption key
+- **THEN** their saved provider settings remain associated with their connection
+- **AND** secret values are never returned to pre-fill the browser
+
+#### Scenario: Add an operator using an existing provider
+- **WHEN** an administrator provisions a new operator
+- **THEN** that operator can set up any supported provider independently without changing server provider credentials or another operator's settings
+
+#### Scenario: Another provider becomes supported
+- **WHEN** a later release adds a provider
+- **THEN** operators can complete that provider's required setup under the same ownership, encrypted-secret, exclusive-sender, approval and recovery rules
+- **AND** existing operators retain their configured connections and private campaign workspaces
+
+### Requirement: Application settings update without mailbox reset
+The system SHALL allow the owner to correct or rotate provider application settings for the same verified mailbox without deleting campaign or sending data. New settings SHALL become active only after validation for that mailbox. Updating settings SHALL NOT transfer sender ownership, silently replace the mailbox or automatically resume paused work.
+
+#### Scenario: Rotate Microsoft application credentials
+- **WHEN** an operator validates replacement application credentials through sign-in to their same verified mailbox
+- **THEN** that connection uses the new saved application settings for subsequent authorization and refresh
+- **AND** campaigns, candidates, tasks, history and applicable formatting approvals are preserved
+- **AND** in-flight requests settle before active credentials change
+
+#### Scenario: Invalid settings update
+- **WHEN** changed application settings fail validation
+- **THEN** the existing saved settings, credentials, mailbox claim and application data remain unchanged
+- **AND** no candidate email is transmitted during validation
+
+#### Scenario: Changed settings identify a different mailbox
+- **WHEN** sign-in under proposed application settings verifies a different mailbox
+- **THEN** the application requires the explicit mailbox-replacement flow before changing the connection
+- **AND** submitting application settings alone cannot trigger the destructive reset
