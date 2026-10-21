@@ -2,6 +2,7 @@ package campaign
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -64,7 +65,12 @@ type CreateCampaignInput struct {
 
 // CreateCampaign stores a campaign with its output settings. The first content
 // revision is created separately, when the operator uploads a body document.
-func (s *Service) CreateCampaign(ctx context.Context, input CreateCampaignInput) (*Campaign, error) {
+// The owner is the trusted operator id from the authenticated session: an
+// unknown owner id is refused by the relation field before anything is stored.
+func (s *Service) CreateCampaign(ctx context.Context, ownerID string, input CreateCampaignInput) (*Campaign, error) {
+	if strings.TrimSpace(ownerID) == "" {
+		return nil, ErrNotFound
+	}
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return nil, errors.New("a campaign name is required")
@@ -88,6 +94,7 @@ func (s *Service) CreateCampaign(ctx context.Context, input CreateCampaignInput)
 		return nil, fmt.Errorf("campaigns collection is missing; run migrations first: %w", err)
 	}
 	record := core.NewRecord(collection)
+	record.Set("owner", ownerID)
 	record.Set("name", name)
 	record.Set("source_headers", sourceHeaders)
 	record.Set("result_labels", labels)
@@ -111,8 +118,8 @@ type RevisionInput struct {
 // placeholders actually used, and stores an immutable revision. A validation
 // failure leaves the previous revision current: an invalid configuration never
 // becomes usable. Returned warnings name unsupported document content.
-func (s *Service) CreateRevision(ctx context.Context, campaignID string, input RevisionInput) (*Configuration, []string, error) {
-	campaign, err := s.LoadCampaign(ctx, campaignID)
+func (s *Service) CreateRevision(ctx context.Context, ownerID, campaignID string, input RevisionInput) (*Configuration, []string, error) {
+	campaign, err := s.LoadCampaign(ctx, ownerID, campaignID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -195,9 +202,16 @@ func (s *Service) CreateRevision(ctx context.Context, campaignID string, input R
 	return configuration, inspection.Warnings, nil
 }
 
-// ListCampaigns returns campaigns ordered by name.
-func (s *Service) ListCampaigns(ctx context.Context) ([]*Campaign, error) {
-	records, err := s.app.FindRecordsByFilter(CampaignsCollection, "", "name", 0, 0)
+// ListCampaigns returns the operator's campaigns ordered by name.
+func (s *Service) ListCampaigns(ctx context.Context, ownerID string) ([]*Campaign, error) {
+	records, err := s.app.FindRecordsByFilter(
+		CampaignsCollection,
+		"owner = {:owner}",
+		"name",
+		0,
+		0,
+		dbx.Params{"owner": ownerID},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -208,11 +222,20 @@ func (s *Service) ListCampaigns(ctx context.Context) ([]*Campaign, error) {
 	return campaigns, nil
 }
 
-// LoadCampaign returns one campaign.
-func (s *Service) LoadCampaign(ctx context.Context, id string) (*Campaign, error) {
-	record, err := s.app.FindRecordById(CampaignsCollection, id)
+// LoadCampaign returns one campaign of the operator. A campaign that does not
+// exist and a campaign owned by another operator are the same ErrNotFound, so
+// an id can never be probed for existence.
+func (s *Service) LoadCampaign(ctx context.Context, ownerID, id string) (*Campaign, error) {
+	record, err := s.app.FindFirstRecordByFilter(
+		CampaignsCollection,
+		"id = {:id} && owner = {:owner}",
+		dbx.Params{"id": id, "owner": ownerID},
+	)
 	if err != nil {
-		return nil, fmt.Errorf("campaign not found: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
 	}
 	return s.campaignFromRecord(record), nil
 }
@@ -220,22 +243,31 @@ func (s *Service) LoadCampaign(ctx context.Context, id string) (*Campaign, error
 // CurrentConfiguration returns the revision a new task would use, compiled and
 // ready to render. It reports an actionable error when the campaign has no
 // revision yet.
-func (s *Service) CurrentConfiguration(ctx context.Context, campaignID string) (*Configuration, error) {
-	campaign, err := s.LoadCampaign(ctx, campaignID)
+func (s *Service) CurrentConfiguration(ctx context.Context, ownerID, campaignID string) (*Configuration, error) {
+	campaign, err := s.LoadCampaign(ctx, ownerID, campaignID)
 	if err != nil {
 		return nil, err
 	}
 	if campaign.CurrentRevisionID == "" {
 		return nil, fmt.Errorf("campaign %q has no configuration yet", campaign.Name)
 	}
-	return s.LoadConfiguration(ctx, campaign.CurrentRevisionID)
+	return s.LoadConfiguration(ctx, ownerID, campaign.CurrentRevisionID)
 }
 
-// LoadConfiguration loads and compiles one revision.
-func (s *Service) LoadConfiguration(ctx context.Context, id string) (*Configuration, error) {
-	record, err := s.app.FindRecordById(ConfigurationsCollection, id)
+// LoadConfiguration loads and compiles one revision. Ownership is verified
+// through the revision's campaign, so a revision of another operator is the
+// same ErrNotFound as a missing one.
+func (s *Service) LoadConfiguration(ctx context.Context, ownerID, id string) (*Configuration, error) {
+	record, err := s.app.FindFirstRecordByFilter(
+		ConfigurationsCollection,
+		"id = {:id} && campaign.owner = {:owner}",
+		dbx.Params{"id": id, "owner": ownerID},
+	)
 	if err != nil {
-		return nil, fmt.Errorf("configuration not found: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
 	}
 	configuration := s.configurationFromRecord(record)
 	template, err := Compile(configuration.Subject, configuration.BodyHTML, configuration.Mappings)
@@ -247,7 +279,10 @@ func (s *Service) LoadConfiguration(ctx context.Context, id string) (*Configurat
 }
 
 // Revisions returns every stored revision of a campaign, newest first.
-func (s *Service) Revisions(ctx context.Context, campaignID string) ([]*Configuration, error) {
+func (s *Service) Revisions(ctx context.Context, ownerID, campaignID string) ([]*Configuration, error) {
+	if _, err := s.LoadCampaign(ctx, ownerID, campaignID); err != nil {
+		return nil, err
+	}
 	records, err := s.app.FindRecordsByFilter(
 		ConfigurationsCollection,
 		"campaign = {:campaign}",
@@ -269,16 +304,61 @@ func (s *Service) Revisions(ctx context.Context, campaignID string) ([]*Configur
 // UpdateResultLabels changes only the downloadable column labels. The content
 // hash of the current revision is untouched, so content approval survives a
 // presentation-only change.
-func (s *Service) UpdateResultLabels(ctx context.Context, campaignID string, labels []string) error {
+func (s *Service) UpdateResultLabels(ctx context.Context, ownerID, campaignID string, labels []string) error {
 	if err := ValidateResultLabels(labels); err != nil {
 		return err
 	}
-	record, err := s.app.FindRecordById(CampaignsCollection, campaignID)
+	campaign, err := s.LoadCampaign(ctx, ownerID, campaignID)
 	if err != nil {
-		return fmt.Errorf("campaign not found: %w", err)
+		return err
+	}
+	record, err := s.app.FindRecordById(CampaignsCollection, campaign.ID)
+	if err != nil {
+		return err
 	}
 	record.Set("result_labels", NormalizeResultLabels(labels))
 	return s.app.Save(record)
+}
+
+// DeleteCampaign removes a campaign and its revisions, including the uploaded
+// body documents PocketBase stores with each revision. It deliberately removes
+// no tasks, candidates or attempts: a caller that needs the campaign history
+// gone uses the retention action, which owns that wider deletion.
+func (s *Service) DeleteCampaign(ctx context.Context, ownerID, campaignID string) error {
+	campaign, err := s.LoadCampaign(ctx, ownerID, campaignID)
+	if err != nil {
+		return err
+	}
+	return s.app.RunInTransaction(func(txApp core.App) error {
+		revisions, err := txApp.FindRecordsByFilter(
+			ConfigurationsCollection,
+			"campaign = {:campaign}",
+			"",
+			0,
+			0,
+			dbx.Params{"campaign": campaign.ID},
+		)
+		if err != nil {
+			return err
+		}
+		// The campaign is cleared of its current pointer first: the pointer
+		// references a revision this transaction is about to delete.
+		parent, err := txApp.FindRecordById(CampaignsCollection, campaign.ID)
+		if err != nil {
+			return err
+		}
+		parent.Set("current_configuration", "")
+		if err := txApp.Save(parent); err != nil {
+			return err
+		}
+		for _, record := range revisions {
+			// Deleting the record also removes its stored document files.
+			if err := txApp.Delete(record); err != nil {
+				return fmt.Errorf("delete revision %d: %w", record.GetInt("revision"), err)
+			}
+		}
+		return txApp.Delete(parent)
+	})
 }
 
 // ConverterStatus reports whether a body document can currently be converted.
@@ -310,6 +390,7 @@ func (s *Service) nextRevision(campaignID string) (int, error) {
 func (s *Service) campaignFromRecord(record *core.Record) *Campaign {
 	campaign := &Campaign{
 		ID:                record.Id,
+		OwnerID:           record.GetString("owner"),
 		Name:              record.GetString("name"),
 		CurrentRevisionID: record.GetString("current_configuration"),
 	}

@@ -226,6 +226,10 @@ var (
 	// ErrTooManyRows reports a selected worksheet above the supported number
 	// of rows carrying data.
 	ErrTooManyRows = fmt.Errorf("the selected worksheet has more than %d rows with data; split the workbook and upload one task at a time", MaxCandidateRows)
+	// ErrNotFound reports a task, row or candidate that does not exist or
+	// belongs to another operator. Both refusals are identical so an id can
+	// never be probed across operators.
+	ErrNotFound = errors.New("task not found")
 )
 
 // ValidationError reports a failed task validation. The message is fixed

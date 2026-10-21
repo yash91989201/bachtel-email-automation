@@ -76,9 +76,16 @@ type Variable struct {
 	Body    bool   `json:"body"`
 }
 
+// ErrNotFound reports a campaign or revision that does not exist or belongs to
+// another operator. Both refusals are identical so an id can never be probed.
+var ErrNotFound = errors.New("campaign not found")
+
 // Campaign is a named email configuration with output settings.
 type Campaign struct {
-	ID                string
+	ID string
+	// OwnerID is the operator record that owns this campaign. Revisions,
+	// tasks, candidates and attempts inherit the owner through it.
+	OwnerID           string
 	Name              string
 	SourceHeaders     []string
 	ResultLabels      []string

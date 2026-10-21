@@ -2,6 +2,7 @@ package intake
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,10 @@ type Service struct {
 	campaigns *campaign.Service
 	store     *Store
 	limits    Limits
+	// writeGuard, when set, refuses new sending-data writes at the start of
+	// Stage, Validate, Revalidate and Claim. It exists so a mailbox reset can
+	// block intake while it deletes disclosed data.
+	writeGuard func(ctx context.Context, ownerID string) error
 }
 
 // NewService returns the intake service. Limits are normalized once, so a
@@ -53,6 +58,39 @@ func NewService(app core.App, campaigns *campaign.Service, limits Limits) *Servi
 // constraints an operator has to work within.
 func (s *Service) Limits() Limits { return s.limits }
 
+// SetWriteGuard binds the guard that refuses new sending-data writes while a
+// mailbox reset is deleting the operator's disclosed data. The guard error is
+// returned unchanged to the caller.
+func (s *Service) SetWriteGuard(fn func(ctx context.Context, ownerID string) error) {
+	s.writeGuard = fn
+}
+
+// guard runs the bound write guard for one operator.
+func (s *Service) guard(ctx context.Context, ownerID string) error {
+	if s.writeGuard == nil {
+		return nil
+	}
+	return s.writeGuard(ctx, ownerID)
+}
+
+// ownedTask loads a task record only when its campaign belongs to the trusted
+// operator. A task that does not exist and a task of another operator are the
+// same ErrNotFound, so an id can never be probed.
+func (s *Service) ownedTask(ctx context.Context, ownerID, taskID string) (*core.Record, error) {
+	record, err := s.app.FindFirstRecordByFilter(
+		TasksCollection,
+		"id = {:id} && campaign.owner = {:owner}",
+		dbx.Params{"id": taskID, "owner": ownerID},
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return record, nil
+}
+
 // Preview is the pinned personalized content of one admitted row, rendered from
 // the task's pinned revision and the row's immutable raw values. It is the same
 // entry point a later dispatch action uses to build the email it submits.
@@ -67,14 +105,17 @@ type Preview struct {
 // Stage stores one uploaded workbook as a staging task. The workbook is opened
 // first: an unsupported, corrupt, oversized or password-protected file is
 // rejected here, before any record exists. A staged task is never sendable.
-func (s *Service) Stage(ctx context.Context, campaignID, filename string, data []byte) (*Task, error) {
+func (s *Service) Stage(ctx context.Context, ownerID, campaignID, filename string, data []byte) (*Task, error) {
+	if err := s.guard(ctx, ownerID); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(campaignID) == "" {
 		return nil, errors.New("a campaign is required for a task upload")
 	}
 	if len(data) == 0 {
 		return nil, ErrNoUpload
 	}
-	target, err := s.campaigns.LoadCampaign(ctx, campaignID)
+	target, err := s.campaigns.LoadCampaign(ctx, ownerID, campaignID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,13 +154,13 @@ func (s *Service) Stage(ctx context.Context, campaignID, filename string, data [
 	return taskFromRecord(record, target.Name), nil
 }
 
-// LoadTask returns one task.
-func (s *Service) LoadTask(ctx context.Context, id string) (*Task, error) {
-	record, err := s.app.FindRecordById(TasksCollection, id)
+// LoadTask returns one task of the operator.
+func (s *Service) LoadTask(ctx context.Context, ownerID, id string) (*Task, error) {
+	record, err := s.ownedTask(ctx, ownerID, id)
 	if err != nil {
-		return nil, fmt.Errorf("task not found: %w", err)
+		return nil, err
 	}
-	target, err := s.campaigns.LoadCampaign(ctx, record.GetString("campaign"))
+	target, err := s.campaigns.LoadCampaign(ctx, ownerID, record.GetString("campaign"))
 	if err != nil {
 		return nil, err
 	}
@@ -127,8 +168,8 @@ func (s *Service) LoadTask(ctx context.Context, id string) (*Task, error) {
 }
 
 // ListTasks returns a campaign's tasks, newest first.
-func (s *Service) ListTasks(ctx context.Context, campaignID string) ([]*Task, error) {
-	target, err := s.campaigns.LoadCampaign(ctx, campaignID)
+func (s *Service) ListTasks(ctx context.Context, ownerID, campaignID string) ([]*Task, error) {
+	target, err := s.campaigns.LoadCampaign(ctx, ownerID, campaignID)
 	if err != nil {
 		return nil, err
 	}
@@ -151,8 +192,12 @@ func (s *Service) ListTasks(ctx context.Context, campaignID string) ([]*Task, er
 }
 
 // Rows returns one task's admitted membership snapshot, ordered by original
-// worksheet row.
-func (s *Service) Rows(ctx context.Context, taskID string) ([]RowSnapshot, error) {
+// worksheet row. The task is authorized first, so another operator's rows are
+// never listed under a guessed id.
+func (s *Service) Rows(ctx context.Context, ownerID, taskID string) ([]RowSnapshot, error) {
+	if _, err := s.ownedTask(ctx, ownerID, taskID); err != nil {
+		return nil, err
+	}
 	records, err := s.app.FindRecordsByFilter(
 		TaskCandidatesCollection,
 		"task = {:task}",
@@ -187,10 +232,10 @@ func (s *Service) Rows(ctx context.Context, taskID string) ([]RowSnapshot, error
 // Manifest returns one task's published validation manifest. It is the
 // authoritative map of every candidate row back to its original worksheet row,
 // including the rows that were excluded from candidate storage.
-func (s *Service) Manifest(ctx context.Context, taskID string) (Manifest, error) {
-	record, err := s.app.FindRecordById(TasksCollection, taskID)
+func (s *Service) Manifest(ctx context.Context, ownerID, taskID string) (Manifest, error) {
+	record, err := s.ownedTask(ctx, ownerID, taskID)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("task not found: %w", err)
+		return Manifest{}, err
 	}
 	data, err := s.readArtifact(ctx, record, "manifest")
 	if err != nil {
@@ -206,10 +251,10 @@ func (s *Service) Manifest(ctx context.Context, taskID string) (Manifest, error)
 // ExclusionReport returns the stored private exclusion report: every row that
 // was held back, with its original columns, row number and reason. It exists
 // immediately after validation, whatever the eligible count.
-func (s *Service) ExclusionReport(ctx context.Context, taskID string) ([]byte, string, error) {
-	record, err := s.app.FindRecordById(TasksCollection, taskID)
+func (s *Service) ExclusionReport(ctx context.Context, ownerID, taskID string) ([]byte, string, error) {
+	record, err := s.ownedTask(ctx, ownerID, taskID)
 	if err != nil {
-		return nil, "", fmt.Errorf("task not found: %w", err)
+		return nil, "", err
 	}
 	if record.GetString("excluded") == "" {
 		return nil, "", errors.New("this task has no exclusion report yet")
@@ -224,8 +269,8 @@ func (s *Service) ExclusionReport(ctx context.Context, taskID string) ([]byte, s
 // Preview renders one admitted row's personalized content from the task's
 // pinned revision. The render is a pure function of that revision and the row's
 // immutable raw snapshot, so a later campaign edit cannot change it.
-func (s *Service) Preview(ctx context.Context, taskID, rowID string) (*Preview, error) {
-	task, err := s.LoadTask(ctx, taskID)
+func (s *Service) Preview(ctx context.Context, ownerID, taskID, rowID string) (*Preview, error) {
+	task, err := s.LoadTask(ctx, ownerID, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -234,12 +279,12 @@ func (s *Service) Preview(ctx context.Context, taskID, rowID string) (*Preview, 
 	}
 	record, err := s.app.FindRecordById(TaskCandidatesCollection, rowID)
 	if err != nil {
-		return nil, fmt.Errorf("task row not found: %w", err)
+		return nil, ErrNotFound
 	}
 	if record.GetString("task") != task.ID {
 		return nil, errors.New("that row belongs to a different task")
 	}
-	configuration, err := s.campaigns.LoadConfiguration(ctx, task.ConfigurationID)
+	configuration, err := s.campaigns.LoadConfiguration(ctx, ownerID, task.ConfigurationID)
 	if err != nil {
 		return nil, err
 	}
@@ -263,22 +308,28 @@ func (s *Service) Preview(ctx context.Context, taskID, rowID string) (*Preview, 
 // Validate turns a staging task into a ready one by validating the selected
 // worksheet and header row against the campaign's current content revision.
 // Nothing becomes sendable: a ready task holds a published snapshot.
-func (s *Service) Validate(ctx context.Context, taskID, sheet string, headerRow int) error {
-	task, err := s.LoadTask(ctx, taskID)
+func (s *Service) Validate(ctx context.Context, ownerID, taskID, sheet string, headerRow int) error {
+	if err := s.guard(ctx, ownerID); err != nil {
+		return err
+	}
+	task, err := s.LoadTask(ctx, ownerID, taskID)
 	if err != nil {
 		return err
 	}
 	if task.Status != TaskStaging {
 		return &ValidationError{Message: "this task already has a validation snapshot; revalidate it instead of choosing a worksheet again"}
 	}
-	return s.validate(ctx, task, sheet, headerRow)
+	return s.validate(ctx, ownerID, task, sheet, headerRow)
 }
 
 // Revalidate reruns validation for an unstarted task against the campaign's
 // current content revision, replacing the preview snapshot. A task that has
 // already started is never touched: its snapshot is history.
-func (s *Service) Revalidate(ctx context.Context, taskID string) error {
-	task, err := s.LoadTask(ctx, taskID)
+func (s *Service) Revalidate(ctx context.Context, ownerID, taskID string) error {
+	if err := s.guard(ctx, ownerID); err != nil {
+		return err
+	}
+	task, err := s.LoadTask(ctx, ownerID, taskID)
 	if err != nil {
 		return err
 	}
@@ -288,14 +339,14 @@ func (s *Service) Revalidate(ctx context.Context, taskID string) error {
 	if task.Sheet == "" {
 		return &ValidationError{Message: "this task has no worksheet selection to revalidate"}
 	}
-	return s.validate(ctx, task, task.Sheet, task.HeaderRow)
+	return s.validate(ctx, ownerID, task, task.Sheet, task.HeaderRow)
 }
 
 // Preflight answers whether a later start, resume or retry action may proceed,
 // with fresh counts and the candidates that are free right now. It reserves
 // nothing: a start action claims through Claim after this check.
-func (s *Service) Preflight(ctx context.Context, taskID string) (*Preflight, error) {
-	task, err := s.LoadTask(ctx, taskID)
+func (s *Service) Preflight(ctx context.Context, ownerID, taskID string) (*Preflight, error) {
+	task, err := s.LoadTask(ctx, ownerID, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -310,11 +361,11 @@ func (s *Service) Preflight(ctx context.Context, taskID string) (*Preflight, err
 		return result, nil
 	}
 
-	target, err := s.campaigns.LoadCampaign(ctx, task.CampaignID)
+	target, err := s.campaigns.LoadCampaign(ctx, ownerID, task.CampaignID)
 	if err != nil {
 		return nil, err
 	}
-	configuration, err := s.campaigns.CurrentConfiguration(ctx, task.CampaignID)
+	configuration, err := s.campaigns.CurrentConfiguration(ctx, ownerID, task.CampaignID)
 	if err != nil {
 		result.Stale = true
 		result.Reasons = append(result.Reasons, "the campaign has no current content revision; create one and revalidate this task")
@@ -331,7 +382,7 @@ func (s *Service) Preflight(ctx context.Context, taskID string) (*Preflight, err
 		result.Reasons = append(result.Reasons, "the campaign's current content revision is not approved yet")
 	}
 
-	rows, err := s.Rows(ctx, taskID)
+	rows, err := s.Rows(ctx, ownerID, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -349,15 +400,18 @@ func (s *Service) Preflight(ctx context.Context, taskID string) (*Preflight, err
 // Claim reserves the still-free candidates of one ready task. Only the
 // candidates of that task's eligible rows are reservable: every other requested
 // id is answered with the state observed for it instead of being reserved.
-func (s *Service) Claim(ctx context.Context, taskID string, candidateIDs []string) (map[string]ClaimOutcome, error) {
-	task, err := s.LoadTask(ctx, taskID)
+func (s *Service) Claim(ctx context.Context, ownerID, taskID string, candidateIDs []string) (map[string]ClaimOutcome, error) {
+	if err := s.guard(ctx, ownerID); err != nil {
+		return nil, err
+	}
+	task, err := s.LoadTask(ctx, ownerID, taskID)
 	if err != nil {
 		return nil, err
 	}
 	if !task.Admitted() {
 		return nil, errors.New("only a validated task can reserve candidates")
 	}
-	rows, err := s.Rows(ctx, taskID)
+	rows, err := s.Rows(ctx, ownerID, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -386,12 +440,14 @@ func (s *Service) Claim(ctx context.Context, taskID string, candidateIDs []strin
 	for _, id := range refused {
 		// An id that is not an eligible row of this task is never reserved
 		// here; the state is reported so a caller can explain the exclusion.
-		candidate, err := s.store.LoadCandidate(s.app, id)
+		// An id outside the operator's campaigns has no state to report, so
+		// it is answered like any other unresolvable candidate.
+		record, err := s.ownedCandidate(ctx, ownerID, id)
 		if err != nil {
 			outcomes[id] = ClaimOutcome{Claimed: false, State: CandidateClaimed}
 			continue
 		}
-		outcomes[id] = ClaimOutcome{Claimed: false, State: candidate.State()}
+		outcomes[id] = ClaimOutcome{Claimed: false, State: candidateFromRecord(record).State()}
 	}
 	return outcomes, nil
 }
@@ -399,18 +455,44 @@ func (s *Service) Claim(ctx context.Context, taskID string, candidateIDs []strin
 // Release clears the reservations one task owns, so a stopped or recovered task
 // releases only safe, unstarted claims. Submission and uncertainty history is
 // never cleared, and a later resume rechecks instead of reclaiming blindly.
-func (s *Service) Release(ctx context.Context, taskID string) (int, error) {
+func (s *Service) Release(ctx context.Context, ownerID, taskID string) (int, error) {
 	if strings.TrimSpace(taskID) == "" {
 		return 0, errors.New("a task is required to release reservations")
+	}
+	if _, err := s.ownedTask(ctx, ownerID, taskID); err != nil {
+		return 0, err
 	}
 	return s.store.Release(ctx, taskID)
 }
 
 // MarkSubmitted records a confirmed submission for one candidate. It exists for
 // the dispatch change that owns sending; intake only defines the history that
-// makes a candidate ineligible for every later upload.
-func (s *Service) MarkSubmitted(ctx context.Context, candidateID string) error {
+// makes a candidate ineligible for every later upload. Ownership is verified
+// through the candidate's campaign, so another operator's history is never
+// touched.
+func (s *Service) MarkSubmitted(ctx context.Context, ownerID, candidateID string) error {
+	if _, err := s.ownedCandidate(ctx, ownerID, candidateID); err != nil {
+		return err
+	}
 	return s.store.MarkSubmitted(ctx, candidateID)
+}
+
+// ownedCandidate loads a candidate record only when its campaign belongs to the
+// trusted operator. A missing candidate and a candidate of another operator are
+// the same ErrNotFound.
+func (s *Service) ownedCandidate(ctx context.Context, ownerID, candidateID string) (*core.Record, error) {
+	record, err := s.app.FindFirstRecordByFilter(
+		CandidatesCollection,
+		"id = {:id} && campaign.owner = {:owner}",
+		dbx.Params{"id": candidateID, "owner": ownerID},
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return record, nil
 }
 
 // validate is the single staged validation path, shared by Validate and
@@ -421,7 +503,7 @@ func (s *Service) MarkSubmitted(ctx context.Context, candidateID string) error {
 // are classified across the complete input BEFORE any candidate is touched, and
 // only then does one transaction publish the snapshot. A failure before that
 // transaction leaves the task unready and records the reason.
-func (s *Service) validate(ctx context.Context, task *Task, sheet string, headerRow int) error {
+func (s *Service) validate(ctx context.Context, ownerID string, task *Task, sheet string, headerRow int) error {
 	data, err := s.sourceBytes(ctx, task.ID)
 	if err != nil {
 		return s.fail(task, &ValidationError{Message: "the stored workbook could not be read; upload the workbook again"})
@@ -430,11 +512,11 @@ func (s *Service) validate(ctx context.Context, task *Task, sheet string, header
 		return s.fail(task, &ValidationError{Message: "the stored workbook no longer matches the digest recorded at upload; upload the workbook again"})
 	}
 
-	target, err := s.campaigns.LoadCampaign(ctx, task.CampaignID)
+	target, err := s.campaigns.LoadCampaign(ctx, ownerID, task.CampaignID)
 	if err != nil {
 		return err
 	}
-	configuration, err := s.campaigns.CurrentConfiguration(ctx, task.CampaignID)
+	configuration, err := s.campaigns.CurrentConfiguration(ctx, ownerID, task.CampaignID)
 	if err != nil {
 		return s.fail(task, &ValidationError{Message: "the campaign has no content revision yet; create one before validating a task"})
 	}

@@ -5,6 +5,7 @@ package intake_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 
@@ -17,8 +18,9 @@ import (
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
 )
 
-// newCampaignRecord stores a minimal campaign: name and recipient header are
-// its only required fields.
+// newCampaignRecord stores a minimal campaign: name, source headers and the
+// required owner relation are its only fields. Each fixture campaign gets its
+// own operator, so two-operator tests can share this helper.
 func newCampaignRecord(t *testing.T, app core.App, name string) string {
 	t.Helper()
 	collection, err := app.FindCollectionByNameOrId(campaign.CampaignsCollection)
@@ -26,6 +28,7 @@ func newCampaignRecord(t *testing.T, app core.App, name string) string {
 		t.Fatal(err)
 	}
 	record := core.NewRecord(collection)
+	record.Set("owner", newOperator(t, app, strings.ReplaceAll(name, " ", "-")+"@bachtelcorporation.com"))
 	record.Set("name", name)
 	record.Set("source_headers", []string{"Email"})
 	if err := app.Save(record); err != nil {

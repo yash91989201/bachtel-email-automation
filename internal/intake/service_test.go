@@ -24,6 +24,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
+	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 )
 
 const testCampaign = "Software Engineers"
@@ -43,6 +44,23 @@ func newTestApp(t *testing.T) core.App {
 		t.Fatal(err)
 	}
 	return app
+}
+
+// newOperator provisions one operator account and returns its record id, which
+// is the owner id every service call is scoped by.
+func newOperator(t *testing.T, app core.App, email string) string {
+	t.Helper()
+	// Provision stores the login identity lowercased, so the lookup has to
+	// normalize the same way.
+	email = strings.ToLower(strings.TrimSpace(email))
+	if err := operator.Provision(app, email, "correct-horse-battery-staple"); err != nil {
+		t.Fatal(err)
+	}
+	record, err := app.FindAuthRecordByEmail(operator.CollectionName, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record.Id
 }
 
 // stubPandoc writes a deterministic converter stand-in: it reports a version
@@ -91,6 +109,7 @@ type env struct {
 	app       core.App
 	campaigns *campaign.Service
 	service   *intake.Service
+	owner     string
 	campaign  string
 	revision  string
 }
@@ -100,15 +119,16 @@ func newEnv(t *testing.T) *env {
 	app := newTestApp(t)
 	campaigns := campaign.NewServiceWithConverter(app, convert.Converter{Path: stubPandoc(t)})
 	ctx := context.Background()
+	owner := newOperator(t, app, "operator@bachtelcorporation.com")
 
-	created, err := campaigns.CreateCampaign(ctx, campaign.CreateCampaignInput{
+	created, err := campaigns.CreateCampaign(ctx, owner, campaign.CreateCampaignInput{
 		Name:          testCampaign,
 		SourceHeaders: []string{"Email"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	revision, _, err := campaigns.CreateRevision(ctx, created.ID, campaign.RevisionInput{
+	revision, _, err := campaigns.CreateRevision(ctx, owner, created.ID, campaign.RevisionInput{
 		Subject:      "Application for {{candidate_name}}",
 		Document:     docxFixture(t),
 		DocumentName: "body.docx",
@@ -127,6 +147,7 @@ func newEnv(t *testing.T) *env {
 		app:       app,
 		campaigns: campaigns,
 		service:   intake.NewService(app, campaigns, intake.Limits{}),
+		owner:     owner,
 		campaign:  created.ID,
 		revision:  revision.ID,
 	}
@@ -148,7 +169,7 @@ func (e *env) approve() {
 
 func (e *env) stage(data []byte, name string) *intake.Task {
 	e.t.Helper()
-	task, err := e.service.Stage(context.Background(), e.campaign, name, data)
+	task, err := e.service.Stage(context.Background(), e.owner, e.campaign, name, data)
 	if err != nil {
 		e.t.Fatalf("stage %s: %v", name, err)
 	}
@@ -159,7 +180,7 @@ func (e *env) stage(data []byte, name string) *intake.Task {
 func (e *env) validate(data []byte) *intake.Task {
 	e.t.Helper()
 	task := e.stage(data, "book.xlsx")
-	if err := e.service.Validate(context.Background(), task.ID, "Candidates", 1); err != nil {
+	if err := e.service.Validate(context.Background(), e.owner, task.ID, "Candidates", 1); err != nil {
 		e.t.Fatalf("validate: %v", err)
 	}
 	return e.mustLoad(task.ID)
@@ -167,7 +188,7 @@ func (e *env) validate(data []byte) *intake.Task {
 
 func (e *env) mustLoad(id string) *intake.Task {
 	e.t.Helper()
-	task, err := e.service.LoadTask(context.Background(), id)
+	task, err := e.service.LoadTask(context.Background(), e.owner, id)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -176,7 +197,7 @@ func (e *env) mustLoad(id string) *intake.Task {
 
 func (e *env) rows(taskID string) []intake.RowSnapshot {
 	e.t.Helper()
-	rows, err := e.service.Rows(context.Background(), taskID)
+	rows, err := e.service.Rows(context.Background(), e.owner, taskID)
 	if err != nil {
 		e.t.Fatal(err)
 	}
@@ -303,7 +324,7 @@ func TestValidatePublishesSnapshotAndCounts(t *testing.T) {
 		t.Fatalf("ineligible reason = %q, want the missing variable named", reason)
 	}
 
-	manifest, err := env.service.Manifest(context.Background(), task.ID)
+	manifest, err := env.service.Manifest(context.Background(), env.owner, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +382,7 @@ func TestPreviewUsesPinnedRevisionAndRawSnapshot(t *testing.T) {
 		t.Fatalf("membership rows = %d, want 3", len(rows))
 	}
 
-	preview, err := env.service.Preview(context.Background(), task.ID, rows[bySourceRow(rows, 2)].ID)
+	preview, err := env.service.Preview(context.Background(), env.owner, task.ID, rows[bySourceRow(rows, 2)].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +401,7 @@ func TestPreviewUsesPinnedRevisionAndRawSnapshot(t *testing.T) {
 
 	// Whitespace-only differences are normalized for the replacement value
 	// while the raw cell stays available next to it.
-	rendered, err := env.service.Preview(context.Background(), task.ID, rows[bySourceRow(rows, 3)].ID)
+	rendered, err := env.service.Preview(context.Background(), env.owner, task.ID, rows[bySourceRow(rows, 3)].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,13 +419,13 @@ func TestPreviewUsesPinnedRevisionAndRawSnapshot(t *testing.T) {
 		rows: [][]string{{"Email", "Applicant Full Name"}, {"frank@example.com", "Frank Reads"}},
 	}))
 	foreign := env.rows(other.ID)
-	if _, err := env.service.Preview(context.Background(), task.ID, foreign[0].ID); err == nil {
+	if _, err := env.service.Preview(context.Background(), env.owner, task.ID, foreign[0].ID); err == nil {
 		t.Fatal("a row of another task was previewed")
 	}
 
 	// A row admitted without its required value has no preview: the render
 	// reports the missing variable instead.
-	if _, err := env.service.Preview(context.Background(), task.ID, rows[bySourceRow(rows, 4)].ID); err == nil {
+	if _, err := env.service.Preview(context.Background(), env.owner, task.ID, rows[bySourceRow(rows, 4)].ID); err == nil {
 		t.Fatal("preview of a row missing a required value succeeded")
 	}
 }
@@ -422,7 +443,7 @@ func TestExclusionReportDownloadsEveryHeldRow(t *testing.T) {
 	env := newEnv(t)
 	task := env.validate(mixedWorkbook(t))
 
-	data, name, err := env.service.ExclusionReport(context.Background(), task.ID)
+	data, name, err := env.service.ExclusionReport(context.Background(), env.owner, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -516,7 +537,7 @@ func TestValidationFailuresLeaveTheTaskUnscheduled(t *testing.T) {
 	for name, testCase := range cases {
 		t.Run(name, func(t *testing.T) {
 			task := env.stage(testCase.workbook, name+".xlsx")
-			err := env.service.Validate(ctx, task.ID, "Candidates", 1)
+			err := env.service.Validate(ctx, env.owner, task.ID, "Candidates", 1)
 			var failure *intake.ValidationError
 			if !errors.As(err, &failure) || !strings.Contains(failure.Message, testCase.want) {
 				t.Fatalf("validate error = %v, want a validation failure naming %q", err, testCase.want)
@@ -532,13 +553,13 @@ func TestValidationFailuresLeaveTheTaskUnscheduled(t *testing.T) {
 			if rows := env.rows(task.ID); len(rows) != 0 {
 				t.Fatalf("membership rows = %d after a failed validation", len(rows))
 			}
-			if _, err := env.service.Manifest(ctx, task.ID); err == nil {
+			if _, err := env.service.Manifest(ctx, env.owner, task.ID); err == nil {
 				t.Fatal("a failed validation published a manifest")
 			}
-			if _, _, err := env.service.ExclusionReport(ctx, task.ID); err == nil {
+			if _, _, err := env.service.ExclusionReport(ctx, env.owner, task.ID); err == nil {
 				t.Fatal("a failed validation published an exclusion report")
 			}
-			preflight, err := env.service.Preflight(ctx, task.ID)
+			preflight, err := env.service.Preflight(ctx, env.owner, task.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -574,7 +595,7 @@ func TestCorruptAndUnsupportedUploadsAreRejectedBeforeStorage(t *testing.T) {
 		"empty":      {},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := env.service.Stage(ctx, env.campaign, name+".xls", data); err == nil {
+			if _, err := env.service.Stage(ctx, env.owner, env.campaign, name+".xls", data); err == nil {
 				t.Fatal("a non-XLSX upload was staged")
 			}
 		})
@@ -582,10 +603,10 @@ func TestCorruptAndUnsupportedUploadsAreRejectedBeforeStorage(t *testing.T) {
 	// An oversized upload is refused before storage even when it is a workbook.
 	workbook := buildWorkbook(t, sheetSpec{name: "Candidates", rows: [][]string{{"Email", "Applicant Full Name"}, {"carol@example.com", "Carol"}}})
 	tiny := intake.NewService(env.app, env.campaigns, intake.Limits{MaxUploadBytes: 128})
-	if _, err := tiny.Stage(ctx, env.campaign, "big.xlsx", workbook); !errors.Is(err, intake.ErrUploadTooLarge) {
+	if _, err := tiny.Stage(ctx, env.owner, env.campaign, "big.xlsx", workbook); !errors.Is(err, intake.ErrUploadTooLarge) {
 		t.Fatalf("oversized stage error = %v, want ErrUploadTooLarge", err)
 	}
-	tasks, err := env.service.ListTasks(ctx, env.campaign)
+	tasks, err := env.service.ListTasks(ctx, env.owner, env.campaign)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -616,14 +637,14 @@ func TestWorksheetSelection(t *testing.T) {
 	if task.Sheet != "Candidates" {
 		t.Fatalf("default selection = %q, want the first visible worksheet", task.Sheet)
 	}
-	err := env.service.Validate(ctx, task.ID, task.Sheet, task.HeaderRow)
+	err := env.service.Validate(ctx, env.owner, task.ID, task.Sheet, task.HeaderRow)
 	if err == nil || !strings.Contains(err.Error(), `no "Email" column`) {
 		t.Fatalf("validate with the default sheet = %v", err)
 	}
-	if err := env.service.Validate(ctx, task.ID, "Missing", 1); !errors.Is(err, intake.ErrUnknownSheet) {
+	if err := env.service.Validate(ctx, env.owner, task.ID, "Missing", 1); !errors.Is(err, intake.ErrUnknownSheet) {
 		t.Fatalf("unknown worksheet = %v, want ErrUnknownSheet", err)
 	}
-	if err := env.service.Validate(ctx, task.ID, "Old", 1); err != nil {
+	if err := env.service.Validate(ctx, env.owner, task.ID, "Old", 1); err != nil {
 		t.Fatalf("validate chosen sheet: %v", err)
 	}
 	loaded := env.mustLoad(task.ID)
@@ -636,12 +657,12 @@ func TestWorksheetSelection(t *testing.T) {
 	}
 	// A second validation of the same task is refused: it already holds a
 	// snapshot, and replacing it silently would be a new task's job.
-	if err := env.service.Validate(ctx, task.ID, "Candidates", 1); err == nil {
+	if err := env.service.Validate(ctx, env.owner, task.ID, "Candidates", 1); err == nil {
 		t.Fatal("a validated task was validated again")
 	}
 	// A different header row inside the table is refused as a header choice.
 	other := env.stage(data, "book2.xlsx")
-	if err := env.service.Validate(ctx, other.ID, "Old", 9); !errors.Is(err, intake.ErrInvalidHeaderRow) {
+	if err := env.service.Validate(ctx, env.owner, other.ID, "Old", 9); !errors.Is(err, intake.ErrInvalidHeaderRow) {
 		t.Fatalf("header row below the table = %v, want ErrInvalidHeaderRow", err)
 	}
 }
@@ -692,7 +713,7 @@ func TestSubmissionHistoryHoldsRowsAndIsNeverCleared(t *testing.T) {
 		{"carol@example.com", "Carol Danvers"},
 	}}))
 	rows := env.rows(first.ID)
-	if err := env.service.MarkSubmitted(ctx, rows[0].CandidateID); err != nil {
+	if err := env.service.MarkSubmitted(ctx, env.owner, rows[0].CandidateID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -734,7 +755,7 @@ func TestPreflightRevalidationAndClaimOwnership(t *testing.T) {
 
 	// Content approval is recorded by a later change; until it exists a start
 	// must be refused even though the snapshot is fresh.
-	preflight, err := env.service.Preflight(ctx, task.ID)
+	preflight, err := env.service.Preflight(ctx, env.owner, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -745,7 +766,7 @@ func TestPreflightRevalidationAndClaimOwnership(t *testing.T) {
 		t.Fatalf("preflight = %+v, want two claimable rows and a refusal without approval", preflight)
 	}
 	env.approve()
-	preflight, err = env.service.Preflight(ctx, task.ID)
+	preflight, err = env.service.Preflight(ctx, env.owner, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -754,7 +775,7 @@ func TestPreflightRevalidationAndClaimOwnership(t *testing.T) {
 	}
 
 	// Exactly one owner reserves a candidate.
-	outcomes, err := env.service.Claim(ctx, task.ID, preflight.Claimable)
+	outcomes, err := env.service.Claim(ctx, env.owner, task.ID, preflight.Claimable)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -763,14 +784,14 @@ func TestPreflightRevalidationAndClaimOwnership(t *testing.T) {
 			t.Fatalf("claim outcome for %q = %+v", id, outcomes[id])
 		}
 	}
-	second, err := env.service.Claim(ctx, task.ID, []string{candidateID})
+	second, err := env.service.Claim(ctx, env.owner, task.ID, []string{candidateID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if second[candidateID].Claimed || second[candidateID].State != intake.CandidateClaimed {
 		t.Fatalf("repeat claim = %+v, want an already claimed report", second[candidateID])
 	}
-	preflight, err = env.service.Preflight(ctx, task.ID)
+	preflight, err = env.service.Preflight(ctx, env.owner, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -791,7 +812,7 @@ func TestPreflightRevalidationAndClaimOwnership(t *testing.T) {
 	if otherRows[bySourceRow(otherRows, 3)].State != intake.RowEligible {
 		t.Fatalf("unscheduled row = %+v, want eligible", otherRows[1])
 	}
-	otherPreflight, err := env.service.Preflight(ctx, other.ID)
+	otherPreflight, err := env.service.Preflight(ctx, env.owner, other.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -801,14 +822,14 @@ func TestPreflightRevalidationAndClaimOwnership(t *testing.T) {
 
 	// Safe release frees only the claims the task owns, and a later action
 	// rechecks instead of reclaiming blindly.
-	released, err := env.service.Release(ctx, task.ID)
+	released, err := env.service.Release(ctx, env.owner, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if released != 2 {
 		t.Fatalf("released = %d, want 2", released)
 	}
-	if err := env.service.Revalidate(ctx, other.ID); err != nil {
+	if err := env.service.Revalidate(ctx, env.owner, other.ID); err != nil {
 		t.Fatal(err)
 	}
 	if state := env.rows(other.ID)[0].State; state != intake.RowEligible {
@@ -832,7 +853,7 @@ func TestConcurrentClaimsAdmitOneOwner(t *testing.T) {
 	errs := make([]error, racers)
 	for i := range racers {
 		wait.Go(func() {
-			outcomes, err := env.service.Claim(ctx, task.ID, []string{candidateID})
+			outcomes, err := env.service.Claim(ctx, env.owner, task.ID, []string{candidateID})
 			if err != nil {
 				errs[i] = err
 				return
@@ -866,7 +887,7 @@ func TestRevalidatePinsTheCurrentRevisionAndLeavesStartedTasksAlone(t *testing.T
 
 	// A new revision makes the snapshot stale: the preview must be rebuilt
 	// against the current revision before anything may start.
-	revision, _, err := env.campaigns.CreateRevision(ctx, env.campaign, campaign.RevisionInput{
+	revision, _, err := env.campaigns.CreateRevision(ctx, env.owner, env.campaign, campaign.RevisionInput{
 		Subject:      "Interview for {{candidate_name}}",
 		Document:     docxFixture(t),
 		DocumentName: "body.docx",
@@ -880,21 +901,21 @@ func TestRevalidatePinsTheCurrentRevisionAndLeavesStartedTasksAlone(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	preflight, err := env.service.Preflight(ctx, task.ID)
+	preflight, err := env.service.Preflight(ctx, env.owner, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !preflight.Stale || preflight.Startable() {
 		t.Fatalf("preflight = %+v, want a stale refusal", preflight)
 	}
-	if err := env.service.Revalidate(ctx, task.ID); err != nil {
+	if err := env.service.Revalidate(ctx, env.owner, task.ID); err != nil {
 		t.Fatal(err)
 	}
 	rebalanced := env.mustLoad(task.ID)
 	if rebalanced.ContentHash != revision.ContentHash {
 		t.Fatalf("pinned hash = %q, want the new revision", rebalanced.ContentHash)
 	}
-	preview, err := env.service.Preview(ctx, task.ID, env.rows(task.ID)[0].ID)
+	preview, err := env.service.Preview(ctx, env.owner, task.ID, env.rows(task.ID)[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -911,7 +932,7 @@ func TestRevalidatePinsTheCurrentRevisionAndLeavesStartedTasksAlone(t *testing.T
 	if err := env.app.Save(record); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.service.Revalidate(ctx, task.ID); err == nil {
+	if err := env.service.Revalidate(ctx, env.owner, task.ID); err == nil {
 		t.Fatal("a started task was revalidated")
 	}
 }
@@ -919,7 +940,7 @@ func TestRevalidatePinsTheCurrentRevisionAndLeavesStartedTasksAlone(t *testing.T
 func TestResultLabelCollisionsResolveWithoutOverwritingSourceColumns(t *testing.T) {
 	env := newEnv(t)
 	ctx := context.Background()
-	if err := env.campaigns.UpdateResultLabels(ctx, env.campaign, []string{"Status", "Applicant Full Name"}); err != nil {
+	if err := env.campaigns.UpdateResultLabels(ctx, env.owner, env.campaign, []string{"Status", "Applicant Full Name"}); err != nil {
 		t.Fatal(err)
 	}
 	task := env.validate(buildWorkbook(t, sheetSpec{name: "Candidates", rows: [][]string{
@@ -933,7 +954,7 @@ func TestResultLabelCollisionsResolveWithoutOverwritingSourceColumns(t *testing.
 	if got := fmt.Sprint(task.Headers); got != "[Email Applicant Full Name Status]" {
 		t.Fatalf("source headers = %v", task.Headers)
 	}
-	preflight, err := env.service.Preflight(ctx, task.ID)
+	preflight, err := env.service.Preflight(ctx, env.owner, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1000,7 +1021,7 @@ func TestSourceBytesAndRowCoordinatesArePreserved(t *testing.T) {
 
 	// Row coordinates in the manifest point at the worksheet the operator
 	// uploaded: row 1 is the header and the held rows keep their own numbers.
-	manifest, err := env.service.Manifest(context.Background(), task.ID)
+	manifest, err := env.service.Manifest(context.Background(), env.owner, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1065,7 +1086,7 @@ func TestThousandRowFixture(t *testing.T) {
 	if rows := env.rows(task.ID); len(rows) != wantEligible+1 {
 		t.Fatalf("membership rows = %d, want %d", len(rows), wantEligible+1)
 	}
-	data, _, err := env.service.ExclusionReport(ctx, task.ID)
+	data, _, err := env.service.ExclusionReport(ctx, env.owner, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1110,7 +1131,7 @@ func TestRecipientMappingDrivesIntakeAndIdentity(t *testing.T) {
 	if err := env.app.Save(record); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = env.campaigns.CreateRevision(ctx, env.campaign, campaign.RevisionInput{
+	_, _, err = env.campaigns.CreateRevision(ctx, env.owner, env.campaign, campaign.RevisionInput{
 		Subject: "Welcome {{candidate_name}}", Document: docxFixture(t), DocumentName: "body.docx",
 		Mappings: []campaign.Mapping{
 			{Variable: "candidate_email", Header: "Contact", Recipient: true},
@@ -1135,14 +1156,14 @@ func TestRecipientMappingDrivesIntakeAndIdentity(t *testing.T) {
 	if err != nil || candidate.GetString("email_key") != "ada@example.com" {
 		t.Fatalf("candidate did not use the mapped recipient: %v", err)
 	}
-	preview, err := env.service.Preview(ctx, task.ID, rows[0].ID)
+	preview, err := env.service.Preview(ctx, env.owner, task.ID, rows[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if preview.Rendered.Recipient != "ada@example.com" || strings.Contains(preview.Rendered.Body, "ada@example.com") {
 		t.Fatalf("preview = %+v", preview.Rendered)
 	}
-	manifest, err := env.service.Manifest(ctx, task.ID)
+	manifest, err := env.service.Manifest(ctx, env.owner, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1164,7 +1185,7 @@ func TestTaskLoadsUnscheduledBeforeAndAfterValidation(t *testing.T) {
 	if ready.ScheduleState != intake.ScheduleNone || !ready.ScheduleAt.IsZero() {
 		t.Fatalf("validated schedule = %q %s", ready.ScheduleState, ready.ScheduleAt)
 	}
-	tasks, err := env.service.ListTasks(context.Background(), env.campaign)
+	tasks, err := env.service.ListTasks(context.Background(), env.owner, env.campaign)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1172,5 +1193,241 @@ func TestTaskLoadsUnscheduledBeforeAndAfterValidation(t *testing.T) {
 		if task.ScheduleState != intake.ScheduleNone {
 			t.Fatalf("listed task %s schedule = %q", task.ID, task.ScheduleState)
 		}
+	}
+}
+
+// secondOperator provisions another operator with their own campaign and
+// revision, so two-operator tests can prove the ownership boundary end to end.
+type secondOperator struct {
+	owner    string
+	campaign string
+	service  *intake.Service
+}
+
+func newSecondOperator(t *testing.T, env *env, email string) *secondOperator {
+	t.Helper()
+	ctx := context.Background()
+	owner := newOperator(t, env.app, email)
+	created, err := env.campaigns.CreateCampaign(ctx, owner, campaign.CreateCampaignInput{
+		Name:          "Other Engineers",
+		SourceHeaders: []string{"Email"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := env.campaigns.CreateRevision(ctx, owner, created.ID, campaign.RevisionInput{
+		Subject:      "Application for {{candidate_name}}",
+		Document:     docxFixture(t),
+		DocumentName: "body.docx",
+		Mappings: []campaign.Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail}, {
+			Variable: "candidate_name",
+			Header:   "Applicant Full Name",
+			Required: true,
+			Format:   campaign.FormatName,
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return &secondOperator{
+		owner:    owner,
+		campaign: created.ID,
+		service:  env.service,
+	}
+}
+
+func (o *secondOperator) workbook(t *testing.T) []byte {
+	t.Helper()
+	return buildWorkbook(t, sheetSpec{name: "Candidates", rows: [][]string{
+		{"Email", "Applicant Full Name"},
+		{"carol@example.com", "Carol Other"},
+	}})
+}
+
+// TestTwoOperatorsAreIsolated proves the owner boundary across the whole
+// intake lifecycle: foreign ids are refused with the same ErrNotFound as
+// missing ones and produce no writes, each operator manages their own tasks,
+// and the same recipient is an independent identity per owner.
+func TestTwoOperatorsAreIsolated(t *testing.T) {
+	env := newEnv(t)
+	ctx := context.Background()
+	bob := newSecondOperator(t, env, "bob@bachtelcorporation.com")
+
+	// The same recipient staged and validated by both owners creates two
+	// independent candidate identities: one per campaign.
+	aliceTask := env.validate(buildWorkbook(t, sheetSpec{name: "Candidates", rows: [][]string{
+		{"Email", "Applicant Full Name"},
+		{"carol@example.com", "Carol Alice"},
+	}}))
+	bobTask := env.validateFor(bob, bob.workbook(t))
+	aliceRows := env.rows(aliceTask.ID)
+	bobRows := env.rowsFor(bob, bobTask.ID)
+	if len(aliceRows) != 1 || len(bobRows) != 1 {
+		t.Fatalf("rows = %d and %d, want one each", len(aliceRows), len(bobRows))
+	}
+	if aliceRows[0].CandidateID == bobRows[0].CandidateID {
+		t.Fatal("the same recipient shared one identity across owners")
+	}
+
+	// Bob cannot reach Alice's task through any read path; every refusal is
+	// the same sentinel a missing id gets.
+	if _, err := bob.service.LoadTask(ctx, bob.owner, aliceTask.ID); !errors.Is(err, intake.ErrNotFound) {
+		t.Fatalf("foreign LoadTask = %v, want ErrNotFound", err)
+	}
+	if _, err := bob.service.LoadTask(ctx, bob.owner, "missing-id"); !errors.Is(err, intake.ErrNotFound) {
+		t.Fatalf("missing LoadTask = %v, want the same ErrNotFound", err)
+	}
+	if _, err := bob.service.Rows(ctx, bob.owner, aliceTask.ID); !errors.Is(err, intake.ErrNotFound) {
+		t.Fatalf("foreign Rows = %v, want ErrNotFound", err)
+	}
+	if _, err := bob.service.Manifest(ctx, bob.owner, aliceTask.ID); !errors.Is(err, intake.ErrNotFound) {
+		t.Fatalf("foreign Manifest = %v, want ErrNotFound", err)
+	}
+	if _, _, err := bob.service.ExclusionReport(ctx, bob.owner, aliceTask.ID); !errors.Is(err, intake.ErrNotFound) {
+		t.Fatalf("foreign ExclusionReport = %v, want ErrNotFound", err)
+	}
+	if _, err := bob.service.Preview(ctx, bob.owner, aliceTask.ID, aliceRows[0].ID); !errors.Is(err, intake.ErrNotFound) {
+		t.Fatalf("foreign Preview = %v, want ErrNotFound", err)
+	}
+	if _, err := bob.service.Preflight(ctx, bob.owner, aliceTask.ID); !errors.Is(err, intake.ErrNotFound) {
+		t.Fatalf("foreign Preflight = %v, want ErrNotFound", err)
+	}
+	if _, err := bob.service.ListTasks(ctx, bob.owner, env.campaign); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("foreign ListTasks = %v, want ErrNotFound", err)
+	}
+	if _, err := bob.service.Stage(ctx, bob.owner, env.campaign, "evil.xlsx", bob.workbook(t)); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("foreign Stage = %v, want ErrNotFound", err)
+	}
+
+	// No foreign write landed: Alice's task, rows and history are untouched.
+	if loaded := env.mustLoad(aliceTask.ID); loaded.Status != intake.TaskReady {
+		t.Fatalf("alice's task status = %q, want ready", loaded.Status)
+	}
+	if rows := env.rows(aliceTask.ID); len(rows) != 1 || rows[0].State != intake.RowEligible {
+		t.Fatalf("alice's rows = %+v, want untouched eligibility", rows)
+	}
+
+	// Bob's writes stay inside his own scope. He claims his own candidate
+	// while Alice's id is mixed into the same request: it is refused, never
+	// reserved.
+	aliceCandidate := aliceRows[0].CandidateID
+	bobCandidate := bobRows[0].CandidateID
+	outcomes, err := bob.service.Claim(ctx, bob.owner, bobTask.ID, []string{bobCandidate, aliceCandidate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !outcomes[bobCandidate].Claimed {
+		t.Fatalf("own claim = %+v", outcomes)
+	}
+	if outcomes[aliceCandidate].Claimed {
+		t.Fatalf("a foreign candidate id was reserved: %+v", outcomes[aliceCandidate])
+	}
+	// Marking history follows the same boundary: Bob may mark his own
+	// candidate and never Alice's.
+	if err := bob.service.MarkSubmitted(ctx, bob.owner, bobCandidate); err != nil {
+		t.Fatalf("bob marked his own candidate: %v", err)
+	}
+	if err := bob.service.MarkSubmitted(ctx, bob.owner, aliceCandidate); !errors.Is(err, intake.ErrNotFound) {
+		t.Fatalf("foreign MarkSubmitted = %v, want ErrNotFound and no write", err)
+	}
+	aliceRecord, err := env.app.FindRecordById(intake.CandidatesCollection, aliceCandidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state := aliceRecord.GetString("submission_state"); state != intake.SubmissionNone {
+		t.Fatalf("alice's candidate state = %q, want untouched", state)
+	}
+	if released, err := bob.service.Release(ctx, bob.owner, aliceTask.ID); !errors.Is(err, intake.ErrNotFound) || released != 0 {
+		t.Fatalf("foreign Release = %d, %v, want 0 and ErrNotFound", released, err)
+	}
+	if outcomes, err := bob.service.Claim(ctx, bob.owner, aliceTask.ID, []string{aliceCandidate}); !errors.Is(err, intake.ErrNotFound) || outcomes != nil {
+		t.Fatalf("foreign Claim = %v, %v, want nil and ErrNotFound", outcomes, err)
+	}
+	if err := bob.service.Validate(ctx, bob.owner, bobTask.ID, "Candidates", 1); err == nil {
+		t.Fatal("a validated task was validated again")
+	}
+	if err := bob.service.Revalidate(ctx, bob.owner, aliceTask.ID); !errors.Is(err, intake.ErrNotFound) {
+		t.Fatalf("foreign Revalidate = %v, want ErrNotFound", err)
+	}
+	// Bob still lists and manages his own tasks.
+	if tasks, err := bob.service.ListTasks(ctx, bob.owner, bob.campaign); err != nil || len(tasks) != 1 {
+		t.Fatalf("bob's tasks = %v, %v, want his single task", tasks, err)
+	}
+}
+
+// validateFor stages and validates one workbook under another operator.
+func (e *env) validateFor(o *secondOperator, data []byte) *intake.Task {
+	e.t.Helper()
+	ctx := context.Background()
+	task, err := o.service.Stage(ctx, o.owner, o.campaign, "book.xlsx", data)
+	if err != nil {
+		e.t.Fatalf("stage for %s: %v", o.owner, err)
+	}
+	if err := o.service.Validate(ctx, o.owner, task.ID, "Candidates", 1); err != nil {
+		e.t.Fatalf("validate for %s: %v", o.owner, err)
+	}
+	loaded, err := o.service.LoadTask(ctx, o.owner, task.ID)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return loaded
+}
+
+func (e *env) rowsFor(o *secondOperator, taskID string) []intake.RowSnapshot {
+	e.t.Helper()
+	rows, err := o.service.Rows(context.Background(), o.owner, taskID)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	return rows
+}
+
+// TestWriteGuardBlocksNewSendingDataWrites proves the guard runs at the start
+// of Stage, Validate, Revalidate and Claim and its error is returned unchanged,
+// while reads stay open.
+func TestWriteGuardBlocksNewSendingDataWrites(t *testing.T) {
+	env := newEnv(t)
+	ctx := context.Background()
+	task := env.stage(mixedWorkbook(t), "book.xlsx")
+
+	guardErr := errors.New("a mailbox replacement is in progress")
+	blocked := 0
+	env.service.SetWriteGuard(func(ctx context.Context, ownerID string) error {
+		if ownerID != env.owner {
+			t.Errorf("guard owner = %q, want %q", ownerID, env.owner)
+		}
+		blocked++
+		return guardErr
+	})
+
+	if _, err := env.service.Stage(ctx, env.owner, env.campaign, "blocked.xlsx", mixedWorkbook(t)); !errors.Is(err, guardErr) {
+		t.Fatalf("stage under guard = %v, want the guard error unchanged", err)
+	}
+	if err := env.service.Validate(ctx, env.owner, task.ID, "Candidates", 1); !errors.Is(err, guardErr) {
+		t.Fatalf("validate under guard = %v, want the guard error unchanged", err)
+	}
+	if _, err := env.service.Claim(ctx, env.owner, task.ID, []string{"any"}); !errors.Is(err, guardErr) {
+		t.Fatalf("claim under guard = %v, want the guard error unchanged", err)
+	}
+	if err := env.service.Revalidate(ctx, env.owner, task.ID); !errors.Is(err, guardErr) {
+		t.Fatalf("revalidate under guard = %v, want the guard error unchanged", err)
+	}
+	if blocked != 4 {
+		t.Fatalf("guard calls = %d, want 4", blocked)
+	}
+	// Nothing was written by a guarded call.
+	if loaded := env.mustLoad(task.ID); loaded.Status != intake.TaskStaging {
+		t.Fatalf("status = %q, want staging after guarded writes", loaded.Status)
+	}
+	if got := env.candidateCount(); got != 0 {
+		t.Fatalf("candidate records = %d, want none", got)
+	}
+	// Reads are not guarded: the staged task still lists.
+	if tasks, err := env.service.ListTasks(ctx, env.owner, env.campaign); err != nil || len(tasks) != 1 {
+		t.Fatalf("listed tasks = %v, %v, want the staged task", tasks, err)
+	}
+	// Once the reset finishes, writes flow again.
+	env.service.SetWriteGuard(nil)
+	if err := env.service.Validate(ctx, env.owner, task.ID, "Candidates", 1); err != nil {
+		t.Fatalf("validate after the guard lifted: %v", err)
 	}
 }

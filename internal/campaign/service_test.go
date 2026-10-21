@@ -17,6 +17,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
+	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 )
 
 func newTestApp(t *testing.T) core.App {
@@ -36,6 +37,23 @@ func newTestApp(t *testing.T) core.App {
 	return app
 }
 
+// newOperator provisions one operator account and returns its record id, which
+// is the owner id every campaign service call is scoped by.
+func newOperator(t *testing.T, app core.App, email string) string {
+	t.Helper()
+	// Provision stores the login identity lowercased, so the lookup has to
+	// normalize the same way.
+	email = strings.ToLower(strings.TrimSpace(email))
+	if err := operator.Provision(app, email, "correct-horse-battery-staple"); err != nil {
+		t.Fatal(err)
+	}
+	record, err := app.FindAuthRecordByEmail(operator.CollectionName, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record.Id
+}
+
 // newService returns a service whose converter path is unusable, proving the
 // paths that must not need one (validation, labels, revision history).
 func newService(t *testing.T, app core.App) *campaign.Service {
@@ -45,8 +63,10 @@ func newService(t *testing.T, app core.App) *campaign.Service {
 
 func TestCreateCampaignValidation(t *testing.T) {
 	t.Parallel()
-	service := newService(t, newTestApp(t))
+	app := newTestApp(t)
+	service := newService(t, app)
 	ctx := context.Background()
+	owner := newOperator(t, app, "validation@bachtelcorporation.com")
 
 	for name, input := range map[string]campaign.CreateCampaignInput{
 		"missing name":         {SourceHeaders: []string{"Email"}},
@@ -55,24 +75,33 @@ func TestCreateCampaignValidation(t *testing.T) {
 		"whitespace only name": {Name: "  ", SourceHeaders: []string{"Email"}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if created, err := service.CreateCampaign(ctx, input); err == nil {
+			if created, err := service.CreateCampaign(ctx, owner, input); err == nil {
 				t.Fatalf("CreateCampaign(%+v) = %+v, want an error", input, created)
 			}
 		})
+	}
+	// A campaign cannot be created without a trusted owner id.
+	if created, err := service.CreateCampaign(ctx, "", campaign.CreateCampaignInput{Name: "Engineers", SourceHeaders: []string{"Email"}}); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("ownerless CreateCampaign = %+v, %v, want ErrNotFound", created, err)
 	}
 }
 
 func TestCreateCampaignDefaultsAndListing(t *testing.T) {
 	t.Parallel()
-	service := newService(t, newTestApp(t))
+	app := newTestApp(t)
+	service := newService(t, app)
 	ctx := context.Background()
+	owner := newOperator(t, app, "listing@bachtelcorporation.com")
 
-	created, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{
+	created, err := service.CreateCampaign(ctx, owner, campaign.CreateCampaignInput{
 		Name:          " Software Engineers ",
 		SourceHeaders: []string{" Email "},
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if created.OwnerID != owner {
+		t.Fatalf("owner = %q, want %q", created.OwnerID, owner)
 	}
 	if created.Name != "Software Engineers" || strings.Join(created.SourceHeaders, ",") != "Email" {
 		t.Fatalf("campaign = %+v, want trimmed values", created)
@@ -81,7 +110,7 @@ func TestCreateCampaignDefaultsAndListing(t *testing.T) {
 		t.Fatalf("result labels = %v, want the defaults", created.ResultLabels)
 	}
 	// A blank entry is dropped rather than becoming an empty column.
-	withBlank, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{
+	withBlank, err := service.CreateCampaign(ctx, owner, campaign.CreateCampaignInput{
 		Name:          "Data",
 		SourceHeaders: []string{"Email"},
 		ResultLabels:  []string{"Status", "  "},
@@ -95,11 +124,11 @@ func TestCreateCampaignDefaultsAndListing(t *testing.T) {
 	if created.CurrentRevisionID != "" {
 		t.Fatal("a new campaign already points at a configuration")
 	}
-	if _, err := service.CurrentConfiguration(ctx, created.ID); err == nil {
+	if _, err := service.CurrentConfiguration(ctx, owner, created.ID); err == nil {
 		t.Fatal("a campaign without a configuration reported a current configuration")
 	}
 
-	listed, err := service.ListCampaigns(ctx)
+	listed, err := service.ListCampaigns(ctx, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,10 +148,12 @@ func TestCreateCampaignDefaultsAndListing(t *testing.T) {
 
 func TestCreateRevisionRejectsUnsupportedUploads(t *testing.T) {
 	t.Parallel()
-	service := newService(t, newTestApp(t))
+	app := newTestApp(t)
+	service := newService(t, app)
 	ctx := context.Background()
+	owner := newOperator(t, app, "revisions@bachtelcorporation.com")
 
-	created, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{Name: "Engineers", SourceHeaders: []string{"Email"}})
+	created, err := service.CreateCampaign(ctx, owner, campaign.CreateCampaignInput{Name: "Engineers", SourceHeaders: []string{"Email"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +190,7 @@ func TestCreateRevisionRejectsUnsupportedUploads(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			revision, warnings, err := service.CreateRevision(ctx, created.ID, input)
+			revision, warnings, err := service.CreateRevision(ctx, owner, created.ID, input)
 			if err == nil {
 				t.Fatalf("CreateRevision accepted %s (warnings %v)", name, warnings)
 			}
@@ -170,14 +201,14 @@ func TestCreateRevisionRejectsUnsupportedUploads(t *testing.T) {
 	}
 
 	// Nothing was stored and the campaign stays unusable for sending.
-	revisions, err := service.Revisions(ctx, created.ID)
+	revisions, err := service.Revisions(ctx, owner, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(revisions) != 0 {
 		t.Fatalf("revisions = %+v, want none", revisions)
 	}
-	loaded, err := service.LoadCampaign(ctx, created.ID)
+	loaded, err := service.LoadCampaign(ctx, owner, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,8 +222,9 @@ func TestResultLabelChangeKeepsContentApproval(t *testing.T) {
 	app := newTestApp(t)
 	service := newService(t, app)
 	ctx := context.Background()
+	owner := newOperator(t, app, "labels@bachtelcorporation.com")
 
-	campaignRecord, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{Name: "Engineers", SourceHeaders: []string{"Email"}})
+	campaignRecord, err := service.CreateCampaign(ctx, owner, campaign.CreateCampaignInput{Name: "Engineers", SourceHeaders: []string{"Email"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,14 +235,14 @@ func TestResultLabelChangeKeepsContentApproval(t *testing.T) {
 	revision := storeRevision(t, app, campaignRecord.ID, 1,
 		"Hello {{candidate_name}}", "<p>Hello {{candidate_name}}</p>", mappings, hash)
 
-	if err := service.UpdateResultLabels(ctx, campaignRecord.ID, []string{"Status", "Submitted"}); err != nil {
+	if err := service.UpdateResultLabels(ctx, owner, campaignRecord.ID, []string{"Status", "Submitted"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.UpdateResultLabels(ctx, campaignRecord.ID, []string{"Status", "Status"}); err == nil {
+	if err := service.UpdateResultLabels(ctx, owner, campaignRecord.ID, []string{"Status", "Status"}); err == nil {
 		t.Fatal("duplicate result labels were accepted")
 	}
 
-	loaded, err := service.LoadConfiguration(ctx, revision)
+	loaded, err := service.LoadConfiguration(ctx, owner, revision)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +252,7 @@ func TestResultLabelChangeKeepsContentApproval(t *testing.T) {
 	if loaded.ApprovedHash != "" || loaded.ApprovalCurrent() {
 		t.Fatal("an unapproved revision reported a current approval")
 	}
-	updated, err := service.LoadCampaign(ctx, campaignRecord.ID)
+	updated, err := service.LoadCampaign(ctx, owner, campaignRecord.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,8 +269,9 @@ func TestRevisionsAreImmutableAndOrdered(t *testing.T) {
 	app := newTestApp(t)
 	service := newService(t, app)
 	ctx := context.Background()
+	owner := newOperator(t, app, "immutable@bachtelcorporation.com")
 
-	created, err := service.CreateCampaign(ctx, campaign.CreateCampaignInput{Name: "Engineers", SourceHeaders: []string{"Email"}})
+	created, err := service.CreateCampaign(ctx, owner, campaign.CreateCampaignInput{Name: "Engineers", SourceHeaders: []string{"Email"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +279,7 @@ func TestRevisionsAreImmutableAndOrdered(t *testing.T) {
 	first := storeRevision(t, app, created.ID, 1, "First {{candidate_name}}", "<p>First {{candidate_name}}</p>", mappings, "hash-1")
 	second := storeRevision(t, app, created.ID, 2, "Second {{candidate_name}}", "<p>Second {{candidate_name}}</p>", mappings, "hash-2")
 
-	revisions, err := service.Revisions(ctx, created.ID)
+	revisions, err := service.Revisions(ctx, owner, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +288,7 @@ func TestRevisionsAreImmutableAndOrdered(t *testing.T) {
 	}
 	// Editing the current revision is not a service operation: the older
 	// revision keeps its stored subject, body and hash.
-	loaded, err := service.LoadConfiguration(ctx, first)
+	loaded, err := service.LoadConfiguration(ctx, owner, first)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,6 +306,97 @@ func TestConverterStatusReportsMissingConverter(t *testing.T) {
 	}
 	if !errors.Is(err, convert.ErrConverterMissing) {
 		t.Fatalf("error = %v, want ErrConverterMissing", err)
+	}
+}
+
+// TestTwoOperatorsCannotSeeEachOthersCampaigns proves the owner boundary: every
+// foreign id is refused with the same ErrNotFound as a missing one, no write
+// lands, and each operator keeps managing their own campaigns and revisions.
+func TestTwoOperatorsCannotSeeEachOthersCampaigns(t *testing.T) {
+	t.Parallel()
+	app := newTestApp(t)
+	service := newService(t, app)
+	ctx := context.Background()
+	alice := newOperator(t, app, "alice@bachtelcorporation.com")
+	bob := newOperator(t, app, "bob@bachtelcorporation.com")
+
+	mappings := []campaign.Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail}}
+	owned, err := service.CreateCampaign(ctx, alice, campaign.CreateCampaignInput{Name: "Alice Engineers", SourceHeaders: []string{"Email"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := storeRevision(t, app, owned.ID, 1, "Hello", "<p>Hello</p>", mappings, "hash-1")
+	bobCampaign, err := service.CreateCampaign(ctx, bob, campaign.CreateCampaignInput{Name: "Bob Engineers", SourceHeaders: []string{"Email"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Bob cannot reach Alice's campaign, revision or mutations, and the
+	// refusal is indistinguishable from a missing record.
+	if _, err := service.LoadCampaign(ctx, bob, owned.ID); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("foreign LoadCampaign = %v, want ErrNotFound", err)
+	}
+	if _, err := service.LoadCampaign(ctx, alice, "missing-id"); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("missing LoadCampaign = %v, want the same ErrNotFound", err)
+	}
+	if _, err := service.CurrentConfiguration(ctx, bob, owned.ID); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("foreign CurrentConfiguration = %v, want ErrNotFound", err)
+	}
+	if _, err := service.LoadConfiguration(ctx, bob, revision); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("foreign LoadConfiguration = %v, want ErrNotFound", err)
+	}
+	if _, err := service.Revisions(ctx, bob, owned.ID); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("foreign Revisions = %v, want ErrNotFound", err)
+	}
+	if err := service.UpdateResultLabels(ctx, bob, owned.ID, []string{"Hijacked"}); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("foreign UpdateResultLabels = %v, want ErrNotFound", err)
+	}
+	if _, _, err := service.CreateRevision(ctx, bob, owned.ID, campaign.RevisionInput{
+		Subject:      "Hi",
+		Document:     []byte("stored docx bytes"),
+		DocumentName: "body.docx",
+		Mappings:     mappings,
+	}); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("foreign CreateRevision = %v, want ErrNotFound", err)
+	}
+	if err := service.DeleteCampaign(ctx, bob, owned.ID); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("foreign DeleteCampaign = %v, want ErrNotFound", err)
+	}
+
+	// A forged owner id that matches no operator record is refused by the
+	// relation field before any campaign row exists.
+	if _, err := service.CreateCampaign(ctx, "forged-owner-id1", campaign.CreateCampaignInput{Name: "Forged", SourceHeaders: []string{"Email"}}); err == nil {
+		t.Fatal("a forged owner id created a campaign")
+	}
+	if total, err := app.CountRecords(campaign.CampaignsCollection); err != nil || total != 2 {
+		t.Fatalf("campaign records = %d (%v), want the two owned campaigns only", total, err)
+	}
+
+	// No foreign write landed.
+	aliceList, err := service.ListCampaigns(ctx, alice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(aliceList) != 1 || aliceList[0].ID != owned.ID || len(aliceList[0].ResultLabels) != len(campaign.DefaultResultLabels) {
+		t.Fatalf("alice's campaigns = %+v, want one untouched campaign", aliceList)
+	}
+	if revisions, err := service.Revisions(ctx, alice, owned.ID); err != nil || len(revisions) != 1 {
+		t.Fatalf("alice's revisions = %v, %v, want the single stored revision", revisions, err)
+	}
+
+	// Bob still manages his own campaign, including a delete of his own data.
+	if err := service.DeleteCampaign(ctx, bob, bobCampaign.ID); err != nil {
+		t.Fatalf("delete own campaign: %v", err)
+	}
+	if _, err := service.LoadCampaign(ctx, bob, bobCampaign.ID); !errors.Is(err, campaign.ErrNotFound) {
+		t.Fatalf("deleted campaign load = %v, want ErrNotFound", err)
+	}
+	// Alice's campaign and revision survive Bob's delete untouched.
+	if _, err := service.LoadCampaign(ctx, alice, owned.ID); err != nil {
+		t.Fatalf("alice's campaign was affected by a foreign delete: %v", err)
+	}
+	if revisions, err := service.Revisions(ctx, alice, owned.ID); err != nil || len(revisions) != 1 {
+		t.Fatalf("alice's revisions after foreign delete = %v, %v", revisions, err)
 	}
 }
 
