@@ -110,24 +110,17 @@ func (s *Store) SettleTasks(ctx context.Context) error {
 			return e
 		}
 		for _, t := range tasks {
-			var counts []struct {
-				State string `db:"dispatch_state"`
-				Count int    `db:"count"`
+			var pending struct {
+				Active   bool `db:"active"`
+				Reserved bool `db:"reserved"`
 			}
-			if e = app.DB().NewQuery("SELECT dispatch_state, COUNT(*) AS count FROM task_candidates WHERE task = {:task} AND dispatch_state IN ('in_flight','reserved') GROUP BY dispatch_state").Bind(dbx.Params{"task": t.Id}).All(&counts); e != nil {
+			// Settlement needs only presence, so stop at the first matching
+			// index entry instead of recounting the task after every outcome.
+			if e = app.DB().NewQuery("SELECT EXISTS(SELECT 1 FROM task_candidates WHERE task = {:task} AND dispatch_state = 'in_flight') AS active, EXISTS(SELECT 1 FROM task_candidates WHERE task = {:task} AND dispatch_state = 'reserved') AS reserved").Bind(dbx.Params{"task": t.Id}).One(&pending); e != nil {
 				return e
 			}
-			active, reserved := 0, 0
-			for _, c := range counts {
-				if c.State == AttemptInFlight {
-					active = c.Count
-				}
-				if c.State == "reserved" {
-					reserved = c.Count
-				}
-			}
 
-			if active > 0 {
+			if pending.Active {
 				continue
 			}
 			if t.GetString("status") == "stopping" {
@@ -136,7 +129,7 @@ func (s *Store) SettleTasks(ctx context.Context) error {
 				}
 				t.Set("status", "stopped")
 			} else {
-				if reserved > 0 {
+				if pending.Reserved {
 					continue
 				}
 				t.Set("status", "completed")
