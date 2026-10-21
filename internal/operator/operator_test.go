@@ -28,7 +28,7 @@ func newApp(t *testing.T) *pocketbase.PocketBase {
 	return app
 }
 
-func TestProvisionCreatesSingleOperator(t *testing.T) {
+func TestProvisionCreatesIndependentOperators(t *testing.T) {
 	app := newApp(t)
 
 	if total, err := app.CountRecords(operator.CollectionName); err != nil || total != 0 {
@@ -38,24 +38,61 @@ func TestProvisionCreatesSingleOperator(t *testing.T) {
 	if err := operator.Provision(app, "Operator@BachtelCorporation.com", "correct-horse-battery"); err != nil {
 		t.Fatal(err)
 	}
+	if err := operator.Provision(app, "second@bachtelcorporation.com", "another-long-password"); err != nil {
+		t.Fatalf("provision a second operator: %v", err)
+	}
 
-	record, err := app.FindAuthRecordByEmail(operator.CollectionName, "operator@bachtelcorporation.com")
+	first, err := app.FindAuthRecordByEmail(operator.CollectionName, "operator@bachtelcorporation.com")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !record.ValidatePassword("correct-horse-battery") {
+	if !first.ValidatePassword("correct-horse-battery") {
 		t.Fatal("provisioned password does not verify")
 	}
-	if record.ValidatePassword("wrong-password") {
+	if first.ValidatePassword("wrong-password") {
 		t.Fatal("wrong password verified")
 	}
-	if !record.Verified() {
+	if !first.Verified() {
 		t.Fatal("provisioned operator should be verified")
 	}
 
-	// Repeated provisioning must never add a second account.
-	if err := operator.Provision(app, "second@bachtelcorporation.com", "another-password"); !errors.Is(err, operator.ErrAlreadyProvisioned) {
-		t.Fatalf("second provision: got %v, want operator.ErrAlreadyProvisioned", err)
+	second, err := app.FindAuthRecordByEmail(operator.CollectionName, "second@bachtelcorporation.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Id == first.Id {
+		t.Fatal("both logins resolved to the same operator")
+	}
+	if !second.ValidatePassword("another-long-password") {
+		t.Fatal("second operator password does not verify")
+	}
+	if total, err := app.CountRecords(operator.CollectionName); err != nil || total != 2 {
+		t.Fatalf("expected two operators, got %d (err=%v)", total, err)
+	}
+}
+
+func TestProvisionRefusesDuplicateIdentity(t *testing.T) {
+	app := newApp(t)
+
+	if err := operator.Provision(app, "operator@bachtelcorporation.com", "correct-horse-battery"); err != nil {
+		t.Fatal(err)
+	}
+	before, err := app.FindAuthRecordByEmail(operator.CollectionName, "operator@bachtelcorporation.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The normalized identity is already used; provisioning must not create a
+	// duplicate or change the existing password.
+	if err := operator.Provision(app, " Operator@BachtelCorporation.com ", "other-password"); !errors.Is(err, operator.ErrEmailTaken) {
+		t.Fatalf("duplicate provision: got %v, want operator.ErrEmailTaken", err)
+	}
+	after, err := app.FindAuthRecordByEmail(operator.CollectionName, "operator@bachtelcorporation.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Id != before.Id || !after.ValidatePassword("correct-horse-battery") {
+		t.Fatal("duplicate provisioning changed the existing account")
 	}
 	if total, err := app.CountRecords(operator.CollectionName); err != nil || total != 1 {
 		t.Fatalf("expected exactly one operator, got %d (err=%v)", total, err)
