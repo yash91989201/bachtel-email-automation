@@ -16,7 +16,9 @@ import (
 	"github.com/pocketbase/pocketbase/tools/hook"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/database"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
+	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"golang.org/x/sys/unix"
 )
@@ -35,8 +37,9 @@ func TestServerOwnsDispatcherUntilDrainBeforeDatabaseClose(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.Config{Origin: "http://127.0.0.1:8090"}
-	connections := microsoft.NewService(app, cfg)
-	bindSending(app, cfg, connections)
+	mailboxes := mailbox.NewStore(app, cfg.EncryptionKey)
+	connections := microsoft.NewService(app, cfg, mailboxes)
+	bindSending(app, cfg)
 	router, err := apis.NewRouter(app)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +54,8 @@ func TestServerOwnsDispatcherUntilDrainBeforeDatabaseClose(t *testing.T) {
 	if output, err := child.CombinedOutput(); err != nil {
 		t.Fatalf("ownership probe in a second process: %v: %s", err, output)
 	}
-	other := sending.NewDispatcher(sending.NewStore(app, sending.Options{}), sending.NewGraph(connections, sending.GraphOptions{}), sending.WorkerOptions{DataDir: app.DataDir()})
+	resolver := &connectionResolver{cfg: cfg, connections: mailboxes, microsoft: connections}
+	other := sending.NewDispatcher(sending.NewStore(app, sending.Options{}), resolver, sending.WorkerOptions{DataDir: app.DataDir()})
 	if err := other.Start(); err == nil {
 		t.Fatal("second dispatcher acquired the running server's store")
 	}
@@ -123,12 +127,20 @@ func TestExportsWaitForSendingRecoveryBeforeTakingSnapshots(t *testing.T) {
 	if err := app.RunAppMigrations(); err != nil {
 		t.Fatal(err)
 	}
+	if err := operator.Provision(app, "recovery@example.test", "correct-horse-battery"); err != nil {
+		t.Fatal(err)
+	}
+	owner, err := app.FindAuthRecordByEmail(operator.CollectionName, "recovery@example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
 	campaigns, err := app.FindCollectionByNameOrId("campaigns")
 	if err != nil {
 		t.Fatal(err)
 	}
 	target := core.NewRecord(campaigns)
 	target.Set("name", "Recovery ordering")
+	target.Set("owner", owner.Id)
 	if err := app.Save(target); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +175,7 @@ func TestExportsWaitForSendingRecoveryBeforeTakingSnapshots(t *testing.T) {
 		return e.Next()
 	})
 	cfg := config.Config{Origin: "http://127.0.0.1:8090"}
-	bindSending(app, cfg, microsoft.NewService(app, cfg))
+	bindSending(app, cfg)
 	router, err := apis.NewRouter(app)
 	if err != nil {
 		t.Fatal(err)

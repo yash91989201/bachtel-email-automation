@@ -15,18 +15,20 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 )
 
-// provisionOperatorCommand creates the single operator account. It is the only
+// provisionOperatorCommand creates one operator account. It is the only
 // supported way to add an operator besides PocketBase superusers, and it never
-// seeds credentials from code or configuration.
+// seeds credentials from code or configuration. Running it again with a new
+// email adds another independent private workspace.
 func provisionOperatorCommand(app core.App) *cobra.Command {
 	var email string
 
 	command := &cobra.Command{
 		Use:   "provision-operator",
-		Short: "Create the single operator account (one time only)",
-		Long: "Create the single operator account.\n\n" +
+		Short: "Create one operator account",
+		Long: "Create one operator account with an independent private workspace.\n\n" +
 			"The password is read from the terminal without echo, or from stdin when\n" +
-			"it is piped. No credentials are seeded and a second operator is refused.",
+			"it is piped. No credentials are seeded, public registration stays disabled,\n" +
+			"and an existing login identity is refused without changing its password.",
 		Args: cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
 			// The serve command runs migrations automatically; a custom command

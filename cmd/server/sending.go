@@ -11,15 +11,18 @@ import (
 	"github.com/pocketbase/pocketbase/tools/hook"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
+	"github.com/yash91989201/bachtel-email-automation/internal/reset"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web"
 )
 
-// bindSending attaches the sole dispatcher to the server's lifetime. Neither
-// request cancellation nor logout owns its context. Candidate actions require
-// approved test formatting for the exact configuration and explicit authorization.
-func bindSending(app core.App, cfg config.Config, connections *microsoft.Service) {
+// bindSending attaches the sole dispatcher, the mailbox connection services and
+// the export worker to the server's lifetime. Neither request cancellation nor
+// logout owns their contexts. Candidate actions require approved test formatting
+// for the exact configuration and explicit operator authorization.
+func bindSending(app core.App, cfg config.Config) {
 	var mu sync.Mutex
 	var dispatcher *sending.Dispatcher
 	var exportWorker func()
@@ -30,20 +33,27 @@ func bindSending(app core.App, cfg config.Config, connections *microsoft.Service
 		if terminating {
 			return errors.New("application is shutting down")
 		}
-		store := sending.NewStore(app, sending.Options{
-			SenderAddress: cfg.Microsoft.SenderAddress,
-			RestoreReview: cfg.RestoreReview,
+		mailboxes := mailbox.NewStore(app, cfg.EncryptionKey)
+		connections := microsoft.NewService(app, cfg, mailboxes)
+		store := sending.NewStore(app, sending.Options{RestoreReview: cfg.RestoreReview})
+		resolver := &connectionResolver{cfg: cfg, connections: mailboxes, microsoft: connections}
+		dispatcher = sending.NewDispatcher(store, resolver, sending.WorkerOptions{
+			DataDir:        app.DataDir(),
+			RequestTimeout: 20 * time.Second,
 		})
-		dispatcher = sending.NewDispatcher(store, sending.NewGraph(connections, sending.GraphOptions{
-			BaseURL: cfg.Microsoft.GraphBaseURL,
-			Timeout: 20 * time.Second,
-		}), sending.WorkerOptions{DataDir: app.DataDir(), RequestTimeout: 20 * time.Second})
 		exported := exports.NewService(app, cfg)
 		exported.BindTaskNotifications()
+		resets := reset.NewService(app, mailboxes)
+		resets.SetDrainer(dispatcher)
 		if err := dispatcher.Start(); err != nil {
 			return err
 		}
-		connections.SetDispatchGuard(dispatcher)
+		// Resume an interrupted destructive replacement before serving: a
+		// workspace blocked by an unfinished reset must stay blocked until its
+		// files are cleaned up and the target mailbox is activated.
+		if err := resets.Recover(context.Background()); err != nil {
+			app.Logger().Error("resume mailbox replacement", "error", err)
+		}
 		// The export worker is process-owned like the dispatcher: it consumes
 		// durable result markers and never depends on a browser session.
 		exportsCtx, cancelExports := context.WithCancel(context.Background())
@@ -60,7 +70,14 @@ func bindSending(app core.App, cfg config.Config, connections *microsoft.Service
 				app.Logger().Warn("export worker did not stop within the shutdown allowance")
 			}
 		}
-		event.Router.Any("/{path...}", apis.WrapStdHandler(web.NewHandlerWithServices(app, cfg, connections, store, dispatcher, exported)))
+		event.Router.Any("/{path...}", apis.WrapStdHandler(web.NewHandler(app, cfg, web.Services{
+			Connections: connections,
+			Mailboxes:   mailboxes,
+			Sending:     store,
+			Dispatcher:  dispatcher,
+			Exports:     exported,
+			Resets:      resets,
+		})))
 		return event.Next()
 	})
 	app.OnTerminate().Bind(&hook.Handler[*core.TerminateEvent]{
@@ -77,9 +94,9 @@ func bindSending(app core.App, cfg config.Config, connections *microsoft.Service
 			}
 			if active != nil {
 				// The container stop allowance is 45 seconds (compose.yaml and
-				// the documented Coolify setting). Graph requests are bounded at
-				// 20 seconds, and final persistence needs headroom, so the drain
-				// budget is 35 seconds.
+				// the documented Coolify setting). Provider requests are bounded
+				// at 20 seconds, and final persistence needs headroom, so the
+				// drain budget is 35 seconds.
 				ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 				err := active.Shutdown(ctx)
 				cancel()

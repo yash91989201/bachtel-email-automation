@@ -9,7 +9,6 @@ import (
 
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/database"
-	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
 )
 
@@ -31,11 +30,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	microsoftService := microsoft.NewService(app, cfg)
-
 	app.RootCmd.AddCommand(provisionOperatorCommand(app))
+	app.RootCmd.AddCommand(resetLocalDataCommand())
 
-	bindSending(app, cfg, microsoftService)
+	bindSending(app, cfg)
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
 	}
