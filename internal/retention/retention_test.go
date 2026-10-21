@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,7 +20,9 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
+	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 	"github.com/yash91989201/bachtel-email-automation/internal/retention"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 )
@@ -31,6 +34,7 @@ type retentionFixture struct {
 	store     *sending.Store
 	intake    *intake.Service
 	campaigns *campaign.Service
+	ownerID   string
 	now       time.Time
 }
 
@@ -52,23 +56,59 @@ func newRetentionFixture(t *testing.T) *retentionFixture {
 	if err := os.WriteFile(stub, []byte("#!/bin/sh\nfor arg in \"$@\"; do\nif [ \"$arg\" = \"--version\" ]; then echo 'pandoc retention'; exit 0; fi\ndone\nprintf '%s' '<p>Hello {{candidate_name}}</p>'\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
+	ownerID := newOperator(t, app, "retention-owner@example.invalid")
+	connectMailbox(t, app, ownerID)
 	campaigns := campaign.NewServiceWithConverter(app, convert.Converter{Path: stub})
 	now := time.Date(2026, 10, 18, 4, 0, 0, 0, time.UTC)
-	cfg := config.Config{PandocPath: stub, Microsoft: config.Microsoft{SenderAddress: "hr@example.invalid"}}
+	cfg := config.Config{PandocPath: stub}
 	return &retentionFixture{
 		app:       app,
 		service:   retention.NewService(app),
 		exports:   exports.NewService(app, cfg),
-		store:     sending.NewStore(app, sending.Options{SenderAddress: "hr@example.invalid", Now: func() time.Time { return now }}),
+		store:     sending.NewStore(app, sending.Options{Now: func() time.Time { return now }}),
 		intake:    intake.NewService(app, campaigns, intake.Limits{}),
 		campaigns: campaigns,
+		ownerID:   ownerID,
 		now:       now,
+	}
+}
+
+// newOperator provisions one operator account and returns its record id.
+func newOperator(t *testing.T, app core.App, email string) string {
+	t.Helper()
+	if err := operator.Provision(app, email, "Retention-fixture-password-2026!"); err != nil {
+		t.Fatal(err)
+	}
+	record, err := app.FindAuthRecordByEmail(operator.CollectionName, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record.Id
+}
+
+// connectMailbox records a connected sending mailbox, which the durable store
+// requires before it queues or launches any work.
+func connectMailbox(t *testing.T, app core.App, ownerID string) {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId(mailbox.ConnectionsCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("owner", ownerID)
+	record.Set("provider", mailbox.ProviderMicrosoft)
+	record.Set("sender", "retention-owner@example.invalid")
+	record.Set("status", mailbox.StatusConnected)
+	record.Set("generation", 1)
+	record.Set("current", true)
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func (f *retentionFixture) campaign(t *testing.T, name string) string {
 	t.Helper()
-	created, err := f.campaigns.CreateCampaign(context.Background(), campaign.CreateCampaignInput{Name: name, SourceHeaders: []string{"Email", "Name"}})
+	created, err := f.campaigns.CreateCampaign(context.Background(), f.ownerID, campaign.CreateCampaignInput{Name: name, SourceHeaders: []string{"Email", "Name"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +124,7 @@ func (f *retentionFixture) campaign(t *testing.T, name string) string {
 	if err = z.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = f.campaigns.CreateRevision(context.Background(), created.ID, campaign.RevisionInput{
+	if _, _, err = f.campaigns.CreateRevision(context.Background(), f.ownerID, created.ID, campaign.RevisionInput{
 		Subject:      "Hello {{candidate_name}}",
 		Document:     doc.Bytes(),
 		DocumentName: "body.docx",
@@ -122,11 +162,11 @@ func (f *retentionFixture) task(t *testing.T, campaignID string, count int) stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err := f.intake.Stage(context.Background(), campaignID, "retention.xlsx", data.Bytes())
+	task, err := f.intake.Stage(context.Background(), f.ownerID, campaignID, "retention.xlsx", data.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = f.intake.Validate(context.Background(), task.ID, "Candidates", 1); err != nil {
+	if err = f.intake.Validate(context.Background(), f.ownerID, task.ID, "Candidates", 1); err != nil {
 		t.Fatal(err)
 	}
 	return task.ID
@@ -137,17 +177,17 @@ func (f *retentionFixture) task(t *testing.T, campaignID string, count int) stri
 func (f *retentionFixture) submit(t *testing.T, task string, count int) {
 	t.Helper()
 	ctx := context.Background()
-	attempt, err := f.store.QueueTest(ctx, sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
+	attempt, err := f.store.QueueTest(ctx, f.ownerID, sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = f.app.DB().NewQuery("UPDATE submission_attempts SET state='submitted' WHERE id={:id}").Bind(map[string]any{"id": attempt.ID}).Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.store.Approve(ctx, task, attempt.ID, "operator", "approve-"+task); err != nil {
+	if err = f.store.Approve(ctx, f.ownerID, task, attempt.ID, "operator", "approve-"+task); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.store.Act(ctx, sending.ActionRequest{ActionID: "start-" + task, TaskID: task, Kind: "start", Actor: "operator", Confirmed: true, ExpectedCount: count}); err != nil {
+	if _, err = f.store.Act(ctx, f.ownerID, sending.ActionRequest{ActionID: "start-" + task, TaskID: task, Kind: "start", Actor: "operator", Confirmed: true, ExpectedCount: count}); err != nil {
 		t.Fatal(err)
 	}
 	for {
@@ -169,7 +209,7 @@ func (f *retentionFixture) submit(t *testing.T, task string, count int) {
 	if err = f.store.SettleTasks(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.exports.GenerateCampaign(ctx, taskCampaign(t, f, task), true); err != nil {
+	if err = f.exports.GenerateCampaign(ctx, f.ownerID, taskCampaign(t, f, task), true); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -201,7 +241,7 @@ func TestDeleteCampaignRemovesScopedRecordsAndFiles(t *testing.T) {
 	f.submit(t, taskA, 3)
 	f.submit(t, taskB, 2)
 
-	artifacts, err := f.exports.CampaignArtifacts(context.Background(), campaignA)
+	artifacts, err := f.exports.CampaignArtifacts(context.Background(), f.ownerID, campaignA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +260,7 @@ func TestDeleteCampaignRemovesScopedRecordsAndFiles(t *testing.T) {
 		filePaths = append(filePaths, record.BaseFilesPath()+"/"+record.GetString("file"))
 	}
 
-	if err = f.service.DeleteCampaign(context.Background(), campaignA); err != nil {
+	if err = f.service.DeleteCampaign(context.Background(), f.ownerID, campaignA); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = f.app.FindRecordById(campaign.CampaignsCollection, campaignA); err == nil {
@@ -261,7 +301,7 @@ func TestDeleteCampaignRemovesScopedRecordsAndFiles(t *testing.T) {
 	}
 
 	// A second deletion of the same campaign affects nothing else.
-	if err = f.service.DeleteCampaign(context.Background(), campaignA); err == nil {
+	if err = f.service.DeleteCampaign(context.Background(), f.ownerID, campaignA); err == nil {
 		t.Fatal("deleting an already removed campaign reported success")
 	}
 	if f.count(t, intake.CandidatesCollection, "campaign='"+campaignB+"'") == 0 {
@@ -293,20 +333,20 @@ func TestDeleteCampaignRejectsActiveWork(t *testing.T) {
 	ctx := context.Background()
 	campaignID := f.campaign(t, "Active")
 	task := f.task(t, campaignID, 2)
-	attempt, err := f.store.QueueTest(ctx, sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
+	attempt, err := f.store.QueueTest(ctx, f.ownerID, sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = f.app.DB().NewQuery("UPDATE submission_attempts SET state='submitted' WHERE id={:id}").Bind(map[string]any{"id": attempt.ID}).Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.store.Approve(ctx, task, attempt.ID, "operator", "approve-"+task); err != nil {
+	if err = f.store.Approve(ctx, f.ownerID, task, attempt.ID, "operator", "approve-"+task); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.store.Act(ctx, sending.ActionRequest{ActionID: "start-" + task, TaskID: task, Kind: "start", Actor: "operator", Confirmed: true, ExpectedCount: 2}); err != nil {
+	if _, err = f.store.Act(ctx, f.ownerID, sending.ActionRequest{ActionID: "start-" + task, TaskID: task, Kind: "start", Actor: "operator", Confirmed: true, ExpectedCount: 2}); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.service.DeleteCampaign(ctx, campaignID); err != retention.ErrCampaignActive {
+	if err = f.service.DeleteCampaign(ctx, f.ownerID, campaignID); err != retention.ErrCampaignActive {
 		t.Fatalf("running task allowed deletion: %v", err)
 	}
 	// An in-flight request also blocks deletion.
@@ -318,12 +358,12 @@ func TestDeleteCampaignRejectsActiveWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = f.service.DeleteCampaign(ctx, campaignID); err != retention.ErrCampaignActive {
+	if err = f.service.DeleteCampaign(ctx, f.ownerID, campaignID); err != retention.ErrCampaignActive {
 		t.Fatalf("in-flight attempt allowed deletion: %v", err)
 	}
 
 	// Once stopped and settled, the campaign can be removed.
-	if _, err = f.store.Act(ctx, sending.ActionRequest{ActionID: "stop-" + task, TaskID: task, Kind: "stop", Actor: "operator", Confirmed: true}); err != nil {
+	if _, err = f.store.Act(ctx, f.ownerID, sending.ActionRequest{ActionID: "stop-" + task, TaskID: task, Kind: "stop", Actor: "operator", Confirmed: true}); err != nil {
 		t.Fatal(err)
 	}
 	if err = f.store.CompleteAttempt(ctx, inflight.ID, sending.Outcome{State: sending.AttemptSubmitted}); err != nil {
@@ -335,7 +375,48 @@ func TestDeleteCampaignRejectsActiveWork(t *testing.T) {
 	if _, err = f.app.FindRecordById(campaign.CampaignsCollection, campaignID); err != nil {
 		t.Fatalf("campaign vanished before the final delete: %v", err)
 	}
-	if err = f.service.DeleteCampaign(ctx, campaignID); err != nil {
+	if err = f.service.DeleteCampaign(ctx, f.ownerID, campaignID); err != nil {
 		t.Fatalf("settled campaign could not be deleted: %v", err)
+	}
+}
+
+// TestDeleteCampaignRefusesForeignOwnerWithTheAbsentError proves deletion is
+// owner-scoped: another operator's campaign id and an absent id return the
+// identical campaign.ErrNotFound, and a refused request deletes nothing.
+func TestDeleteCampaignRefusesForeignOwnerWithTheAbsentError(t *testing.T) {
+	f := newRetentionFixture(t)
+	ctx := context.Background()
+	otherOwner := newOperator(t, f.app, "intruder@example.invalid")
+
+	campaignID := f.campaign(t, "Protected")
+	task := f.task(t, campaignID, 2)
+	f.submit(t, task, 2)
+
+	foreignErr := f.service.DeleteCampaign(ctx, otherOwner, campaignID)
+	if !errors.Is(foreignErr, campaign.ErrNotFound) {
+		t.Fatalf("foreign deletion = %v, want campaign.ErrNotFound", foreignErr)
+	}
+	absentErr := f.service.DeleteCampaign(ctx, otherOwner, "absentcampaign0")
+	if foreignErr.Error() != absentErr.Error() {
+		t.Fatalf("foreign and absent deletion errors differ: %q vs %q", foreignErr, absentErr)
+	}
+	// The same refusal applies to the owner presenting a foreign id: the
+	// intruder owns no campaigns at all, so nothing was deleted.
+	if _, err := f.app.FindRecordById(campaign.CampaignsCollection, campaignID); err != nil {
+		t.Fatalf("refused deletion removed the campaign: %v", err)
+	}
+	if count := f.count(t, intake.TasksCollection, "campaign='"+campaignID+"'"); count != 1 {
+		t.Fatalf("refused deletion left %d tasks, want 1", count)
+	}
+	if count := f.count(t, intake.CandidatesCollection, "campaign='"+campaignID+"'"); count == 0 {
+		t.Fatal("refused deletion removed the campaign's candidates")
+	}
+	if count := f.count(t, sending.AttemptsCollection, "task='"+task+"'"); count == 0 {
+		t.Fatal("refused deletion removed the campaign's attempts")
+	}
+
+	// The owner still deletes their own campaign.
+	if err := f.service.DeleteCampaign(ctx, f.ownerID, campaignID); err != nil {
+		t.Fatalf("owner could not delete their own campaign: %v", err)
 	}
 }

@@ -20,17 +20,17 @@ import (
 func TestStoppedVolumeBackupRestoresFilesAndAttemptReferences(t *testing.T) {
 	f := newExportFixture(t)
 	task := f.mixedTask(t)
-	if err := f.service.GenerateTask(context.Background(), task, false); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, task, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.service.GenerateCampaign(context.Background(), f.campaignID, true); err != nil {
+	if err := f.service.GenerateCampaign(context.Background(), f.ownerID, f.campaignID, true); err != nil {
 		t.Fatal(err)
 	}
 	attempts := f.records(t, sending.AttemptsCollection, "")
 	if len(attempts) == 0 {
 		t.Fatal("fixture produced no attempts")
 	}
-	artifact, err := f.service.TaskArtifact(context.Background(), task)
+	artifact, err := f.service.TaskArtifact(context.Background(), f.ownerID, task)
 	if err != nil || artifact == nil || !artifact.Ready {
 		t.Fatalf("task artifact missing before backup: %v %+v", err, artifact)
 	}
@@ -89,11 +89,11 @@ func TestStoppedVolumeBackupRestoresFilesAndAttemptReferences(t *testing.T) {
 	// Retained source, manifest and generated artifact files come back through
 	// the restored record's private filesystem path.
 	restoredExports := exports.NewService(restored, f.cfg)
-	artifact, err = restoredExports.TaskArtifact(context.Background(), task)
+	artifact, err = restoredExports.TaskArtifact(context.Background(), f.ownerID, task)
 	if err != nil || artifact == nil || !artifact.Ready {
 		t.Fatalf("restored artifact missing: %v %+v", err, artifact)
 	}
-	if _, _, err = restoredExports.DownloadTask(context.Background(), task); err != nil {
+	if _, _, err = restoredExports.DownloadTask(context.Background(), f.ownerID, task); err != nil {
 		t.Fatalf("restored results file is unreadable: %v", err)
 	}
 	fsys, err := restored.NewFilesystem()

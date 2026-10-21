@@ -41,7 +41,7 @@ func CampaignPackage(snapshot *campaignSnapshot, report []byte) (data []byte, er
 		if err != nil {
 			return nil, err
 		}
-		html, err := attemptHTML(attempt, "")
+		html, err := attemptHTML(attempt)
 		if err != nil {
 			return nil, err
 		}

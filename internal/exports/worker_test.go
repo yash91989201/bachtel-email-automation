@@ -149,7 +149,7 @@ func TestOrdinaryRecoveredGenerationFailureStaysFailedAcrossRestarts(t *testing.
 	f := newExportFixture(t)
 	taskID := f.stage(t, [][]string{{"bad@example.invalid", "Bad"}})
 	setTask(t, f, taskID, "stopped", false)
-	if err := f.service.GenerateTask(context.Background(), taskID, false); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, taskID, false); err != nil {
 		t.Fatal(err)
 	}
 	artifact := waitForArtifactState(t, f, taskID, exports.StateReady)
@@ -311,7 +311,7 @@ func TestStartupRebuildsInterruptedTaskExport(t *testing.T) {
 	setTask(t, f, taskID, "stopped", false)
 	setTask(t, f, readyTaskID, "stopped", false)
 	setTask(t, f, deletedTaskID, "stopped", false)
-	if err := f.service.GenerateTask(context.Background(), taskID, false); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, taskID, false); err != nil {
 		t.Fatal(err)
 	}
 	artifact := waitForArtifactState(t, f, taskID, exports.StateReady)
@@ -330,15 +330,15 @@ func TestStartupRebuildsInterruptedTaskExport(t *testing.T) {
 	}
 	membersBefore := memberStates()
 	candidatesBefore := len(f.records(t, intake.CandidatesCollection, "campaign='"+f.campaignID+"'"))
-	if err := f.service.GenerateTask(context.Background(), readyTaskID, false); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, readyTaskID, false); err != nil {
 		t.Fatal(err)
 	}
 	readyBefore := waitForArtifactState(t, f, readyTaskID, exports.StateReady)
 	readyDigest := readyBefore.GetString("digest")
-	if err := f.service.GenerateTask(context.Background(), deletedTaskID, false); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, deletedTaskID, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.service.DeleteTask(context.Background(), deletedTaskID); err != nil {
+	if err := f.service.DeleteTask(context.Background(), f.ownerID, deletedTaskID); err != nil {
 		t.Fatal(err)
 	}
 	artifact.Set("state", exports.StateGenerating)
@@ -371,7 +371,7 @@ func TestStartupRebuildsInterruptedTaskExport(t *testing.T) {
 
 func TestStartupRebuildsOnlyPendingCampaignArtifactAndPreservesSiblingState(t *testing.T) {
 	f := newExportFixture(t)
-	if err := f.service.GenerateCampaign(context.Background(), f.campaignID, false); err != nil {
+	if err := f.service.GenerateCampaign(context.Background(), f.ownerID, f.campaignID, false); err != nil {
 		t.Fatal(err)
 	}
 	readyPackageRows := f.records(t, exports.ArtifactsCollection, "kind='campaign_package' && campaign='"+f.campaignID+"'")
@@ -391,6 +391,7 @@ func TestStartupRebuildsOnlyPendingCampaignArtifactAndPreservesSiblingState(t *t
 	add := func(kind, state string) *core.Record {
 		t.Helper()
 		record := core.NewRecord(collection)
+		record.Set("owner", f.ownerID)
 		record.Set("kind", kind)
 		record.Set("campaign", f.campaignID)
 		record.Set("state", state)
@@ -473,7 +474,7 @@ func TestStartupRebuildsOnlyPendingCampaignArtifactAndPreservesSiblingState(t *t
 	}
 	stop()
 
-	if err := f.service.DeleteCampaign(context.Background(), f.campaignID); err != nil {
+	if err := f.service.DeleteCampaign(context.Background(), f.ownerID, f.campaignID); err != nil {
 		t.Fatal(err)
 	}
 	pendingReport = add(exports.KindCampaignReport, exports.StateGenerating)

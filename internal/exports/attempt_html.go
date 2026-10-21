@@ -61,17 +61,17 @@ type attemptView struct {
 	RetryCount                        int
 }
 
-func attemptHTML(attempt *core.Record, fallbackSender string) ([]byte, error) {
-	sender := attempt.GetString("sender")
-	if sender == "" {
-		sender = fallbackSender
-	}
+// attemptHTML renders one recorded attempt. Only Body is inserted as HTML: it
+// is the already sanitized rendered body stored at send time. The sender comes
+// from the attempt record (the mailbox at queue time), never from current
+// configuration.
+func attemptHTML(attempt *core.Record) ([]byte, error) {
 	view := attemptView{
 		Body:            template.HTML(attempt.GetString("body")),
 		ID:              attempt.Id,
 		KindLabel:       kindLabel(attempt.GetString("kind")),
 		StateLabel:      stateLabel(attempt.GetString("state")),
-		Sender:          sender,
+		Sender:          attempt.GetString("sender"),
 		Recipient:       attempt.GetString("recipient"),
 		Subject:         attempt.GetString("subject"),
 		TaskID:          attempt.GetString("task"),

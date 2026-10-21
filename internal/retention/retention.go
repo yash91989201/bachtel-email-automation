@@ -34,12 +34,17 @@ func NewService(app core.App) *Service { return &Service{app: app} }
 // resolutions and generated downloads. Duplicate-prevention history is part of
 // the deletion by design, so a later campaign can send to the same recipients.
 //
+// Ownership is verified before anything is deleted: an absent campaign and a
+// campaign owned by another operator both return campaign.ErrNotFound and
+// leave every record untouched.
+//
 // The delete is idempotent from the operator's perspective: after a partial
 // failure the same request can be retried, and it only ever touches records
 // explicitly scoped to this campaign.
-func (s *Service) DeleteCampaign(ctx context.Context, campaignID string) error {
-	if _, err := s.app.FindRecordById(campaign.CampaignsCollection, campaignID); err != nil {
-		return err
+func (s *Service) DeleteCampaign(ctx context.Context, ownerID, campaignID string) error {
+	target, err := s.app.FindRecordById(campaign.CampaignsCollection, campaignID)
+	if err != nil || target.GetString("owner") != ownerID {
+		return campaign.ErrNotFound
 	}
 	return s.app.RunInTransaction(func(txApp core.App) error {
 		tasks, err := find(txApp, intake.TasksCollection, "campaign={:c}", dbx.Params{"c": campaignID})

@@ -104,12 +104,12 @@ func TestLateStopSettlementMarkerIsRecoveredOnNextStartup(t *testing.T) {
 	f := newExportFixture(t)
 	task := f.stage(t, [][]string{{"late@example.invalid", "Late"}})
 	f.approve(t, task)
-	f.act(t, task, "start", "late-start", 1)
+	f.act(t, f.ownerID, task, "start", "late-start", 1)
 	attempt := f.begin(t, "")
 	f.service.BindTaskNotifications()
 	stop := startExports(t, f.service)
 	stop()
-	f.act(t, task, "stop", "late-stop", 0)
+	f.act(t, f.ownerID, task, "stop", "late-stop", 0)
 	if err := f.store.CompleteAttempt(context.Background(), attempt.ID, sending.Outcome{State: sending.AttemptSubmitted}); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestLateStopSettlementMarkerIsRecoveredOnNextStartup(t *testing.T) {
 
 func TestCampaignPairClaimsRollbackWhenSiblingIsOwned(t *testing.T) {
 	f := newExportFixture(t)
-	if err := f.service.GenerateCampaign(context.Background(), f.campaignID, false); err != nil {
+	if err := f.service.GenerateCampaign(context.Background(), f.ownerID, f.campaignID, false); err != nil {
 		t.Fatal(err)
 	}
 	artifacts := f.records(t, exports.ArtifactsCollection, "task=''")
@@ -153,7 +153,7 @@ func TestCampaignPairClaimsRollbackWhenSiblingIsOwned(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	err := f.service.GenerateCampaign(context.Background(), f.campaignID, false)
+	err := f.service.GenerateCampaign(context.Background(), f.ownerID, f.campaignID, false)
 	if !errors.Is(err, exports.ErrInProgress) {
 		t.Fatalf("competing campaign claim: %v", err)
 	}
@@ -175,6 +175,7 @@ func TestDeletingFailedTaskExportCancelsStartupRegeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 	failed := core.NewRecord(collection)
+	failed.Set("owner", f.ownerID)
 	failed.Set("kind", exports.KindTaskResults)
 	failed.Set("campaign", f.campaignID)
 	failed.Set("task", task)
@@ -182,7 +183,7 @@ func TestDeletingFailedTaskExportCancelsStartupRegeneration(t *testing.T) {
 	if err := f.app.Save(failed); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.service.DeleteTask(context.Background(), task); err != nil {
+	if err := f.service.DeleteTask(context.Background(), f.ownerID, task); err != nil {
 		t.Fatal(err)
 	}
 	record, err := f.app.FindRecordById(intake.TasksCollection, task)

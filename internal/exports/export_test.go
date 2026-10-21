@@ -26,7 +26,9 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
+	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 )
 
@@ -37,6 +39,8 @@ type exportFixture struct {
 	service    *exports.Service
 	store      *sending.Store
 	intake     *intake.Service
+	campaigns  *campaign.Service
+	ownerID    string
 	campaignID string
 	now        time.Time
 	cfg        config.Config
@@ -65,8 +69,10 @@ func newExportFixtureWithLabels(t *testing.T, labels []string) *exportFixture {
 	if err := os.WriteFile(stub, []byte("#!/bin/sh\nfor arg in \"$@\"; do\nif [ \"$arg\" = \"--version\" ]; then echo 'pandoc export'; exit 0; fi\ndone\nprintf '%s' '<p>Hello {{candidate_name}}</p>'\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	ownerID := newOperator(t, app, "owner@example.invalid")
+	connectMailbox(t, app, ownerID, "owner@example.invalid")
 	campaigns := campaign.NewServiceWithConverter(app, convert.Converter{Path: stub})
-	created, err := campaigns.CreateCampaign(context.Background(), campaign.CreateCampaignInput{Name: "Export fixture", SourceHeaders: []string{"Email", "Name"}, ResultLabels: labels})
+	created, err := campaigns.CreateCampaign(context.Background(), ownerID, campaign.CreateCampaignInput{Name: "Export fixture", SourceHeaders: []string{"Email", "Name"}, ResultLabels: labels})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +88,7 @@ func newExportFixtureWithLabels(t *testing.T, labels []string) *exportFixture {
 	if err = z.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err = campaigns.CreateRevision(context.Background(), created.ID, campaign.RevisionInput{
+	if _, _, err = campaigns.CreateRevision(context.Background(), ownerID, created.ID, campaign.RevisionInput{
 		Subject:      "Hello {{candidate_name}}",
 		Document:     doc.Bytes(),
 		DocumentName: "body.docx",
@@ -94,12 +100,14 @@ func newExportFixtureWithLabels(t *testing.T, labels []string) *exportFixture {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 18, 2, 30, 0, 0, time.UTC)
-	cfg := config.Config{PandocPath: stub, Microsoft: config.Microsoft{SenderAddress: "hr@example.invalid"}}
+	cfg := config.Config{PandocPath: stub}
 	fixture := &exportFixture{
 		app:        app,
 		service:    exports.NewService(app, cfg),
-		store:      sending.NewStore(app, sending.Options{SenderAddress: "hr@example.invalid", Now: func() time.Time { return now }}),
+		store:      sending.NewStore(app, sending.Options{Now: func() time.Time { return now }}),
 		intake:     intake.NewService(app, campaigns, intake.Limits{}),
+		campaigns:  campaigns,
+		ownerID:    ownerID,
 		campaignID: created.ID,
 		now:        now,
 		cfg:        cfg,
@@ -107,9 +115,86 @@ func newExportFixtureWithLabels(t *testing.T, labels []string) *exportFixture {
 	return fixture
 }
 
+// addOperator provisions a second operator with its own connected mailbox and
+// campaign, returning the operator and campaign record ids. It builds the same
+// revision shape as the primary fixture so both operators can stage tasks and
+// record attempts independently.
+func (f *exportFixture) addOperator(t *testing.T, email string) (ownerID, campaignID string) {
+	t.Helper()
+	ownerID = newOperator(t, f.app, email)
+	connectMailbox(t, f.app, ownerID, email)
+	created, err := f.campaigns.CreateCampaign(context.Background(), ownerID, campaign.CreateCampaignInput{Name: "Campaign of " + email, SourceHeaders: []string{"Email", "Name"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc bytes.Buffer
+	z := zip.NewWriter(&doc)
+	part, err := z.Create("word/document.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = part.Write([]byte(`<w:document xmlns:w="w"><w:body><w:p/></w:body></w:document>`)); err != nil {
+		t.Fatal(err)
+	}
+	if err = z.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = f.campaigns.CreateRevision(context.Background(), ownerID, created.ID, campaign.RevisionInput{
+		Subject:      "Hello {{candidate_name}}",
+		Document:     doc.Bytes(),
+		DocumentName: "body.docx",
+		Mappings: []campaign.Mapping{
+			{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail},
+			{Variable: "candidate_name", Header: "Name", Required: true, Format: campaign.FormatName},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return ownerID, created.ID
+}
+
+// newOperator provisions one operator account and returns its record id, so a
+// fixture can exercise the multi-operator ownership boundary.
+func newOperator(t *testing.T, app core.App, email string) string {
+	t.Helper()
+	if err := operator.Provision(app, email, "Export-fixture-password-2026!"); err != nil {
+		t.Fatal(err)
+	}
+	record, err := app.FindAuthRecordByEmail(operator.CollectionName, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record.Id
+}
+
+// connectMailbox records a connected sending mailbox for an operator, which
+// the durable store requires before it queues or launches any work.
+func connectMailbox(t *testing.T, app core.App, ownerID, sender string) {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId(mailbox.ConnectionsCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("owner", ownerID)
+	record.Set("provider", mailbox.ProviderMicrosoft)
+	record.Set("sender", sender)
+	record.Set("status", mailbox.StatusConnected)
+	record.Set("generation", 1)
+	record.Set("current", true)
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // stage uploads a workbook with a Candidates sheet plus a second worksheet, so
 // the retained original layout is exercised.
 func (f *exportFixture) stage(t *testing.T, rows [][]string) string {
+	t.Helper()
+	return f.stageFor(t, f.ownerID, f.campaignID, rows)
+}
+
+func (f *exportFixture) stageFor(t *testing.T, ownerID, campaignID string, rows [][]string) string {
 	t.Helper()
 	book := excelize.NewFile()
 	defer func() {
@@ -138,11 +223,11 @@ func (f *exportFixture) stage(t *testing.T, rows [][]string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err := f.intake.Stage(context.Background(), f.campaignID, "export.xlsx", data.Bytes())
+	task, err := f.intake.Stage(context.Background(), ownerID, campaignID, "export.xlsx", data.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = f.intake.Validate(context.Background(), task.ID, "Candidates", 1); err != nil {
+	if err = f.intake.Validate(context.Background(), ownerID, task.ID, "Candidates", 1); err != nil {
 		t.Fatal(err)
 	}
 	return task.ID
@@ -163,7 +248,7 @@ func (f *exportFixture) mixedTask(t *testing.T) string {
 	}
 	task := f.stage(t, rows)
 	f.approve(t, task)
-	act := f.act(t, task, "start", "mixed-start", 4)
+	act := f.act(t, f.ownerID, task, "start", "mixed-start", 4)
 	if act.Claimed != 4 {
 		t.Fatalf("claimed %d, want 4", act.Claimed)
 	}
@@ -174,16 +259,16 @@ func (f *exportFixture) mixedTask(t *testing.T) string {
 	})
 	// Retries are refused while the task owns active work: stop and settle
 	// first, exactly as the sending page requires.
-	f.act(t, task, "stop", "stop-mixed", 0)
+	f.act(t, f.ownerID, task, "stop", "stop-mixed", 0)
 	if err := f.store.SettleTasks(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.store.Act(context.Background(), sending.ActionRequest{ActionID: "retry-carol", TaskID: task, Kind: "retry", MemberID: f.memberID(t, task, "carol@example.invalid"), Actor: "operator", Confirmed: true, ExpectedCount: 1}); err != nil {
+	if _, err := f.store.Act(context.Background(), f.ownerID, sending.ActionRequest{ActionID: "retry-carol", TaskID: task, Kind: "retry", MemberID: f.memberID(t, task, "carol@example.invalid"), Actor: "operator", Confirmed: true, ExpectedCount: 1}); err != nil {
 		t.Fatal(err)
 	}
 	f.drain(t, map[string]sending.Outcome{})
 	req := sending.ActionRequest{ActionID: "resolve-dave", TaskID: task, Kind: "resolve", MemberID: f.memberID(t, task, "dave@example.invalid"), Actor: "operator", Basis: "verified in the provider sent folder", Confirmed: true, ExpectedCount: 1}
-	if _, err := f.store.Act(context.Background(), req); err != nil {
+	if _, err := f.store.Act(context.Background(), f.ownerID, req); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.store.SettleTasks(context.Background()); err != nil {
@@ -208,7 +293,7 @@ func (f *exportFixture) memberID(t *testing.T, task, email string) string {
 func (f *exportFixture) approve(t *testing.T, task string) {
 	t.Helper()
 	ctx := context.Background()
-	a, err := f.store.QueueTest(ctx, sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
+	a, err := f.store.QueueTest(ctx, f.ownerID, sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +301,7 @@ func (f *exportFixture) approve(t *testing.T, task string) {
 	if err = f.store.CompleteAttempt(ctx, attempt.ID, sending.Outcome{State: sending.AttemptSubmitted}); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.store.Approve(ctx, task, attempt.ID, "operator", "approve-"+task); err != nil {
+	if err = f.store.Approve(ctx, f.ownerID, task, attempt.ID, "operator", "approve-"+task); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -274,9 +359,9 @@ func (f *exportFixture) drain(t *testing.T, outcomes map[string]sending.Outcome)
 	}
 }
 
-func (f *exportFixture) act(t *testing.T, task, kind, id string, count int) *sending.ActionResult {
+func (f *exportFixture) act(t *testing.T, ownerID, task, kind, id string, count int) *sending.ActionResult {
 	t.Helper()
-	result, err := f.store.Act(context.Background(), sending.ActionRequest{ActionID: id, TaskID: task, Kind: kind, Actor: "operator", Confirmed: true, ExpectedCount: count})
+	result, err := f.store.Act(context.Background(), ownerID, sending.ActionRequest{ActionID: id, TaskID: task, Kind: kind, Actor: "operator", Confirmed: true, ExpectedCount: count})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,7 +447,7 @@ func TestTaskResultsWorkbookPreservesSourceAndReportsOutcomes(t *testing.T) {
 	task := f.mixedTask(t)
 	before := f.attemptsFingerprint(t)
 
-	if err := f.service.GenerateTask(context.Background(), task, false); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, task, false); err != nil {
 		t.Fatal(err)
 	}
 	if after := f.attemptsFingerprint(t); after != before {
@@ -370,14 +455,14 @@ func TestTaskResultsWorkbookPreservesSourceAndReportsOutcomes(t *testing.T) {
 	}
 	// Repeated generation is a no-op on the database snapshot and cannot
 	// create a second attempt.
-	if err := f.service.GenerateTask(context.Background(), task, false); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, task, false); err != nil {
 		t.Fatal(err)
 	}
 	if after := f.attemptsFingerprint(t); after != before {
 		t.Fatal("repeated generation changed recorded attempts")
 	}
 
-	data, name, err := f.service.DownloadTask(context.Background(), task)
+	data, name, err := f.service.DownloadTask(context.Background(), f.ownerID, task)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -459,10 +544,10 @@ func TestTaskResultsKeepSourceColumnsAndCollisionFreeLabels(t *testing.T) {
 	if _, err := f.app.DB().NewQuery("UPDATE send_tasks SET status='completed' WHERE id={:id}").Bind(map[string]any{"id": task}).Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.service.GenerateTask(context.Background(), task, false); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, task, false); err != nil {
 		t.Fatal(err)
 	}
-	data, _, err := f.service.DownloadTask(context.Background(), task)
+	data, _, err := f.service.DownloadTask(context.Background(), f.ownerID, task)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -513,7 +598,7 @@ func TestAttemptHTMLUsesStoredContentAfterTemplateChange(t *testing.T) {
 	if err = f.app.Save(configuration); err != nil {
 		t.Fatal(err)
 	}
-	data, _, err := f.service.AttemptHTML(context.Background(), attempt.Id)
+	data, _, err := f.service.AttemptHTML(context.Background(), f.ownerID, attempt.Id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -529,10 +614,10 @@ func TestAttemptHTMLUsesStoredContentAfterTemplateChange(t *testing.T) {
 func TestCampaignReportSeparatesTestsAndHistory(t *testing.T) {
 	f := newExportFixture(t)
 	task := f.mixedTask(t)
-	if err := f.service.GenerateCampaign(context.Background(), f.campaignID, true); err != nil {
+	if err := f.service.GenerateCampaign(context.Background(), f.ownerID, f.campaignID, true); err != nil {
 		t.Fatal(err)
 	}
-	report, _, err := f.service.DownloadCampaign(context.Background(), f.campaignID, exports.KindCampaignReport)
+	report, _, err := f.service.DownloadCampaign(context.Background(), f.ownerID, f.campaignID, exports.KindCampaignReport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -607,10 +692,10 @@ func TestCampaignReportSeparatesTestsAndHistory(t *testing.T) {
 	if _, err := f.app.DB().NewQuery("UPDATE submission_attempts SET subject = '=SUM(A1:A2)' WHERE kind='test'").Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.service.GenerateCampaign(context.Background(), f.campaignID, true); err != nil {
+	if err := f.service.GenerateCampaign(context.Background(), f.ownerID, f.campaignID, true); err != nil {
 		t.Fatal(err)
 	}
-	report, _, err = f.service.DownloadCampaign(context.Background(), f.campaignID, exports.KindCampaignReport)
+	report, _, err = f.service.DownloadCampaign(context.Background(), f.ownerID, f.campaignID, exports.KindCampaignReport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -653,10 +738,10 @@ func TestCampaignPackageIsIndexedAndInert(t *testing.T) {
 	if _, err := f.app.DB().NewQuery("UPDATE submission_attempts SET subject = '<script>alert(1)</script>'").Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.service.GenerateCampaign(context.Background(), f.campaignID, true); err != nil {
+	if err := f.service.GenerateCampaign(context.Background(), f.ownerID, f.campaignID, true); err != nil {
 		t.Fatal(err)
 	}
-	data, name, err := f.service.DownloadCampaign(context.Background(), f.campaignID, exports.KindCampaignPackage)
+	data, name, err := f.service.DownloadCampaign(context.Background(), f.ownerID, f.campaignID, exports.KindCampaignPackage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -740,16 +825,16 @@ func TestExportFailureNeverTouchesAttemptsAndIsRetryable(t *testing.T) {
 	manifestName := record.GetString("manifest")
 	manifestBytes := f.readStoredFile(t, record, manifestName)
 	f.removeStoredFile(t, record, manifestName)
-	if err = f.service.GenerateTask(context.Background(), task, true); err == nil {
+	if err = f.service.GenerateTask(context.Background(), f.ownerID, task, true); err == nil {
 		t.Fatal("generation succeeded without the retained manifest")
 	}
 	if after := f.attemptsFingerprint(t); after != before {
 		t.Fatal("failed generation changed recorded attempts")
 	}
-	if _, _, err = f.service.DownloadTask(context.Background(), task); !errors.Is(err, exports.ErrNotReady) {
+	if _, _, err = f.service.DownloadTask(context.Background(), f.ownerID, task); !errors.Is(err, exports.ErrNotReady) {
 		t.Fatalf("failed generation published a download: %v", err)
 	}
-	artifact, err := f.service.TaskArtifact(context.Background(), task)
+	artifact, err := f.service.TaskArtifact(context.Background(), f.ownerID, task)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -770,10 +855,10 @@ func TestExportFailureNeverTouchesAttemptsAndIsRetryable(t *testing.T) {
 	if err = f.app.Save(record); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.service.GenerateTask(context.Background(), task, true); err != nil {
+	if err = f.service.GenerateTask(context.Background(), f.ownerID, task, true); err != nil {
 		t.Fatalf("retry after the write failure did not publish: %v", err)
 	}
-	if _, _, err = f.service.DownloadTask(context.Background(), task); err != nil {
+	if _, _, err = f.service.DownloadTask(context.Background(), f.ownerID, task); err != nil {
 		t.Fatalf("retried generation published no download: %v", err)
 	}
 }
@@ -784,10 +869,10 @@ func TestInterruptedGenerationCanBeRetried(t *testing.T) {
 	if _, err := f.app.DB().NewQuery("UPDATE send_tasks SET status='interrupted' WHERE id={:id}").Bind(map[string]any{"id": task}).Execute(); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.service.GenerateTask(context.Background(), task, false); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, task, false); err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := f.service.TaskArtifact(context.Background(), task)
+	artifact, err := f.service.TaskArtifact(context.Background(), f.ownerID, task)
 	if err != nil || artifact == nil {
 		t.Fatalf("artifact missing: %v", err)
 	}
@@ -800,10 +885,10 @@ func TestInterruptedGenerationCanBeRetried(t *testing.T) {
 	if err = f.app.Save(record); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.service.GenerateTask(context.Background(), task, true); err != nil {
+	if err = f.service.GenerateTask(context.Background(), f.ownerID, task, true); err != nil {
 		t.Fatalf("stale generation could not be retried: %v", err)
 	}
-	if _, _, err = f.service.DownloadTask(context.Background(), task); err != nil {
+	if _, _, err = f.service.DownloadTask(context.Background(), f.ownerID, task); err != nil {
 		t.Fatalf("retried generation published no file: %v", err)
 	}
 }
@@ -811,15 +896,15 @@ func TestInterruptedGenerationCanBeRetried(t *testing.T) {
 func TestGeneratedFileDeletionKeepsHistoryAndRegenerates(t *testing.T) {
 	f := newExportFixture(t)
 	task := f.mixedTask(t)
-	if err := f.service.GenerateTask(context.Background(), task, false); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, task, false); err != nil {
 		t.Fatal(err)
 	}
 	before := f.attemptsFingerprint(t)
 	candidates := len(f.records(t, intake.CandidatesCollection, ""))
-	if err := f.service.DeleteTask(context.Background(), task); err != nil {
+	if err := f.service.DeleteTask(context.Background(), f.ownerID, task); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := f.service.DownloadTask(context.Background(), task); !errors.Is(err, exports.ErrNotReady) {
+	if _, _, err := f.service.DownloadTask(context.Background(), f.ownerID, task); !errors.Is(err, exports.ErrNotReady) {
 		t.Fatalf("deleted export still downloadable: %v", err)
 	}
 	if after := f.attemptsFingerprint(t); after != before {
@@ -828,10 +913,10 @@ func TestGeneratedFileDeletionKeepsHistoryAndRegenerates(t *testing.T) {
 	if len(f.records(t, intake.CandidatesCollection, "")) != candidates {
 		t.Fatal("deleting the generated file changed candidate eligibility rows")
 	}
-	if err := f.service.GenerateTask(context.Background(), task, true); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, task, true); err != nil {
 		t.Fatalf("deleted workbook could not be regenerated: %v", err)
 	}
-	if _, _, err := f.service.DownloadTask(context.Background(), task); err != nil {
+	if _, _, err := f.service.DownloadTask(context.Background(), f.ownerID, task); err != nil {
 		t.Fatalf("regenerated workbook unavailable: %v", err)
 	}
 }

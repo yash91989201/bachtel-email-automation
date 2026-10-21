@@ -26,7 +26,7 @@ func TestExportThousandRowWorkflow(t *testing.T) {
 	}
 	task := f.stage(t, rows)
 	f.approve(t, task)
-	act := f.act(t, task, "start", "thousand-start", 1000)
+	act := f.act(t, f.ownerID, task, "start", "thousand-start", 1000)
 	if act.Claimed != 1000 {
 		t.Fatalf("claimed %d, want 1000", act.Claimed)
 	}
@@ -37,10 +37,10 @@ func TestExportThousandRowWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := f.service.GenerateTask(context.Background(), task, false); err != nil {
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, task, false); err != nil {
 		t.Fatal(err)
 	}
-	data, _, err := f.service.DownloadTask(context.Background(), task)
+	data, _, err := f.service.DownloadTask(context.Background(), f.ownerID, task)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,10 +69,10 @@ func TestExportThousandRowWorkflow(t *testing.T) {
 		t.Error(err)
 	}
 
-	if err := f.service.GenerateCampaign(context.Background(), f.campaignID, true); err != nil {
+	if err := f.service.GenerateCampaign(context.Background(), f.ownerID, f.campaignID, true); err != nil {
 		t.Fatal(err)
 	}
-	report, _, err := f.service.DownloadCampaign(context.Background(), f.campaignID, exports.KindCampaignReport)
+	report, _, err := f.service.DownloadCampaign(context.Background(), f.ownerID, f.campaignID, exports.KindCampaignReport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestExportThousandRowWorkflow(t *testing.T) {
 		t.Error(err)
 	}
 
-	pkg, _, err := f.service.DownloadCampaign(context.Background(), f.campaignID, exports.KindCampaignPackage)
+	pkg, _, err := f.service.DownloadCampaign(context.Background(), f.ownerID, f.campaignID, exports.KindCampaignPackage)
 	if err != nil {
 		t.Fatal(err)
 	}
