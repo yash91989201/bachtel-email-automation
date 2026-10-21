@@ -86,8 +86,10 @@ func TestTitanResolutionDoesNotRequireMicrosoftConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(resolver.cfg.Microsoft.Missing()) == 0 {
-		t.Fatal("fixture must leave Microsoft settings incomplete")
+	// The deployment holds no Microsoft credentials at all: Titan must resolve
+	// without any operator-saved Microsoft registration.
+	if _, err := mailboxes.ActiveSettings(context.Background(), ownerID); !errors.Is(err, mailbox.ErrSettingsMissing) {
+		t.Fatalf("fixture must have no saved Microsoft settings: %v", err)
 	}
 	sender, err := resolver.Sender(context.Background(), connection.ID)
 	if err != nil {

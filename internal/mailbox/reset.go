@@ -47,6 +47,9 @@ type Reset struct {
 	Status           string
 	Error            string
 	CreatedAt        time.Time
+	// RotationGeneration is the staged provider setup generation to activate
+	// together with the target connection; zero means the setup is unchanged.
+	RotationGeneration int
 }
 
 // ResetManifest is the exact retained/deleted scope disclosed to the operator
@@ -113,6 +116,11 @@ func (s *Store) StageReplacement(ctx context.Context, candidate Candidate) (*Res
 		target.Set("status", string(StatusConnected))
 		target.Set("current", false)
 		target.Set("generation", current.Generation+1)
+		// Tokens sealed here were issued under the candidate's saved provider
+		// setup. A staged registration is promoted only when the reset
+		// activates, so a cancelled replacement never rewrites the active
+		// registration.
+		target.Set("settings_generation", candidate.SettingsGeneration)
 		sealed, err := s.seal(candidate.OwnerID, candidate.Provider, target.Id, candidate.Credential)
 		if err != nil {
 			return err
@@ -135,6 +143,9 @@ func (s *Store) StageReplacement(ctx context.Context, candidate Candidate) (*Res
 		record.Set("from_connection", current.ID)
 		record.Set("to_connection", target.Id)
 		record.Set("status", ResetStaging)
+		if candidate.PromoteSettings {
+			record.Set("rotation_generation", candidate.SettingsGeneration)
+		}
 		if err := app.Save(record); err != nil {
 			return err
 		}
@@ -289,6 +300,12 @@ func (s *Store) ActivateReset(ctx context.Context, resetID string) error {
 		if err := app.Save(target); err != nil {
 			return err
 		}
+		// Activate the staged registration with the connection whose tokens it
+		// issued. A superseded generation aborts the whole activation, so the
+		// operator retries instead of mixing registrations.
+		if err := promoteSettings(app, owner, Provider(target.GetString("provider")), record.GetInt("rotation_generation")); err != nil {
+			return err
+		}
 		// Complete the reset while the replaced connection still exists: the
 		// reset record references it, and PocketBase validates relations on
 		// save. The claim is released immediately after.
@@ -321,12 +338,13 @@ func (s *Store) ReadResetManifest(ctx context.Context, resetID string) (ResetMan
 
 func resetFromRecord(record *core.Record) *Reset {
 	return &Reset{
-		ID:               record.Id,
-		OwnerID:          record.GetString("owner"),
-		FromConnectionID: record.GetString("from_connection"),
-		ToConnectionID:   record.GetString("to_connection"),
-		Status:           record.GetString("status"),
-		Error:            record.GetString("error"),
-		CreatedAt:        record.GetDateTime("created").Time().UTC(),
+		ID:                 record.Id,
+		OwnerID:            record.GetString("owner"),
+		FromConnectionID:   record.GetString("from_connection"),
+		ToConnectionID:     record.GetString("to_connection"),
+		Status:             record.GetString("status"),
+		Error:              record.GetString("error"),
+		CreatedAt:          record.GetDateTime("created").Time().UTC(),
+		RotationGeneration: record.GetInt("rotation_generation"),
 	}
 }

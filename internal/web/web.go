@@ -96,6 +96,7 @@ func NewHandler(app core.App, cfg config.Config, services Services) http.Handler
 	mux.HandleFunc("GET /status", s.requireOperator(s.handleStatus))
 	mux.HandleFunc("GET /connection", s.requireOperator(s.handleConnection))
 	mux.HandleFunc("GET /connection/replace", s.requireOperator(s.handleReplacement))
+	mux.HandleFunc("POST /connection/microsoft/settings", s.requireOperator(s.handleMicrosoftSettings))
 	mux.HandleFunc("POST /connection/microsoft/connect", s.requireOperator(s.handleMicrosoftConnect))
 	mux.HandleFunc("GET /connection/callback", s.requireOperator(s.handleCallback))
 	mux.HandleFunc("POST /connection/titan", s.requireOperator(s.handleTitanConnect))

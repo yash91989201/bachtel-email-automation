@@ -116,7 +116,7 @@ func TestAcceptanceBrowserHarness(t *testing.T) {
 	cfg := config.Config{
 		Origin:     "http://127.0.0.1",
 		PandocPath: f.pandocPath,
-		Microsoft:  config.Microsoft{TenantID: "simulated-tenant", ClientID: "simulated-client", ClientSecret: "simulated-secret", RedirectURL: "http://127.0.0.1/connection/callback", AuthorityURL: "http://127.0.0.1", GraphBaseURL: "http://127.0.0.1"},
+		Microsoft:  config.Microsoft{AuthorityURL: "http://127.0.0.1", GraphBaseURL: "http://127.0.0.1"},
 		Titan:      config.Titan{Address: "smtp.example.invalid"},
 	}
 	mailboxes := mailbox.NewStore(f.app, func() ([]byte, error) { return testKey, nil })

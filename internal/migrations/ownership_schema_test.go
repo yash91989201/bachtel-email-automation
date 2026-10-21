@@ -93,3 +93,77 @@ func TestOwnershipSchemaEnforcesItsInvariants(t *testing.T) {
 		t.Fatal("campaign-scoped candidate identity uniqueness was not preserved")
 	}
 }
+
+// A saved provider setup belongs to exactly one operator, is required to name
+// that owner, and its application registration never widens a mailbox claim: a
+// sender claimed through one Client ID stays claimed for every other.
+func TestProviderSettingsSchemaEnforcesOwnerAndClaims(t *testing.T) {
+	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
+	if err := app.Bootstrap(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := app.ClearBootstrap(); err != nil {
+			t.Error(err)
+		}
+	})
+	if err := app.RunAppMigrations(); err != nil {
+		t.Fatal(err)
+	}
+
+	settings, err := app.FindCollectionByNameOrId(mailbox.SettingsCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := newOperator(t, app, "first@example.test")
+	second := newOperator(t, app, "second@example.test")
+
+	unowned := core.NewRecord(settings)
+	unowned.Set("provider", string(mailbox.ProviderMicrosoft))
+	unowned.Set("tenant_id", "11111111-1111-1111-1111-111111111111")
+	unowned.Set("client_id", "22222222-2222-2222-2222-222222222222")
+	if err := app.Save(unowned); err == nil {
+		t.Fatal("provider settings without an owner were accepted")
+	}
+
+	saved := func(owner, clientID string) *core.Record {
+		record := core.NewRecord(settings)
+		record.Set("owner", owner)
+		record.Set("provider", string(mailbox.ProviderMicrosoft))
+		record.Set("tenant_id", "11111111-1111-1111-1111-111111111111")
+		record.Set("client_id", clientID)
+		record.Set("secret", "v1.sealed")
+		return record
+	}
+	if err := app.Save(saved(first, "22222222-2222-2222-2222-222222222222")); err != nil {
+		t.Fatalf("first saved setup: %v", err)
+	}
+	if err := app.Save(saved(first, "33333333-3333-3333-3333-333333333333")); err == nil {
+		t.Fatal("a second saved setup for one operator was accepted")
+	}
+	if err := app.Save(saved(second, "33333333-3333-3333-3333-333333333333")); err != nil {
+		t.Fatalf("second operator's setup was rejected: %v", err)
+	}
+
+	connections, err := app.FindCollectionByNameOrId(mailbox.ConnectionsCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claim := func(owner string) *core.Record {
+		record := core.NewRecord(connections)
+		record.Set("owner", owner)
+		record.Set("provider", string(mailbox.ProviderMicrosoft))
+		record.Set("sender", "shared@example.test")
+		record.Set("status", string(mailbox.StatusConnected))
+		record.Set("generation", 1)
+		record.Set("settings_generation", 1)
+		record.Set("current", true)
+		return record
+	}
+	if err := app.Save(claim(first)); err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	if err := app.Save(claim(second)); err == nil {
+		t.Fatal("a sender claimed under one application registration was claimed again through another Client ID")
+	}
+}

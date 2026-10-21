@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -89,7 +90,6 @@ func testConfig(origin string) config.Config {
 	return config.Config{
 		Origin: origin,
 		Microsoft: config.Microsoft{
-			RedirectURL:  origin + config.CallbackPath,
 			AuthorityURL: config.DefaultAuthorityURL,
 			GraphBaseURL: config.DefaultGraphBaseURL,
 		},
@@ -485,6 +485,7 @@ func TestCSRFProtection(t *testing.T) {
 	}{
 		{http.MethodPost, "/login"},
 		{http.MethodPost, "/logout"},
+		{http.MethodPost, "/connection/microsoft/settings"},
 		{http.MethodPost, "/connection/microsoft/connect"},
 		{http.MethodPost, "/connection/disconnect"},
 		{http.MethodPost, "/connection/titan"},
@@ -521,48 +522,93 @@ func TestCSRFProtection(t *testing.T) {
 }
 
 func TestConnectionPage(t *testing.T) {
-	t.Run("missing settings disable Microsoft and keep Titan usable", func(t *testing.T) {
+	t.Run("saving provider setup is required before Microsoft sign-in", func(t *testing.T) {
 		cfg := testConfig("http://127.0.0.1:8090")
 		app, handler := newTestServer(t, cfg)
 		provisionOperator(t, app)
 		cookie := login(t, handler)
+		owner := operatorID(t, app)
 
 		rec := do(t, handler, http.MethodGet, "/connection", nil, withCookie(cookie))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
 		body := rec.Body.String()
-		for _, name := range []string{"MS_TENANT_ID", "MS_CLIENT_ID", "MS_CLIENT_SECRET"} {
-			if !strings.Contains(body, "<code>"+name+"</code>") {
-				t.Fatalf("missing setting %s not listed by env name: %.400s", name, body)
+		// The setup form and the deployment-derived callback are shown, and
+		// sign-in stays unavailable until a registration is saved.
+		for _, want := range []string{
+			`action="/connection/microsoft/settings"`,
+			`name="tenant_id"`,
+			`name="client_id"`,
+			`name="client_secret"`,
+			"data-callback-url>" + cfg.CallbackURL() + "</code>",
+		} {
+			if !strings.Contains(body, want) {
+				t.Fatalf("connection page missing %q: %.600s", want, body)
 			}
 		}
-		// Both provider options render; only the Microsoft controls are disabled.
-		if !strings.Contains(body, `action="/connection/microsoft/connect"`) || !strings.Contains(body, `action="/connection/titan"`) {
-			t.Fatalf("connection page must offer both providers: %.400s", body)
+		if strings.Contains(body, ">Continue with Microsoft 365<") {
+			t.Fatal("sign-in is offered before any registration is saved")
 		}
-		if disabled := strings.Count(body, " data-disabled"); disabled < 2 {
-			t.Fatalf("expected disabled Microsoft controls, found %d disabled markers", disabled)
+		if !strings.Contains(body, `action="/connection/titan"`) || !strings.Contains(body, ">Validate Titan mailbox<") {
+			t.Fatalf("Titan must stay usable without Microsoft settings: %.600s", body)
 		}
-		if !strings.Contains(body, ">Validate Titan mailbox<") {
-			t.Fatalf("Titan submit must stay usable: %.400s", body)
+
+		// Sign-in without saved settings reports the actionable requirement.
+		rec = do(t, handler, http.MethodPost, "/connection/microsoft/connect", url.Values{}, withCookie(cookie))
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Save your Microsoft Tenant ID, Client ID and Client Secret") {
+			t.Fatalf("connect without settings: status=%d body=%.400s", rec.Code, rec.Body.String())
 		}
-		// No secret value is rendered anywhere on the page.
-		for _, value := range []string{"value=\"client", "value=\"tenant", "value=\"secret"} {
-			if strings.Contains(body, value) {
-				t.Fatalf("page renders a secret value %q", value)
+
+		// Invalid identifiers are refused with field guidance, not values.
+		rec = do(t, handler, http.MethodPost, "/connection/microsoft/settings", url.Values{
+			"tenant_id": {"common"}, "client_id": {"22222222-2222-2222-2222-222222222222"}, "client_secret": {"super-secret-value"},
+		}, withCookie(cookie))
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Tenant ID must be the directory UUID") {
+			t.Fatalf("invalid tenant: status=%d body=%.400s", rec.Code, rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), "super-secret-value") {
+			t.Fatal("rejected form echoed the submitted secret")
+		}
+		if _, err := mailbox.NewStore(app, testKey).Settings(context.Background(), owner); !errors.Is(err, mailbox.ErrSettingsMissing) {
+			t.Fatalf("rejected input saved a setup: %v", err)
+		}
+
+		// A valid save stages the registration and offers sign-in.
+		rec = do(t, handler, http.MethodPost, "/connection/microsoft/settings", url.Values{
+			"tenant_id": {"11111111-1111-1111-1111-111111111111"}, "client_id": {"22222222-2222-2222-2222-222222222222"}, "client_secret": {"super-secret-value"},
+		}, withCookie(cookie))
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection?notice=settings-saved" {
+			t.Fatalf("save settings: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
+		}
+		rec = do(t, handler, http.MethodGet, "/connection", nil, withCookie(cookie))
+		body = rec.Body.String()
+		for _, want := range []string{
+			"11111111-1111-1111-1111-111111111111",
+			"22222222-2222-2222-2222-222222222222",
+			">Continue with Microsoft 365<",
+		} {
+			if !strings.Contains(body, want) {
+				t.Fatalf("saved setup missing %q: %.600s", want, body)
 			}
+		}
+		if strings.Contains(body, "super-secret-value") {
+			t.Fatal("page rendered the saved client secret")
 		}
 	})
 
 	t.Run("stored credential never reaches the page", func(t *testing.T) {
 		cfg := testConfig("http://127.0.0.1:8090")
-		cfg.Microsoft.TenantID = "tenant-1234"
-		cfg.Microsoft.ClientID = "client-1234"
-		cfg.Microsoft.ClientSecret = "super-secret-value"
 		app, handler := newTestServer(t, cfg)
 		provisionOperator(t, app)
 		cookie := login(t, handler)
+		owner := operatorID(t, app)
+
+		store := mailbox.NewStore(app, testKey)
+		if _, err := store.SaveSettings(context.Background(), owner, mailbox.ProviderMicrosoft,
+			"11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "super-secret-value"); err != nil {
+			t.Fatal(err)
+		}
 
 		collection, err := app.FindCollectionByNameOrId(mailbox.ConnectionsCollection)
 		if err != nil {
@@ -570,12 +616,13 @@ func TestConnectionPage(t *testing.T) {
 		}
 		const garbage = "GARBAGE-CIPHERTEXT-9f3a"
 		record := core.NewRecord(collection)
-		record.Set("owner", operatorID(t, app))
+		record.Set("owner", owner)
 		record.Set("provider", string(mailbox.ProviderMicrosoft))
 		record.Set("sender", "hr@bachtelcorporation.com")
-		record.Set("identity", "account-1@tenant-1234")
+		record.Set("identity", "account-1@11111111-1111-1111-1111-111111111111")
 		record.Set("status", string(mailbox.StatusReconnectRequired))
 		record.Set("generation", 1)
+		record.Set("settings_generation", 1)
 		record.Set("current", true)
 		record.Set("credential", garbage)
 		if err := app.Save(record); err != nil {
@@ -587,17 +634,49 @@ func TestConnectionPage(t *testing.T) {
 			t.Fatalf("status=%d", rec.Code)
 		}
 		body := rec.Body.String()
-		if strings.Contains(body, garbage) {
-			t.Fatal("page renders stored credential value")
-		}
-		if strings.Contains(body, "super-secret-value") {
-			t.Fatal("page renders client secret")
+		for _, leaked := range []string{garbage, "super-secret-value"} {
+			if strings.Contains(body, leaked) {
+				t.Fatalf("page renders stored secret material %q", leaked)
+			}
 		}
 		if !strings.Contains(body, "Reconnect required") {
 			t.Fatalf("missing reconnect_required badge: %.400s", body)
 		}
 		if !strings.Contains(body, "/connection/microsoft/connect") {
 			t.Fatal("reconnect must be actionable from the page")
+		}
+	})
+
+	t.Run("saved setup is owner-scoped", func(t *testing.T) {
+		cfg := testConfig("http://127.0.0.1:8090")
+		app, handler := newTestServer(t, cfg)
+		provisionOperator(t, app)
+		provisionOperatorAs(t, app, "second@example.com", "second-horse-battery-staple")
+		first := login(t, handler)
+		second := loginAs(t, handler, "second@example.com", "second-horse-battery-staple")
+
+		rec := do(t, handler, http.MethodPost, "/connection/microsoft/settings", url.Values{
+			"tenant_id": {"11111111-1111-1111-1111-111111111111"}, "client_id": {"22222222-2222-2222-2222-222222222222"}, "client_secret": {"first-secret"},
+		}, withCookie(first))
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("save first: status=%d body=%.300s", rec.Code, rec.Body.String())
+		}
+
+		rec = do(t, handler, http.MethodGet, "/connection", nil, withCookie(second))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("second page: status=%d", rec.Code)
+		}
+		body := rec.Body.String()
+		if strings.Contains(body, "11111111-1111-1111-1111-111111111111") || strings.Contains(body, "22222222-2222-2222-2222-222222222222") {
+			t.Fatal("another operator's saved registration is visible")
+		}
+		if !strings.Contains(body, `action="/connection/microsoft/settings"`) {
+			t.Fatal("the second operator must see their own setup form")
+		}
+
+		rec = do(t, handler, http.MethodPost, "/connection/microsoft/connect", url.Values{}, withCookie(second))
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Save your Microsoft Tenant ID, Client ID and Client Secret") {
+			t.Fatalf("foreign settings authorized sign-in: status=%d", rec.Code)
 		}
 	})
 }

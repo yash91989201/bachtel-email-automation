@@ -74,11 +74,15 @@ type Connection struct {
 	Identity   string
 	Status     Status
 	Generation int
-	Current    bool
-	LastError  string
-	ExpiresAt  time.Time
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	// SettingsGeneration is the saved provider setup generation this
+	// connection's credentials were issued under. A refresh refuses to run
+	// when it no longer matches the active setup.
+	SettingsGeneration int
+	Current            bool
+	LastError          string
+	ExpiresAt          time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 // Usable reports whether the connection may send right now.
@@ -91,6 +95,7 @@ type Credential struct {
 	AccessToken  string    `json:"access_token,omitempty"`
 	RefreshToken string    `json:"refresh_token,omitempty"`
 	Password     string    `json:"password,omitempty"`
+	ClientSecret string    `json:"client_secret,omitempty"`
 	ExpiresAt    time.Time `json:"expires_at,omitzero"`
 }
 
@@ -118,6 +123,12 @@ type Candidate struct {
 	Sender     string
 	Identity   string
 	Credential Credential
+	// SettingsGeneration is the saved provider setup generation the credential
+	// was issued under. It is zero for providers without saved setup.
+	SettingsGeneration int
+	// PromoteSettings marks SettingsGeneration as a staged registration that
+	// becomes active together with this credential.
+	PromoteSettings bool
 }
 
 // Store reads and writes mailbox connections and their credentials.
@@ -219,6 +230,7 @@ func (s *Store) Install(ctx context.Context, candidate Candidate) (*Connection, 
 		record.Set("identity", candidate.Identity)
 		record.Set("status", string(StatusConnected))
 		record.Set("generation", 1)
+		record.Set("settings_generation", candidate.SettingsGeneration)
 		record.Set("current", true)
 		sealed, err := s.seal(candidate.OwnerID, candidate.Provider, record.Id, candidate.Credential)
 		if err != nil {
@@ -226,6 +238,11 @@ func (s *Store) Install(ctx context.Context, candidate Candidate) (*Connection, 
 		}
 		record.Set("credential", sealed)
 		record.Set("credential_expires_at", candidate.Credential.ExpiresAt.UTC())
+		if candidate.PromoteSettings {
+			if err := promoteSettings(app, candidate.OwnerID, candidate.Provider, candidate.SettingsGeneration); err != nil {
+				return err
+			}
+		}
 		if err := app.Save(record); err != nil {
 			// A concurrent claim loses the unique constraint race; report the
 			// same refusal the pre-check produces instead of a database error.
@@ -264,6 +281,43 @@ func (s *Store) Reconnect(ctx context.Context, connection *Connection, credentia
 		}
 		record.Set("credential", sealed)
 		record.Set("credential_expires_at", credential.ExpiresAt.UTC())
+		record.Set("status", string(StatusConnected))
+		record.Set("last_error", "")
+		return app.Save(record)
+	})
+}
+
+// Rotate installs validated credentials together with the staged provider
+// registration they were issued under, in one transaction for the same verified
+// mailbox. The connection generation is preserved, so applicable formatting
+// approvals remain valid. A mismatched generation changes nothing.
+func (s *Store) Rotate(ctx context.Context, connection *Connection, credential Credential, settingsGeneration int, promote bool) error {
+	if credential.Provider != connection.Provider {
+		return ErrUnsupportedProvider
+	}
+	return s.app.RunInTransaction(func(app core.App) error {
+		record, err := app.FindRecordById(ConnectionsCollection, connection.ID)
+		if err != nil {
+			return fmt.Errorf("read the mailbox connection: %w", err)
+		}
+		if record.GetString("owner") != connection.OwnerID {
+			return ErrNotConnected
+		}
+		sealed, err := s.seal(connection.OwnerID, connection.Provider, record.Id, credential)
+		if err != nil {
+			return err
+		}
+		if promote {
+			if err := promoteSettings(app, connection.OwnerID, connection.Provider, settingsGeneration); err != nil {
+				return err
+			}
+		} else if record.GetInt("settings_generation") != settingsGeneration {
+			// Only a connection already bound to this registration may keep it.
+			return ErrSettingsStale
+		}
+		record.Set("credential", sealed)
+		record.Set("credential_expires_at", credential.ExpiresAt.UTC())
+		record.Set("settings_generation", settingsGeneration)
 		record.Set("status", string(StatusConnected))
 		record.Set("last_error", "")
 		return app.Save(record)
@@ -359,6 +413,12 @@ func validateCandidate(candidate Candidate) error {
 	if candidate.Credential.Provider != candidate.Provider {
 		return ErrUnsupportedProvider
 	}
+	if candidate.Provider == ProviderMicrosoft && candidate.SettingsGeneration == 0 {
+		return ErrSettingsMissing
+	}
+	if candidate.Provider != ProviderMicrosoft && candidate.SettingsGeneration != 0 {
+		return ErrUnsupportedProvider
+	}
 	return nil
 }
 
@@ -378,10 +438,12 @@ func connectionFromRecord(record *core.Record) *Connection {
 		Identity:   record.GetString("identity"),
 		Status:     Status(record.GetString("status")),
 		Generation: record.GetInt("generation"),
-		Current:    record.GetBool("current"),
-		LastError:  record.GetString("last_error"),
-		ExpiresAt:  record.GetDateTime("credential_expires_at").Time().UTC(),
-		CreatedAt:  record.GetDateTime("created").Time().UTC(),
-		UpdatedAt:  record.GetDateTime("updated").Time().UTC(),
+
+		SettingsGeneration: record.GetInt("settings_generation"),
+		Current:            record.GetBool("current"),
+		LastError:          record.GetString("last_error"),
+		ExpiresAt:          record.GetDateTime("credential_expires_at").Time().UTC(),
+		CreatedAt:          record.GetDateTime("created").Time().UTC(),
+		UpdatedAt:          record.GetDateTime("updated").Time().UTC(),
 	}
 }

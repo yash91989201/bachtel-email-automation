@@ -36,7 +36,22 @@ const (
 	// testSender is the mailbox address the simulated Graph reports for the
 	// signed-in account; each operator owns it exclusively.
 	testSender = "operator@bachtelcorporation.com"
+	// Each operator saves their own registration; these stand in for one
+	// Entra application.
+	testTenantID  = "11111111-1111-1111-1111-111111111111"
+	testClientID  = "22222222-2222-2222-2222-222222222222"
+	testSecret    = "client-secret-value"
+	otherTenantID = "33333333-3333-3333-3333-333333333333"
+	otherClientID = "44444444-4444-4444-4444-444444444444"
 )
+
+// tokenRegistration records which operator registration a token request used.
+type tokenRegistration struct {
+	Tenant       string
+	ClientID     string
+	ClientSecret string
+	Grant        string
+}
 
 type acceptanceEnv struct {
 	t         *testing.T
@@ -50,6 +65,7 @@ type acceptanceEnv struct {
 
 	mu            sync.Mutex
 	tokenRequests []url.Values
+	tokenMeta     []tokenRegistration
 }
 
 func newAcceptanceEnv(t *testing.T) *acceptanceEnv {
@@ -58,10 +74,6 @@ func newAcceptanceEnv(t *testing.T) *acceptanceEnv {
 
 	t.Setenv(config.EnvOrigin, testOrigin)
 	t.Setenv(config.EnvEncryptionKey, base64.StdEncoding.EncodeToString([]byte(strings.Repeat("k", config.EncryptionKeySize))))
-	t.Setenv(config.EnvTenantID, "tenant-id")
-	t.Setenv(config.EnvClientID, "client-id")
-	t.Setenv(config.EnvClientSecret, "client-secret-value")
-	t.Setenv(config.EnvRedirectURL, testOrigin+config.CallbackPath)
 	t.Setenv(config.EnvAuthorityURL, "http://authority.invalid")
 
 	// Simulated Microsoft authorization server: token exchange only.
@@ -71,6 +83,17 @@ func newAcceptanceEnv(t *testing.T) *acceptanceEnv {
 		}
 		env.mu.Lock()
 		env.tokenRequests = append(env.tokenRequests, r.PostForm)
+		// oauth2 sends the client credentials with HTTP Basic auth by default.
+		clientID, clientSecret, _ := r.BasicAuth()
+		if clientID == "" {
+			clientID, clientSecret = r.PostForm.Get("client_id"), r.PostForm.Get("client_secret")
+		}
+		env.tokenMeta = append(env.tokenMeta, tokenRegistration{
+			Tenant:       strings.Split(strings.Trim(r.URL.Path, "/"), "/")[0],
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			Grant:        r.PostForm.Get("grant_type"),
+		})
 		env.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		// The access token carries the authorization code so the Graph mock
@@ -99,7 +122,11 @@ func newAcceptanceEnv(t *testing.T) *acceptanceEnv {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if _, err := fmt.Fprintf(w, `{"id":"account-1","mail":%q,"userPrincipalName":%q}`, mailboxAddress, mailboxAddress); err != nil {
+		// The account id follows the authorization code, so two simulated
+		// tenants hold genuinely different identities while a repeated code
+		// represents the same account.
+		id := "account-" + strings.TrimPrefix(token, "access-token-")
+		if _, err := fmt.Fprintf(w, `{"id":%q,"mail":%q,"userPrincipalName":%q}`, id, mailboxAddress, mailboxAddress); err != nil {
 			t.Errorf("write mock response: %v", err)
 		}
 	}))
@@ -195,6 +222,20 @@ func (env *acceptanceEnv) request(method, target string, cookies []*http.Cookie,
 	return rec
 }
 
+// saveMicrosoftSettings stages one operator's own Entra registration exactly
+// as the connection form does.
+func (env *acceptanceEnv) saveMicrosoftSettings(session *http.Cookie, tenantID, clientID, secret string) {
+	env.t.Helper()
+	rec := env.request(http.MethodPost, "/connection/microsoft/settings", []*http.Cookie{session}, url.Values{
+		"tenant_id":     {tenantID},
+		"client_id":     {clientID},
+		"client_secret": {secret},
+	})
+	if rec.Code != http.StatusSeeOther {
+		env.t.Fatalf("save provider settings: status=%d body=%.300s", rec.Code, rec.Body.String())
+	}
+}
+
 func (env *acceptanceEnv) signIn() *http.Cookie {
 	env.t.Helper()
 	rec := env.request(http.MethodPost, "/login", nil, url.Values{"email": {testEmail}, "password": {testPassword}})
@@ -230,7 +271,9 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 		t.Fatalf("connection page before connect: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
 
-	// Operator starts authorization and follows the callback.
+	// The operator saves their own Entra registration, then starts
+	// authorization and follows the callback.
+	env.saveMicrosoftSettings(session, testTenantID, testClientID, testSecret)
 	rec = env.request(http.MethodPost, "/connection/microsoft/connect", []*http.Cookie{session}, url.Values{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("connect: status=%d body=%.300s", rec.Code, rec.Body.String())
@@ -242,6 +285,12 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 	state := authorizeURL.Query().Get("state")
 	if state == "" || authorizeURL.Query().Get("code_challenge_method") != "S256" {
 		t.Fatalf("authorization URL missing PKCE state: %q", authorizeURL.String())
+	}
+	if !strings.Contains(authorizeURL.Path, "/"+testTenantID+"/") {
+		t.Fatalf("authorization URL is not scoped to the saved tenant: %q", authorizeURL.Path)
+	}
+	if got := authorizeURL.Query().Get("redirect_uri"); got != env.cfg.CallbackURL() {
+		t.Fatalf("redirect_uri = %q, want the origin-derived %q", got, env.cfg.CallbackURL())
 	}
 
 	rec = env.request(http.MethodGet, "/connection/callback?state="+url.QueryEscape(state)+"&code=authorization-code", []*http.Cookie{session}, nil)
@@ -268,7 +317,7 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 	if !strings.Contains(body, testSender) || !strings.Contains(body, "connected") {
 		t.Fatalf("connection page missing connected identity: %.600s", body)
 	}
-	for _, secret := range []string{"access-token-", "refresh-token-", "client-secret-value", "v1."} {
+	for _, secret := range []string{"access-token-", "refresh-token-", testSecret, "v1."} {
 		if strings.Contains(body, secret) {
 			t.Fatalf("connection page leaked %q", secret)
 		}
@@ -309,6 +358,7 @@ func TestAcceptanceRestartDuringMicrosoftSignIn(t *testing.T) {
 	session := env.signIn()
 	cookies := []*http.Cookie{session}
 
+	env.saveMicrosoftSettings(session, testTenantID, testClientID, testSecret)
 	start := env.request(http.MethodPost, "/connection/microsoft/connect", cookies, url.Values{})
 	oldURL, err := url.Parse(start.Header().Get("Location"))
 	if err != nil || start.Code != http.StatusSeeOther || oldURL.Query().Get("state") == "" {
@@ -391,6 +441,7 @@ func TestAcceptanceRestartKeepsConnection(t *testing.T) {
 	env := newAcceptanceEnv(t)
 	session := env.signIn()
 
+	env.saveMicrosoftSettings(session, testTenantID, testClientID, testSecret)
 	rec := env.request(http.MethodPost, "/connection/microsoft/connect", []*http.Cookie{session}, url.Values{})
 	authorizeURL, err := url.Parse(rec.Header().Get("Location"))
 	if err != nil {
@@ -446,6 +497,7 @@ func TestAcceptancePrivateRecordBoundariesAndNoSendEndpoint(t *testing.T) {
 		"/api/collections/operators/records",
 		"/api/collections/" + mailbox.ConnectionsCollection + "/records",
 		"/api/collections/" + mailbox.ResetsCollection + "/records",
+		"/api/collections/" + mailbox.SettingsCollection + "/records",
 	} {
 		if rec := env.request(http.MethodGet, target, nil, nil); rec.Code < 400 {
 			t.Fatalf("anonymous %s: status=%d body=%.200s", target, rec.Code, rec.Body.String())
@@ -485,7 +537,7 @@ func TestAcceptancePrivateRecordBoundariesAndNoSendEndpoint(t *testing.T) {
 func TestAcceptanceAnonymousMutationsRejected(t *testing.T) {
 	env := newAcceptanceEnv(t)
 
-	for _, target := range []string{"/logout", "/connection/microsoft/connect", "/connection/disconnect", "/connection/titan", "/connection/replace/confirm"} {
+	for _, target := range []string{"/logout", "/connection/microsoft/settings", "/connection/microsoft/connect", "/connection/disconnect", "/connection/titan", "/connection/replace/confirm"} {
 		if rec := env.request(http.MethodPost, target, nil, url.Values{}); rec.Code != http.StatusUnauthorized {
 			t.Fatalf("anonymous %s: status=%d body=%.200s", target, rec.Code, rec.Body.String())
 		}
@@ -512,6 +564,7 @@ func TestAcceptanceAnonymousMutationsRejected(t *testing.T) {
 func TestAcceptanceConnectionRecordStoredEncrypted(t *testing.T) {
 	env := newAcceptanceEnv(t)
 	session := env.signIn()
+	env.saveMicrosoftSettings(session, testTenantID, testClientID, testSecret)
 	rec := env.request(http.MethodPost, "/connection/microsoft/connect", []*http.Cookie{session}, url.Values{})
 	authorizeURL, err := url.Parse(rec.Header().Get("Location"))
 	if err != nil {
@@ -533,7 +586,7 @@ func TestAcceptanceConnectionRecordStoredEncrypted(t *testing.T) {
 	if !strings.HasPrefix(stored, "v1.") {
 		t.Fatalf("credential not versioned: %q", stored)
 	}
-	for _, raw := range []string{"access-token-code", "refresh-token-1", "client-secret-value"} {
+	for _, raw := range []string{"access-token-code", "refresh-token-1", testSecret} {
 		if strings.Contains(stored, raw) {
 			t.Fatalf("stored credential contains raw value %q", raw)
 		}

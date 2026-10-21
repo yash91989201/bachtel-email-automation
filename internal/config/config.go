@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -28,20 +27,11 @@ const (
 	// Microsoft credentials. It is a deployment secret, separate from the
 	// Microsoft client secret, and must be backed up independently.
 	EnvEncryptionKey = "APP_ENCRYPTION_KEY"
-	// EnvTenantID is the Microsoft Entra tenant (directory) id.
-	EnvTenantID = "MS_TENANT_ID"
-	// EnvClientID is the Microsoft application (client) id.
-	EnvClientID = "MS_CLIENT_ID"
-	// EnvClientSecret is the Microsoft application client secret.
-	EnvClientSecret = "MS_CLIENT_SECRET"
-	// EnvRedirectURL overrides the Microsoft redirect URI. It defaults to the
-	// callback path appended to EnvOrigin and must match the registration.
-	EnvRedirectURL = "MS_REDIRECT_URL"
-	// EnvAuthorityURL overrides the Microsoft authority origin, used by
-	// simulated authorization servers in tests.
+	// EnvAuthorityURL overrides the Microsoft authority origin. It exists only
+	// for simulated authorization servers in tests; operators never set it.
 	EnvAuthorityURL = "MS_AUTHORITY_URL"
-	// EnvGraphBaseURL overrides the Microsoft Graph API base URL, used by
-	// simulated Graph servers in tests.
+	// EnvGraphBaseURL overrides the Microsoft Graph API base URL. It exists
+	// only for simulated Graph servers in tests; operators never set it.
 	EnvGraphBaseURL = "MS_GRAPH_BASE_URL"
 	// EnvRestoreReview disables every send-like action after a backup restore
 	// until the operator reconciles the submission gap.
@@ -82,8 +72,6 @@ const (
 var (
 	// ErrOriginInvalid reports a malformed EnvOrigin value.
 	ErrOriginInvalid = errors.New("APP_ORIGIN must be an absolute http(s) origin such as https://mail.example.com")
-	// ErrRedirectInsecure reports an http callback under an https origin.
-	ErrRedirectInsecure = errors.New("MS_REDIRECT_URL must use https when APP_ORIGIN uses https")
 	// ErrEncryptionKeyMissing reports an unset EnvEncryptionKey.
 	ErrEncryptionKeyMissing = errors.New("APP_ENCRYPTION_KEY is not set")
 	// ErrEncryptionKeyInvalid reports an EnvEncryptionKey that is not base64
@@ -117,14 +105,13 @@ type Config struct {
 	Titan Titan
 }
 
-// Microsoft holds the shared Microsoft Entra application settings. Each
-// operator connects their own mailbox in the configured tenant; there is no
-// fixed sender address.
+// Microsoft holds the endpoint overrides for the Microsoft connection.
+// Tenant, application and secret settings belong to each operator's saved
+// provider setup, not to the deployment: the same deployment serves operators
+// in different tenants with separate application registrations.
 type Microsoft struct {
-	TenantID     string
-	ClientID     string
-	ClientSecret string
-	RedirectURL  string
+	// AuthorityURL and GraphBaseURL are simulated-test overrides of the public
+	// endpoints. Operators never configure them.
 	AuthorityURL string
 	GraphBaseURL string
 }
@@ -144,21 +131,8 @@ func Load() (Config, error) {
 	}
 
 	microsoft := Microsoft{
-		TenantID:     strings.TrimSpace(os.Getenv(EnvTenantID)),
-		ClientID:     strings.TrimSpace(os.Getenv(EnvClientID)),
-		ClientSecret: os.Getenv(EnvClientSecret),
-		RedirectURL:  strings.TrimSpace(env(EnvRedirectURL, origin+CallbackPath)),
 		AuthorityURL: strings.TrimSuffix(strings.TrimSpace(env(EnvAuthorityURL, DefaultAuthorityURL)), "/"),
 		GraphBaseURL: strings.TrimSuffix(strings.TrimSpace(env(EnvGraphBaseURL, DefaultGraphBaseURL)), "/"),
-	}
-	if microsoft.RedirectURL == "" {
-		return Config{}, fmt.Errorf("%s must not be empty", EnvRedirectURL)
-	}
-	if parsed, err := url.Parse(microsoft.RedirectURL); err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return Config{}, fmt.Errorf("%s must be an absolute http(s) URL", EnvRedirectURL)
-	}
-	if strings.HasPrefix(origin, "https://") && !strings.HasPrefix(microsoft.RedirectURL, "https://") {
-		return Config{}, ErrRedirectInsecure
 	}
 
 	intakeLimits, err := loadIntakeLimits()
@@ -234,29 +208,18 @@ func (c Config) EncryptionKey() ([]byte, error) {
 	return nil, ErrEncryptionKeyInvalid
 }
 
-// Endpoints returns the tenant-specific Microsoft authorization-code
-// endpoints (consent URL and token URL).
-func (m Microsoft) Endpoints() (authorizeURL, tokenURL string) {
-	base := m.AuthorityURL + "/" + url.PathEscape(m.TenantID) + "/oauth2/v2.0"
-	return base + "/authorize", base + "/token"
+// CallbackURL is the fixed Microsoft redirect URI every operator registers.
+// It is derived from the trusted deployment origin, so no operator-supplied
+// redirect can redirect the authorization response elsewhere.
+func (c Config) CallbackURL() string {
+	return c.Origin + CallbackPath
 }
 
-// Missing returns the names of the required settings that are absent. An empty
-// result means the connection can be configured.
-func (m Microsoft) Missing() []string {
-	var missing []string
-	for name, value := range map[string]string{
-		EnvTenantID:     m.TenantID,
-		EnvClientID:     m.ClientID,
-		EnvClientSecret: m.ClientSecret,
-		EnvRedirectURL:  m.RedirectURL,
-	} {
-		if strings.TrimSpace(value) == "" {
-			missing = append(missing, name)
-		}
-	}
-	slices.Sort(missing)
-	return missing
+// Endpoints returns the tenant-specific Microsoft authorization-code
+// endpoints (consent URL and token URL) for an operator-saved tenant.
+func (m Microsoft) Endpoints(tenantID string) (authorizeURL, tokenURL string) {
+	base := m.AuthorityURL + "/" + url.PathEscape(tenantID) + "/oauth2/v2.0"
+	return base + "/authorize", base + "/token"
 }
 
 func env(name, fallback string) string {

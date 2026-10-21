@@ -41,6 +41,9 @@ func bindSending(app core.App, cfg config.Config) {
 			DataDir:        app.DataDir(),
 			RequestTimeout: 20 * time.Second,
 		})
+		// Application-settings rotation waits for the owner's in-flight
+		// submissions to settle before the credentials are swapped.
+		connections.SetDrainer(dispatcher)
 		exported := exports.NewService(app, cfg)
 		exported.BindTaskNotifications()
 		resets := reset.NewService(app, mailboxes)

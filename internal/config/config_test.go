@@ -14,12 +14,32 @@ import (
 func clearEnvironment(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
-		EnvOrigin, EnvEncryptionKey, EnvTenantID, EnvClientID, EnvClientSecret,
-		EnvRedirectURL, EnvTitanSMTPAddress, EnvAuthorityURL, EnvGraphBaseURL,
-		EnvIntakeMaxUploadBytes, EnvIntakeUnzipSizeLimit, EnvIntakeUnzipXMLSizeLimit,
-		EnvRestoreReview,
+		EnvOrigin, EnvEncryptionKey, EnvTitanSMTPAddress, EnvAuthorityURL,
+		EnvGraphBaseURL, EnvIntakeMaxUploadBytes, EnvIntakeUnzipSizeLimit,
+		EnvIntakeUnzipXMLSizeLimit, EnvRestoreReview,
 	} {
 		t.Setenv(name, "")
+	}
+}
+
+// TestLegacySharedMicrosoftSettingsAreIgnored guards the removal of the shared
+// deployment credentials: setting them must not configure anything.
+func TestLegacySharedMicrosoftSettingsAreIgnored(t *testing.T) {
+	clearEnvironment(t)
+	for name, value := range map[string]string{
+		"MS_TENANT_ID":     "00000000-0000-0000-0000-000000000001",
+		"MS_CLIENT_ID":     "00000000-0000-0000-0000-000000000002",
+		"MS_CLIENT_SECRET": "shared-secret",
+		"MS_REDIRECT_URL":  "https://elsewhere.example.test/callback",
+	} {
+		t.Setenv(name, value)
+	}
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := DefaultOrigin + CallbackPath; cfg.CallbackURL() != want {
+		t.Fatalf("callback = %q, want the origin-derived %q", cfg.CallbackURL(), want)
 	}
 }
 
@@ -36,14 +56,11 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.SecureCookies() {
 		t.Fatal("loopback development origin must not force secure cookies")
 	}
-	if got, want := cfg.Microsoft.RedirectURL, DefaultOrigin+CallbackPath; got != want {
-		t.Fatalf("redirect url = %q, want %q", got, want)
+	if got, want := cfg.CallbackURL(), DefaultOrigin+CallbackPath; got != want {
+		t.Fatalf("callback = %q, want %q", got, want)
 	}
 	if got := cfg.Titan.Address; got != DefaultTitanSMTPAddress {
 		t.Fatalf("titan endpoint = %q, want %q", got, DefaultTitanSMTPAddress)
-	}
-	if missing := cfg.Microsoft.Missing(); len(missing) != 3 {
-		t.Fatalf("expected tenant/client/secret to be reported missing, got %v", missing)
 	}
 }
 
@@ -144,14 +161,8 @@ func TestLoadRejectsMalformedOrigin(t *testing.T) {
 	}
 }
 
-func TestLoadHttpsOriginRequiresSecureCallback(t *testing.T) {
+func TestLoadHttpsOriginDerivesSecureCallback(t *testing.T) {
 	t.Setenv(EnvOrigin, "https://mail.example.com")
-	t.Setenv(EnvRedirectURL, "http://mail.example.com/connection/callback")
-	if _, err := Load(); !errors.Is(err, ErrRedirectInsecure) {
-		t.Fatalf("got %v, want ErrRedirectInsecure", err)
-	}
-
-	t.Setenv(EnvRedirectURL, "https://mail.example.com/connection/callback")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -162,11 +173,13 @@ func TestLoadHttpsOriginRequiresSecureCallback(t *testing.T) {
 	if cfg.Origin != "https://mail.example.com" {
 		t.Fatalf("origin = %q", cfg.Origin)
 	}
+	if want := "https://mail.example.com/connection/callback"; cfg.CallbackURL() != want {
+		t.Fatalf("callback = %q, want %q", cfg.CallbackURL(), want)
+	}
 }
 
 func TestLoadNormalizesTrailingSlash(t *testing.T) {
 	t.Setenv(EnvOrigin, "https://mail.example.com/")
-	t.Setenv(EnvRedirectURL, "https://mail.example.com/connection/callback")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -174,8 +187,8 @@ func TestLoadNormalizesTrailingSlash(t *testing.T) {
 	if cfg.Origin != "https://mail.example.com" {
 		t.Fatalf("origin = %q, want no trailing slash", cfg.Origin)
 	}
-	if want := "https://mail.example.com/connection/callback"; cfg.Microsoft.RedirectURL != want {
-		t.Fatalf("redirect url = %q, want %q", cfg.Microsoft.RedirectURL, want)
+	if want := "https://mail.example.com/connection/callback"; cfg.CallbackURL() != want {
+		t.Fatalf("callback = %q, want %q", cfg.CallbackURL(), want)
 	}
 }
 
@@ -214,7 +227,7 @@ func TestEncryptionKey(t *testing.T) {
 }
 
 func TestMicrosoftEndpoints(t *testing.T) {
-	authorize, token := Microsoft{TenantID: "tenant-id", AuthorityURL: DefaultAuthorityURL}.Endpoints()
+	authorize, token := Microsoft{AuthorityURL: DefaultAuthorityURL}.Endpoints("tenant-id")
 	if want := DefaultAuthorityURL + "/tenant-id/oauth2/v2.0/authorize"; authorize != want {
 		t.Fatalf("authorize = %q, want %q", authorize, want)
 	}

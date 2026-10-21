@@ -2,11 +2,13 @@
 // the OAuth 2.0 authorization-code flow with PKCE, Microsoft Graph identity
 // verification, and token refresh on top of mailbox.Store.
 //
-// There is no fixed sender address: every operator signs in with their own
-// mailbox. The verified mailbox becomes an exclusive claim through
-// mailbox.Store. Signing in a different mailbox while one is connected stages
-// a replacement claim and reports ReplacementRequired; the current connection
-// is never silently replaced.
+// There is no fixed sender address and no deployment-wide tenant: every
+// operator saves their own Tenant ID, Client ID and Client Secret, signs in
+// with their own mailbox, and the verified mailbox becomes an exclusive claim
+// through mailbox.Store. Signing in a different mailbox while one is connected
+// stages a replacement claim and reports ReplacementRequired; the current
+// connection is never silently replaced. Signing in the same mailbox under
+// changed application settings rotates those settings without losing history.
 //
 // Secret material (access tokens, refresh tokens, PKCE verifiers, the client
 // secret) never leaves the server. Credential ciphertext is sealed and
@@ -22,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -34,9 +35,10 @@ import (
 
 // Errors reported by the connection service.
 var (
-	// ErrNotConfigured wraps ConfigError: the required Microsoft settings are
-	// incomplete, so no flow can start.
-	ErrNotConfigured = errors.New("microsoft connection is not configured")
+	// ErrNotConfigured reports an operator without saved provider settings, so
+	// no flow can start. Each operator saves their own Tenant ID, Client ID
+	// and Client Secret; the deployment holds no Microsoft credentials.
+	ErrNotConfigured = errors.New("save your Microsoft provider settings before signing in")
 	// ErrAuthorizationState reports an unknown, expired, already-used, or
 	// operator-mismatched OAuth state parameter.
 	ErrAuthorizationState = errors.New("the Microsoft sign-in attempt is unknown, expired, or already used")
@@ -47,6 +49,10 @@ var (
 	// The connection is marked reconnect required; the operator must sign in
 	// again.
 	ErrRefreshRejected = errors.New("the stored mailbox credentials were rejected; reconnect the mailbox")
+	// ErrRotationInFlight reports a same-mailbox settings change that did not
+	// settle in-flight submissions in time. The saved settings and credentials
+	// stay unchanged and the operator signs in again.
+	ErrRotationInFlight = errors.New("email submissions are in flight; the application settings were not changed, so sign in again once they settle")
 )
 
 // ReplacementRequired reports a sign-in whose verified mailbox differs from
@@ -69,6 +75,10 @@ const (
 	refreshSkew = 60 * time.Second
 	// tokenAccessTimeout includes waiting for another refresh and its HTTP call.
 	tokenAccessTimeout = 20 * time.Second
+	// rotationDrainTimeout bounds how long a same-mailbox application-settings
+	// rotation waits for in-flight submissions before asking the operator to
+	// sign in again.
+	rotationDrainTimeout = 30 * time.Second
 )
 
 // scopes: offline_access yields the refresh token, Mail.Send is the only
@@ -80,10 +90,14 @@ var scopes = []string{
 	"https://graph.microsoft.com/User.Read",
 }
 
-// pendingAttempt is one in-memory OAuth sign-in attempt.
+// pendingAttempt is one in-memory OAuth sign-in attempt. It carries an
+// immutable snapshot of the saved registration the operator started with, so
+// a later settings edit can neither redirect the callback to another
+// registration nor be overwritten by it.
 type pendingAttempt struct {
 	ownerID   string
 	verifier  string
+	settings  *mailbox.ProviderSettings
 	expiresAt time.Time
 }
 
@@ -93,6 +107,9 @@ type Service struct {
 	app   core.App
 	cfg   config.Config
 	store *mailbox.Store
+	drain Drainer
+	// drainTimeout bounds the rotation wait; tests shorten it.
+	drainTimeout time.Duration
 
 	mu       sync.Mutex
 	attempts map[string]pendingAttempt
@@ -101,33 +118,36 @@ type Service struct {
 	refreshes map[string]chan struct{}
 }
 
+// Drainer reports how many submissions the operator's mailbox still has in
+// flight. Application settings are swapped only after they settle.
+type Drainer interface {
+	InFlightFor(ctx context.Context, ownerID string) (int, error)
+}
+
+// SetDrainer binds the dispatcher's per-owner in-flight query. Without one, no
+// submissions are assumed to be running.
+func (s *Service) SetDrainer(drainer Drainer) { s.drain = drainer }
+
 // NewService builds the Microsoft connection service for the app, its
 // configuration, and the shared mailbox connection store.
 func NewService(app core.App, cfg config.Config, connections *mailbox.Store) *Service {
 	return &Service{
-		app:       app,
-		cfg:       cfg,
-		store:     connections,
-		attempts:  make(map[string]pendingAttempt),
-		refreshes: make(map[string]chan struct{}),
+		app:          app,
+		cfg:          cfg,
+		store:        connections,
+		attempts:     make(map[string]pendingAttempt),
+		refreshes:    make(map[string]chan struct{}),
+		drainTimeout: rotationDrainTimeout,
 	}
 }
 
-// ConfigError reports the required settings that are absent, naming only
-// environment variable names, never values. It never blocks server startup.
-func (s *Service) ConfigError() error {
-	missing := s.cfg.Microsoft.Missing()
-	if len(missing) == 0 {
-		return nil
-	}
-	return fmt.Errorf("%w: set %s", ErrNotConfigured, strings.Join(missing, ", "))
-}
-
-// BeginAuth starts the authorization-code flow and returns the Microsoft
-// consent URL. The returned state binds the eventual callback to this
-// operator for a single use within attemptTTL.
+// BeginAuth starts the authorization-code flow with the operator's saved
+// registration and returns the Microsoft consent URL. The returned state binds
+// the eventual callback to this operator and to this registration snapshot for
+// a single use within attemptTTL.
 func (s *Service) BeginAuth(ctx context.Context, ownerID string) (string, error) {
-	if err := s.ConfigError(); err != nil {
+	settings, err := s.savedSettings(ctx, ownerID)
+	if err != nil {
 		return "", err
 	}
 	state, err := randomToken()
@@ -148,10 +168,10 @@ func (s *Service) BeginAuth(ctx context.Context, ownerID string) (string, error)
 			delete(s.attempts, key)
 		}
 	}
-	s.attempts[state] = pendingAttempt{ownerID: ownerID, verifier: verifier, expiresAt: now.Add(attemptTTL)}
+	s.attempts[state] = pendingAttempt{ownerID: ownerID, verifier: verifier, settings: settings, expiresAt: now.Add(attemptTTL)}
 	s.mu.Unlock()
 
-	return s.oauthConfig().AuthCodeURL(state,
+	return s.oauthConfig(settings).AuthCodeURL(state,
 		oauth2.S256ChallengeOption(verifier),
 		oauth2.AccessTypeOffline,
 	), nil
@@ -164,15 +184,13 @@ func (s *Service) BeginAuth(ctx context.Context, ownerID string) (string, error)
 // when a later step fails, so a replayed callback can never install
 // credentials.
 func (s *Service) CompleteAuth(ctx context.Context, ownerID, state, code string) (*mailbox.Connection, error) {
-	if err := s.ConfigError(); err != nil {
-		return nil, err
-	}
 	attempt, ok := s.consumeAttempt(state, ownerID)
 	if !ok {
 		return nil, ErrAuthorizationState
 	}
+	settings := attempt.settings
 
-	token, err := s.oauthConfig().Exchange(ctx, code, oauth2.VerifierOption(attempt.verifier))
+	token, err := s.oauthConfig(settings).Exchange(ctx, code, oauth2.VerifierOption(attempt.verifier))
 	if err != nil {
 		return nil, fmt.Errorf("the Microsoft token exchange failed: %w", err)
 	}
@@ -186,13 +204,15 @@ func (s *Service) CompleteAuth(ctx context.Context, ownerID, state, code string)
 		s.app.Logger().WarnContext(ctx, "microsoft sign-in without a mailbox identity; nothing changed")
 		return nil, ErrNoMailbox
 	}
-	// The identity carries the configured tenant so one account cannot be
-	// claimed under two different tenants.
+	// The identity carries the tenant the tokens were issued in, so one account
+	// cannot be claimed twice through different registrations.
 	candidate := mailbox.Candidate{
-		OwnerID:  ownerID,
-		Provider: mailbox.ProviderMicrosoft,
-		Sender:   sender,
-		Identity: graphID + "@" + s.cfg.Microsoft.TenantID,
+		OwnerID:            ownerID,
+		Provider:           mailbox.ProviderMicrosoft,
+		Sender:             sender,
+		Identity:           graphID + "@" + settings.TenantID,
+		SettingsGeneration: settings.Generation,
+		PromoteSettings:    settings.Pending,
 		Credential: mailbox.Credential{
 			Provider:     mailbox.ProviderMicrosoft,
 			AccessToken:  token.AccessToken,
@@ -217,8 +237,20 @@ func (s *Service) CompleteAuth(ctx context.Context, ownerID, state, code string)
 	}
 
 	if current.Identity == candidate.Identity {
-		// Same verified account: refresh credentials in place. The generation
-		// is preserved, so exact-content approvals remain valid.
+		// Same verified account. Newly saved application settings replace the
+		// active ones only after in-flight submissions settle, and only with
+		// the tokens this sign-in produced. A plain reconnect keeps the
+		// generation, so exact-content approvals remain valid.
+		if settings.Pending || current.SettingsGeneration != settings.Generation {
+			if err := s.drainOwner(ctx, ownerID); err != nil {
+				return nil, err
+			}
+			if err := s.store.Rotate(ctx, current, candidate.Credential, settings.Generation, settings.Pending); err != nil {
+				return nil, fmt.Errorf("rotating the microsoft application settings failed: %w", err)
+			}
+			s.app.Logger().InfoContext(ctx, "microsoft application settings rotated", "owner", ownerID)
+			return s.store.ByID(ctx, current.ID)
+		}
 		if err := s.store.Reconnect(ctx, current, candidate.Credential); err != nil {
 			return nil, fmt.Errorf("refreshing the microsoft connection failed: %w", err)
 		}
@@ -267,7 +299,16 @@ func (s *Service) AccessToken(ctx context.Context, connection *mailbox.Connectio
 		return token.AccessToken, nil
 	}
 
-	refreshed, err := s.refreshGrant(ctx, token.RefreshToken)
+	refreshed, err := func() (*oauth2.Token, error) {
+		settings, err := s.registrationFor(ctx, connection)
+		if err != nil {
+			if errors.Is(err, mailbox.ErrSettingsStale) || errors.Is(err, mailbox.ErrSettingsMissing) || errors.Is(err, ErrNotConfigured) {
+				s.MarkReconnectRequired(ctx, connection, "The saved Microsoft application settings changed; sign in again to reconnect the mailbox")
+			}
+			return nil, err
+		}
+		return s.refreshGrant(ctx, settings, token.RefreshToken)
+	}()
 	if err != nil {
 		if refreshRejected(err) {
 			s.app.Logger().WarnContext(ctx, "microsoft refresh token rejected", "connection", connection.ID)
@@ -305,16 +346,80 @@ func (s *Service) MarkReconnectRequired(ctx context.Context, connection *mailbox
 	}
 }
 
-// oauthConfig builds the tenant-specific OAuth config from the service
-// settings. The client secret stays inside this server-side value.
-func (s *Service) oauthConfig() *oauth2.Config {
-	authorizeURL, tokenURL := s.cfg.Microsoft.Endpoints()
+// oauthConfig builds the tenant-specific OAuth config from one saved
+// registration. The client secret stays inside this server-side value.
+func (s *Service) oauthConfig(settings *mailbox.ProviderSettings) *oauth2.Config {
+	authorizeURL, tokenURL := s.cfg.Microsoft.Endpoints(settings.TenantID)
 	return &oauth2.Config{
-		ClientID:     s.cfg.Microsoft.ClientID,
-		ClientSecret: s.cfg.Microsoft.ClientSecret,
-		RedirectURL:  s.cfg.Microsoft.RedirectURL,
+		ClientID:     settings.ClientID,
+		ClientSecret: settings.ClientSecret,
+		RedirectURL:  s.cfg.CallbackURL(),
 		Endpoint:     oauth2.Endpoint{AuthURL: authorizeURL, TokenURL: tokenURL},
 		Scopes:       scopes,
+	}
+}
+
+// savedSettings returns the registration an operator should authorize with:
+// the staged one when they saved a change, otherwise the active one.
+func (s *Service) savedSettings(ctx context.Context, ownerID string) (*mailbox.ProviderSettings, error) {
+	pending, err := s.store.PendingSettings(ctx, ownerID)
+	switch {
+	case err == nil:
+		return pending, nil
+	case !errors.Is(err, mailbox.ErrSettingsMissing):
+		return nil, err
+	}
+	active, err := s.store.ActiveSettings(ctx, ownerID)
+	if errors.Is(err, mailbox.ErrSettingsMissing) {
+		return nil, fmt.Errorf("%w: save the Tenant ID, Client ID and Client Secret first", ErrNotConfigured)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return active, nil
+}
+
+// registrationFor loads the saved registration the connection's credentials
+// were issued under. A refresh never uses another registration: a mismatch
+// requires a fresh sign-in.
+func (s *Service) registrationFor(ctx context.Context, connection *mailbox.Connection) (*mailbox.ProviderSettings, error) {
+	settings, err := s.store.ActiveSettings(ctx, connection.OwnerID)
+	if errors.Is(err, mailbox.ErrSettingsMissing) {
+		return nil, fmt.Errorf("%w: %v", ErrNotConfigured, err)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if settings.Generation != connection.SettingsGeneration {
+		return nil, fmt.Errorf("%w: sign in again to use the changed application settings", mailbox.ErrSettingsStale)
+	}
+	return settings, nil
+}
+
+// drainOwner waits a bounded time for the owner's in-flight submissions to
+// settle before application settings are swapped. It never blocks another
+// operator's mailbox.
+func (s *Service) drainOwner(ctx context.Context, ownerID string) error {
+	if s.drain == nil {
+		return nil
+	}
+	deadline := time.Now().Add(s.drainTimeout)
+	for {
+		inFlight, err := s.drain.InFlightFor(ctx, ownerID)
+		if err != nil {
+			return err
+		}
+		if inFlight == 0 {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return ErrRotationInFlight
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
 	}
 }
 
@@ -409,11 +514,11 @@ func (s *Service) refreshSlot(connectionID string) chan struct{} {
 
 // refreshGrant exchanges the refresh token at the tenant-specific token
 // endpoint.
-func (s *Service) refreshGrant(ctx context.Context, refreshToken string) (*oauth2.Token, error) {
-	_, tokenURL := s.cfg.Microsoft.Endpoints()
+func (s *Service) refreshGrant(ctx context.Context, settings *mailbox.ProviderSettings, refreshToken string) (*oauth2.Token, error) {
+	_, tokenURL := s.cfg.Microsoft.Endpoints(settings.TenantID)
 	oauthCfg := &oauth2.Config{
-		ClientID:     s.cfg.Microsoft.ClientID,
-		ClientSecret: s.cfg.Microsoft.ClientSecret,
+		ClientID:     settings.ClientID,
+		ClientSecret: settings.ClientSecret,
 		Endpoint:     oauth2.Endpoint{TokenURL: tokenURL},
 	}
 	// An already-expired token forces TokenSource to use the refresh grant.

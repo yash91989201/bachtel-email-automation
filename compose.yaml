@@ -3,17 +3,14 @@ services:
     build: .
     ports:
       - "${APP_HOST:-127.0.0.1}:${APP_PORT:-8090}:8090"
-    # Application settings interpolated from the host .env file.
+    # Application settings interpolated from the host .env file. Microsoft
+    # tenant/application credentials are not deployment settings: each operator
+    # saves their own provider setup in the UI.
     # MS_AUTHORITY_URL / MS_GRAPH_BASE_URL stay unset in production.
     environment:
       APP_ORIGIN: ${APP_ORIGIN:-}
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-}
       APP_RESTORE_REVIEW: ${APP_RESTORE_REVIEW:-}
-      MS_TENANT_ID: ${MS_TENANT_ID:-}
-      MS_CLIENT_ID: ${MS_CLIENT_ID:-}
-      MS_CLIENT_SECRET: ${MS_CLIENT_SECRET:-}
-      MS_REDIRECT_URL: ${MS_REDIRECT_URL:-}
-      MS_SENDER_ADDRESS: ${MS_SENDER_ADDRESS:-}
     volumes:
       - pb_data:/app/pb_data
     restart: unless-stopped

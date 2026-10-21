@@ -18,8 +18,11 @@ import (
 // Only these fixed notices may be selected by a connection-page URL. Raw
 // provider errors and form values must never be forwarded to it.
 var connectionNotices = map[string]string{
-	"not-configured":    "The Microsoft connection is not configured. Set the missing settings and try again.",
-	"in-flight":         "Email submissions are in flight. The connection was not changed; try again once they settle.",
+	"not-configured":    "Save your Microsoft Tenant ID, Client ID and Client Secret before signing in.",
+	"settings-saved":    "Provider settings saved and encrypted. Sign in with Microsoft 365 to activate them.",
+	"settings-stale":    "The saved application settings changed during that sign-in. Start a new sign-in.",
+	"settings-invalid":  "The provider settings were not saved. Check the Tenant ID, Client ID and Client Secret.",
+	"in-flight":         "Email submissions are in flight. The connection and application settings were not changed; try again once they settle.",
 	"state":             "This Microsoft sign-in attempt expired, was already used, or was cleared by a server restart. Start a new sign-in.",
 	"credentials":       "The stored connection credentials could not be read. Reconnect the mailbox.",
 	"incomplete":        "The sign-in response was incomplete. Start the connection again.",
@@ -41,8 +44,14 @@ func connectionErrorCode(err error) string {
 		return ""
 	}
 	switch {
-	case errors.Is(err, microsoft.ErrNotConfigured):
+	case errors.Is(err, microsoft.ErrNotConfigured), errors.Is(err, mailbox.ErrSettingsMissing):
 		return "not-configured"
+	case errors.Is(err, microsoft.ErrRotationInFlight):
+		return "in-flight"
+	case errors.Is(err, mailbox.ErrSettingsStale):
+		return "settings-stale"
+	case errors.Is(err, mailbox.ErrSettingsInvalid):
+		return "settings-invalid"
 	case errors.Is(err, mailbox.ErrCredentialsUnreadable), errors.Is(err, microsoft.ErrRefreshRejected):
 		return "credentials"
 	case errors.Is(err, microsoft.ErrNoMailbox):
@@ -80,9 +89,21 @@ func (s *server) connectionData(r *http.Request, notice string) views.Connection
 		Status:       string(mailbox.StatusDisconnected),
 		Notice:       notice,
 		TitanAddress: s.cfg.Titan.Address,
+		CallbackURL:  s.cfg.CallbackURL(),
 	}
-	if missing := s.cfg.Microsoft.Missing(); len(missing) > 0 {
-		data.MissingSettings = missing
+	if settings, err := s.mailboxes.Settings(r.Context(), ownerID); err == nil {
+		data.MicrosoftSaved = settings.Saved()
+		data.MicrosoftGen = settings.Generation
+		data.MicrosoftTenantID = settings.TenantID
+		data.MicrosoftClientID = settings.ClientID
+		data.MicrosoftPending = settings.HasPending()
+		data.MicrosoftPendingTenantID = settings.PendingTenantID
+		data.MicrosoftPendingClientID = settings.PendingClientID
+		data.MicrosoftPendingGen = settings.PendingGeneration
+		data.MicrosoftReady = settings.Saved() || settings.HasPending()
+	} else if !errors.Is(err, mailbox.ErrSettingsMissing) {
+		s.app.Logger().Warn("read saved provider settings", "error", err)
+		data.LastError = "The saved provider settings could not be read."
 	}
 
 	connection, err := s.mailboxes.Current(r.Context(), ownerID)
@@ -96,7 +117,9 @@ func (s *server) connectionData(r *http.Request, notice string) views.Connection
 		data.SenderAddress = connection.Sender
 		data.AccountEmail = connection.Identity
 		data.Status = string(connection.Status)
-		data.LastError = connection.LastError
+		if connection.LastError != "" {
+			data.LastError = connection.LastError
+		}
 		if !connection.ExpiresAt.IsZero() {
 			data.CredentialExpiresAt = connection.ExpiresAt.Format(time.RFC3339)
 		}
@@ -164,6 +187,43 @@ func (s *server) handleReplacement(w http.ResponseWriter, r *http.Request) {
 	data.LastError = data.Notice
 	data.Notice = ""
 	s.render(w, r, views.ReplacementPage(data))
+}
+
+func (s *server) handleMicrosoftSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	ownerID := recordFromContext(r).Id
+	// The secret is read from the form only: it is sealed immediately and
+	// never rendered, logged, or echoed back.
+	_, err := s.mailboxes.SaveSettings(r.Context(), ownerID, mailbox.ProviderMicrosoft,
+		r.FormValue("tenant_id"), r.FormValue("client_id"), r.FormValue("client_secret"))
+	if err != nil {
+		if errors.Is(err, mailbox.ErrSettingsInvalid) {
+			// Validation text names fields only, never values.
+			s.app.Logger().Info("rejected microsoft provider settings")
+		} else {
+			s.app.Logger().Warn("save microsoft provider settings", "error", err)
+		}
+		data := s.connectionData(r, "")
+		data.LastError = s.settingsMessage(err)
+		s.render(w, r, views.ConnectionPage(data))
+		return
+	}
+	http.Redirect(w, r, "/connection?notice=settings-saved", http.StatusSeeOther)
+}
+
+// settingsMessage maps a rejected settings save to operator text. Only field
+// names are forwarded, never submitted values.
+func (s *server) settingsMessage(err error) string {
+	switch {
+	case errors.Is(err, mailbox.ErrSettingsInvalid):
+		return err.Error()
+	case errors.Is(err, mailbox.ErrResetInProgress):
+		return connectionNotices["reset-started"]
+	case errors.Is(err, mailbox.ErrCredentialsUnreadable):
+		return connectionNotices["credentials"]
+	default:
+		return connectionNotices["settings-invalid"]
+	}
 }
 
 func (s *server) handleMicrosoftConnect(w http.ResponseWriter, r *http.Request) {

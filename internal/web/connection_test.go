@@ -38,19 +38,21 @@ func TestConnectionPageOffersBothProviders(t *testing.T) {
 	if !strings.Contains(body, "Mailbox connection") {
 		t.Fatalf("connection page missing heading copy: %.400s", body)
 	}
-	// Both provider forms render with their post targets.
-	if !strings.Contains(body, `action="/connection/microsoft/connect"`) || !strings.Contains(body, `action="/connection/titan"`) {
-		t.Fatalf("connection page must offer Microsoft and Titan: %.400s", body)
+	// Both providers render with their post targets. Microsoft starts with its
+	// own saved-setup form; no shared deployment registration exists.
+	if !strings.Contains(body, `action="/connection/microsoft/settings"`) || !strings.Contains(body, `action="/connection/titan"`) {
+		t.Fatalf("connection page must offer Microsoft setup and Titan: %.400s", body)
 	}
-	// With missing Microsoft settings the Microsoft submit buttons carry the
-	// disabled attribute and the missing settings are listed by env name only.
-	if disabled := strings.Count(body, " data-disabled"); disabled < 2 {
-		t.Fatalf("Microsoft controls must be disabled while settings are missing, found %d disabled markers", disabled)
+	if strings.Contains(body, "MS_TENANT_ID") || strings.Contains(body, "MS_CLIENT_SECRET") {
+		t.Fatalf("connection page still names shared Microsoft environment settings: %.400s", body)
 	}
-	for _, name := range []string{"MS_TENANT_ID", "MS_CLIENT_ID", "MS_CLIENT_SECRET"} {
-		if !strings.Contains(body, "<code>"+name+"</code>") {
-			t.Fatalf("missing setting %s not listed by env name", name)
+	for _, name := range []string{"tenant_id", "client_id", "client_secret"} {
+		if !strings.Contains(body, `name="`+name+`"`) {
+			t.Fatalf("Microsoft setup form missing %s input", name)
 		}
+	}
+	if strings.Contains(body, ">Continue with Microsoft 365<") {
+		t.Fatal("Microsoft sign-in is offered before any registration is saved")
 	}
 	// Titan stays usable: its form carries no disabled attribute.
 	titanStart := strings.Index(body, `action="/connection/titan"`)
@@ -63,7 +65,7 @@ func TestConnectionPageOffersBothProviders(t *testing.T) {
 		t.Fatalf("Titan form missing credential inputs: %.400s", titanForm)
 	}
 	// No configured secret value reaches the page.
-	for _, secret := range []string{"client-secret", "super-secret", "value=\""} {
+	for _, secret := range []string{"value=\"client-secret", "value=\"super-secret", "value=\""} {
 		if secret == "value=\"" {
 			// The form inputs render empty; no prefilled value attributes exist.
 			if strings.Contains(titanForm, "value=\"") {

@@ -8,6 +8,7 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 )
 
@@ -224,6 +225,23 @@ func TestStoreScheduledFireRefusalsMarkMissedWithoutSending(t *testing.T) {
 		setClock(f, at.Add(time.Second))
 		if fired, err := f.store.FireScheduled(storeCtx); err != nil || fired {
 			t.Fatalf("unapproved fire = %t, %v", fired, err)
+		}
+		assertMissed(t, f, task, "approval")
+	})
+	t.Run("replaced mailbox generation", func(t *testing.T) {
+		f := newAcceptanceFixture(t)
+		task := f.task(t, 1)
+		storeApprove(t, f, task)
+		at := f.clock.Now().Add(time.Hour)
+		scheduleTask(t, f, task, at, 1)
+		// A replacement bumps the connection generation: the approval for the
+		// previous mailbox no longer authorizes this scheduled fire.
+		connection := storeRecord(t, f, mailbox.ConnectionsCollection, f.connectionID)
+		connection.Set("generation", connection.GetInt("generation")+1)
+		storeSave(t, f, connection)
+		setClock(f, at.Add(time.Second))
+		if fired, err := f.store.FireScheduled(storeCtx); err != nil || fired {
+			t.Fatalf("replaced-mailbox fire = %t, %v", fired, err)
 		}
 		assertMissed(t, f, task, "approval")
 	})
