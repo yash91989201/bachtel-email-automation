@@ -1,6 +1,8 @@
 package web
 
 import (
+	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,15 +16,38 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/ui"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
+	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
+	"github.com/yash91989201/bachtel-email-automation/internal/reset"
+	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 )
 
 const (
 	testOperatorEmail    = "operator@example.com"
 	testOperatorPassword = "correct-horse-battery-staple"
 )
+
+// testKey is the fixed deployment key every test store seals credentials
+// with; it never comes from the environment.
+func testKey() ([]byte, error) { return bytes.Repeat([]byte("k"), config.EncryptionKeySize), nil }
+
+// testServices assembles the same process-owned dependencies the running
+// application binds, without a live dispatcher or export worker.
+func testServices(t *testing.T, app core.App, cfg config.Config, dispatcher Dispatcher) Services {
+	t.Helper()
+	mailboxes := mailbox.NewStore(app, testKey)
+	return Services{
+		Connections: microsoft.NewService(app, cfg, mailboxes),
+		Mailboxes:   mailboxes,
+		Sending:     sending.NewStore(app, sending.StoreOptions{}),
+		Dispatcher:  dispatcher,
+		Exports:     exports.NewService(app, cfg),
+		Resets:      reset.NewService(app, mailboxes),
+	}
+}
 
 // newTestServer boots a temp-data PocketBase app with the operator UI mounted
 // the same way the running application mounts it.
@@ -40,7 +65,7 @@ func newTestServer(t *testing.T, cfg config.Config) (*pocketbase.PocketBase, htt
 	if err := app.RunAppMigrations(); err != nil {
 		t.Fatal(err)
 	}
-	return app, wrapWithPocketBase(t, app, NewHandler(app, cfg, microsoft.NewService(app, cfg)))
+	return app, wrapWithPocketBase(t, app, NewHandler(app, cfg, testServices(t, app, cfg, nil)))
 }
 
 // wrapWithPocketBase mounts the UI handler behind the PocketBase router, as
@@ -64,11 +89,11 @@ func testConfig(origin string) config.Config {
 	return config.Config{
 		Origin: origin,
 		Microsoft: config.Microsoft{
-			RedirectURL:   origin + config.CallbackPath,
-			SenderAddress: config.DefaultSenderAddress,
-			AuthorityURL:  config.DefaultAuthorityURL,
-			GraphBaseURL:  config.DefaultGraphBaseURL,
+			RedirectURL:  origin + config.CallbackPath,
+			AuthorityURL: config.DefaultAuthorityURL,
+			GraphBaseURL: config.DefaultGraphBaseURL,
 		},
+		Titan: config.Titan{Address: config.DefaultTitanSMTPAddress},
 	}
 }
 
@@ -120,6 +145,69 @@ func provisionOperator(t *testing.T, app core.App) {
 	if err := operator.Provision(app, testOperatorEmail, testOperatorPassword); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// provisionOperatorAs creates an additional operator account and returns its
+// record id.
+func provisionOperatorAs(t *testing.T, app core.App, email, password string) string {
+	t.Helper()
+	if err := operator.Provision(app, email, password); err != nil {
+		t.Fatal(err)
+	}
+	record, err := app.FindAuthRecordByEmail(operator.CollectionName, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record.Id
+}
+
+// operatorID resolves the primary test operator's record id.
+func operatorID(t *testing.T, app core.App) string {
+	t.Helper()
+	return operatorIDFor(t, app, testOperatorEmail)
+}
+
+// operatorIDFor resolves any provisioned operator's record id.
+func operatorIDFor(t *testing.T, app core.App, email string) string {
+	t.Helper()
+	record, err := app.FindAuthRecordByEmail(operator.CollectionName, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record.Id
+}
+
+// loginAs performs a successful sign-in for any provisioned operator.
+func loginAs(t *testing.T, handler http.Handler, email, password string) *http.Cookie {
+	t.Helper()
+	rec := do(t, handler, http.MethodPost, "/login", loginForm(email, password), nil)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("login %s: status=%d body=%.200s", email, rec.Code, rec.Body.String())
+	}
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == sessionCookieName && cookie.Value != "" {
+			return cookie
+		}
+	}
+	t.Fatalf("login %s did not set a session cookie", email)
+	return nil
+}
+
+// installMailbox claims an exclusive Titan mailbox for the owner through the
+// real store, so sealing, claiming and status behave exactly as in production.
+func installMailbox(t *testing.T, app core.App, ownerID, sender string) *mailbox.Connection {
+	t.Helper()
+	connection, err := mailbox.NewStore(app, testKey).Install(context.Background(), mailbox.Candidate{
+		OwnerID:    ownerID,
+		Provider:   mailbox.ProviderTitan,
+		Sender:     mailbox.CanonicalSender(sender),
+		Identity:   mailbox.CanonicalSender(sender),
+		Credential: mailbox.Credential{Provider: mailbox.ProviderTitan, Password: "mailbox-password"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return connection
 }
 
 func TestPublicSurface(t *testing.T) {
@@ -180,13 +268,13 @@ func TestAnonymousRequests(t *testing.T) {
 	}
 
 	// Unsafe methods get a plain 401 and change nothing.
-	for _, path := range []string{"/logout", "/connection/connect", "/connection/disconnect"} {
+	for _, path := range []string{"/logout", "/connection/microsoft/connect", "/connection/disconnect", "/connection/titan"} {
 		rec := do(t, handler, http.MethodPost, path, url.Values{}, nil)
 		if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "authentication required") {
 			t.Fatalf("POST %s anonymous: status=%d body=%q", path, rec.Code, rec.Body.String())
 		}
 	}
-	if count, err := app.CountRecords(microsoft.CollectionName); err != nil || count != 0 {
+	if count, err := app.CountRecords(mailbox.ConnectionsCollection); err != nil || count != 0 {
 		t.Fatalf("anonymous POSTs created %d connection records (err=%v)", count, err)
 	}
 
@@ -397,8 +485,10 @@ func TestCSRFProtection(t *testing.T) {
 	}{
 		{http.MethodPost, "/login"},
 		{http.MethodPost, "/logout"},
-		{http.MethodPost, "/connection/connect"},
+		{http.MethodPost, "/connection/microsoft/connect"},
 		{http.MethodPost, "/connection/disconnect"},
+		{http.MethodPost, "/connection/titan"},
+		{http.MethodPost, "/connection/replace/confirm"},
 	}
 	for _, m := range mutations {
 		for name, mutate := range map[string]func(*http.Request){"origin": evilOrigin, "sec-fetch-site": crossSite} {
@@ -431,7 +521,7 @@ func TestCSRFProtection(t *testing.T) {
 }
 
 func TestConnectionPage(t *testing.T) {
-	t.Run("missing settings alert", func(t *testing.T) {
+	t.Run("missing settings disable Microsoft and keep Titan usable", func(t *testing.T) {
 		cfg := testConfig("http://127.0.0.1:8090")
 		app, handler := newTestServer(t, cfg)
 		provisionOperator(t, app)
@@ -443,12 +533,25 @@ func TestConnectionPage(t *testing.T) {
 		}
 		body := rec.Body.String()
 		for _, name := range []string{"MS_TENANT_ID", "MS_CLIENT_ID", "MS_CLIENT_SECRET"} {
-			if !strings.Contains(body, name) {
-				t.Fatalf("missing setting %s not listed: %.400s", name, body)
+			if !strings.Contains(body, "<code>"+name+"</code>") {
+				t.Fatalf("missing setting %s not listed by env name: %.400s", name, body)
 			}
 		}
-		if strings.Contains(body, "ClientSecret</code>") && strings.Contains(body, "value=") {
-			t.Fatal("page must not render secret values")
+		// Both provider options render; only the Microsoft controls are disabled.
+		if !strings.Contains(body, `action="/connection/microsoft/connect"`) || !strings.Contains(body, `action="/connection/titan"`) {
+			t.Fatalf("connection page must offer both providers: %.400s", body)
+		}
+		if disabled := strings.Count(body, " data-disabled"); disabled < 2 {
+			t.Fatalf("expected disabled Microsoft controls, found %d disabled markers", disabled)
+		}
+		if !strings.Contains(body, ">Validate Titan mailbox<") {
+			t.Fatalf("Titan submit must stay usable: %.400s", body)
+		}
+		// No secret value is rendered anywhere on the page.
+		for _, value := range []string{"value=\"client", "value=\"tenant", "value=\"secret"} {
+			if strings.Contains(body, value) {
+				t.Fatalf("page renders a secret value %q", value)
+			}
 		}
 	})
 
@@ -461,14 +564,19 @@ func TestConnectionPage(t *testing.T) {
 		provisionOperator(t, app)
 		cookie := login(t, handler)
 
-		collection, err := app.FindCollectionByNameOrId(microsoft.CollectionName)
+		collection, err := app.FindCollectionByNameOrId(mailbox.ConnectionsCollection)
 		if err != nil {
 			t.Fatal(err)
 		}
 		const garbage = "GARBAGE-CIPHERTEXT-9f3a"
 		record := core.NewRecord(collection)
-		record.Set("status", string(microsoft.StatusReconnectRequired))
-		record.Set("account_email", "hr@bachtelcorporation.com")
+		record.Set("owner", operatorID(t, app))
+		record.Set("provider", string(mailbox.ProviderMicrosoft))
+		record.Set("sender", "hr@bachtelcorporation.com")
+		record.Set("identity", "account-1@tenant-1234")
+		record.Set("status", string(mailbox.StatusReconnectRequired))
+		record.Set("generation", 1)
+		record.Set("current", true)
 		record.Set("credential", garbage)
 		if err := app.Save(record); err != nil {
 			t.Fatal(err)
@@ -488,7 +596,7 @@ func TestConnectionPage(t *testing.T) {
 		if !strings.Contains(body, "Reconnect required") {
 			t.Fatalf("missing reconnect_required badge: %.400s", body)
 		}
-		if !strings.Contains(body, "/connection/connect") {
+		if !strings.Contains(body, "/connection/microsoft/connect") {
 			t.Fatal("reconnect must be actionable from the page")
 		}
 	})

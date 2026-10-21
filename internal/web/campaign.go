@@ -20,6 +20,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/retention"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
@@ -51,8 +52,9 @@ func (s *server) registerCampaignRoutes(mux *http.ServeMux) {
 
 func (s *server) handleCampaignList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ownerID := recordFromContext(r).Id
 	data := views.CampaignListData{}
-	campaigns, err := s.campaigns.ListCampaigns(ctx)
+	campaigns, err := s.campaigns.ListCampaigns(ctx, ownerID)
 	if err != nil {
 		s.app.Logger().Error("list campaigns", "error", err)
 		http.Error(w, "Unable to load campaigns", http.StatusInternalServerError)
@@ -63,7 +65,7 @@ func (s *server) handleCampaignList(w http.ResponseWriter, r *http.Request) {
 		if c.CurrentRevisionID != "" {
 			row.HasRevision = true
 			row.Revision = c.Revision
-			configuration, err := s.campaigns.LoadConfiguration(ctx, c.CurrentRevisionID)
+			configuration, err := s.campaigns.LoadConfiguration(ctx, ownerID, c.CurrentRevisionID)
 			if err != nil {
 				s.app.Logger().Error("load current configuration", "campaign", c.ID, "error", err)
 			} else {
@@ -104,7 +106,7 @@ func (s *server) handleCampaignCreate(w http.ResponseWriter, r *http.Request) {
 		s.renderWithStatus(w, r, http.StatusBadRequest, views.CampaignForm(data))
 		return
 	}
-	created, err := s.campaigns.CreateCampaign(r.Context(), input)
+	created, err := s.campaigns.CreateCampaign(r.Context(), recordFromContext(r).Id, input)
 	if err != nil {
 		s.app.Logger().Error("create campaign", "error", err)
 		http.Error(w, "Unable to create campaign", http.StatusInternalServerError)
@@ -130,7 +132,7 @@ func (s *server) handleCampaignExportsGenerate(w http.ResponseWriter, r *http.Re
 		s.campaignLoadFailure(w, r, err)
 		return
 	}
-	if err = s.exports.GenerateCampaign(r.Context(), page.ID, true); err != nil {
+	if err = s.exports.GenerateCampaign(r.Context(), recordFromContext(r).Id, page.ID, true); err != nil {
 		if errors.Is(err, exports.ErrInProgress) {
 			page.RevisionError = "export generation is already in progress; reload this page shortly"
 			s.renderWithStatus(w, r, http.StatusConflict, views.CampaignPage(page))
@@ -148,7 +150,7 @@ func (s *server) handleCampaignExportsGenerate(w http.ResponseWriter, r *http.Re
 // Campaign records, attempts and candidate eligibility stay unchanged.
 func (s *server) handleCampaignExportsDelete(w http.ResponseWriter, r *http.Request) {
 	target := r.PathValue("id")
-	if err := s.exports.DeleteCampaign(r.Context(), target); err != nil {
+	if err := s.exports.DeleteCampaign(r.Context(), recordFromContext(r).Id, target); err != nil {
 		page, dataErr := s.campaignPageData(r, target, nil)
 		if dataErr != nil {
 			s.campaignLoadFailure(w, r, dataErr)
@@ -163,7 +165,7 @@ func (s *server) handleCampaignExportsDelete(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *server) handleCampaignReportDownload(w http.ResponseWriter, r *http.Request) {
-	data, filename, err := s.exports.DownloadCampaign(r.Context(), r.PathValue("id"), exports.KindCampaignReport)
+	data, filename, err := s.exports.DownloadCampaign(r.Context(), recordFromContext(r).Id, r.PathValue("id"), exports.KindCampaignReport)
 	if err != nil {
 		s.writeDownloadFailure(w, "load campaign report", err)
 		return
@@ -172,7 +174,7 @@ func (s *server) handleCampaignReportDownload(w http.ResponseWriter, r *http.Req
 }
 
 func (s *server) handleCampaignPackageDownload(w http.ResponseWriter, r *http.Request) {
-	data, filename, err := s.exports.DownloadCampaign(r.Context(), r.PathValue("id"), exports.KindCampaignPackage)
+	data, filename, err := s.exports.DownloadCampaign(r.Context(), recordFromContext(r).Id, r.PathValue("id"), exports.KindCampaignPackage)
 	if err != nil {
 		s.writeDownloadFailure(w, "load campaign package", err)
 		return
@@ -186,7 +188,7 @@ func (s *server) handleCampaignPackageDownload(w http.ResponseWriter, r *http.Re
 func (s *server) handleAttemptHTML(w http.ResponseWriter, r *http.Request) {
 	campaignID := r.PathValue("id")
 	attemptID := r.PathValue("attempt")
-	belongs, err := s.exports.AttemptBelongsTo(r.Context(), attemptID, campaignID)
+	belongs, err := s.exports.AttemptBelongsTo(r.Context(), recordFromContext(r).Id, attemptID, campaignID)
 	if err != nil {
 		s.writeDownloadFailure(w, "load attempt", err)
 		return
@@ -195,7 +197,7 @@ func (s *server) handleAttemptHTML(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data, filename, err := s.exports.AttemptHTML(r.Context(), attemptID)
+	data, filename, err := s.exports.AttemptHTML(r.Context(), recordFromContext(r).Id, attemptID)
 	if err != nil {
 		s.writeDownloadFailure(w, "build attempt html", err)
 		return
@@ -218,7 +220,11 @@ func (s *server) handleCampaignDelete(w http.ResponseWriter, r *http.Request) {
 		s.renderWithStatus(w, r, http.StatusBadRequest, views.CampaignPage(page))
 		return
 	}
-	if err := s.retention.DeleteCampaign(r.Context(), target); err != nil {
+	if err := s.retention.DeleteCampaign(r.Context(), recordFromContext(r).Id, target); err != nil {
+		if errors.Is(err, campaign.ErrNotFound) || errors.Is(err, intake.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
 		if errors.Is(err, retention.ErrCampaignActive) {
 			page, dataErr := s.campaignPageData(r, target, nil)
 			if dataErr != nil {
@@ -237,7 +243,8 @@ func (s *server) handleCampaignDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) writeDownloadFailure(w http.ResponseWriter, operation string, err error) {
-	if errors.Is(err, exports.ErrNotReady) || errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, exports.ErrNotReady) || errors.Is(err, sql.ErrNoRows) ||
+		errors.Is(err, campaign.ErrNotFound) || errors.Is(err, intake.ErrNotFound) {
 		http.NotFound(w, nil)
 		return
 	}
@@ -305,7 +312,7 @@ func (s *server) handleCampaignRevision(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, warnings, err := s.campaigns.CreateRevision(r.Context(), page.ID, campaign.RevisionInput{
+	_, warnings, err := s.campaigns.CreateRevision(r.Context(), recordFromContext(r).Id, page.ID, campaign.RevisionInput{
 		Subject:      subject,
 		Document:     document,
 		DocumentName: header.Filename,
@@ -340,7 +347,7 @@ func (s *server) handleCampaignLabels(w http.ResponseWriter, r *http.Request) {
 		s.renderWithStatus(w, r, http.StatusBadRequest, views.CampaignPage(page))
 		return
 	}
-	if err := s.campaigns.UpdateResultLabels(r.Context(), page.ID, labels); err != nil {
+	if err := s.campaigns.UpdateResultLabels(r.Context(), recordFromContext(r).Id, page.ID, labels); err != nil {
 		s.app.Logger().Error("update result labels", "campaign", page.ID, "error", err)
 		http.Error(w, "Unable to save result labels", http.StatusInternalServerError)
 		return
@@ -355,7 +362,8 @@ func (s *server) handleCampaignLabels(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleCampaignPreview(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()
-	loaded, err := s.campaigns.LoadCampaign(ctx, id)
+	ownerID := recordFromContext(r).Id
+	loaded, err := s.campaigns.LoadCampaign(ctx, ownerID, id)
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
@@ -366,7 +374,7 @@ func (s *server) handleCampaignPreview(w http.ResponseWriter, r *http.Request) {
 		s.renderWithStatus(w, r, http.StatusOK, views.PreviewResult(data))
 		return
 	}
-	configuration, err := s.campaigns.LoadConfiguration(ctx, loaded.CurrentRevisionID)
+	configuration, err := s.campaigns.LoadConfiguration(ctx, ownerID, loaded.CurrentRevisionID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			s.campaignLoadFailure(w, r, err)
@@ -412,8 +420,9 @@ func (s *server) handleCampaignPreview(w http.ResponseWriter, r *http.Request) {
 // passed by the caller.
 func (s *server) campaignPageData(r *http.Request, id string, warnings []string) (views.CampaignPageData, error) {
 	ctx := r.Context()
+	ownerID := recordFromContext(r).Id
 	data := views.CampaignPageData{Warnings: warnings}
-	loaded, err := s.campaigns.LoadCampaign(ctx, id)
+	loaded, err := s.campaigns.LoadCampaign(ctx, ownerID, id)
 	if err != nil {
 		return data, err
 	}
@@ -425,7 +434,7 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 	// teaches a variable name the draft spells differently.
 	data.ExampleVariable, data.ExampleHeader = exampleMapping(loaded.SourceHeaders)
 	if loaded.CurrentRevisionID != "" {
-		configuration, err := s.campaigns.LoadConfiguration(ctx, loaded.CurrentRevisionID)
+		configuration, err := s.campaigns.LoadConfiguration(ctx, ownerID, loaded.CurrentRevisionID)
 		if err != nil {
 			return data, err
 		}
@@ -443,7 +452,7 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 		// source headers as the draft table.
 		data.MappingDraft = mappingDraftText(campaign.DefaultMappings(loaded.SourceHeaders))
 	}
-	history, err := s.campaigns.Revisions(ctx, data.ID)
+	history, err := s.campaigns.Revisions(ctx, ownerID, data.ID)
 	if err != nil {
 		return data, err
 	}
@@ -454,7 +463,7 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 			Approved:    revision.ApprovalCurrent(),
 		})
 	}
-	artifacts, err := s.exports.CampaignArtifacts(ctx, data.ID)
+	artifacts, err := s.exports.CampaignArtifacts(ctx, ownerID, data.ID)
 	if err != nil {
 		return data, err
 	}
@@ -495,7 +504,7 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 // detail: an unknown id is a plain 404, anything else is logged and answered
 // generically.
 func (s *server) campaignLoadFailure(w http.ResponseWriter, r *http.Request, err error) {
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) || errors.Is(err, campaign.ErrNotFound) {
 		http.NotFound(w, r)
 		return
 	}

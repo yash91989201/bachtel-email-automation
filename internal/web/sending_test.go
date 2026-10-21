@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
-	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
@@ -96,6 +95,7 @@ func (d *recordingSendingDispatcher) Synchronize(action func() error) error {
 	d.synchronizationCalls++
 	return action()
 }
+func (*recordingSendingDispatcher) InFlightFor(context.Context, string) (int, error) { return 0, nil }
 
 func TestSendingPacingAndTaskOwnership(t *testing.T) {
 	app, handler := newTaskServer(t)
@@ -105,10 +105,11 @@ func TestSendingPacingAndTaskOwnership(t *testing.T) {
 		t.Fatalf("revision: %d", rec.Code)
 	}
 	taskID := stageTask(t, handler, cookie, id, mixedWorkbook(t))
+	connection := installMailbox(t, app, operatorID(t, app), "sender@example.test")
 	cfg := testConfig("http://127.0.0.1:8090")
 	cfg.Intake = intake.DefaultLimits()
 	dispatcher := &recordingSendingDispatcher{}
-	handler = wrapWithPocketBase(t, app, NewHandlerWithDispatcher(app, cfg, microsoft.NewService(app, cfg), sending.NewStore(app, sending.StoreOptions{}), dispatcher))
+	handler = wrapWithPocketBase(t, app, NewHandler(app, cfg, testServices(t, app, cfg, dispatcher)))
 	base := "/campaigns/" + id + "/tasks/" + taskID + "/sending"
 	for _, invalid := range []string{"0", "31", "1.5"} {
 		rec := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-invalid-123456"}, "rate": {invalid}}, withCookie(cookie))
@@ -133,7 +134,7 @@ func TestSendingPacingAndTaskOwnership(t *testing.T) {
 	if dispatcher.synchronizationCalls != 3 {
 		t.Fatalf("valid rate skipped dispatch barrier: calls=%d", dispatcher.synchronizationCalls)
 	}
-	settings, err := sending.NewStore(app, sending.StoreOptions{}).DispatcherState(context.Background())
+	settings, err := sending.NewStore(app, sending.StoreOptions{}).DispatcherState(context.Background(), connection.ID, operatorID(t, app))
 	if err != nil || settings.Rate != 17 {
 		t.Fatalf("persisted pacing: %+v %v", settings, err)
 	}
@@ -141,9 +142,30 @@ func TestSendingPacingAndTaskOwnership(t *testing.T) {
 	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Current pacing: 17") {
 		t.Fatalf("pacing poll: %d", page.Code)
 	}
+	// The sending page shows the operator's own mailbox and its state.
+	full := do(t, handler, http.MethodGet, base, nil, withCookie(cookie))
+	if full.Code != http.StatusOK || !strings.Contains(full.Body.String(), "Sending mailbox: <strong>sender@example.test</strong> <span data-sender-status=\"connected\">(connected)</span>") {
+		t.Fatalf("sending mailbox summary: %d %.400s", full.Code, full.Body.String())
+	}
 	wrongCampaign := createCampaign(t, handler, cookie, "Another")
 	page = do(t, handler, http.MethodGet, "/campaigns/"+wrongCampaign+"/tasks/"+taskID+"/sending/progress", nil, withCookie(cookie))
 	if page.Code != http.StatusNotFound {
 		t.Fatalf("cross-campaign task access: %d", page.Code)
+	}
+	// Another operator cannot use this task's sending surfaces and changes nothing.
+	otherID := provisionOperatorAs(t, app, "second@example.com", "second-password")
+	otherCookie := loginAs(t, handler, "second@example.com", "second-password")
+	installMailbox(t, app, otherID, "second@example.test")
+	other := do(t, handler, http.MethodGet, base+"/progress", nil, withCookie(otherCookie))
+	if other.Code != http.StatusNotFound {
+		t.Fatalf("cross-operator task access: %d", other.Code)
+	}
+	mutation := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-cross-operator-1"}, "rate": {"5"}}, withCookie(otherCookie))
+	if mutation.Code != http.StatusNotFound {
+		t.Fatalf("cross-operator rate mutation: %d", mutation.Code)
+	}
+	settings, err = sending.NewStore(app, sending.StoreOptions{}).DispatcherState(context.Background(), connection.ID, operatorID(t, app))
+	if err != nil || settings.Rate != 17 {
+		t.Fatalf("cross-operator rate changed state: %+v %v", settings, err)
 	}
 }

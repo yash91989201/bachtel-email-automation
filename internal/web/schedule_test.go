@@ -16,7 +16,6 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
-	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 )
 
@@ -42,9 +41,11 @@ func newScheduleFixture(t *testing.T) *scheduleFixture {
 		t.Fatalf("revision: %d", rec.Code)
 	}
 	taskID := stageTask(t, handler, cookie, id, mixedWorkbook(t))
+	owner := operatorID(t, app)
+	installMailbox(t, app, owner, "sender@example.test")
 	store := sending.NewStore(app, sending.StoreOptions{})
 	ctx := context.Background()
-	attempt, err := store.QueueTest(ctx, sending.TestRequest{
+	attempt, err := store.QueueTest(ctx, owner, sending.TestRequest{
 		ActionID:  "schedule-fixture-test-123456",
 		TaskID:    taskID,
 		Actor:     "operator",
@@ -57,13 +58,13 @@ func newScheduleFixture(t *testing.T) *scheduleFixture {
 	if _, err := app.DB().NewQuery("UPDATE submission_attempts SET state='submitted' WHERE id={:id}").Bind(dbx.Params{"id": attempt.ID}).Execute(); err != nil {
 		t.Fatalf("mark test submitted: %v", err)
 	}
-	if err := store.Approve(ctx, taskID, attempt.ID, "operator", "approve-"+taskID); err != nil {
+	if err := store.Approve(ctx, owner, taskID, attempt.ID, "operator", "approve-"+taskID); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 	cfg := testConfig("http://127.0.0.1:8090")
 	cfg.Intake = intake.DefaultLimits()
 	dispatcher := &recordingSendingDispatcher{}
-	handler = wrapWithPocketBase(t, app, NewHandlerWithDispatcher(app, cfg, microsoft.NewService(app, cfg), store, dispatcher))
+	handler = wrapWithPocketBase(t, app, NewHandler(app, cfg, testServices(t, app, cfg, dispatcher)))
 	return &scheduleFixture{
 		app:        app,
 		handler:    handler,

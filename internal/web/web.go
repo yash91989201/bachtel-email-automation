@@ -15,7 +15,9 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
+	"github.com/yash91989201/bachtel-email-automation/internal/reset"
 	"github.com/yash91989201/bachtel-email-automation/internal/retention"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
@@ -26,10 +28,24 @@ import (
 //go:embed static
 var assets embed.FS
 
+// Services are the process-owned dependencies the UI drives. The dispatcher
+// interface is satisfied by the sending dispatcher; a nil value disables only
+// the launch barrier, not the durable store.
+type Services struct {
+	Connections *microsoft.Service
+	Mailboxes   *mailbox.Store
+	Sending     *sending.Store
+	Dispatcher  Dispatcher
+	Exports     *exports.Service
+	Resets      *reset.Service
+}
+
 type server struct {
 	app         core.App
 	cfg         config.Config
 	connections *microsoft.Service
+	mailboxes   *mailbox.Store
+	resets      *reset.Service
 	campaigns   *campaign.Service
 	tasks       *intake.Service
 	logins      *loginLimiter
@@ -41,31 +57,21 @@ type server struct {
 
 // NewHandler serves the application UI. PocketBase owns the server lifecycle,
 // its API, and the dashboard on the same listener.
-func NewHandler(app core.App, cfg config.Config, connections *microsoft.Service) http.Handler {
-	store := sending.NewStore(app, sending.StoreOptions{
-		SenderAddress: cfg.Microsoft.SenderAddress,
-		RestoreReview: cfg.RestoreReview,
-	})
-	return NewHandlerWithDispatcher(app, cfg, connections, store, nil)
-}
-
-// NewHandlerWithDispatcher injects the process-owned sender and its durable store.
-func NewHandlerWithDispatcher(app core.App, cfg config.Config, connections *microsoft.Service, store *sending.Store, dispatcher Dispatcher) http.Handler {
-	return NewHandlerWithServices(app, cfg, connections, store, dispatcher, exports.NewService(app, cfg))
-}
-
-// NewHandlerWithServices shares the process-owned export worker with handlers.
-func NewHandlerWithServices(app core.App, cfg config.Config, connections *microsoft.Service, store *sending.Store, dispatcher Dispatcher, exported *exports.Service) http.Handler {
+func NewHandler(app core.App, cfg config.Config, services Services) http.Handler {
 	campaigns := campaign.NewService(app, cfg.PandocPath)
+	tasks := intake.NewService(app, campaigns, cfg.Intake)
+	tasks.SetWriteGuard(reset.Guard(app))
 	s := &server{
 		app:         app,
-		sending:     store,
-		dispatcher:  dispatcher,
+		sending:     services.Sending,
+		dispatcher:  services.Dispatcher,
 		cfg:         cfg,
-		connections: connections,
+		connections: services.Connections,
+		mailboxes:   services.Mailboxes,
+		resets:      services.Resets,
 		campaigns:   campaigns,
-		tasks:       intake.NewService(app, campaigns, cfg.Intake),
-		exports:     exported,
+		tasks:       tasks,
+		exports:     services.Exports,
 		retention:   retention.NewService(app),
 		logins:      newLoginLimiter(10, 5*time.Minute),
 	}
@@ -89,9 +95,13 @@ func NewHandlerWithServices(app core.App, cfg config.Config, connections *micros
 	mux.HandleFunc("GET /{$}", s.requireOperator(s.handleHome))
 	mux.HandleFunc("GET /status", s.requireOperator(s.handleStatus))
 	mux.HandleFunc("GET /connection", s.requireOperator(s.handleConnection))
-	mux.HandleFunc("POST /connection/connect", s.requireOperator(s.handleConnect))
+	mux.HandleFunc("GET /connection/replace", s.requireOperator(s.handleReplacement))
+	mux.HandleFunc("POST /connection/microsoft/connect", s.requireOperator(s.handleMicrosoftConnect))
 	mux.HandleFunc("GET /connection/callback", s.requireOperator(s.handleCallback))
+	mux.HandleFunc("POST /connection/titan", s.requireOperator(s.handleTitanConnect))
 	mux.HandleFunc("POST /connection/disconnect", s.requireOperator(s.handleDisconnect))
+	mux.HandleFunc("POST /connection/replace/confirm", s.requireOperator(s.handleReplaceConfirm))
+	mux.HandleFunc("POST /connection/replace/cancel", s.requireOperator(s.handleReplaceCancel))
 	s.registerCampaignRoutes(mux)
 	s.registerTaskRoutes(mux)
 	s.registerSendingRoutes(mux)

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -10,14 +11,18 @@ import (
 	"time"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
-// Dispatcher wakes the application-owned worker; requests never own its lifetime.
+// Dispatcher wakes the application-owned worker; requests never own its
+// lifetime. In-flight counts are per operator so a connection change drains only
+// the affected mailbox.
 type Dispatcher interface {
 	Wake()
 	Synchronize(func() error) error
+	InFlightFor(ctx context.Context, ownerID string) (int, error)
 }
 
 func (s *server) registerSendingRoutes(mux *http.ServeMux) {
@@ -38,29 +43,34 @@ func actionID() string {
 }
 
 func (s *server) sendingData(r *http.Request) (views.SendingData, error) {
-	task, err := s.tasks.LoadTask(r.Context(), r.PathValue("task"))
+	ownerID := recordFromContext(r).Id
+	task, err := s.tasks.LoadTask(r.Context(), ownerID, r.PathValue("task"))
 	if err != nil {
 		return views.SendingData{}, err
 	}
-	progress, err := s.sending.Preview(r.Context(), task.ID)
+	progress, err := s.sending.Preview(r.Context(), ownerID, task.ID)
 	if err != nil {
 		return views.SendingData{}, err
 	}
-	data := views.SendingData{ArtifactNeeded: progress.ArtifactNeeded, Base: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/sending", TaskURL: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID, Sender: s.cfg.Microsoft.SenderAddress, Hash: progress.ContentHash, Approved: progress.Approved, Status: progress.Status, Reason: progress.Reason, Eligible: progress.Eligible, Remaining: progress.Remaining, Submitted: progress.Submitted, Failed: progress.Failed, RetryableFailed: progress.RetryableFailed, Held: progress.Held, InFlight: progress.InFlight, Reserved: progress.Reserved, Invalid: progress.Invalid, Duplicate: progress.Duplicate, Ineligible: progress.Ineligible, ActionID: actionID()}
+	sender, senderStatus := s.mailboxSummary(r.Context(), ownerID)
+	data := views.SendingData{ArtifactNeeded: progress.ArtifactNeeded, Base: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/sending", TaskURL: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID, Sender: sender, SenderStatus: senderStatus, Hash: progress.ContentHash, Approved: progress.Approved, Status: progress.Status, Reason: progress.Reason, Eligible: progress.Eligible, Remaining: progress.Remaining, Submitted: progress.Submitted, Failed: progress.Failed, RetryableFailed: progress.RetryableFailed, Held: progress.Held, InFlight: progress.InFlight, Reserved: progress.Reserved, Invalid: progress.Invalid, Duplicate: progress.Duplicate, Ineligible: progress.Ineligible, ActionID: actionID()}
 	data.RestoreReview = progress.RestoreReview
-	if artifact, e := s.exports.TaskArtifact(r.Context(), task.ID); e == nil && artifact != nil {
+	if artifact, e := s.exports.TaskArtifact(r.Context(), ownerID, task.ID); e == nil && artifact != nil {
 		data.ResultsState = artifact.State
 		data.ResultsReady = artifact.Ready
 	}
 	data.ScheduleAt = sending.DisplayTime(task.ScheduleAt)
 	data.ScheduleState = task.ScheduleState
 	data.ScheduleMinDate = sending.DisplayDate(time.Now())
-	settings, err := s.sending.DispatcherState(r.Context())
-	if err != nil {
-		return data, err
+	if connection, e := s.mailboxes.Current(r.Context(), ownerID); e == nil {
+		settings, e := s.sending.DispatcherState(r.Context(), connection.ID, ownerID)
+		if e != nil {
+			return data, e
+		}
+		data.Rate = settings.Rate
+		data.Cooldown = sending.DisplayTime(settings.CooldownUntil)
+		data.CooldownReason = settings.Reason
 	}
-	data.Rate = settings.Rate
-	data.Cooldown = sending.DisplayTime(settings.CooldownUntil)
 	for _, row := range progress.Members {
 		viewRow := views.SendingRow{ResolutionActor: row.ResolutionActor, ResolutionBasis: row.ResolutionBasis, ResolvedAt: sending.DisplayTime(row.ResolvedAt), SampleEligible: row.SampleEligible, ID: row.ID, Number: row.SourceRow, State: row.State, Reason: row.Reason, ActionID: actionID()}
 		if row.LatestAttempt != nil {
@@ -84,6 +94,16 @@ func (s *server) sendingData(r *http.Request) (views.SendingData, error) {
 		data.Recent = append(data.Recent, views.SendingOutcome{ID: attempt.ID, Kind: attempt.Kind, Recipient: attempt.Recipient, State: attempt.State, Reason: attempt.Reason, Time: sending.DisplayTime(when)})
 	}
 	return data, nil
+}
+
+// mailboxSummary renders the owning operator's sending mailbox and its state.
+// A workspace without a usable connection can review history but cannot send.
+func (s *server) mailboxSummary(ctx context.Context, ownerID string) (sender, status string) {
+	connection, err := s.mailboxes.Current(ctx, ownerID)
+	if err != nil {
+		return "No mailbox connected", string(mailbox.StatusDisconnected)
+	}
+	return connection.Sender, string(connection.Status)
 }
 
 func (s *server) handleSending(w http.ResponseWriter, r *http.Request) {
@@ -131,16 +151,14 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 		var err error
 		switch kind {
 		case "test":
-			if s.connections == nil {
-				err = errors.New("microsoft connection is unavailable")
+			connection, connectionErr := s.mailboxes.Current(r.Context(), actor)
+			if connectionErr != nil || connection.Status != mailbox.StatusConnected {
+				err = errors.New("reconnect the mailbox before sending a test")
 				break
 			}
-			if _, err = s.connections.AccessToken(r.Context()); err != nil {
-				break
-			}
-			_, err = s.sending.QueueTest(r.Context(), sending.TestRequest{ActionID: id, TaskID: task.ID, MemberID: r.FormValue("member_id"), Recipient: r.FormValue("test_address"), Actor: actor})
+			_, err = s.sending.QueueTest(r.Context(), actor, sending.TestRequest{ActionID: id, TaskID: task.ID, MemberID: r.FormValue("member_id"), Recipient: r.FormValue("test_address"), Actor: actor})
 		case "approve":
-			progress, e := s.sending.Preview(r.Context(), task.ID)
+			progress, e := s.sending.Preview(r.Context(), actor, task.ID)
 			if e != nil {
 				err = e
 				break
@@ -149,14 +167,14 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 				http.Error(w, "Confirm received formatting for this exact content hash", http.StatusBadRequest)
 				return
 			}
-			err = s.sending.Approve(r.Context(), task.ID, r.FormValue("attempt_id"), actor, id)
+			err = s.sending.Approve(r.Context(), actor, task.ID, r.FormValue("attempt_id"), actor, id)
 		case "rate":
 			rate, e := strconv.Atoi(r.FormValue("rate"))
 			if e != nil || rate < 1 || rate > 30 {
 				http.Error(w, "Rate must be a whole number from 1 to 30", http.StatusBadRequest)
 				return
 			}
-			setRate := func() error { return s.sending.SetRate(r.Context(), rate) }
+			setRate := func() error { return s.sending.SetRate(r.Context(), actor, rate) }
 			if s.dispatcher != nil {
 				err = s.dispatcher.Synchronize(setRate)
 			} else {
@@ -187,7 +205,7 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 				break
 			}
 			schedule := func() error {
-				_, err = s.sending.Schedule(r.Context(), request)
+				_, err = s.sending.Schedule(r.Context(), actor, request)
 				return err
 			}
 			if s.dispatcher != nil {
@@ -202,7 +220,7 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 				return
 			}
 			act := func() error {
-				_, err = s.sending.Act(r.Context(), sending.ActionRequest{ActionID: id, TaskID: task.ID, Kind: kind, MemberID: r.FormValue("member_id"), Actor: actor, Basis: r.FormValue("basis"), Confirmed: r.FormValue("confirmed") == "yes", DuplicateRisk: r.FormValue("duplicate_risk") == "yes", ExpectedCount: count})
+				_, err = s.sending.Act(r.Context(), actor, sending.ActionRequest{ActionID: id, TaskID: task.ID, Kind: kind, MemberID: r.FormValue("member_id"), Actor: actor, Basis: r.FormValue("basis"), Confirmed: r.FormValue("confirmed") == "yes", DuplicateRisk: r.FormValue("duplicate_risk") == "yes", ExpectedCount: count})
 				return err
 			}
 			if kind == "stop" && s.dispatcher != nil {
@@ -237,7 +255,7 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 		if kind == "artifacts" {
 			// Generation is a file export, never a send: a failure leaves the
 			// durable marker set for the background worker or a retry.
-			if err = s.exports.GenerateTask(r.Context(), task.ID, false); err != nil && !errors.Is(err, exports.ErrInProgress) {
+			if err = s.exports.GenerateTask(r.Context(), actor, task.ID, false); err != nil && !errors.Is(err, exports.ErrInProgress) {
 				s.app.Logger().Error("generate task results after request", "task", task.ID, "error", err)
 			}
 			s.exports.Trigger()

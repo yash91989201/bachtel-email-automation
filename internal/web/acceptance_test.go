@@ -17,9 +17,13 @@ import (
 	"github.com/pocketbase/pocketbase/ui"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
+	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
+	"github.com/yash91989201/bachtel-email-automation/internal/reset"
+	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 )
 
 // Acceptance checks for change add-operator-and-microsoft-auth: they drive the
@@ -29,6 +33,9 @@ const (
 	testOrigin   = "http://127.0.0.1:8090"
 	testEmail    = "operator@bachtelcorporation.com"
 	testPassword = "correct-horse-battery"
+	// testSender is the mailbox address the simulated Graph reports for the
+	// signed-in account; each operator owns it exclusively.
+	testSender = "operator@bachtelcorporation.com"
 )
 
 type acceptanceEnv struct {
@@ -37,6 +44,7 @@ type acceptanceEnv struct {
 	app       *pocketbase.PocketBase
 	handler   http.Handler
 	cfg       config.Config
+	mailboxes *mailbox.Store
 	authority *httptest.Server
 	graph     *httptest.Server
 
@@ -54,7 +62,6 @@ func newAcceptanceEnv(t *testing.T) *acceptanceEnv {
 	t.Setenv(config.EnvClientID, "client-id")
 	t.Setenv(config.EnvClientSecret, "client-secret-value")
 	t.Setenv(config.EnvRedirectURL, testOrigin+config.CallbackPath)
-	t.Setenv(config.EnvSenderAddress, config.DefaultSenderAddress)
 	t.Setenv(config.EnvAuthorityURL, "http://authority.invalid")
 
 	// Simulated Microsoft authorization server: token exchange only.
@@ -66,26 +73,33 @@ func newAcceptanceEnv(t *testing.T) *acceptanceEnv {
 		env.tokenRequests = append(env.tokenRequests, r.PostForm)
 		env.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
-		// Real Microsoft token envelopes can exceed PocketBase's default text
-		// limit once encrypted and base64 encoded. Keep this fixture large so
-		// all connection acceptance tests exercise the production schema limit.
-		if _, err := fmt.Fprintf(w, `{"access_token":"access-token-1","token_type":"Bearer","expires_in":3600,"refresh_token":%q,"scope":"offline_access"}`, "refresh-token-1"+strings.Repeat("r", 8192)); err != nil {
+		// The access token carries the authorization code so the Graph mock
+		// can resolve each operator's own mailbox. Real Microsoft token
+		// envelopes can exceed PocketBase's default text limit once encrypted
+		// and base64 encoded. Keep this fixture large so all connection
+		// acceptance tests exercise the production schema limit.
+		if _, err := fmt.Fprintf(w, `{"access_token":%q,"token_type":"Bearer","expires_in":3600,"refresh_token":%q,"scope":"offline_access"}`, "access-token-"+r.PostForm.Get("code"), "refresh-token-1"+strings.Repeat("r", 8192)); err != nil {
 			t.Errorf("write mock response: %v", err)
 		}
 	}))
 	t.Cleanup(env.authority.Close)
 	t.Setenv(config.EnvAuthorityURL, env.authority.URL)
 
-	// Simulated Microsoft Graph: the verified mailbox identity.
+	// Simulated Microsoft Graph: the verified mailbox identity. Each access
+	// token maps to one mailbox address so every operator connects their own.
 	env.graph = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1.0/me" {
 			t.Errorf("unexpected graph path %q", r.URL.Path)
 		}
-		if r.Header.Get("Authorization") != "Bearer access-token-1" {
-			t.Errorf("unexpected graph authorization header")
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		mailboxAddress := graphMailbox(token)
+		if mailboxAddress == "" {
+			t.Errorf("unexpected graph authorization header %q", r.Header.Get("Authorization"))
+			w.WriteHeader(http.StatusUnauthorized)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if _, err := fmt.Fprintf(w, `{"id":"account-1","mail":%q,"userPrincipalName":%q}`, config.DefaultSenderAddress, config.DefaultSenderAddress); err != nil {
+		if _, err := fmt.Fprintf(w, `{"id":"account-1","mail":%q,"userPrincipalName":%q}`, mailboxAddress, mailboxAddress); err != nil {
 			t.Errorf("write mock response: %v", err)
 		}
 	}))
@@ -99,6 +113,21 @@ func newAcceptanceEnv(t *testing.T) *acceptanceEnv {
 	env.cfg = cfg
 	env.start(t, true)
 	return env
+}
+
+// graphMailbox maps a simulated access token to the mailbox address its owner
+// signed in with. Tokens minted for an authorization code carrying an "-alias"
+// suffix resolve to that alias, so one test can drive two operators with
+// different mailboxes.
+func graphMailbox(token string) string {
+	code, ok := strings.CutPrefix(token, "access-token-")
+	if !ok {
+		return ""
+	}
+	if alias, ok := strings.CutSuffix(code, "-alias"); ok {
+		return "alias-" + alias + "@bachtelcorporation.com"
+	}
+	return testSender
 }
 
 // start bootstraps the app (and optionally the operator) on the current data dir.
@@ -121,12 +150,20 @@ func (env *acceptanceEnv) start(t *testing.T, provision bool) {
 			t.Fatal(err)
 		}
 	}
+	mailboxes := mailbox.NewStore(app, env.cfg.EncryptionKey)
+	env.mailboxes = mailboxes
 	router, err := apis.NewRouter(app)
 	if err != nil {
 		t.Fatal(err)
 	}
 	router.GET("/_/{path...}", apis.Static(ui.DistDirFS, false))
-	router.Any("/{path...}", apis.WrapStdHandler(NewHandler(app, env.cfg, microsoft.NewService(app, env.cfg))))
+	router.Any("/{path...}", apis.WrapStdHandler(NewHandler(app, env.cfg, Services{
+		Connections: microsoft.NewService(app, env.cfg, mailboxes),
+		Mailboxes:   mailboxes,
+		Sending:     sending.NewStore(app, sending.StoreOptions{}),
+		Exports:     exports.NewService(app, env.cfg),
+		Resets:      reset.NewService(app, mailboxes),
+	})))
 	env.handler, err = router.BuildMux()
 	if err != nil {
 		t.Fatal(err)
@@ -194,7 +231,7 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 	}
 
 	// Operator starts authorization and follows the callback.
-	rec = env.request(http.MethodPost, "/connection/connect", []*http.Cookie{session}, url.Values{})
+	rec = env.request(http.MethodPost, "/connection/microsoft/connect", []*http.Cookie{session}, url.Values{})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("connect: status=%d body=%.300s", rec.Code, rec.Body.String())
 	}
@@ -228,10 +265,10 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 		t.Fatalf("connection page after connect: status=%d", page.Code)
 	}
 	body := page.Body.String()
-	if !strings.Contains(body, config.DefaultSenderAddress) || !strings.Contains(body, "connected") {
+	if !strings.Contains(body, testSender) || !strings.Contains(body, "connected") {
 		t.Fatalf("connection page missing connected identity: %.600s", body)
 	}
-	for _, secret := range []string{"access-token-1", "refresh-token-1", "client-secret-value", "v1."} {
+	for _, secret := range []string{"access-token-", "refresh-token-", "client-secret-value", "v1."} {
 		if strings.Contains(body, secret) {
 			t.Fatalf("connection page leaked %q", secret)
 		}
@@ -272,7 +309,7 @@ func TestAcceptanceRestartDuringMicrosoftSignIn(t *testing.T) {
 	session := env.signIn()
 	cookies := []*http.Cookie{session}
 
-	start := env.request(http.MethodPost, "/connection/connect", cookies, url.Values{})
+	start := env.request(http.MethodPost, "/connection/microsoft/connect", cookies, url.Values{})
 	oldURL, err := url.Parse(start.Header().Get("Location"))
 	if err != nil || start.Code != http.StatusSeeOther || oldURL.Query().Get("state") == "" {
 		t.Fatalf("start sign-in: status=%d location=%q", start.Code, start.Header().Get("Location"))
@@ -293,7 +330,7 @@ func TestAcceptanceRestartDuringMicrosoftSignIn(t *testing.T) {
 	// Following and refreshing the error page must not repeat the callback.
 	for range 2 {
 		page := env.request(http.MethodGet, stale.Header().Get("Location"), cookies, nil)
-		if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "cleared by a server restart") || !strings.Contains(page.Body.String(), `action="/connection/connect"`) {
+		if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "cleared by a server restart") || !strings.Contains(page.Body.String(), `action="/connection/microsoft/connect"`) {
 			t.Fatalf("retry page: status=%d body=%.400s", page.Code, page.Body.String())
 		}
 	}
@@ -303,12 +340,12 @@ func TestAcceptanceRestartDuringMicrosoftSignIn(t *testing.T) {
 	if exchanges != 0 {
 		t.Fatalf("stale callback reached token endpoint: %d exchanges", exchanges)
 	}
-	if records, err := env.app.FindAllRecords(microsoft.CollectionName); err != nil || len(records) != 0 {
+	if records, err := env.app.FindAllRecords(mailbox.ConnectionsCollection); err != nil || len(records) != 0 {
 		t.Fatalf("stale callback installed credentials: %d records (err=%v)", len(records), err)
 	}
 
 	// Connect creates a fresh state that can complete on the restarted server.
-	retry := env.request(http.MethodPost, "/connection/connect", cookies, url.Values{})
+	retry := env.request(http.MethodPost, "/connection/microsoft/connect", cookies, url.Values{})
 	newURL, err := url.Parse(retry.Header().Get("Location"))
 	if err != nil || retry.Code != http.StatusSeeOther || newURL.Query().Get("state") == "" || newURL.Query().Get("state") == oldURL.Query().Get("state") {
 		t.Fatal("retry did not create a fresh sign-in attempt")
@@ -354,7 +391,7 @@ func TestAcceptanceRestartKeepsConnection(t *testing.T) {
 	env := newAcceptanceEnv(t)
 	session := env.signIn()
 
-	rec := env.request(http.MethodPost, "/connection/connect", []*http.Cookie{session}, url.Values{})
+	rec := env.request(http.MethodPost, "/connection/microsoft/connect", []*http.Cookie{session}, url.Values{})
 	authorizeURL, err := url.Parse(rec.Header().Get("Location"))
 	if err != nil {
 		t.Fatal(err)
@@ -370,15 +407,15 @@ func TestAcceptanceRestartKeepsConnection(t *testing.T) {
 	}
 	env.start(t, false)
 
-	records, err := env.app.FindAllRecords(microsoft.CollectionName)
+	records, err := env.app.FindAllRecords(mailbox.ConnectionsCollection)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(records) != 1 {
 		t.Fatalf("expected exactly one connection record after restart, got %d", len(records))
 	}
-	if got := records[0].GetString("account_email"); got != config.DefaultSenderAddress {
-		t.Fatalf("connection account after restart = %q", got)
+	if got := records[0].GetString("sender"); got != testSender {
+		t.Fatalf("connection sender after restart = %q", got)
 	}
 	if got := records[0].GetString("credential"); !strings.HasPrefix(got, "v1.") {
 		t.Fatalf("stored credential is not sealed versioned ciphertext: %q", got)
@@ -386,11 +423,15 @@ func TestAcceptanceRestartKeepsConnection(t *testing.T) {
 
 	session = env.signIn()
 	page := env.request(http.MethodGet, "/connection", []*http.Cookie{session}, nil)
-	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), config.DefaultSenderAddress) || !strings.Contains(page.Body.String(), `data-status="connected"`) {
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), testSender) || !strings.Contains(page.Body.String(), `data-status="connected"`) {
 		t.Fatalf("connection page after restart: status=%d body=%.400s", page.Code, page.Body.String())
 	}
-	service := microsoft.NewService(env.app, env.cfg)
-	if token, err := service.AccessToken(context.Background()); err != nil || token != "access-token-1" {
+	connection, err := env.mailboxes.Current(context.Background(), operatorIDFor(t, env.app, testEmail))
+	if err != nil {
+		t.Fatalf("load connection after restart: %v", err)
+	}
+	service := microsoft.NewService(env.app, env.cfg, env.mailboxes)
+	if token, err := service.AccessToken(context.Background(), connection); err != nil || token != "access-token-code" {
 		t.Fatalf("large stored credential cannot be used after restart (err=%v)", err)
 	}
 }
@@ -403,7 +444,8 @@ func TestAcceptancePrivateRecordBoundariesAndNoSendEndpoint(t *testing.T) {
 	// an authenticated operator.
 	for _, target := range []string{
 		"/api/collections/operators/records",
-		"/api/collections/microsoft_connection/records",
+		"/api/collections/" + mailbox.ConnectionsCollection + "/records",
+		"/api/collections/" + mailbox.ResetsCollection + "/records",
 	} {
 		if rec := env.request(http.MethodGet, target, nil, nil); rec.Code < 400 {
 			t.Fatalf("anonymous %s: status=%d body=%.200s", target, rec.Code, rec.Body.String())
@@ -443,7 +485,7 @@ func TestAcceptancePrivateRecordBoundariesAndNoSendEndpoint(t *testing.T) {
 func TestAcceptanceAnonymousMutationsRejected(t *testing.T) {
 	env := newAcceptanceEnv(t)
 
-	for _, target := range []string{"/logout", "/connection/connect", "/connection/disconnect"} {
+	for _, target := range []string{"/logout", "/connection/microsoft/connect", "/connection/disconnect", "/connection/titan", "/connection/replace/confirm"} {
 		if rec := env.request(http.MethodPost, target, nil, url.Values{}); rec.Code != http.StatusUnauthorized {
 			t.Fatalf("anonymous %s: status=%d body=%.200s", target, rec.Code, rec.Body.String())
 		}
@@ -460,7 +502,7 @@ func TestAcceptanceAnonymousMutationsRejected(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("cross-origin login: status=%d", rec.Code)
 	}
-	if records, err := env.app.FindAllRecords(microsoft.CollectionName); err != nil || len(records) != 0 {
+	if records, err := env.app.FindAllRecords(mailbox.ConnectionsCollection); err != nil || len(records) != 0 {
 		t.Fatalf("cross-origin request changed state: %d records (err=%v)", len(records), err)
 	}
 }
@@ -470,7 +512,7 @@ func TestAcceptanceAnonymousMutationsRejected(t *testing.T) {
 func TestAcceptanceConnectionRecordStoredEncrypted(t *testing.T) {
 	env := newAcceptanceEnv(t)
 	session := env.signIn()
-	rec := env.request(http.MethodPost, "/connection/connect", []*http.Cookie{session}, url.Values{})
+	rec := env.request(http.MethodPost, "/connection/microsoft/connect", []*http.Cookie{session}, url.Values{})
 	authorizeURL, err := url.Parse(rec.Header().Get("Location"))
 	if err != nil {
 		t.Fatal(err)
@@ -480,7 +522,7 @@ func TestAcceptanceConnectionRecordStoredEncrypted(t *testing.T) {
 		t.Fatalf("callback: status=%d body=%.300s", rec.Code, rec.Body.String())
 	}
 
-	records, err := env.app.FindAllRecords(microsoft.CollectionName)
+	records, err := env.app.FindAllRecords(mailbox.ConnectionsCollection)
 	if err != nil || len(records) != 1 {
 		t.Fatalf("connection records: %d (err=%v)", len(records), err)
 	}
@@ -491,7 +533,7 @@ func TestAcceptanceConnectionRecordStoredEncrypted(t *testing.T) {
 	if !strings.HasPrefix(stored, "v1.") {
 		t.Fatalf("credential not versioned: %q", stored)
 	}
-	for _, raw := range []string{"access-token-1", "refresh-token-1", "client-secret-value"} {
+	for _, raw := range []string{"access-token-code", "refresh-token-1", "client-secret-value"} {
 		if strings.Contains(stored, raw) {
 			t.Fatalf("stored credential contains raw value %q", raw)
 		}

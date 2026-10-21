@@ -40,13 +40,14 @@ func (s *server) registerTaskRoutes(mux *http.ServeMux) {
 // handleTaskList lists a campaign's tasks with their status and counts.
 func (s *server) handleTaskList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ownerID := recordFromContext(r).Id
 	id := r.PathValue("id")
-	loaded, err := s.campaigns.LoadCampaign(ctx, id)
+	loaded, err := s.campaigns.LoadCampaign(ctx, ownerID, id)
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
 	}
-	tasks, err := s.tasks.ListTasks(ctx, id)
+	tasks, err := s.tasks.ListTasks(ctx, ownerID, id)
 	if err != nil {
 		s.app.Logger().Error("list tasks", "campaign", id, "error", err)
 		http.Error(w, "Unable to load tasks", http.StatusInternalServerError)
@@ -69,7 +70,8 @@ func (s *server) handleTaskList(w http.ResponseWriter, r *http.Request) {
 // handleTaskNew renders the upload form with the configured workbook limits.
 func (s *server) handleTaskNew(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	loaded, err := s.campaigns.LoadCampaign(ctx, r.PathValue("id"))
+	ownerID := recordFromContext(r).Id
+	loaded, err := s.campaigns.LoadCampaign(ctx, ownerID, r.PathValue("id"))
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
@@ -82,8 +84,9 @@ func (s *server) handleTaskNew(w http.ResponseWriter, r *http.Request) {
 // the form again.
 func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ownerID := recordFromContext(r).Id
 	id := r.PathValue("id")
-	loaded, err := s.campaigns.LoadCampaign(ctx, id)
+	loaded, err := s.campaigns.LoadCampaign(ctx, ownerID, id)
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
@@ -129,7 +132,7 @@ func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	task, err := s.tasks.Stage(ctx, id, header.Filename, data)
+	task, err := s.tasks.Stage(ctx, ownerID, id, header.Filename, data)
 	if err != nil {
 		if message := intakeErrorMessage(err); message != "" {
 			uploadError(message)
@@ -166,12 +169,13 @@ func (s *server) handleTaskSelect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	ownerID := recordFromContext(r).Id
 	headerRow, err := strconv.Atoi(strings.TrimSpace(r.FormValue("header_row")))
 	if err != nil {
 		s.renderTaskMessage(w, r, task, intake.ErrInvalidHeaderRow.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := s.tasks.Validate(ctx, task.ID, r.FormValue("sheet"), headerRow); err != nil {
+	if err := s.tasks.Validate(ctx, ownerID, task.ID, r.FormValue("sheet"), headerRow); err != nil {
 		if validation, ok := errors.AsType[*intake.ValidationError](err); ok {
 			s.renderTaskMessage(w, r, task, validation.Message, http.StatusBadRequest)
 			return
@@ -189,7 +193,7 @@ func (s *server) handleTaskRevalidate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.tasks.Revalidate(r.Context(), task.ID); err != nil {
+	if err := s.tasks.Revalidate(r.Context(), recordFromContext(r).Id, task.ID); err != nil {
 		if validation, ok := errors.AsType[*intake.ValidationError](err); ok {
 			s.renderTaskMessage(w, r, task, validation.Message, http.StatusBadRequest)
 			return
@@ -209,10 +213,11 @@ func (s *server) handleTaskPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
+	ownerID := recordFromContext(r).Id
 	data := views.TaskPreviewData{}
 	rowID := strings.TrimSpace(r.FormValue("row"))
 
-	rows, err := s.tasks.Rows(ctx, task.ID)
+	rows, err := s.tasks.Rows(ctx, ownerID, task.ID)
 	if err != nil {
 		s.app.Logger().Error("list task rows", "task", task.ID, "error", err)
 		data.Error = "the preview could not be rendered for this row; try again"
@@ -231,7 +236,7 @@ func (s *server) handleTaskPreview(w http.ResponseWriter, r *http.Request) {
 		s.renderWithStatus(w, r, http.StatusOK, views.TaskPreviewResult(data))
 		return
 	}
-	preview, err := s.tasks.Preview(ctx, task.ID, rowID)
+	preview, err := s.tasks.Preview(ctx, ownerID, task.ID, rowID)
 	if err != nil {
 		data.Error = s.taskPreviewMessage(err)
 		s.renderWithStatus(w, r, http.StatusOK, views.TaskPreviewResult(data))
@@ -266,7 +271,7 @@ func (s *server) handleTaskExcluded(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data, filename, err := s.tasks.ExclusionReport(r.Context(), task.ID)
+	data, filename, err := s.tasks.ExclusionReport(r.Context(), recordFromContext(r).Id, task.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)
@@ -291,7 +296,7 @@ func (s *server) handleTaskResultsDownload(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	data, filename, err := s.exports.DownloadTask(r.Context(), task.ID)
+	data, filename, err := s.exports.DownloadTask(r.Context(), recordFromContext(r).Id, task.ID)
 	if err != nil {
 		if errors.Is(err, exports.ErrNotReady) {
 			http.NotFound(w, r)
@@ -311,7 +316,7 @@ func (s *server) handleTaskResultsGenerate(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	err := s.exports.GenerateTask(r.Context(), task.ID, true)
+	err := s.exports.GenerateTask(r.Context(), recordFromContext(r).Id, task.ID, true)
 	switch {
 	case err == nil:
 		http.Redirect(w, r, "/campaigns/"+task.CampaignID+"/tasks/"+task.ID, http.StatusSeeOther)
@@ -333,7 +338,7 @@ func (s *server) handleTaskResultsDelete(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	if err := s.exports.DeleteTask(r.Context(), task.ID); err != nil {
+	if err := s.exports.DeleteTask(r.Context(), recordFromContext(r).Id, task.ID); err != nil {
 		s.app.Logger().Error("delete task results", "task", task.ID, "error", err)
 		s.renderTaskMessage(w, r, task, "the generated workbook could not be removed; retry", http.StatusInternalServerError)
 		return
@@ -344,7 +349,7 @@ func (s *server) handleTaskResultsDelete(w http.ResponseWriter, r *http.Request)
 // loadCampaignTask loads the path's task and confirms it belongs to the
 // campaign in the path, so a task id is never usable from another campaign.
 func (s *server) loadCampaignTask(w http.ResponseWriter, r *http.Request) (*intake.Task, bool) {
-	task, err := s.tasks.LoadTask(r.Context(), r.PathValue("task"))
+	task, err := s.tasks.LoadTask(r.Context(), recordFromContext(r).Id, r.PathValue("task"))
 	if err != nil {
 		s.taskLoadFailure(w, r, err)
 		return nil, false
@@ -369,7 +374,7 @@ func (s *server) writeDownload(w http.ResponseWriter, contentType, filename stri
 // an unknown id is a plain 404, anything else is logged and answered
 // generically.
 func (s *server) taskLoadFailure(w http.ResponseWriter, r *http.Request, err error) {
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) || errors.Is(err, intake.ErrNotFound) {
 		http.NotFound(w, r)
 		return
 	}
@@ -404,19 +409,20 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task) (views.TaskPag
 	}
 
 	ctx := r.Context()
-	configuration, err := s.campaigns.LoadConfiguration(ctx, task.ConfigurationID)
+	ownerID := recordFromContext(r).Id
+	configuration, err := s.campaigns.LoadConfiguration(ctx, ownerID, task.ConfigurationID)
 	if err != nil {
 		return data, err
 	}
-	preflight, err := s.tasks.Preflight(ctx, task.ID)
+	preflight, err := s.tasks.Preflight(ctx, ownerID, task.ID)
 	if err != nil {
 		return data, err
 	}
-	manifest, err := s.tasks.Manifest(ctx, task.ID)
+	manifest, err := s.tasks.Manifest(ctx, ownerID, task.ID)
 	if err != nil {
 		return data, err
 	}
-	rows, err := s.tasks.Rows(ctx, task.ID)
+	rows, err := s.tasks.Rows(ctx, ownerID, task.ID)
 	if err != nil {
 		return data, err
 	}
@@ -432,7 +438,7 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task) (views.TaskPag
 		ReviewRequired:   task.Counts.ReviewRequired,
 	}
 	data.ResultLabels = task.ResultLabels
-	if artifact, err := s.exports.TaskArtifact(ctx, task.ID); err == nil && artifact != nil {
+	if artifact, err := s.exports.TaskArtifact(ctx, ownerID, task.ID); err == nil && artifact != nil {
 		data.ResultsState = artifact.State
 		data.ResultsError = artifact.Error
 		data.ResultsReady = artifact.Ready
@@ -473,7 +479,7 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task) (views.TaskPag
 // stays visible; an identical recorded message is dropped to avoid showing the
 // same text twice.
 func (s *server) renderTaskMessage(w http.ResponseWriter, r *http.Request, task *intake.Task, message string, status int) {
-	if fresh, err := s.tasks.LoadTask(r.Context(), task.ID); err == nil {
+	if fresh, err := s.tasks.LoadTask(r.Context(), recordFromContext(r).Id, task.ID); err == nil {
 		task = fresh
 	}
 	data, err := s.taskPageData(r, task)

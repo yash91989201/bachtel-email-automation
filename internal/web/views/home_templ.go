@@ -448,7 +448,7 @@ func Home() templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Microsoft 365</p><h2 id=\"connection-heading\" class=\"cn-card-title\">Connect your sender</h2><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Manage the HR mailbox connection used for diagnostic tests and candidate submissions.</p><div class=\"app-card-actions\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">Private mailbox</p><h2 id=\"connection-heading\" class=\"cn-card-title\">Connect your sender</h2><p class=\"text-muted-foreground max-w-[75ch] text-[.875rem]\">Connect your own Microsoft 365 or GoDaddy Titan mailbox for diagnostic tests and candidate submissions. Each operator owns one exclusive sending mailbox.</p><div class=\"app-card-actions\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
