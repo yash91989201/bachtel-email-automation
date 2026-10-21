@@ -25,7 +25,7 @@ Then read 2–3 full messages with `git log -3 --format='--- %h ---%n%B'`. Match
 - Check docs, specs, and changelog directories — they often state the intent in prose.
 - For huge change sets, delegate the reading to a subagent and ask for an intent list, not raw diffs.
 
-Build a list of `intent -> files`. Expect 2–5 intents (for example: a feature, its docs, a dev-tooling change).
+Before staging or creating any commits, build a complete list of `intent -> files/hunks`. Group all changes by intent first, then identify dependencies between those groups.
 
 ## 3. Watch for cross-cutting files
 
@@ -37,8 +37,9 @@ Two traps:
 ## 4. Choose the grouping and order
 
 - Don't over-split. Sequential follow-ups that touch the same files and share a theme can be one commit; name the parts in the body.
-- Each commit should read as coherent on its own.
-- Order by dependency: foundations first. Avoid, when cheap, a commit that references something only a later commit adds.
+- Determine the complete commit order before creating the first commit. Commit prerequisites before the changes that depend on them; independent groups can go in any clear order.
+- Each commit must leave a coherent, buildable state without relying on changes in later commits or the remaining working tree. Keep the tests and documentation needed for that intent with its implementation.
+- If groups depend on each other or cannot be separated into coherent, buildable commits, combine them rather than creating a broken intermediate state.
 - If a change is genuinely unrelated junk (scratch files, personal config), leave it out and tell the user.
 
 ## 5. Stage precisely
