@@ -61,7 +61,7 @@ func TestIdleDispatcherExecutesNoRecurringSQLAndWakesForTest(t *testing.T) {
 		}
 	}
 	mailbox := &acceptanceMailbox{}
-	d := sending.NewDispatcher(store, mailbox, sending.WorkerOptions{DataDir: f.app.DataDir()})
+	d := sending.NewDispatcher(store, fixedResolver(mailbox), sending.WorkerOptions{DataDir: f.app.DataDir()})
 	if err := d.Start(); err != nil {
 		for _, logger := range saved {
 			logger.db.QueryLogFunc, logger.db.ExecLogFunc = logger.query, logger.exec
@@ -97,7 +97,7 @@ func TestIdleDispatcherExecutesNoRecurringSQLAndWakesForTest(t *testing.T) {
 	if got := calls.Load(); got != before {
 		t.Fatalf("idle dispatcher executed %d additional SQL calls", got-before)
 	}
-	attempt, err := store.QueueTest(context.Background(), sending.TestRequest{
+	attempt, err := store.QueueTest(context.Background(), f.ownerID, sending.TestRequest{
 		ActionID: "idle-sql-test", TaskID: task, Recipient: "operator@example.invalid",
 		Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"},
 	})

@@ -1,24 +1,21 @@
 package sending_test
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
+	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
-	"github.com/yash91989201/bachtel-email-automation/internal/operator"
+	"github.com/yash91989201/bachtel-email-automation/internal/reset"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web"
 )
@@ -77,6 +74,8 @@ func (m browserMailbox) Send(ctx context.Context, message sending.Message) sendi
 	return sending.SendResult{Kind: sending.OutcomeSubmitted}
 }
 
+// browserDispatcher exposes the sole dispatcher to the web handler's operator
+// barrier, including the per-owner in-flight query used by mailbox replacement.
 type browserDispatcher struct {
 	mu sync.Mutex
 	d  *sending.Dispatcher
@@ -88,10 +87,10 @@ func (d *browserDispatcher) Synchronize(fn func() error) error {
 	defer d.mu.Unlock()
 	return d.d.Synchronize(fn)
 }
-func (d *browserDispatcher) InFlight(ctx context.Context) (int, error) {
+func (d *browserDispatcher) InFlightFor(ctx context.Context, ownerID string) (int, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.d.InFlight(ctx)
+	return d.d.InFlightFor(ctx, ownerID)
 }
 
 func TestAcceptanceBrowserHarness(t *testing.T) {
@@ -106,47 +105,28 @@ func TestAcceptanceBrowserHarness(t *testing.T) {
 	if err := os.WriteFile(control, []byte(`{}`), 0600); err != nil {
 		t.Fatal(err)
 	}
+	// The fixture provisions the operator and installs one connected mailbox,
+	// so the browser only needs the fixture's credentials to sign in.
 	f := newAcceptanceFixture(t)
 	task := f.task(t, 12)
 	overlap := f.task(t, 12)
 	const email = "operator@example.invalid"
-	const password = "Browser-harness-password-2026!"
-	if err := operator.Provision(f.app, email, password); err != nil {
-		t.Fatal(err)
+	const password = "correct-horse-battery"
+
+	cfg := config.Config{
+		Origin:     "http://127.0.0.1",
+		PandocPath: f.pandocPath,
+		Microsoft:  config.Microsoft{TenantID: "simulated-tenant", ClientID: "simulated-client", ClientSecret: "simulated-secret", RedirectURL: "http://127.0.0.1/connection/callback", AuthorityURL: "http://127.0.0.1", GraphBaseURL: "http://127.0.0.1"},
+		Titan:      config.Titan{Address: "smtp.example.invalid"},
 	}
-	t.Setenv(config.EnvEncryptionKey, base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, 32)))
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case strings.HasSuffix(r.URL.Path, "/token"):
-			if _, err := fmt.Fprint(w, `{"access_token":"simulated-access","refresh_token":"simulated-refresh","token_type":"Bearer","expires_in":86400}`); err != nil {
-				return
-			}
-		case strings.HasSuffix(r.URL.Path, "/me"):
-			if _, err := fmt.Fprint(w, `{"id":"simulated-mailbox","mail":"hr@bachtelcorporation.com","userPrincipalName":"hr@bachtelcorporation.com"}`); err != nil {
-				return
-			}
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer provider.Close()
-	cfg := config.Config{Origin: "http://127.0.0.1", Microsoft: config.Microsoft{TenantID: "simulated-tenant", ClientID: "simulated-client", ClientSecret: "simulated-secret", RedirectURL: "http://127.0.0.1/connection/callback", SenderAddress: "hr@bachtelcorporation.com", AuthorityURL: provider.URL, GraphBaseURL: provider.URL}}
-	connection := microsoft.NewService(f.app, cfg)
-	auth, err := connection.BeginAuth(context.Background(), "simulated-operator")
-	if err != nil {
-		t.Fatal(err)
-	}
-	authURL, err := url.Parse(auth)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = connection.CompleteAuth(context.Background(), "simulated-operator", authURL.Query().Get("state"), "simulated-code"); err != nil {
-		t.Fatal(err)
-	}
+	mailboxes := mailbox.NewStore(f.app, func() ([]byte, error) { return testKey, nil })
+	connections := microsoft.NewService(f.app, cfg, mailboxes)
+	exported := exports.NewService(f.app, cfg)
+	resets := reset.NewService(f.app, mailboxes)
+
 	proxy := &browserDispatcher{}
 	start := func() {
-		proxy.d = sending.NewDispatcher(f.store, browserMailbox{control}, sending.WorkerOptions{DataDir: f.app.DataDir(), Now: f.clock.Now, After: f.clock.After, RequestTimeout: 30 * time.Second})
+		proxy.d = sending.NewDispatcher(f.store, fixedResolver(browserMailbox{control}), sending.WorkerOptions{DataDir: f.app.DataDir(), Now: f.clock.Now, After: f.clock.After, RequestTimeout: 30 * time.Second})
 		if err := proxy.d.Start(); err != nil {
 			t.Fatal(err)
 		}
@@ -159,18 +139,25 @@ func TestAcceptanceBrowserHarness(t *testing.T) {
 			t.Error(err)
 		}
 	}()
-	connection.SetDispatchGuard(proxy)
-	server := httptest.NewServer(web.NewHandlerWithDispatcher(f.app, cfg, connection, f.store, proxy))
+	resets.SetDrainer(proxy.d)
+	server := httptest.NewServer(web.NewHandler(f.app, cfg, web.Services{
+		Connections: connections,
+		Mailboxes:   mailboxes,
+		Sending:     f.store,
+		Dispatcher:  proxy,
+		Exports:     exported,
+		Resets:      resets,
+	}))
 	defer server.Close()
 	metadata := map[string]any{"url": server.URL, "task_url": server.URL + "/campaigns/" + f.campaignID + "/tasks/" + task + "/sending", "overlap_task_url": server.URL + "/campaigns/" + f.campaignID + "/tasks/" + overlap + "/sending", "email": email, "password": password, "control": control, "data_dir": f.app.DataDir()}
 	data, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "harness.json"), data, 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(dir, "harness.json"), data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fmt.Printf("BROWSER_HARNESS %s\n", data); err != nil {
+	if _, err = fmt.Printf("BROWSER_HARNESS %s\n", data); err != nil {
 		t.Fatal(err)
 	}
 	restart := 0

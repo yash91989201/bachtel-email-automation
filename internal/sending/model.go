@@ -44,9 +44,6 @@ type ScheduleRefusal struct{ Reason string }
 func (r *ScheduleRefusal) Error() string { return r.Reason }
 
 type StoreOptions struct {
-	// SenderAddress is recorded on each attempt so a historical HTML export
-	// shows the mailbox used at send time.
-	SenderAddress string
 	// RestoreReview disables every send-like action after a backup restore.
 	// Stop, history resolution and export generation remain available.
 	RestoreReview bool
@@ -68,9 +65,14 @@ func NewStore(app core.App, options StoreOptions) *Store {
 }
 
 type Work struct {
-	ID, Kind, TaskID, MemberID, CandidateID, ConfigurationID, ContentHash, Recipient, Subject, Body string
-	RetryCount                                                                                      int
-	Sender                                                                                          string
+	// OwnerID, ConnectionID and Generation record the exact mailbox that
+	// authorizes and transmits this work. They are rechecked at launch, so a
+	// replaced or disconnected connection cannot send queued work.
+	ID, Kind, OwnerID, ConnectionID                                                       string
+	Generation                                                                            int
+	TaskID, MemberID, CandidateID, ConfigurationID, ContentHash, Recipient, Subject, Body string
+	RetryCount                                                                            int
+	Sender                                                                                string
 }
 type Attempt struct {
 	Work

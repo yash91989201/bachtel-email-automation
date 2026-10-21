@@ -37,7 +37,7 @@ func storeSave(t *testing.T, f *acceptanceFixture, r *core.Record) {
 }
 func storePreview(t *testing.T, f *acceptanceFixture, task string) *sending.Progress {
 	t.Helper()
-	p, e := f.store.Preview(storeCtx, task)
+	p, e := f.store.Preview(storeCtx, f.ownerID, task)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -57,7 +57,7 @@ func storeBegin(t *testing.T, f *acceptanceFixture) *sending.Attempt {
 }
 func storeApprove(t *testing.T, f *acceptanceFixture, task string) *sending.Attempt {
 	t.Helper()
-	_, e := f.store.QueueTest(storeCtx, sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
+	_, e := f.store.QueueTest(storeCtx, f.ownerID, sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -65,14 +65,14 @@ func storeApprove(t *testing.T, f *acceptanceFixture, task string) *sending.Atte
 	if e = f.store.CompleteAttempt(storeCtx, a.ID, sending.Outcome{State: sending.AttemptSubmitted}); e != nil {
 		t.Fatal(e)
 	}
-	if e = f.store.Approve(storeCtx, task, a.ID, "operator", "approve-"+task); e != nil {
+	if e = f.store.Approve(storeCtx, f.ownerID, task, a.ID, "operator", "approve-"+task); e != nil {
 		t.Fatal(e)
 	}
 	return a
 }
 func storeAct(t *testing.T, f *acceptanceFixture, task, kind, id string, count int) *sending.ActionResult {
 	t.Helper()
-	r, e := f.store.Act(storeCtx, sending.ActionRequest{TaskID: task, Kind: kind, ActionID: id, Confirmed: true, Actor: "operator", ExpectedCount: count})
+	r, e := f.store.Act(storeCtx, f.ownerID, sending.ActionRequest{TaskID: task, Kind: kind, ActionID: id, Confirmed: true, Actor: "operator", ExpectedCount: count})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -82,11 +82,11 @@ func storeAct(t *testing.T, f *acceptanceFixture, task, kind, id string, count i
 func TestStoreApprovalExactHashAndExplicitAction(t *testing.T) {
 	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
-	a, e := f.store.QueueTest(storeCtx, sending.TestRequest{ActionID: "test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_name": "Sample", "candidate_email": "sample@example.invalid"}})
+	a, e := f.store.QueueTest(storeCtx, f.ownerID, sending.TestRequest{ActionID: "test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_name": "Sample", "candidate_email": "sample@example.invalid"}})
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = f.store.Approve(storeCtx, task, a.ID, "operator", "premature"); e == nil {
+	if e = f.store.Approve(storeCtx, f.ownerID, task, a.ID, "operator", "premature"); e == nil {
 		t.Fatal("queued test approved")
 	}
 	a = storeBegin(t, f)
@@ -101,7 +101,7 @@ func TestStoreApprovalExactHashAndExplicitAction(t *testing.T) {
 		blocked := req
 		blocked.ActionID = "unapproved-" + kind
 		blocked.Kind = kind
-		if _, err := f.store.Act(storeCtx, blocked); err == nil || !strings.Contains(err.Error(), "approve") {
+		if _, err := f.store.Act(storeCtx, f.ownerID, blocked); err == nil || !strings.Contains(err.Error(), "approve") {
 			t.Fatalf("submitted test without approval permitted %s: %v", kind, err)
 		}
 	}
@@ -112,21 +112,21 @@ func TestStoreApprovalExactHashAndExplicitAction(t *testing.T) {
 	hash := tr.GetString("content_hash")
 	tr.Set("content_hash", strings.Repeat("a", 64))
 	storeSave(t, f, tr)
-	if e = f.store.Approve(storeCtx, task, a.ID, "operator", "wrong-hash"); e == nil {
+	if e = f.store.Approve(storeCtx, f.ownerID, task, a.ID, "operator", "wrong-hash"); e == nil {
 		t.Fatal("wrong hash approved")
 	}
 	tr.Set("content_hash", hash)
 	storeSave(t, f, tr)
-	if e = f.store.Approve(storeCtx, task, a.ID, "operator", "approved"); e != nil {
+	if e = f.store.Approve(storeCtx, f.ownerID, task, a.ID, "operator", "approved"); e != nil {
 		t.Fatal(e)
 	}
-	if e = f.store.Approve(storeCtx, task, a.ID, "operator", "approved"); e != nil {
+	if e = f.store.Approve(storeCtx, f.ownerID, task, a.ID, "operator", "approved"); e != nil {
 		t.Fatal(e)
 	}
 	if !storePreview(t, f, task).Approved {
 		t.Fatal("approval missing")
 	}
-	if _, e = f.store.Act(storeCtx, req); e != nil {
+	if _, e = f.store.Act(storeCtx, f.ownerID, req); e != nil {
 		t.Fatalf("default store refused approved start: %v", e)
 	}
 	candidate := storeBegin(t, f)
@@ -137,10 +137,14 @@ func TestStoreApprovalExactHashAndExplicitAction(t *testing.T) {
 
 func TestCorruptPersistedPacingHistoryStopsDispatch(t *testing.T) {
 	f := newAcceptanceFixture(t)
-	if _, err := f.app.DB().NewQuery("UPDATE dispatcher_state SET starts='not-json' WHERE key='mailbox'").Execute(); err != nil {
+	// The per-connection pacing row is created on first use, then corrupted.
+	if _, err := f.store.DispatcherState(storeCtx, f.connectionID, f.ownerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.store.DispatcherState(storeCtx); err == nil {
+	if _, err := f.app.DB().NewQuery("UPDATE dispatcher_state SET starts='not-json' WHERE connection={:conn}").Bind(dbx.Params{"conn": f.connectionID}).Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.store.DispatcherState(storeCtx, f.connectionID, f.ownerID); err == nil {
 		t.Fatal("corrupt pacing history was accepted")
 	}
 }
@@ -175,7 +179,7 @@ func TestStoreActionsRollbackReplayPauseStopAndStaleStart(t *testing.T) {
 	f := newAcceptanceFixture(t)
 	task := f.task(t, 3)
 	storeApprove(t, f, task)
-	if _, e := f.store.Act(storeCtx, sending.ActionRequest{ActionID: "wrong-count", TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 2}); e == nil {
+	if _, e := f.store.Act(storeCtx, f.ownerID, sending.ActionRequest{ActionID: "wrong-count", TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 2}); e == nil {
 		t.Fatal("stale count accepted")
 	}
 	if p := storePreview(t, f, task); p.Reserved != 0 || p.Eligible != 3 {
@@ -186,7 +190,7 @@ func TestStoreActionsRollbackReplayPauseStopAndStaleStart(t *testing.T) {
 	if !replay.Repeated || replay.Claimed != first.Claimed {
 		t.Fatal("replay mutated result")
 	}
-	if _, e := f.store.Act(storeCtx, sending.ActionRequest{ActionID: "start", TaskID: task, Kind: "stop"}); e == nil {
+	if _, e := f.store.Act(storeCtx, f.ownerID, sending.ActionRequest{ActionID: "start", TaskID: task, Kind: "stop"}); e == nil {
 		t.Fatal("action id reused")
 	}
 	stale, e := f.store.NextWork(storeCtx)
@@ -194,7 +198,7 @@ func TestStoreActionsRollbackReplayPauseStopAndStaleStart(t *testing.T) {
 		t.Fatal(e)
 	}
 	a := storeBegin(t, f)
-	if e = f.store.PauseTask(storeCtx, task, "operator pause"); e != nil {
+	if e = f.store.PauseTask(storeCtx, f.ownerID, task, "operator pause"); e != nil {
 		t.Fatal(e)
 	}
 	if p := storePreview(t, f, task); p.Reserved != 0 || p.InFlight != 1 || p.Eligible != 2 {
@@ -249,14 +253,14 @@ func TestStoreFailuresUncertainResolutionAndRetryHistory(t *testing.T) {
 		t.Fatal(e)
 	}
 	req := sending.ActionRequest{ActionID: "resend-no-risk", TaskID: task, MemberID: uncertain.MemberID, Kind: "resend", Confirmed: true, ExpectedCount: 1}
-	if _, e := f.store.Act(storeCtx, req); e == nil {
+	if _, e := f.store.Act(storeCtx, f.ownerID, req); e == nil {
 		t.Fatal("resend without duplicate risk accepted")
 	}
 	req.Kind = "resolve"
 	req.ActionID = "resolve"
 	req.Actor = "operator"
 	req.Basis = "verified in provider sent items"
-	if _, e := f.store.Act(storeCtx, req); e != nil {
+	if _, e := f.store.Act(storeCtx, f.ownerID, req); e != nil {
 		t.Fatal(e)
 	}
 	p := storePreview(t, f, task)
@@ -280,13 +284,13 @@ func TestStoreRecoveryPausedIntentAndDurablePacing(t *testing.T) {
 	storeAct(t, f, task, "start", "start", 3)
 	a := storeBegin(t, f)
 	until := f.clock.Now().Add(7 * time.Minute)
-	if e := f.store.SetCooldown(storeCtx, until, "throttle"); e != nil {
+	if e := f.store.SetCooldown(storeCtx, f.connectionID, f.ownerID, until, "throttle"); e != nil {
 		t.Fatal(e)
 	}
-	if e := f.store.PauseTask(storeCtx, task, "paused with active send"); e != nil {
+	if e := f.store.PauseTask(storeCtx, f.ownerID, task, "paused with active send"); e != nil {
 		t.Fatal(e)
 	}
-	before, e := f.store.DispatcherState(storeCtx)
+	before, e := f.store.DispatcherState(storeCtx, f.connectionID, f.ownerID)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -294,7 +298,7 @@ func TestStoreRecoveryPausedIntentAndDurablePacing(t *testing.T) {
 	if e = restarted.Recover(storeCtx); e != nil {
 		t.Fatal(e)
 	}
-	after, e := restarted.DispatcherState(storeCtx)
+	after, e := restarted.DispatcherState(storeCtx, f.connectionID, f.ownerID)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -327,7 +331,7 @@ func TestStoreNextWorkDeadlineTracksOnlyActionableFutureRetries(t *testing.T) {
 	storeApprove(t, f, task)
 	storeAct(t, f, task, "start", "start", 1)
 	futureTest := f.clock.Now().Add(5 * time.Minute)
-	queued, err := f.store.QueueTest(storeCtx, sending.TestRequest{ActionID: "deadline-test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_name": "Sample", "candidate_email": "sample@example.invalid"}})
+	queued, err := f.store.QueueTest(storeCtx, f.ownerID, sending.TestRequest{ActionID: "deadline-test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_name": "Sample", "candidate_email": "sample@example.invalid"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +411,7 @@ func TestStoreConcurrentTasksClaimCandidateOnce(t *testing.T) {
 		wg.Add(1)
 		go func(task string, i int) {
 			defer wg.Done()
-			_, e := f.store.Act(storeCtx, sending.ActionRequest{ActionID: fmt.Sprint("claim", i), TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 1})
+			_, e := f.store.Act(storeCtx, f.ownerID, sending.ActionRequest{ActionID: fmt.Sprint("claim", i), TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 1})
 			results <- e
 		}(task, i)
 	}
@@ -492,7 +496,7 @@ func TestStoreResumeSafeRemainderAfterRetryBatchCompleted(t *testing.T) {
 func TestStoreCorrectionRequiresNewIntakeAndTestRetriesKeepHistory(t *testing.T) {
 	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
-	_, e := f.store.QueueTest(storeCtx, sending.TestRequest{ActionID: "retry-test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_name": "Sample", "candidate_email": "sample@example.invalid"}})
+	_, e := f.store.QueueTest(storeCtx, f.ownerID, sending.TestRequest{ActionID: "retry-test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_name": "Sample", "candidate_email": "sample@example.invalid"}})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -510,7 +514,7 @@ func TestStoreCorrectionRequiresNewIntakeAndTestRetriesKeepHistory(t *testing.T)
 	if e = f.store.CompleteAttempt(storeCtx, next.ID, sending.Outcome{State: sending.AttemptSubmitted}); e != nil {
 		t.Fatal(e)
 	}
-	if e = f.store.Approve(storeCtx, task, next.ID, "operator", "approve"); e != nil {
+	if e = f.store.Approve(storeCtx, f.ownerID, task, next.ID, "operator", "approve"); e != nil {
 		t.Fatal(e)
 	}
 	storeAct(t, f, task, "start", "start", 1)
@@ -525,7 +529,7 @@ func TestStoreCorrectionRequiresNewIntakeAndTestRetriesKeepHistory(t *testing.T)
 	if p.Failed != 1 || p.RetryableFailed != 0 || p.Members[0].State != "correction_required" {
 		t.Fatalf("correction lost: %+v", p)
 	}
-	if _, e = f.store.Act(storeCtx, sending.ActionRequest{ActionID: "retry-correction", TaskID: task, Kind: "retry_all", Confirmed: true, ExpectedCount: 1}); e == nil {
+	if _, e = f.store.Act(storeCtx, f.ownerID, sending.ActionRequest{ActionID: "retry-correction", TaskID: task, Kind: "retry_all", Confirmed: true, ExpectedCount: 1}); e == nil {
 		t.Fatal("uncorrected data retried")
 	}
 }
@@ -538,7 +542,7 @@ func TestStoreStaleConfiguration(t *testing.T) {
 	camp := storeRecord(t, f, campaign.CampaignsCollection, f.campaignID)
 	camp.Set("current_configuration", "")
 	storeSave(t, f, camp)
-	if _, e := f.store.Act(storeCtx, req); e == nil || !strings.Contains(e.Error(), "configuration changed") {
+	if _, e := f.store.Act(storeCtx, f.ownerID, req); e == nil || !strings.Contains(e.Error(), "configuration changed") {
 		t.Fatalf("stale configuration accepted: %v", e)
 	}
 	if p := storePreview(t, f, task); p.Eligible != 1 || p.Reserved != 0 {
@@ -549,22 +553,26 @@ func TestStoreStaleConfiguration(t *testing.T) {
 func TestStoreInvalidStoredRateAndActionQueryFailure(t *testing.T) {
 	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
-	if e := f.store.SetRate(storeCtx, 0); e == nil {
+	if e := f.store.SetRate(storeCtx, f.ownerID, 0); e == nil {
 		t.Fatal("zero rate accepted")
 	}
-	if e := f.store.SetRate(storeCtx, 31); e == nil {
+	if e := f.store.SetRate(storeCtx, f.ownerID, 31); e == nil {
 		t.Fatal("excess rate accepted")
 	}
-	if _, e := f.app.DB().NewQuery("UPDATE dispatcher_state SET rate=1.5 WHERE key='mailbox'").Execute(); e != nil {
+	// Create the per-connection pacing row, then store a fractional rate.
+	if _, e := f.store.DispatcherState(storeCtx, f.connectionID, f.ownerID); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := f.store.DispatcherState(storeCtx); e == nil {
+	if _, e := f.app.DB().NewQuery("UPDATE dispatcher_state SET rate=1.5 WHERE connection={:conn}").Bind(dbx.Params{"conn": f.connectionID}).Execute(); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := f.store.DispatcherState(storeCtx, f.connectionID, f.ownerID); e == nil {
 		t.Fatal("fractional stored rate accepted")
 	}
 	if _, e := f.app.DB().NewQuery("DROP TABLE sending_actions").Execute(); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := f.store.Act(storeCtx, sending.ActionRequest{ActionID: "stop", TaskID: task, Kind: "stop"}); e == nil {
+	if _, e := f.store.Act(storeCtx, f.ownerID, sending.ActionRequest{ActionID: "stop", TaskID: task, Kind: "stop"}); e == nil {
 		t.Fatal("query failure treated as missing action")
 	}
 	if p := storeRecord(t, f, intake.TasksCollection, task); p.GetBool("result_generation_needed") {
@@ -627,7 +635,7 @@ func TestStorePreparedGraphDispatchRoundRobinUsesCommittedStarts(t *testing.T) {
 	d := f.dispatcher(t, graph)
 	if e = d.Synchronize(func() error {
 		for i, task := range []string{first, second} {
-			if _, e := f.store.Act(storeCtx, sending.ActionRequest{ActionID: fmt.Sprint("fair-start", i), TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 4}); e != nil {
+			if _, e := f.store.Act(storeCtx, f.ownerID, sending.ActionRequest{ActionID: fmt.Sprint("fair-start", i), TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 4}); e != nil {
 				return e
 			}
 		}
@@ -648,5 +656,110 @@ func TestStorePreparedGraphDispatchRoundRobinUsesCommittedStarts(t *testing.T) {
 	}
 	if firstCount != 2 || secondCount != 2 {
 		t.Fatalf("prepared authorization starved a task; first four submissions=%v", submitted[:4])
+	}
+}
+
+// approveFor queues, submits and approves a formatting test for one operator.
+func approveFor(t *testing.T, f *acceptanceFixture, ownerID, task string) {
+	t.Helper()
+	_, err := f.store.QueueTest(storeCtx, ownerID, sending.TestRequest{ActionID: "test-" + ownerID + "-" + task, TaskID: task, Recipient: "operator@example.invalid", Actor: "acceptance", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := f.store.NextWork(storeCtx)
+	if err != nil || w == nil {
+		t.Fatalf("test work = %v %v", w, err)
+	}
+	a, err := f.store.BeginAttempt(storeCtx, w, f.clock.Now(), f.clock.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.store.CompleteAttempt(storeCtx, a.ID, sending.Outcome{State: sending.AttemptSubmitted}); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.store.Approve(storeCtx, ownerID, task, a.ID, "acceptance", "approve-"+ownerID+"-"+task); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// actFor runs one operator action against that operator's own task.
+func actFor(t *testing.T, f *acceptanceFixture, ownerID, task, kind, id string, count int) *sending.ActionResult {
+	t.Helper()
+	r, err := f.store.Act(storeCtx, ownerID, sending.ActionRequest{ActionID: id, TaskID: task, Kind: kind, Confirmed: true, Actor: "operator", ExpectedCount: count})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// TestMultiOperatorTaskAccessIsIsolated proves that another operator's task is
+// indistinguishable from a missing one for every send-like action, and that a
+// refused cross-operator action mutates nothing.
+func TestMultiOperatorTaskAccessIsIsolated(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	task := f.task(t, 1)
+	otherOwner, _ := f.addOperator(t, "other@example.invalid", "other-sender@example.invalid")
+
+	if _, err := f.store.Preview(storeCtx, otherOwner, task); !errors.Is(err, sending.ErrNotFound) {
+		t.Fatalf("cross-operator preview = %v, want ErrNotFound", err)
+	}
+	if _, err := f.store.QueueTest(storeCtx, otherOwner, sending.TestRequest{ActionID: "cross-test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}}); !errors.Is(err, sending.ErrNotFound) {
+		t.Fatalf("cross-operator queue test = %v, want ErrNotFound", err)
+	}
+	if _, err := f.store.Act(storeCtx, otherOwner, sending.ActionRequest{ActionID: "cross-start", TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 1}); !errors.Is(err, sending.ErrNotFound) {
+		t.Fatalf("cross-operator act = %v, want ErrNotFound", err)
+	}
+
+	// Nothing was approved, reserved, queued or submitted.
+	if p := storePreview(t, f, task); p.Approved || p.Reserved != 0 || p.Submitted != 0 || p.Eligible != 1 {
+		t.Fatalf("cross-operator actions mutated state: %+v", p)
+	}
+	attempts, err := f.app.FindAllRecords(sending.AttemptsCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(attempts) != 0 {
+		t.Fatalf("cross-operator actions created %d attempts", len(attempts))
+	}
+}
+
+// TestMultiOperatorPacingAndInFlightAreIndependent proves pacing state is
+// per-connection: a cooldown on one mailbox never leaks into another's
+// dispatcher state or blocks the selection of its work.
+func TestMultiOperatorPacingAndInFlightAreIndependent(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	otherOwner, otherConnection := f.addOperator(t, "second@example.invalid", "second-sender@example.invalid")
+	otherCampaign := f.createCampaign(t, otherOwner, "Second operator")
+	theirs := f.taskFor(t, otherOwner, otherCampaign, 1)
+
+	// A cooldown recorded for one mailbox must not touch the other's pacing.
+	until := f.clock.Now().Add(30 * time.Minute)
+	if err := f.store.SetCooldown(storeCtx, f.connectionID, f.ownerID, until, "throttle"); err != nil {
+		t.Fatal(err)
+	}
+	mineState, err := f.store.DispatcherState(storeCtx, f.connectionID, f.ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !mineState.CooldownUntil.Equal(until) {
+		t.Fatalf("cooldown not recorded on its own connection: %+v", mineState)
+	}
+	theirState, err := f.store.DispatcherState(storeCtx, otherConnection, otherOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !theirState.CooldownUntil.IsZero() {
+		t.Fatalf("cooldown leaked across mailboxes: %+v", theirState)
+	}
+
+	// This mailbox's cooldown does not delay work selection for the other one.
+	approveFor(t, f, otherOwner, theirs)
+	actFor(t, f, otherOwner, theirs, "start", "start-theirs", 1)
+	w, err := f.store.NextWork(storeCtx)
+	if err != nil || w == nil {
+		t.Fatalf("next work = %v, %v", w, err)
+	}
+	if w.OwnerID != otherOwner {
+		t.Fatalf("cooldown blocked the other mailbox's work: %+v", w)
 	}
 }

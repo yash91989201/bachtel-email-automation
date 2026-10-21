@@ -58,7 +58,7 @@ func DisplayDate(t time.Time) string {
 // the pinned revision, the approved test and current
 // candidate eligibility, but reserves nothing. A zero At clears a pending or
 // missed schedule and leaves the manual Start action available.
-func (s *Store) Schedule(ctx context.Context, in ScheduleRequest) (*ActionResult, error) {
+func (s *Store) Schedule(ctx context.Context, ownerID string, in ScheduleRequest) (*ActionResult, error) {
 	if strings.TrimSpace(in.ActionID) == "" || len(in.ActionID) > 128 {
 		return nil, errors.New("an action ID is required")
 	}
@@ -72,7 +72,7 @@ func (s *Store) Schedule(ctx context.Context, in ScheduleRequest) (*ActionResult
 			out = old
 			return nil
 		}
-		t, e := app.FindRecordById(intake.TasksCollection, in.TaskID)
+		t, e := s.authorizeTask(app, ownerID, in.TaskID)
 		if e != nil {
 			return e
 		}
@@ -96,7 +96,7 @@ func (s *Store) Schedule(ctx context.Context, in ScheduleRequest) (*ActionResult
 			if e = app.Save(t); e != nil {
 				return e
 			}
-			return saveAction(app, ActionRequest{ActionID: in.ActionID, TaskID: in.TaskID, Kind: "schedule", Actor: in.Actor}, out)
+			return saveAction(app, ownerID, ActionRequest{ActionID: in.ActionID, TaskID: in.TaskID, Kind: "schedule", Actor: in.Actor}, out)
 		}
 		if !in.Confirmed {
 			return &ScheduleRefusal{Reason: "explicit confirmation is required"}
@@ -110,7 +110,10 @@ func (s *Store) Schedule(ctx context.Context, in ScheduleRequest) (*ActionResult
 		if t.GetString("status") != intake.TaskReady || t.GetString("configuration") == "" {
 			return &ScheduleRefusal{Reason: "validate the task before scheduling a start"}
 		}
-		isApproved, e := approved(app, t)
+		if _, e := s.usableConnection(ownerID); e != nil {
+			return &ScheduleRefusal{Reason: "connect a usable sending mailbox before scheduling a start"}
+		}
+		isApproved, e := s.approvalFor(app, t, ownerID)
 		if e != nil {
 			return e
 		}
@@ -155,7 +158,7 @@ func (s *Store) Schedule(ctx context.Context, in ScheduleRequest) (*ActionResult
 		if e = app.Save(t); e != nil {
 			return e
 		}
-		return saveAction(app, ActionRequest{ActionID: in.ActionID, TaskID: in.TaskID, Kind: "schedule", Actor: in.Actor}, out)
+		return saveAction(app, ownerID, ActionRequest{ActionID: in.ActionID, TaskID: in.TaskID, Kind: "schedule", Actor: in.Actor}, out)
 	})
 	return out, err
 }
@@ -211,13 +214,17 @@ func (s *Store) fire(_ context.Context, taskID string) (bool, error) {
 		if old != nil {
 			return nil
 		}
+		owner, e := ownerOfTask(app, t)
+		if e != nil {
+			return e
+		}
 		miss := func(reason string) error {
 			t.Set("schedule_state", intake.ScheduleMissed)
 			t.Set("pause_reason", reason)
 			if e := app.Save(t); e != nil {
 				return e
 			}
-			return saveAction(app, ActionRequest{ActionID: id, TaskID: t.Id, Kind: "fire", Actor: "dispatcher"}, &ActionResult{ActionID: id, TaskID: t.Id, Status: intake.ScheduleMissed})
+			return saveAction(app, owner, ActionRequest{ActionID: id, TaskID: t.Id, Kind: "fire", Actor: "dispatcher"}, &ActionResult{ActionID: id, TaskID: t.Id, Status: intake.ScheduleMissed})
 		}
 		if s.options.RestoreReview {
 			return miss("restore review is active: reconcile submissions made after the backup and restart without APP_RESTORE_REVIEW before sending")
@@ -232,12 +239,16 @@ func (s *Store) fire(_ context.Context, taskID string) (bool, error) {
 		if target.GetString("current_configuration") != t.GetString("configuration") {
 			return miss("the campaign configuration changed after this task was scheduled; revalidate and schedule again")
 		}
-		isApproved, e := approved(app, t)
+		connection, connectionErr := s.usableConnection(owner)
+		if connectionErr != nil {
+			return miss("the mailbox connection is not ready; reconnect it and schedule this task again")
+		}
+		isApproved, e := approved(app, t, connection.Id, connection.GetInt("generation"))
 		if e != nil {
 			return e
 		}
 		if !isApproved {
-			return miss("approval for this exact configuration is missing; re-approve before sending")
+			return miss("approval for this exact configuration and mailbox is missing; re-approve before sending")
 		}
 		rows, e := records(app, intake.TaskCandidatesCollection, "task={:t}", "source_row", dbx.Params{"t": t.Id})
 		if e != nil {
@@ -270,7 +281,7 @@ func (s *Store) fire(_ context.Context, taskID string) (bool, error) {
 			return e
 		}
 		fired = true
-		return saveAction(app, ActionRequest{ActionID: id, TaskID: t.Id, Kind: "fire", Actor: "dispatcher"}, &ActionResult{ActionID: id, TaskID: t.Id, Status: "running", Claimed: claimed, Excluded: len(rows) - claimed})
+		return saveAction(app, owner, ActionRequest{ActionID: id, TaskID: t.Id, Kind: "fire", Actor: "dispatcher"}, &ActionResult{ActionID: id, TaskID: t.Id, Status: "running", Claimed: claimed, Excluded: len(rows) - claimed})
 	})
 	return fired, err
 }

@@ -14,43 +14,6 @@ import (
 	"time"
 )
 
-// Message is the immutable content saved with the submission intent.
-type Message struct {
-	Recipient string
-	Subject   string
-	HTML      string
-}
-
-type OutcomeKind string
-
-const (
-	OutcomeSubmitted       OutcomeKind = "submitted"
-	OutcomeDefiniteFailure OutcomeKind = "definite_failure"
-	OutcomeSafeRetry       OutcomeKind = "safe_retry"
-	OutcomeAuthFailure     OutcomeKind = "auth_failure"
-	OutcomeUncertain       OutcomeKind = "uncertain"
-)
-
-// SendResult contains only application-owned reasons, never provider diagnostics.
-// Submitted means accepted for processing, not delivered.
-type SendResult struct {
-	Kind               OutcomeKind
-	RetryAfter         time.Time
-	Error              string
-	PauseMailbox       bool
-	RequiresCorrection bool
-}
-
-type Sender interface {
-	Send(context.Context, Message) SendResult
-}
-
-// PreparingSender resolves potentially blocking authorization before the dispatcher
-// grants a paced start. The returned sender must not refresh authorization.
-type PreparingSender interface {
-	Prepare(context.Context) Sender
-}
-
 type preparedGraph struct {
 	graph   *Graph
 	token   string

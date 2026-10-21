@@ -20,7 +20,7 @@ func setClock(f *acceptanceFixture, at time.Time) {
 
 func storeSchedule(t *testing.T, f *acceptanceFixture, task, id string, at time.Time, count int) *sending.ActionResult {
 	t.Helper()
-	result, err := f.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: id, TaskID: task, Actor: "operator", At: at, Confirmed: true, ExpectedCount: count})
+	result, err := f.store.Schedule(storeCtx, f.ownerID, sending.ScheduleRequest{ActionID: id, TaskID: task, Actor: "operator", At: at, Confirmed: true, ExpectedCount: count})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func scheduleTask(t *testing.T, f *acceptanceFixture, task string, at time.Time,
 
 func taskRecord(t *testing.T, f *acceptanceFixture, task string) *intake.Task {
 	t.Helper()
-	loaded, err := f.intake.LoadTask(storeCtx, task)
+	loaded, err := f.intake.LoadTask(storeCtx, f.ownerID, task)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,14 +65,14 @@ func TestStoreScheduleValidatesLeadApprovalRevisionAndEligibility(t *testing.T) 
 	storeApprove(t, f, task)
 	now := f.clock.Now()
 	tooSoon := now.Add(sending.ScheduleLead - time.Second)
-	if _, err := f.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: "too-soon", TaskID: task, Actor: "operator", At: tooSoon, Confirmed: true, ExpectedCount: 1}); err == nil || !strings.Contains(err.Error(), "30 minutes") {
+	if _, err := f.store.Schedule(storeCtx, f.ownerID, sending.ScheduleRequest{ActionID: "too-soon", TaskID: task, Actor: "operator", At: tooSoon, Confirmed: true, ExpectedCount: 1}); err == nil || !strings.Contains(err.Error(), "30 minutes") {
 		t.Fatalf("too-soon schedule: %v", err)
 	}
 	camp := storeRecord(t, f, campaign.CampaignsCollection, f.campaignID)
 	current := camp.GetString("current_configuration")
 	camp.Set("current_configuration", "")
 	storeSave(t, f, camp)
-	if _, err := f.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: "stale", TaskID: task, Actor: "operator", At: now.Add(time.Hour), Confirmed: true, ExpectedCount: 1}); err == nil || !strings.Contains(err.Error(), "configuration changed") {
+	if _, err := f.store.Schedule(storeCtx, f.ownerID, sending.ScheduleRequest{ActionID: "stale", TaskID: task, Actor: "operator", At: now.Add(time.Hour), Confirmed: true, ExpectedCount: 1}); err == nil || !strings.Contains(err.Error(), "configuration changed") {
 		t.Fatalf("stale revision schedule: %v", err)
 	}
 	camp.Set("current_configuration", current)
@@ -82,10 +82,10 @@ func TestStoreScheduleValidatesLeadApprovalRevisionAndEligibility(t *testing.T) 
 	candidate := storeRecord(t, f, intake.CandidatesCollection, storeRecord(t, f, intake.TaskCandidatesCollection, storePreview(t, f, task).Members[0].ID).GetString("candidate"))
 	candidate.Set("claim_task", other)
 	storeSave(t, f, candidate)
-	if _, err := f.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: "zero", TaskID: task, Actor: "operator", At: now.Add(time.Hour), Confirmed: true, ExpectedCount: 0}); err == nil || !strings.Contains(err.Error(), "no eligible candidates") {
+	if _, err := f.store.Schedule(storeCtx, f.ownerID, sending.ScheduleRequest{ActionID: "zero", TaskID: task, Actor: "operator", At: now.Add(time.Hour), Confirmed: true, ExpectedCount: 0}); err == nil || !strings.Contains(err.Error(), "no eligible candidates") {
 		t.Fatalf("zero eligible schedule: %v", err)
 	}
-	if _, err := f.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: "changed", TaskID: task, Actor: "operator", At: now.Add(time.Hour), Confirmed: true, ExpectedCount: 1}); err == nil || !strings.Contains(err.Error(), "count changed") {
+	if _, err := f.store.Schedule(storeCtx, f.ownerID, sending.ScheduleRequest{ActionID: "changed", TaskID: task, Actor: "operator", At: now.Add(time.Hour), Confirmed: true, ExpectedCount: 1}); err == nil || !strings.Contains(err.Error(), "count changed") {
 		t.Fatalf("changed count schedule: %v", err)
 	}
 	candidate.Set("claim_task", "")
@@ -104,13 +104,13 @@ func TestStoreScheduleValidatesLeadApprovalRevisionAndEligibility(t *testing.T) 
 	if loaded = taskRecord(t, f, task); !loaded.ScheduleAt.Equal(replaced) {
 		t.Fatalf("replaced schedule = %s", loaded.ScheduleAt)
 	}
-	if _, err := f.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: "clear", TaskID: task, Actor: "operator"}); err != nil {
+	if _, err := f.store.Schedule(storeCtx, f.ownerID, sending.ScheduleRequest{ActionID: "clear", TaskID: task, Actor: "operator"}); err != nil {
 		t.Fatal(err)
 	}
 	if loaded = taskRecord(t, f, task); loaded.ScheduleState != intake.ScheduleNone || !loaded.ScheduleAt.IsZero() {
 		t.Fatalf("cleared schedule = %s %s", loaded.ScheduleState, loaded.ScheduleAt)
 	}
-	if _, err := f.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: "clear-again", TaskID: task, Actor: "operator"}); err == nil {
+	if _, err := f.store.Schedule(storeCtx, f.ownerID, sending.ScheduleRequest{ActionID: "clear-again", TaskID: task, Actor: "operator"}); err == nil {
 		t.Fatal("empty schedule cleared twice")
 	}
 }
@@ -118,10 +118,10 @@ func TestStoreScheduleValidatesLeadApprovalRevisionAndEligibility(t *testing.T) 
 func TestStoreScheduleRequiresApproval(t *testing.T) {
 	unapproved := newAcceptanceFixture(t)
 	unapprovedTask := unapproved.task(t, 1)
-	if _, err := unapproved.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: "unapproved", TaskID: unapprovedTask, Actor: "operator", At: unapproved.clock.Now().Add(time.Hour), Confirmed: true, ExpectedCount: 1}); err == nil || !strings.Contains(err.Error(), "approve") {
+	if _, err := unapproved.store.Schedule(storeCtx, unapproved.ownerID, sending.ScheduleRequest{ActionID: "unapproved", TaskID: unapprovedTask, Actor: "operator", At: unapproved.clock.Now().Add(time.Hour), Confirmed: true, ExpectedCount: 1}); err == nil || !strings.Contains(err.Error(), "approve") {
 		t.Fatalf("unapproved schedule: %v", err)
 	}
-	if _, err := unapproved.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: "unconfirmed", TaskID: unapprovedTask, Actor: "operator", At: unapproved.clock.Now().Add(time.Hour), ExpectedCount: 1}); err == nil {
+	if _, err := unapproved.store.Schedule(storeCtx, unapproved.ownerID, sending.ScheduleRequest{ActionID: "unconfirmed", TaskID: unapprovedTask, Actor: "operator", At: unapproved.clock.Now().Add(time.Hour), ExpectedCount: 1}); err == nil {
 		t.Fatal("unconfirmed schedule accepted")
 	}
 }
@@ -249,7 +249,7 @@ func TestStoreScheduledFireRefusalsMarkMissedWithoutSending(t *testing.T) {
 		assertMissed(t, f, task, "no candidate")
 		// Clearing a refused schedule resets the reason and leaves the task
 		// ready for a fresh schedule or manual start.
-		if _, err := f.store.Schedule(storeCtx, sending.ScheduleRequest{ActionID: "clear-refused", TaskID: task, Actor: "operator"}); err != nil {
+		if _, err := f.store.Schedule(storeCtx, f.ownerID, sending.ScheduleRequest{ActionID: "clear-refused", TaskID: task, Actor: "operator"}); err != nil {
 			t.Fatal(err)
 		}
 		cleared := taskRecord(t, f, task)
@@ -332,7 +332,7 @@ func TestStoreRecoveryPausesMissedScheduleAndResumeUsesSafeRemainder(t *testing.
 	other := f.task(t, 1)
 	candidates[0].Set("claim_task", other)
 	storeSave(t, f, candidates[0])
-	if _, err := f.store.Act(storeCtx, sending.ActionRequest{ActionID: "resume", TaskID: task, Kind: "resume", Actor: "operator", Confirmed: true, ExpectedCount: 1}); err != nil {
+	if _, err := f.store.Act(storeCtx, f.ownerID, sending.ActionRequest{ActionID: "resume", TaskID: task, Kind: "resume", Actor: "operator", Confirmed: true, ExpectedCount: 1}); err != nil {
 		t.Fatal(err)
 	}
 	loaded = taskRecord(t, f, task)

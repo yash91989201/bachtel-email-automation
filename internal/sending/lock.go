@@ -28,6 +28,17 @@ func acquireOwnership(dir string) (*ownershipLock, error) {
 	return &ownershipLock{file: f}, nil
 }
 
+// LockDataDirectory acquires exclusive dispatcher ownership of dir without
+// starting a dispatcher. Destructive local maintenance uses it to prove that no
+// worker owns the data before anything is removed.
+func LockDataDirectory(dir string) (func() error, error) {
+	lock, err := acquireOwnership(dir)
+	if err != nil {
+		return nil, err
+	}
+	return lock.Close, nil
+}
+
 func (l *ownershipLock) Close() error {
 	if l == nil || l.file == nil {
 		return nil

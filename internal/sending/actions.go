@@ -9,6 +9,8 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
+	"strconv"
 	"strings"
 )
 
@@ -23,19 +25,71 @@ func restoreBlocked(kind string) bool {
 	}
 }
 
-func approved(app core.App, t *core.Record) (bool, error) {
-	r, e := app.FindFirstRecordByFilter(ApprovalsCollection, "configuration={:c} && content_hash={:h}", dbx.Params{"c": t.GetString("configuration"), "h": t.GetString("content_hash")})
+// ErrNotFound is returned for a task that is absent or owned by another
+// operator. Both cases produce the same refusal.
+var ErrNotFound = errors.New("task not found")
+
+// approved reports whether this exact content was approved through the given
+// mailbox connection generation. A replacement bumps the generation, so every
+// earlier approval stops authorizing candidate sending.
+func approved(app core.App, t *core.Record, connectionID string, generation int) (bool, error) {
+	r, e := app.FindFirstRecordByFilter(
+		ApprovalsCollection,
+		"configuration={:c} && content_hash={:h} && connection={:conn} && connection_generation={:g}",
+		dbx.Params{
+			"c":    t.GetString("configuration"),
+			"h":    t.GetString("content_hash"),
+			"conn": connectionID,
+			"g":    generation,
+		},
+	)
 	if errors.Is(e, sql.ErrNoRows) {
 		return false, nil
 	}
 	return r != nil && e == nil, e
 }
-func (s *Store) Preview(ctx context.Context, id string) (*Progress, error) {
-	t, e := s.app.FindRecordById(intake.TasksCollection, id)
+
+// authorizeTask loads a task only when it belongs to the trusted operator.
+func (s *Store) authorizeTask(app core.App, ownerID, taskID string) (*core.Record, error) {
+	t, err := app.FindRecordById(intake.TasksCollection, taskID)
+	if err != nil {
+		return nil, ErrNotFound
+	}
+	owner, err := ownerOfTask(app, t)
+	if err != nil {
+		return nil, err
+	}
+	if owner != ownerID {
+		return nil, ErrNotFound
+	}
+	blocked, err := activeReset(app, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	if blocked {
+		return nil, errors.New("a mailbox replacement is in progress; finish it before changing sending work")
+	}
+	return t, nil
+}
+
+// approvalFor answers the approval question for the operator's current
+// connection generation.
+func (s *Store) approvalFor(app core.App, t *core.Record, ownerID string) (bool, error) {
+	connection, err := s.currentConnection(ownerID)
+	if errors.Is(err, mailbox.ErrNotConnected) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return approved(app, t, connection.Id, connection.GetInt("generation"))
+}
+func (s *Store) Preview(ctx context.Context, ownerID, id string) (*Progress, error) {
+	t, e := s.authorizeTask(s.app, ownerID, id)
 	if e != nil {
 		return nil, e
 	}
-	isApproved, e := approved(s.app, t)
+	isApproved, e := s.approvalFor(s.app, t, ownerID)
 	if e != nil {
 		return nil, e
 	}
@@ -186,13 +240,14 @@ func existingAction(app core.App, id, task, kind string) (*ActionResult, error) 
 	v.Repeated = true
 	return v, nil
 }
-func saveAction(app core.App, in ActionRequest, out *ActionResult) error {
+func saveAction(app core.App, ownerID string, in ActionRequest, out *ActionResult) error {
 	c, e := app.FindCollectionByNameOrId(ActionsCollection)
 	if e != nil {
 		return e
 	}
 	r := core.NewRecord(c)
 	r.Set("action_id", in.ActionID)
+	r.Set("owner", ownerID)
 	r.Set("task", in.TaskID)
 	r.Set("kind", in.Kind)
 	r.Set("actor", in.Actor)
@@ -235,7 +290,7 @@ func (s *Store) reserve(app core.App, t, m, c *core.Record) error {
 	return app.Save(m)
 }
 
-func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error) {
+func (s *Store) Act(ctx context.Context, ownerID string, in ActionRequest) (*ActionResult, error) {
 	var out *ActionResult
 	if strings.TrimSpace(in.ActionID) == "" || len(in.ActionID) > 128 {
 		return nil, errors.New("an action ID is required")
@@ -249,7 +304,7 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 			out = old
 			return nil
 		}
-		t, e := app.FindRecordById(intake.TasksCollection, in.TaskID)
+		t, e := s.authorizeTask(app, ownerID, in.TaskID)
 		if e != nil {
 			return e
 		}
@@ -265,7 +320,7 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 				return e
 			}
 			out.Status = t.GetString("status")
-			return saveAction(app, in, out)
+			return saveAction(app, ownerID, in, out)
 		}
 		if in.Kind == "stop" {
 			if t.GetString("status") == "running" || t.GetString("status") == "waiting" || t.GetString("status") == "paused" || t.GetString("status") == "interrupted" {
@@ -282,7 +337,7 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 				return e
 			}
 			out.Status = t.GetString("status")
-			return saveAction(app, in, out)
+			return saveAction(app, ownerID, in, out)
 		}
 		if !in.Confirmed {
 			return errors.New("explicit confirmation is required")
@@ -293,7 +348,10 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 		if t.GetString("configuration") == "" || t.GetString("status") == intake.TaskStaging {
 			return errors.New("validate the task before sending")
 		}
-		isApproved, e := approved(app, t)
+		if _, e := s.usableConnection(ownerID); e != nil {
+			return errors.New("connect a usable sending mailbox before starting, retrying or resending")
+		}
+		isApproved, e := s.approvalFor(app, t, ownerID)
 		if e != nil {
 			return e
 		}
@@ -439,11 +497,11 @@ func (s *Store) Act(ctx context.Context, in ActionRequest) (*ActionResult, error
 			return e
 		}
 		out.Status = t.GetString("status")
-		return saveAction(app, in, out)
+		return saveAction(app, ownerID, in, out)
 	})
 	return out, err
 }
-func (s *Store) QueueTest(ctx context.Context, in TestRequest) (*Attempt, error) {
+func (s *Store) QueueTest(ctx context.Context, ownerID string, in TestRequest) (*Attempt, error) {
 	var out *Attempt
 	if in.ActionID == "" {
 		return nil, errors.New("an action ID is required")
@@ -465,7 +523,11 @@ func (s *Store) QueueTest(ctx context.Context, in TestRequest) (*Attempt, error)
 			out = attemptFrom(r)
 			return nil
 		}
-		t, e := app.FindRecordById(intake.TasksCollection, in.TaskID)
+		t, e := s.authorizeTask(app, ownerID, in.TaskID)
+		if e != nil {
+			return e
+		}
+		connection, e := s.usableConnection(ownerID)
 		if e != nil {
 			return e
 		}
@@ -504,17 +566,29 @@ func (s *Store) QueueTest(ctx context.Context, in TestRequest) (*Attempt, error)
 			return e
 		}
 		r := core.NewRecord(col)
-		putWork(r, &Work{Kind: KindTest, TaskID: t.Id, ConfigurationID: cfg.Id, ContentHash: cfg.GetString("content_hash"), Recipient: recipient, Sender: s.options.SenderAddress, Subject: rendered.Subject, Body: rendered.Body})
+		putWork(r, &Work{
+			Kind:            KindTest,
+			OwnerID:         ownerID,
+			ConnectionID:    connection.Id,
+			Generation:      connection.GetInt("generation"),
+			TaskID:          t.Id,
+			ConfigurationID: cfg.Id,
+			ContentHash:     cfg.GetString("content_hash"),
+			Recipient:       recipient,
+			Sender:          connection.GetString("sender"),
+			Subject:         rendered.Subject,
+			Body:            rendered.Body,
+		})
 		r.Set("state", AttemptQueued)
 		if e = app.Save(r); e != nil {
 			return e
 		}
 		out = attemptFrom(r)
-		return saveAction(app, ActionRequest{ActionID: in.ActionID, TaskID: t.Id, Kind: "test", Actor: in.Actor}, &ActionResult{ActionID: in.ActionID, TaskID: t.Id, Status: r.Id})
+		return saveAction(app, ownerID, ActionRequest{ActionID: in.ActionID, TaskID: t.Id, Kind: "test", Actor: in.Actor}, &ActionResult{ActionID: in.ActionID, TaskID: t.Id, Status: r.Id})
 	})
 	return out, err
 }
-func (s *Store) Approve(ctx context.Context, taskID, attemptID, actor, actionID string) error {
+func (s *Store) Approve(ctx context.Context, ownerID, taskID, attemptID, actor, actionID string) error {
 	if actionID == "" || actor == "" {
 		return errors.New("approval requires an actor and action ID")
 	}
@@ -523,7 +597,11 @@ func (s *Store) Approve(ctx context.Context, taskID, attemptID, actor, actionID 
 		if e != nil || old != nil {
 			return e
 		}
-		t, e := app.FindRecordById(intake.TasksCollection, taskID)
+		t, e := s.authorizeTask(app, ownerID, taskID)
+		if e != nil {
+			return e
+		}
+		connection, e := s.currentConnection(ownerID)
 		if e != nil {
 			return e
 		}
@@ -531,10 +609,13 @@ func (s *Store) Approve(ctx context.Context, taskID, attemptID, actor, actionID 
 		if e != nil {
 			return e
 		}
+		if a.GetString("owner") != ownerID || a.GetString("connection") != connection.Id || a.GetString("connection_generation") != strconv.Itoa(connection.GetInt("generation")) {
+			return errors.New("choose a submitted test for the current mailbox connection")
+		}
 		if a.GetString("kind") != KindTest || a.GetString("state") != AttemptSubmitted || a.GetString("configuration") != t.GetString("configuration") || a.GetString("content_hash") != t.GetString("content_hash") {
 			return errors.New("choose a submitted test for this exact configuration")
 		}
-		isApproved, e := approved(app, t)
+		isApproved, e := s.approvalFor(app, t, ownerID)
 		if e != nil {
 			return e
 		}
@@ -544,6 +625,9 @@ func (s *Store) Approve(ctx context.Context, taskID, attemptID, actor, actionID 
 				return e
 			}
 			r := core.NewRecord(col)
+			r.Set("owner", ownerID)
+			r.Set("connection", connection.Id)
+			r.Set("connection_generation", connection.GetInt("generation"))
 			r.Set("configuration", t.GetString("configuration"))
 			r.Set("content_hash", t.GetString("content_hash"))
 			r.Set("attempt", attemptID)
@@ -562,6 +646,6 @@ func (s *Store) Approve(ctx context.Context, taskID, attemptID, actor, actionID 
 		if e = app.Save(cfg); e != nil {
 			return e
 		}
-		return saveAction(app, ActionRequest{ActionID: actionID, TaskID: taskID, Kind: "approve", Actor: actor}, &ActionResult{ActionID: actionID, TaskID: taskID, Status: "approved"})
+		return saveAction(app, ownerID, ActionRequest{ActionID: actionID, TaskID: taskID, Kind: "approve", Actor: actor}, &ActionResult{ActionID: actionID, TaskID: taskID, Status: "approved"})
 	})
 }

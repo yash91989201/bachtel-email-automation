@@ -40,7 +40,7 @@ func (f *workerFixture) after(d time.Duration) <-chan time.Time {
 	f.mu.Unlock()
 	return time.After(time.Millisecond)
 }
-func (f *workerFixture) DispatcherState(context.Context) (Settings, error) {
+func (f *workerFixture) DispatcherState(context.Context, string, string) (Settings, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.settings, nil
@@ -88,11 +88,16 @@ func (f *workerFixture) BeginAttempt(_ context.Context, w *Work, start, next tim
 	if f.intentError {
 		return nil, errors.New("disk failure")
 	}
+	// A durable Stop clears the queue; a launch that raced past it must see the
+	// same refusal the real store reports for work that is no longer eligible.
+	if len(f.queue) == 0 {
+		return nil, ErrNoWork
+	}
 	f.queue = f.queue[1:]
 	f.intents++
 	return &Attempt{ID: fmt.Sprint(f.intents), Work: *w}, nil
 }
-func (f *workerFixture) RecordActualStart(_ context.Context, _ string, start, next time.Time) error {
+func (f *workerFixture) RecordActualStart(_ context.Context, _ *Work, _ string, start, next time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.settings.Starts = append(f.settings.Starts, start)
@@ -108,15 +113,18 @@ func (f *workerFixture) CompleteAttempt(context.Context, string, Outcome) error 
 	f.results++
 	return nil
 }
-func (f *workerFixture) SetCooldown(_ context.Context, until time.Time, _ string) error {
+func (f *workerFixture) SetCooldown(_ context.Context, _, _ string, until time.Time, _ string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.settings.CooldownUntil = until
 	return nil
 }
-func (f *workerFixture) Recover(context.Context) error                   { f.recovered = true; return nil }
-func (f *workerFixture) PauseMailbox(context.Context, string) error      { return nil }
-func (f *workerFixture) PauseTask(context.Context, string, string) error { return nil }
+func (f *workerFixture) Recover(context.Context) error                      { f.recovered = true; return nil }
+func (f *workerFixture) PauseMailbox(context.Context, string, string) error { return nil }
+func (f *workerFixture) PauseAll(context.Context, string) error             { return nil }
+func (f *workerFixture) PauseTask(context.Context, string, string, string) error {
+	return nil
+}
 func (f *workerFixture) SettleTasks(context.Context) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -128,10 +136,27 @@ type workerSender func(context.Context, Message) SendResult
 
 func (s workerSender) Send(ctx context.Context, m Message) SendResult { return s(ctx, m) }
 
+// resolverFunc adapts a fake sender to the mailbox Resolver interface so the
+// fixture exercises the dispatcher's per-connection resolution path.
+type resolverFunc func(context.Context, string) (Sender, error)
+
+func (r resolverFunc) Sender(ctx context.Context, connectionID string) (Sender, error) {
+	return r(ctx, connectionID)
+}
+
+func fixedResolver(s Sender) Resolver {
+	return resolverFunc(func(context.Context, string) (Sender, error) { return s, nil })
+}
+
+const (
+	fixtureOwner      = "operator-one"
+	fixtureConnection = "connection-one"
+)
+
 func newWorkerFixture(n int) *workerFixture {
 	f := &workerFixture{now: time.Now().UTC(), settings: Settings{Rate: 30}}
 	for i := range n {
-		f.queue = append(f.queue, &Work{Kind: KindTest, Recipient: fmt.Sprintf("%d@example.com", i), Subject: "frozen", Body: "<p>body</p>"})
+		f.queue = append(f.queue, &Work{Kind: KindTest, OwnerID: fixtureOwner, ConnectionID: fixtureConnection, Recipient: fmt.Sprintf("%d@example.com", i), Subject: "frozen", Body: "<p>body</p>"})
 	}
 	return f
 }
@@ -148,7 +173,7 @@ func TestWorkerIdleWaitsForWakeWithoutPollingStore(t *testing.T) {
 	time.Sleep(30 * time.Millisecond)
 	f.mu.Lock()
 	before := f.nextWorkCalls
-	f.queue = append(f.queue, &Work{Kind: KindTest, Recipient: "wake@example.invalid"})
+	f.queue = append(f.queue, &Work{Kind: KindTest, OwnerID: fixtureOwner, ConnectionID: fixtureConnection, Recipient: "wake@example.invalid"})
 	f.mu.Unlock()
 	if before != 1 {
 		t.Fatalf("idle dispatcher polled work %d times", before)
@@ -168,9 +193,9 @@ func TestWorkerShutdownReportsSettlementFailureAndReleasesOwnership(t *testing.T
 	f := newWorkerFixture(0)
 	dir := t.TempDir()
 	want := errors.New("settlement persistence failed")
-	d := NewDispatcher(settleFailureStore{DispatchStore: f, err: want}, workerSender(func(context.Context, Message) SendResult {
+	d := NewDispatcher(settleFailureStore{DispatchStore: f, err: want}, fixedResolver(workerSender(func(context.Context, Message) SendResult {
 		return SendResult{Kind: OutcomeSubmitted}
-	}), WorkerOptions{DataDir: dir})
+	})), WorkerOptions{DataDir: dir})
 	if err := d.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -179,9 +204,9 @@ func TestWorkerShutdownReportsSettlementFailureAndReleasesOwnership(t *testing.T
 	if err := d.Shutdown(ctx); !errors.Is(err, want) {
 		t.Fatalf("Shutdown error = %v, want %v", err, want)
 	}
-	second := NewDispatcher(newWorkerFixture(0), workerSender(func(context.Context, Message) SendResult {
+	second := NewDispatcher(newWorkerFixture(0), fixedResolver(workerSender(func(context.Context, Message) SendResult {
 		return SendResult{Kind: OutcomeSubmitted}
-	}), WorkerOptions{DataDir: dir})
+	})), WorkerOptions{DataDir: dir})
 	if err := second.Start(); err != nil {
 		t.Fatalf("ownership remained held after failed settlement: %v", err)
 	}
@@ -227,7 +252,7 @@ func TestWorkerFiresDueScheduleBeforeCandidateLaunch(t *testing.T) {
 	f := newWorkerFixture(0)
 	f.mu.Lock()
 	f.due = f.now.Add(45 * time.Millisecond)
-	f.dueQueue = []*Work{{Kind: KindTest, Recipient: "scheduled@example.invalid"}}
+	f.dueQueue = []*Work{{Kind: KindTest, OwnerID: fixtureOwner, ConnectionID: fixtureConnection, Recipient: "scheduled@example.invalid"}}
 	f.mu.Unlock()
 	_ = startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
 		return SendResult{Kind: OutcomeSubmitted}
@@ -258,7 +283,7 @@ func TestWorkerObservesNewScheduleWhileIdleWithoutWaitingForOldDeadline(t *testi
 	f.mu.Lock()
 	f.now = f.now.Add(10 * time.Minute)
 	f.due = f.now
-	f.dueQueue = []*Work{{Kind: KindTest, Recipient: "rescheduled@example.invalid"}}
+	f.dueQueue = []*Work{{Kind: KindTest, OwnerID: fixtureOwner, ConnectionID: fixtureConnection, Recipient: "rescheduled@example.invalid"}}
 	f.mu.Unlock()
 	d.Wake()
 	eventually(t, func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.intents == 1 })
@@ -266,7 +291,7 @@ func TestWorkerObservesNewScheduleWhileIdleWithoutWaitingForOldDeadline(t *testi
 
 func startFixture(t *testing.T, f *workerFixture, s Sender) *Dispatcher {
 	t.Helper()
-	d := NewDispatcher(f, s, WorkerOptions{DataDir: t.TempDir(), Now: f.clock, After: f.after})
+	d := NewDispatcher(f, fixedResolver(s), WorkerOptions{DataDir: t.TempDir(), Now: f.clock, After: f.after})
 	if err := d.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -339,6 +364,57 @@ func TestWorkerFourSlotsAndShutdownDrainsIndependentRequests(t *testing.T) {
 	if f.results != 4 || f.intents != 4 {
 		t.Fatalf("intents=%d outcomes=%d", f.intents, f.results)
 	}
+}
+
+const (
+	fixtureOwnerTwo      = "operator-two"
+	fixtureConnectionTwo = "connection-two"
+)
+
+// TestWorkerInFlightForCountsOnlyOwnerRequests proves the dispatcher tracks
+// in-flight requests per owner: two mailboxes filling the four global slots are
+// counted separately, and one owner's requests never inflate another's total.
+func TestWorkerInFlightForCountsOnlyOwnerRequests(t *testing.T) {
+	f := newWorkerFixture(0)
+	f.mu.Lock()
+	for i := range 4 {
+		owner, connection := fixtureOwner, fixtureConnection
+		if i%2 == 1 {
+			owner, connection = fixtureOwnerTwo, fixtureConnectionTwo
+		}
+		f.queue = append(f.queue, &Work{Kind: KindTest, OwnerID: owner, ConnectionID: connection, Recipient: fmt.Sprintf("%d@example.com", i), Subject: "frozen", Body: "<p>body</p>"})
+	}
+	f.mu.Unlock()
+	entered := make(chan context.Context, 4)
+	release := make(chan struct{})
+	d := startFixture(t, f, workerSender(func(ctx context.Context, _ Message) SendResult {
+		entered <- ctx
+		<-release
+		return SendResult{Kind: OutcomeSubmitted}
+	}))
+	for range 4 {
+		select {
+		case <-entered:
+		case <-time.After(time.Second):
+			t.Fatal("four requests did not start")
+		}
+	}
+	total, err := d.InFlight(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := d.InFlightFor(context.Background(), fixtureOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := d.InFlightFor(context.Background(), fixtureOwnerTwo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 4 || first != 2 || second != 2 {
+		t.Fatalf("in-flight total=%d first=%d second=%d, want 4/2/2", total, first, second)
+	}
+	close(release)
 }
 
 func TestWorkerIntentFailureSendsNothingAndCannotWakePastStorageBarrier(t *testing.T) {
@@ -476,11 +552,11 @@ func (s blockingWorkerTokens) AccessToken(ctx context.Context) (string, error) {
 func TestWorkerShutdownDrainsRequestsUnderBoundedDeadline(t *testing.T) {
 	f := newWorkerFixture(8)
 	entered := make(chan struct{}, 4)
-	d := NewDispatcher(f, workerSender(func(ctx context.Context, _ Message) SendResult {
+	d := NewDispatcher(f, fixedResolver(workerSender(func(ctx context.Context, _ Message) SendResult {
 		entered <- struct{}{}
 		<-ctx.Done()
 		return SendResult{Kind: OutcomeUncertain, PauseMailbox: true}
-	}), WorkerOptions{DataDir: t.TempDir(), Now: f.clock, After: f.after, RequestTimeout: 50 * time.Millisecond})
+	})), WorkerOptions{DataDir: t.TempDir(), Now: f.clock, After: f.after, RequestTimeout: 50 * time.Millisecond})
 	if err := d.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -526,7 +602,7 @@ func TestWorkerGraphPOSTStartsStaySpacedAfterDelayedAuthorization(t *testing.T) 
 		f.mu.Unlock()
 		return time.After(time.Millisecond)
 	}
-	d := NewDispatcher(f, NewGraph(blockingWorkerTokens{entered: entered, release: release}, GraphOptions{HTTPClient: client}), WorkerOptions{DataDir: t.TempDir(), Now: f.clock, After: after})
+	d := NewDispatcher(f, fixedResolver(NewGraph(blockingWorkerTokens{entered: entered, release: release}, GraphOptions{HTTPClient: client})), WorkerOptions{DataDir: t.TempDir(), Now: f.clock, After: after})
 	if err := d.Start(); err != nil {
 		t.Fatal(err)
 	}

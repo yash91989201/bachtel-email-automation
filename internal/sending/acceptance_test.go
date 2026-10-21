@@ -19,16 +19,67 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
+	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 )
 
+// testKey is a fixed deployment key that seals fixture mailbox credentials.
+var testKey = bytes.Repeat([]byte{7}, 32)
+
+// resolverFunc adapts a fake sender to the mailbox Resolver so the fixture
+// dispatcher resolves every connection to the same simulated mailbox.
+type resolverFunc func(context.Context, string) (sending.Sender, error)
+
+func (r resolverFunc) Sender(ctx context.Context, connectionID string) (sending.Sender, error) {
+	return r(ctx, connectionID)
+}
+
+func fixedResolver(s sending.Sender) sending.Resolver {
+	return resolverFunc(func(context.Context, string) (sending.Sender, error) { return s, nil })
+}
+
+// provisionOperator creates an operator account and returns its record id.
+func provisionOperator(t *testing.T, app core.App, email string) string {
+	t.Helper()
+	if err := operator.Provision(app, email, "correct-horse-battery"); err != nil {
+		t.Fatal(err)
+	}
+	record, err := app.FindAuthRecordByEmail(operator.CollectionName, email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record.Id
+}
+
+// installConnection claims one current, connected Titan mailbox for owner.
+func installConnection(t *testing.T, app core.App, ownerID, sender string) string {
+	t.Helper()
+	store := mailbox.NewStore(app, func() ([]byte, error) { return testKey, nil })
+	connection, err := store.Install(context.Background(), mailbox.Candidate{
+		OwnerID:    ownerID,
+		Provider:   mailbox.ProviderTitan,
+		Sender:     sender,
+		Identity:   sender + "@titan",
+		Credential: mailbox.Credential{Provider: mailbox.ProviderTitan, Password: "mailbox-password"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return connection.ID
+}
+
 type acceptanceFixture struct {
-	app        core.App
-	store      *sending.Store
-	intake     *intake.Service
-	campaignID string
-	clock      *acceptanceClock
+	app           core.App
+	store         *sending.Store
+	intake        *intake.Service
+	campaignID    string
+	clock         *acceptanceClock
+	ownerID       string
+	connectionID  string
+	senderAddress string
+	pandocPath    string
 }
 
 // The clock advances only when the worker waits; database work and goroutine
@@ -70,8 +121,28 @@ func newAcceptanceFixture(t *testing.T) *acceptanceFixture {
 	if err := os.WriteFile(stub, []byte("#!/bin/sh\nfor arg in \"$@\"; do\nif [ \"$arg\" = \"--version\" ]; then echo 'pandoc acceptance'; exit 0; fi\ndone\nprintf '%s' '<p>Hello {{candidate_name}}</p>'\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	campaigns := campaign.NewServiceWithConverter(app, convert.Converter{Path: stub})
-	created, err := campaigns.CreateCampaign(context.Background(), campaign.CreateCampaignInput{Name: "Simulated acceptance", SourceHeaders: []string{"Email", "Name"}})
+	ownerID := provisionOperator(t, app, "operator@example.invalid")
+	connectionID := installConnection(t, app, ownerID, "sender@example.invalid")
+	f := &acceptanceFixture{
+		app:           app,
+		clock:         &acceptanceClock{now: time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)},
+		ownerID:       ownerID,
+		connectionID:  connectionID,
+		senderAddress: "sender@example.invalid",
+		pandocPath:    stub,
+	}
+	f.store = sending.NewStore(app, sending.Options{Now: f.clock.Now})
+	f.intake = intake.NewService(app, campaign.NewServiceWithConverter(app, convert.Converter{Path: stub}), intake.Limits{})
+	f.campaignID = f.createCampaign(t, ownerID, "Simulated acceptance")
+	return f
+}
+
+// createCampaign creates an owned campaign with one configured revision.
+func (f *acceptanceFixture) createCampaign(t *testing.T, ownerID, name string) string {
+	t.Helper()
+	campaigns := campaign.NewServiceWithConverter(f.app, convert.Converter{Path: f.pandocPath})
+	ctx := context.Background()
+	created, err := campaigns.CreateCampaign(ctx, ownerID, campaign.CreateCampaignInput{Name: name, SourceHeaders: []string{"Email", "Name"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,15 +158,27 @@ func newAcceptanceFixture(t *testing.T) *acceptanceFixture {
 	if err = z.Close(); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = campaigns.CreateRevision(context.Background(), created.ID, campaign.RevisionInput{Subject: "Hello {{candidate_name}}", Document: doc.Bytes(), DocumentName: "body.docx", Mappings: []campaign.Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail}, {Variable: "candidate_name", Header: "Name", Required: true, Format: campaign.FormatName}}})
+	_, _, err = campaigns.CreateRevision(ctx, ownerID, created.ID, campaign.RevisionInput{Subject: "Hello {{candidate_name}}", Document: doc.Bytes(), DocumentName: "body.docx", Mappings: []campaign.Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail}, {Variable: "candidate_name", Header: "Name", Required: true, Format: campaign.FormatName}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	clock := &acceptanceClock{now: time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)}
-	return &acceptanceFixture{app: app, store: sending.NewStore(app, sending.Options{Now: clock.Now}), intake: intake.NewService(app, campaigns, intake.Limits{}), campaignID: created.ID, clock: clock}
+	return created.ID
+}
+
+// addOperator provisions a second operator with its own connected mailbox.
+func (f *acceptanceFixture) addOperator(t *testing.T, email, sender string) (ownerID, connectionID string) {
+	t.Helper()
+	ownerID = provisionOperator(t, f.app, email)
+	connectionID = installConnection(t, f.app, ownerID, sender)
+	return ownerID, connectionID
 }
 
 func (f *acceptanceFixture) task(t *testing.T, count int) string {
+	t.Helper()
+	return f.taskFor(t, f.ownerID, f.campaignID, count)
+}
+
+func (f *acceptanceFixture) taskFor(t *testing.T, ownerID, campaignID string, count int) string {
 	t.Helper()
 	book := excelize.NewFile()
 	defer func() {
@@ -119,11 +202,11 @@ func (f *acceptanceFixture) task(t *testing.T, count int) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err := f.intake.Stage(context.Background(), f.campaignID, "acceptance.xlsx", data.Bytes())
+	task, err := f.intake.Stage(context.Background(), ownerID, campaignID, "acceptance.xlsx", data.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = f.intake.Validate(context.Background(), task.ID, "Candidates", 1); err != nil {
+	if err = f.intake.Validate(context.Background(), ownerID, task.ID, "Candidates", 1); err != nil {
 		t.Fatal(err)
 	}
 	return task.ID
@@ -175,7 +258,7 @@ func acceptanceEventually(t *testing.T, condition func() bool) {
 }
 func (f *acceptanceFixture) dispatcher(t *testing.T, mailbox sending.Sender) *sending.Dispatcher {
 	t.Helper()
-	d := sending.NewDispatcher(f.store, mailbox, sending.WorkerOptions{DataDir: f.app.DataDir(), Now: f.clock.Now, After: f.clock.After, RequestTimeout: 3 * time.Second})
+	d := sending.NewDispatcher(f.store, fixedResolver(mailbox), sending.WorkerOptions{DataDir: f.app.DataDir(), Now: f.clock.Now, After: f.clock.After, RequestTimeout: 3 * time.Second})
 	if err := d.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +273,7 @@ func (f *acceptanceFixture) dispatcher(t *testing.T, mailbox sending.Sender) *se
 }
 func (f *acceptanceFixture) approve(t *testing.T, task string, d *sending.Dispatcher) {
 	t.Helper()
-	attempt, err := f.store.QueueTest(context.Background(), sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Actor: "acceptance", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
+	attempt, err := f.store.QueueTest(context.Background(), f.ownerID, sending.TestRequest{ActionID: "test-" + task, TaskID: task, Recipient: "operator@example.invalid", Actor: "acceptance", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,13 +282,13 @@ func (f *acceptanceFixture) approve(t *testing.T, task string, d *sending.Dispat
 		r, e := f.app.FindRecordById(sending.AttemptsCollection, attempt.ID)
 		return e == nil && r.GetString("state") == sending.AttemptSubmitted
 	})
-	if err = f.store.Approve(context.Background(), task, attempt.ID, "acceptance", "approve-"+task); err != nil {
+	if err = f.store.Approve(context.Background(), f.ownerID, task, attempt.ID, "acceptance", "approve-"+task); err != nil {
 		t.Fatal(err)
 	}
 }
-func acceptanceAct(t *testing.T, store *sending.Store, task, kind, id string, count int) *sending.ActionResult {
+func (f *acceptanceFixture) act(t *testing.T, task, kind, id string, count int) *sending.ActionResult {
 	t.Helper()
-	result, err := store.Act(context.Background(), sending.ActionRequest{ActionID: id, TaskID: task, Kind: kind, Actor: "acceptance", Confirmed: true, ExpectedCount: count})
+	result, err := f.store.Act(context.Background(), f.ownerID, sending.ActionRequest{ActionID: id, TaskID: task, Kind: kind, Actor: "acceptance", Confirmed: true, ExpectedCount: count})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,22 +301,22 @@ func TestAcceptanceThousandCandidatePipelineAndReplay(t *testing.T) {
 	mailbox := &acceptanceMailbox{}
 	d := f.dispatcher(t, mailbox)
 	// Approval is an explicit action following a separately submitted test.
-	if _, err := f.store.Act(context.Background(), sending.ActionRequest{ActionID: "unapproved", TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 1000}); err == nil {
+	if _, err := f.store.Act(context.Background(), f.ownerID, sending.ActionRequest{ActionID: "unapproved", TaskID: task, Kind: "start", Confirmed: true, ExpectedCount: 1000}); err == nil {
 		t.Fatal("unapproved candidate start succeeded")
 	}
 	f.approve(t, task, d)
-	p, err := f.store.Preview(context.Background(), task)
+	p, err := f.store.Preview(context.Background(), f.ownerID, task)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.Submitted != 0 || p.Eligible != 1000 {
 		t.Fatalf("test changed candidate eligibility: %+v", p)
 	}
-	first := acceptanceAct(t, f.store, task, "start", "start-1000", 1000)
+	first := f.act(t, task, "start", "start-1000", 1000)
 	if first.Claimed != 1000 {
 		t.Fatalf("claimed %d, want 1000", first.Claimed)
 	}
-	repeated := acceptanceAct(t, f.store, task, "start", "start-1000", 1000)
+	repeated := f.act(t, task, "start", "start-1000", 1000)
 	if !repeated.Repeated || repeated.Claimed != 1000 {
 		t.Fatalf("replay = %+v", repeated)
 	}
@@ -242,7 +325,7 @@ func TestAcceptanceThousandCandidatePipelineAndReplay(t *testing.T) {
 		r, e := f.app.FindRecordById(intake.TasksCollection, task)
 		return e == nil && r.GetString("status") == "completed"
 	})
-	p, err = f.store.Preview(context.Background(), task)
+	p, err = f.store.Preview(context.Background(), f.ownerID, task)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,24 +384,24 @@ func TestAcceptanceSharedCapacityCrossTaskClaimsAndStop(t *testing.T) {
 	mailbox.mu.Lock()
 	mailbox.hold = gate
 	mailbox.mu.Unlock()
-	result := acceptanceAct(t, f.store, first, "start", "shared-start", 12)
+	result := f.act(t, first, "start", "shared-start", 12)
 	if result.Claimed != 12 {
 		t.Fatal(result)
 	}
 	// A second upload with identical campaign recipients cannot claim those rows.
-	if _, err := f.store.Act(context.Background(), sending.ActionRequest{ActionID: "overlapping-start", TaskID: overlap, Kind: "start", Confirmed: true, ExpectedCount: 12}); err == nil {
+	if _, err := f.store.Act(context.Background(), f.ownerID, sending.ActionRequest{ActionID: "overlapping-start", TaskID: overlap, Kind: "start", Confirmed: true, ExpectedCount: 12}); err == nil {
 		t.Fatal("overlapping task claimed reserved recipients")
 	}
 	d.Wake()
 	acceptanceEventually(t, func() bool { return mailbox.count() == 5 }) // one prior test plus four held sends
 	if err := d.Synchronize(func() error {
-		_, err := f.store.Act(context.Background(), sending.ActionRequest{ActionID: "stop-shared", TaskID: first, Kind: "stop"})
+		_, err := f.store.Act(context.Background(), f.ownerID, sending.ActionRequest{ActionID: "stop-shared", TaskID: first, Kind: "stop"})
 		return err
 	}); err != nil {
 		t.Fatal(err)
 	}
 	// A test while stopping shares capacity. It must wait for an active slot.
-	test, err := f.store.QueueTest(context.Background(), sending.TestRequest{ActionID: "during-stop", TaskID: first, Recipient: "diagnostic@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Diagnostic"}})
+	test, err := f.store.QueueTest(context.Background(), f.ownerID, sending.TestRequest{ActionID: "during-stop", TaskID: first, Recipient: "diagnostic@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Diagnostic"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +416,7 @@ func TestAcceptanceSharedCapacityCrossTaskClaimsAndStop(t *testing.T) {
 		return e == nil && r.GetString("state") == sending.AttemptSubmitted
 	})
 	acceptanceEventually(t, func() bool {
-		p, e := f.store.Preview(context.Background(), first)
+		p, e := f.store.Preview(context.Background(), f.ownerID, first)
 		return e == nil && p.Status == "stopped" && p.Submitted == 4 && p.Remaining == 8
 	})
 	if mailbox.count() != 6 {
@@ -345,10 +428,10 @@ func TestAcceptanceSharedCapacityCrossTaskClaimsAndStop(t *testing.T) {
 	if max != 4 {
 		t.Fatalf("max in flight=%d, want 4", max)
 	}
-	acceptanceAct(t, f.store, first, "resume", "resume-shared", 8)
+	f.act(t, first, "resume", "resume-shared", 8)
 	d.Wake()
 	acceptanceEventually(t, func() bool {
-		p, e := f.store.Preview(context.Background(), first)
+		p, e := f.store.Preview(context.Background(), f.ownerID, first)
 		return e == nil && p.Submitted == 12 && p.Status == "completed"
 	})
 	if mailbox.count() != 14 {
@@ -362,7 +445,7 @@ func TestAcceptanceRestartConservativeIntentsAndCooldown(t *testing.T) {
 			f := newAcceptanceFixture(t)
 			task := f.task(t, 5)
 			ctx := context.Background()
-			sample, err := f.store.QueueTest(ctx, sending.TestRequest{ActionID: "restart-test", TaskID: task, Recipient: "operator@example.invalid", Actor: "acceptance", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
+			sample, err := f.store.QueueTest(ctx, f.ownerID, sending.TestRequest{ActionID: "restart-test", TaskID: task, Recipient: "operator@example.invalid", Actor: "acceptance", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -376,10 +459,10 @@ func TestAcceptanceRestartConservativeIntentsAndCooldown(t *testing.T) {
 			if err = f.store.CompleteAttempt(ctx, sample.ID, sending.Outcome{State: sending.AttemptSubmitted}); err != nil {
 				t.Fatal(err)
 			}
-			if err = f.store.Approve(ctx, task, sample.ID, "acceptance", "restart-approve"); err != nil {
+			if err = f.store.Approve(ctx, f.ownerID, task, sample.ID, "acceptance", "restart-approve"); err != nil {
 				t.Fatal(err)
 			}
-			acceptanceAct(t, f.store, task, "start", "restart-start", 5)
+			f.act(t, task, "start", "restart-start", 5)
 			w, err = f.store.NextWork(ctx)
 			if err != nil || w == nil {
 				t.Fatalf("candidate work=%v err=%v", w, err)
@@ -402,21 +485,21 @@ func TestAcceptanceRestartConservativeIntentsAndCooldown(t *testing.T) {
 				t.Fatal(err)
 			}
 			cooldown := f.clock.Now().Add(2 * time.Minute)
-			if err = f.store.SetCooldown(ctx, cooldown, "simulated persisted Retry-After"); err != nil {
+			if err = f.store.SetCooldown(ctx, f.connectionID, f.ownerID, cooldown, "simulated persisted Retry-After"); err != nil {
 				t.Fatal(err)
 			}
 			f.store = sending.NewStore(f.app, sending.Options{Now: f.clock.Now})
 			if err = f.store.Recover(ctx); err != nil {
 				t.Fatal(err)
 			}
-			p, err := f.store.Preview(ctx, task)
+			p, err := f.store.Preview(ctx, f.ownerID, task)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if p.Status != "interrupted" || p.Held != 1 || p.Submitted != 1 || p.Remaining != 3 || !p.ArtifactNeeded {
 				t.Fatalf("recovered=%+v", p)
 			}
-			state, err := f.store.DispatcherState(ctx)
+			state, err := f.store.DispatcherState(ctx, f.connectionID, f.ownerID)
 			if err != nil || !state.CooldownUntil.Equal(cooldown) {
 				t.Fatalf("cooldown=%+v err=%v", state, err)
 			}
@@ -433,10 +516,10 @@ func TestAcceptanceRestartConservativeIntentsAndCooldown(t *testing.T) {
 			if mailbox.count() != 0 {
 				t.Fatal("restart automatically resumed candidates")
 			}
-			acceptanceAct(t, f.store, task, "resume", "restart-resume", 3)
+			f.act(t, task, "resume", "restart-resume", 3)
 			d.Wake()
 			acceptanceEventually(t, func() bool {
-				p, e := f.store.Preview(ctx, task)
+				p, e := f.store.Preview(ctx, f.ownerID, task)
 				return e == nil && p.Status == "completed" && p.Submitted == 4 && p.Held == 1
 			})
 			if mailbox.count() != 3 {

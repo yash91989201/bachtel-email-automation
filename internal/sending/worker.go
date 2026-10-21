@@ -10,19 +10,22 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// DispatchStore is the durable application state machine, not an in-memory queue.
+// DispatchStore is the durable application state machine, not an in-memory
+// queue. Every method is mailbox-scoped: pacing, cooldowns and pauses belong to
+// one connection, while a shared storage failure stops every launch.
 type DispatchStore interface {
-	DispatcherState(context.Context) (Settings, error)
+	DispatcherState(context.Context, string, string) (Settings, error)
 	NextWork(context.Context) (*Work, error)
 	NextWorkDeadline(context.Context) (time.Time, error)
 	FireScheduled(context.Context) (bool, error)
 	BeginAttempt(context.Context, *Work, time.Time, time.Time) (*Attempt, error)
-	RecordActualStart(context.Context, string, time.Time, time.Time) error
+	RecordActualStart(context.Context, *Work, string, time.Time, time.Time) error
 	CompleteAttempt(context.Context, string, Outcome) error
-	SetCooldown(context.Context, time.Time, string) error
+	SetCooldown(context.Context, string, string, time.Time, string) error
 	Recover(context.Context) error
-	PauseMailbox(context.Context, string) error
-	PauseTask(context.Context, string, string) error
+	PauseMailbox(context.Context, string, string) error
+	PauseAll(context.Context, string) error
+	PauseTask(context.Context, string, string, string) error
 	SettleTasks(context.Context) error
 }
 
@@ -33,9 +36,12 @@ type WorkerOptions struct {
 	After          func(time.Duration) <-chan time.Time
 }
 
+// Dispatcher is the single owner of the datastore's sending state. It resolves
+// each work item's mailbox connection to a concrete sender, paces that mailbox
+// independently, and keeps at most four simultaneous requests overall.
 type Dispatcher struct {
 	store                     DispatchStore
-	sender                    Sender
+	resolver                  Resolver
 	options                   WorkerOptions
 	mu                        sync.Mutex // serializes launch, stop, and response safety barriers
 	wake                      chan struct{}
@@ -46,12 +52,14 @@ type Dispatcher struct {
 	started, stopping, paused bool
 	fatalStorage              bool
 	inflight                  int
-	lastStart                 time.Time
-	limiter                   *rate.Limiter
+	inflightByConnection      map[string]int
+	inflightByOwner           map[string]int
+	lastStart                 map[string]time.Time
+	limiters                  map[string]*rate.Limiter
 	lifecycleErr              error
 }
 
-func NewDispatcher(store DispatchStore, sender Sender, options WorkerOptions) *Dispatcher {
+func NewDispatcher(store DispatchStore, resolver Resolver, options WorkerOptions) *Dispatcher {
 	if options.Now == nil {
 		options.Now = time.Now
 	}
@@ -61,7 +69,17 @@ func NewDispatcher(store DispatchStore, sender Sender, options WorkerOptions) *D
 	if options.RequestTimeout <= 0 || options.RequestTimeout > 30*time.Second {
 		options.RequestTimeout = 20 * time.Second
 	}
-	return &Dispatcher{store: store, sender: sender, options: options, wake: make(chan struct{}, 1), done: make(chan struct{})}
+	return &Dispatcher{
+		store:                store,
+		resolver:             resolver,
+		options:              options,
+		wake:                 make(chan struct{}, 1),
+		done:                 make(chan struct{}),
+		inflightByConnection: make(map[string]int),
+		inflightByOwner:      make(map[string]int),
+		lastStart:            make(map[string]time.Time),
+		limiters:             make(map[string]*rate.Limiter),
+	}
 }
 
 // Start obtains exclusive process ownership before doing any recovery or sending.
@@ -80,7 +98,6 @@ func (d *Dispatcher) Start() error {
 	}
 	d.lock = lock
 	d.ctx, d.cancel = context.WithCancel(context.Background())
-	d.limiter = rate.NewLimiter(rate.Every(time.Minute/DefaultRate), 1)
 	d.started = true
 	go d.run()
 	return nil
@@ -93,6 +110,7 @@ func (d *Dispatcher) notify() {
 	}
 }
 
+// InFlight reports how many requests are currently outstanding.
 func (d *Dispatcher) InFlight(ctx context.Context) (int, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
@@ -100,6 +118,17 @@ func (d *Dispatcher) InFlight(ctx context.Context) (int, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.inflight, nil
+}
+
+// InFlightFor reports how many requests the operator's mailbox currently has in
+// flight, so a connection change waits only for its own work.
+func (d *Dispatcher) InFlightFor(ctx context.Context, ownerID string) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.inflightByOwner[ownerID], nil
 }
 
 // Wake is called after an explicit operator action; durable paused tasks remain paused.
@@ -198,37 +227,44 @@ func timer(after func(time.Duration) <-chan time.Time, delay time.Duration) <-ch
 func (d *Dispatcher) pause(reason string) {
 	d.paused = true
 	d.fatalStorage = true
-	d.lifecycleErr = errors.Join(d.lifecycleErr, d.store.PauseMailbox(context.Background(), reason))
+	d.lifecycleErr = errors.Join(d.lifecycleErr, d.store.PauseAll(context.Background(), reason))
+}
+
+// resolveSender binds the work item's mailbox connection to its provider
+// sender. An unusable connection is reported with a fixed reason and a short
+// cooldown so the coordinator does not spin.
+func (d *Dispatcher) resolveSender(connectionID string) (Sender, bool) {
+	ctx, cancel := context.WithTimeout(d.ctx, d.options.RequestTimeout)
+	sender, err := d.resolver.Sender(ctx, connectionID)
+	cancel()
+	if err != nil || sender == nil {
+		return nil, false
+	}
+	return sender, true
 }
 
 func (d *Dispatcher) launch() (time.Duration, error) {
-	return d.launchPrepared(d.sender, false)
+	return d.launchPrepared(nil, nil, false)
 }
 
-func (d *Dispatcher) launchPrepared(sender Sender, prepared bool) (time.Duration, error) {
+// launchPrepared launches one opportunity. A prepared sender skips the
+// authorization step that must run outside the start barrier.
+func (d *Dispatcher) launchPrepared(sender Sender, work *Work, prepared bool) (time.Duration, error) {
 	ctx := context.Background()
-	s, err := d.store.DispatcherState(ctx)
-	if err != nil {
-		return 0, err
-	}
-	if s.Rate == 0 {
-		s.Rate = DefaultRate
-	}
-	if err = ValidateRate(s.Rate); err != nil {
-		return 0, err
-	}
 	// Due schedules are evaluated before normal launches so a due task starts
 	// even while another task is running, sharing the same pacing and slots.
 	fired, err := d.store.FireScheduled(ctx)
 	if err != nil {
 		return 0, err
 	}
-	if fired {
+	if fired && work == nil {
 		return -1, nil
 	}
-	work, err := d.store.NextWork(ctx)
-	if err != nil {
-		return 0, err
+	if work == nil {
+		work, err = d.store.NextWork(ctx)
+		if err != nil {
+			return 0, err
+		}
 	}
 	if work == nil {
 		deadline, err := d.store.NextWorkDeadline(ctx)
@@ -244,13 +280,45 @@ func (d *Dispatcher) launchPrepared(sender Sender, prepared bool) (time.Duration
 		}
 		return 0, nil
 	}
-	now := d.options.Now()
-	if !d.lastStart.IsZero() && d.lastStart.Add(time.Minute/time.Duration(s.Rate)).After(s.NextEligible) {
-		s.NextEligible = d.lastStart.Add(time.Minute / time.Duration(s.Rate))
+
+	settings, err := d.store.DispatcherState(ctx, work.ConnectionID, work.OwnerID)
+	if err != nil {
+		return 0, err
 	}
-	if next := nextStart(now, s); next.After(now) {
+	if settings.Rate == 0 {
+		settings.Rate = DefaultRate
+	}
+	if err = ValidateRate(settings.Rate); err != nil {
+		return 0, err
+	}
+	now := d.options.Now()
+	interval := time.Minute / time.Duration(settings.Rate)
+	if last := d.lastStart[work.ConnectionID]; !last.IsZero() && last.Add(interval).After(settings.NextEligible) {
+		settings.NextEligible = last.Add(interval)
+	}
+	if next := nextStart(now, settings); next.After(now) {
 		return next.Sub(now), nil
 	}
+	if d.inflightByConnection[work.ConnectionID] >= 4 {
+		// The global cap already bounds this; keep the per-mailbox bound
+		// explicit for the documented contract.
+		return 0, nil
+	}
+
+	if sender == nil {
+		resolved, ok := d.resolveSender(work.ConnectionID)
+		if !ok {
+			// The connection cannot produce a sender right now (unknown
+			// provider, unreadable credential, disconnected). Delay this
+			// mailbox without touching another mailbox's work.
+			if err := d.store.SetCooldown(ctx, work.ConnectionID, work.OwnerID, now.Add(time.Minute), "The mailbox connection is not usable; reconnect it."); err != nil {
+				return 0, err
+			}
+			return time.Minute, nil
+		}
+		sender = resolved
+	}
+
 	if preparation, ok := sender.(PreparingSender); ok && !prepared {
 		// Authorization may refresh over the network. Stop/operator actions must
 		// remain available while it waits, and no paced start is spent yet.
@@ -262,15 +330,22 @@ func (d *Dispatcher) launchPrepared(sender Sender, prepared bool) (time.Duration
 		if d.stopping || d.paused || d.fatalStorage {
 			return 0, nil
 		}
-		// Re-read both work and pacing: operator actions, in-flight responses,
+		// Re-read work and pacing: operator actions, in-flight responses,
 		// cooldowns and configuration may have changed while authorization waited.
-		return d.launchPrepared(ready, true)
+		return d.launchPrepared(ready, work, true)
 	}
-	d.limiter.SetLimitAt(now, rate.Every(time.Minute/time.Duration(s.Rate)))
-	if !d.limiter.AllowN(now, 1) {
-		return time.Minute / time.Duration(s.Rate), nil
+
+	limiter := d.limiters[work.ConnectionID]
+	if limiter == nil {
+		limiter = rate.NewLimiter(rate.Every(interval), 1)
+		d.limiters[work.ConnectionID] = limiter
 	}
-	attempt, err := d.store.BeginAttempt(ctx, work, now, now.Add(time.Minute/time.Duration(s.Rate)))
+	limiter.SetLimitAt(now, rate.Every(interval))
+	if !limiter.AllowN(now, 1) {
+		return interval, nil
+	}
+
+	attempt, err := d.store.BeginAttempt(ctx, work, now, now.Add(interval))
 	if errors.Is(err, ErrNoWork) {
 		return -1, nil
 	}
@@ -287,7 +362,7 @@ func (d *Dispatcher) launchPrepared(sender Sender, prepared bool) (time.Duration
 	started := make(chan startResult, 1)
 	go func() {
 		actual := d.options.Now()
-		err := d.store.RecordActualStart(ctx, attempt.ID, actual, actual.Add(time.Minute/time.Duration(s.Rate)))
+		err := d.store.RecordActualStart(ctx, &attempt.Work, attempt.ID, actual, actual.Add(interval))
 		if err != nil {
 			started <- startResult{err: err}
 			return
@@ -299,8 +374,10 @@ func (d *Dispatcher) launchPrepared(sender Sender, prepared bool) (time.Duration
 	if start.err != nil {
 		return 0, start.err
 	}
-	d.lastStart = start.at
+	d.lastStart[work.ConnectionID] = start.at
 	d.inflight++
+	d.inflightByConnection[work.ConnectionID]++
+	d.inflightByOwner[work.OwnerID]++
 	return -1, nil
 }
 
@@ -324,7 +401,7 @@ func (d *Dispatcher) send(sender Sender, attempt *Attempt, work *Work) {
 		if outcome.RetryAt.IsZero() {
 			outcome.RetryAt = d.options.Now().Add(retryDelay(work.RetryCount))
 		}
-		if err := d.store.SetCooldown(context.Background(), outcome.RetryAt, "Microsoft throttling or safe retry wait"); err != nil {
+		if err := d.store.SetCooldown(context.Background(), work.ConnectionID, work.OwnerID, outcome.RetryAt, "Provider throttling or safe retry wait"); err != nil {
 			d.pause("Sending stopped because the cooldown could not be saved. Restart after checking storage.")
 		}
 	default:
@@ -339,11 +416,19 @@ func (d *Dispatcher) send(sender Sender, attempt *Attempt, work *Work) {
 		d.pause("Sending stopped because a submission outcome could not be saved. Review unfinished attempts after restarting.")
 	}
 	if outcome.PauseMailbox {
-		if err := d.store.PauseMailbox(context.Background(), outcome.Reason); err != nil {
+		if err := d.store.PauseMailbox(context.Background(), work.OwnerID, outcome.Reason); err != nil {
 			d.pause("Sending stopped because the mailbox pause could not be saved. Restart after checking storage.")
 		}
 	}
 	d.inflight--
+	d.inflightByConnection[work.ConnectionID]--
+	if d.inflightByConnection[work.ConnectionID] <= 0 {
+		delete(d.inflightByConnection, work.ConnectionID)
+	}
+	d.inflightByOwner[work.OwnerID]--
+	if d.inflightByOwner[work.OwnerID] <= 0 {
+		delete(d.inflightByOwner, work.OwnerID)
+	}
 	d.notify()
 }
 
