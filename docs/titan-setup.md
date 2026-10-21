@@ -1,4 +1,4 @@
-# GoDaddy Titan connection setup
+# Titan connection setup
 
 Titan mailboxes need no provider registration. The operator connects their own
 mailbox from `/connection`; the deployment needs only `APP_ENCRYPTION_KEY` to
@@ -26,7 +26,7 @@ in the configuration table in `README.md`.
 ## Connect the mailbox
 
 1. Sign in and open `/connection`.
-2. Under **GoDaddy Titan**, enter the **full mailbox address** and the
+2. Choose **Titan**, then enter the **full mailbox address** and the
    mailbox's **email password**.
 3. Submit. The application connects to the provider endpoint over implicit
    TLS, authenticates, and quits. **Validation sends no message**: no MAIL,

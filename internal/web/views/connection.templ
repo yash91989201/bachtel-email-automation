@@ -37,7 +37,8 @@ type ConnectionData struct {
 	TitanAddress        string
 	// CallbackURL is the fixed redirect URI derived from the deployment
 	// origin; the operator registers exactly this value in Entra.
-	CallbackURL string
+	CallbackURL      string
+	SelectedProvider string
 	// MicrosoftSaved reports an active saved registration; MicrosoftPending a
 	// staged change awaiting a successful sign-in. Only non-secret
 	// identifiers are ever shown.
@@ -85,186 +86,244 @@ templ ConnectionPage(data ConnectionData) {
 				}
 			}
 		}
-		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "status-heading"}}) {
-			@card.Content(card.ContentProps{Class: "gap-4"}) {
-				<h2 id="status-heading" class="cn-card-title">Sending mailbox</h2>
-				<div class="flex items-center gap-3">
-					@statusBadge(data.Status)
-					if data.Provider != "" {
-						@badge.Badge(badge.Props{Variant: badge.VariantOutline, Attributes: templ.Attributes{"data-provider": data.Provider}}) {
-							{ providerLabel(data.Provider) }
-						}
-					}
-				</div>
-				<dl class="grid grid-cols-2 gap-5 p-5 bg-muted rounded-4xl [&>div]:block [&_dt]:mb-[.3rem] [&_dt]:text-[.72rem] [&_dd]:font-semibold [&_dd]:wrap-anywhere max-[760px]:grid-cols-1 text-sm">
-					if data.AccountEmail != "" {
-						<div class="flex gap-2">
-							<dt class="font-semibold">Account:</dt>
-							<dd>{ data.AccountEmail }</dd>
-						</div>
-					}
-					if data.SenderAddress != "" {
-						<div class="flex gap-2">
-							<dt class="font-semibold">Sender address:</dt>
-							<dd>{ data.SenderAddress }</dd>
-						</div>
-					}
-					if data.ConnectedAt != "" {
-						<div class="flex gap-2">
-							<dt class="font-semibold">Connected:</dt>
-							<dd><time datetime={ data.ConnectedAt }>{ data.ConnectedAt }</time></dd>
-						</div>
-					}
-					if data.CredentialExpiresAt != "" {
-						<div class="flex gap-2">
-							<dt class="font-semibold">Credential expires:</dt>
-							<dd><time datetime={ data.CredentialExpiresAt }>{ data.CredentialExpiresAt }</time></dd>
-						</div>
-					}
-				</dl>
-				<div class="app-card-actions flex-wrap">
-					if data.Status != string(mailbox.StatusConnected) {
-						if data.Provider == string(mailbox.ProviderMicrosoft) || data.Provider == "" {
-							<form method="post" action="/connection/microsoft/connect">
-								@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.MicrosoftReady}) {
-									if data.Status == string(mailbox.StatusReconnectRequired) {
-										Reconnect Microsoft 365
-									} else {
-										Connect Microsoft 365
-									}
-								}
-							</form>
-						}
-					}
-					if data.Status != string(mailbox.StatusDisconnected) && data.SenderAddress != "" {
-						<form id="mailbox-disconnect-form" method="post" action="/connection/disconnect">
-							@alertdialog.AlertDialog(alertdialog.Props{ID: "mailbox-disconnect-dialog"}) {
-								@button.Button(button.Props{Variant: button.VariantOutline, Attributes: alertdialog.Trigger(ctx)}) {
-									Disconnect
-								}
-								@alertdialog.Content(alertdialog.ContentProps{}) {
-									@alertdialog.Header(alertdialog.HeaderProps{}) {
-										@alertdialog.Title(alertdialog.TitleProps{}) {
-											Disconnect the mailbox?
-										}
-										@alertdialog.Description(alertdialog.DescriptionProps{}) {
-											Diagnostic tests and candidate sending stop until you reconnect or replace this mailbox. Recorded attempts, recovery state and the exclusive mailbox claim stay unchanged.
-										}
-									}
-									@alertdialog.Footer(alertdialog.FooterProps{}) {
-										@alertdialog.Cancel(alertdialog.CancelProps{}) {
-											Cancel
-										}
-										@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit, Attributes: templ.Attributes{"form": "mailbox-disconnect-form"}}) {
-											Yes, disconnect
-										}
-									}
-								}
+		if data.SenderAddress != "" || data.Provider != "" {
+			@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "status-heading"}}) {
+				@card.Content(card.ContentProps{Class: "gap-4"}) {
+					<h2 id="status-heading" class="cn-card-title">Sending mailbox</h2>
+					<div class="flex items-center gap-3">
+						@statusBadge(data.Status)
+						if data.Provider != "" {
+							@badge.Badge(badge.Props{Variant: badge.VariantOutline, Attributes: templ.Attributes{"data-provider": data.Provider}}) {
+								{ providerLabel(data.Provider) }
 							}
-						</form>
-					}
-				</div>
-			}
-		}
-		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "connect-heading"}}) {
-			@card.Content(card.ContentProps{Class: "gap-4"}) {
-				<h2 id="connect-heading" class="cn-card-title">
-					if data.SenderAddress == "" {
-						Connect a provider
-					} else {
-						Connect a different mailbox
-					}
-				</h2>
-				<p class="text-muted-foreground text-sm">Connecting the same mailbox again reconnects it and keeps its history. A different mailbox requires an explicit replacement confirmation and resets this workspace's sending data.</p>
-				<div class="grid gap-6 max-[760px]:grid-cols-1">
-					<div class="grid gap-4">
-						<h3 class="font-semibold">Microsoft 365</h3>
-						<p class="text-muted-foreground text-sm">Save your own Entra application registration before signing in. Each operator may use a different tenant and application; nothing is shared with other workspaces.</p>
-						<p class="text-muted-foreground text-sm">Register this exact redirect URI on the application: <code data-callback-url>{ data.CallbackURL }</code></p>
-						if data.MicrosoftSaved || data.MicrosoftPending {
-							<dl class="grid grid-cols-2 gap-5 p-5 bg-muted rounded-4xl [&>div]:block [&_dt]:mb-[.3rem] [&_dt]:text-[.72rem] [&_dd]:font-semibold [&_dd]:wrap-anywhere max-[760px]:grid-cols-1 text-sm">
-								if data.MicrosoftSaved {
-									<div>
-										<dt>Saved Tenant ID</dt>
-										<dd>{ data.MicrosoftTenantID }</dd>
-									</div>
-									<div>
-										<dt>Saved Client ID</dt>
-										<dd>{ data.MicrosoftClientID }</dd>
-									</div>
-								}
-								if data.MicrosoftPending {
-									<div>
-										<dt>Pending Tenant ID</dt>
-										<dd>{ data.MicrosoftPendingTenantID }</dd>
-									</div>
-									<div>
-										<dt>Pending Client ID</dt>
-										<dd>{ data.MicrosoftPendingClientID }</dd>
-									</div>
-								}
-							</dl>
-							<p class="text-muted-foreground text-sm">
-								if data.MicrosoftPending {
-									These staged identifiers replace the saved registration only after a successful sign-in under them. The saved Client Secret is never shown again; enter it only when you change it.
-								} else {
-									The saved Client Secret is never shown again. Save the form again to stage a rotation; it takes effect after you sign in.
-								}
-							</p>
-						}
-						<form method="post" action="/connection/microsoft/settings" class="grid gap-3">
-							<div class="grid gap-2">
-								@label.Label(label.Props{For: "microsoft-tenant-id"}) {
-									Tenant ID
-								}
-								@input.Input(input.Props{ID: "microsoft-tenant-id", Name: "tenant_id", Type: "text", Required: true, Value: data.MicrosoftTenantID, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "placeholder": "00000000-0000-0000-0000-000000000000"}})
-							</div>
-							<div class="grid gap-2">
-								@label.Label(label.Props{For: "microsoft-client-id"}) {
-									Client ID
-								}
-								@input.Input(input.Props{ID: "microsoft-client-id", Name: "client_id", Type: "text", Required: true, Value: data.MicrosoftClientID, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "placeholder": "00000000-0000-0000-0000-000000000000"}})
-							</div>
-							<div class="grid gap-2">
-								@label.Label(label.Props{For: "microsoft-client-secret"}) {
-									Client Secret
-								}
-								@input.Input(input.Props{ID: "microsoft-client-secret", Name: "client_secret", Type: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "new-password"}})
-							</div>
-							@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeSubmit}) {
-								Save provider settings
-							}
-						</form>
-						if data.MicrosoftReady {
-							<form method="post" action="/connection/microsoft/connect">
-								@button.Button(button.Props{Type: button.TypeSubmit}) {
-									Continue with Microsoft 365
-								}
-							</form>
-						} else {
-							<p class="text-muted-foreground text-sm">Sign-in becomes available after the settings are saved.</p>
 						}
 					</div>
-					<form method="post" action="/connection/titan" class="grid gap-3">
-						<h3 class="font-semibold">GoDaddy Titan</h3>
-						<p class="text-muted-foreground text-sm">Use the full mailbox address and its email password. The connection is validated over encrypted SMTP at <code>{ data.TitanAddress }</code>; validation sends no message.</p>
-						<div class="grid gap-2">
-							@label.Label(label.Props{For: "titan-address"}) {
-								Mailbox address
+					if data.AccountEmail != "" || data.SenderAddress != "" || data.ConnectedAt != "" || data.CredentialExpiresAt != "" {
+						<dl class="grid grid-cols-2 gap-5 p-5 bg-muted rounded-4xl [&>div]:block [&_dt]:mb-[.3rem] [&_dt]:text-[.72rem] [&_dd]:font-semibold [&_dd]:wrap-anywhere max-[760px]:grid-cols-1 text-sm">
+							if data.AccountEmail != "" {
+								<div class="flex gap-2">
+									<dt class="font-semibold">Account:</dt>
+									<dd>{ data.AccountEmail }</dd>
+								</div>
 							}
-							@input.Input(input.Props{ID: "titan-address", Name: "address", Type: "email", Required: true, Attributes: templ.Attributes{"autocomplete": "username"}})
-						</div>
-						<div class="grid gap-2">
-							@label.Label(label.Props{For: "titan-password"}) {
-								Email password
+							if data.SenderAddress != "" {
+								<div class="flex gap-2">
+									<dt class="font-semibold">Sender address:</dt>
+									<dd>{ data.SenderAddress }</dd>
+								</div>
 							}
-							@input.Input(input.Props{ID: "titan-password", Name: "password", Type: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "current-password"}})
-						</div>
-						@button.Button(button.Props{Type: button.TypeSubmit}) {
-							Validate Titan mailbox
+							if data.ConnectedAt != "" {
+								<div class="flex gap-2">
+									<dt class="font-semibold">Connected:</dt>
+									<dd><time datetime={ data.ConnectedAt }>{ data.ConnectedAt }</time></dd>
+								</div>
+							}
+							if data.CredentialExpiresAt != "" {
+								<div class="flex gap-2">
+									<dt class="font-semibold">Credential expires:</dt>
+									<dd><time datetime={ data.CredentialExpiresAt }>{ data.CredentialExpiresAt }</time></dd>
+								</div>
+							}
+						</dl>
+					}
+					<div class="app-card-actions flex-wrap">
+						if data.Status != string(mailbox.StatusDisconnected) && data.SenderAddress != "" {
+							<form id="mailbox-disconnect-form" method="post" action="/connection/disconnect">
+								@alertdialog.AlertDialog(alertdialog.Props{ID: "mailbox-disconnect-dialog"}) {
+									@button.Button(button.Props{Variant: button.VariantOutline, Attributes: alertdialog.Trigger(ctx)}) {
+										Disconnect
+									}
+									@alertdialog.Content(alertdialog.ContentProps{}) {
+										@alertdialog.Header(alertdialog.HeaderProps{}) {
+											@alertdialog.Title(alertdialog.TitleProps{}) {
+												Disconnect the mailbox?
+											}
+											@alertdialog.Description(alertdialog.DescriptionProps{}) {
+												Diagnostic tests and candidate sending stop until you reconnect or replace this mailbox. Recorded attempts, recovery state and the exclusive mailbox claim stay unchanged.
+											}
+										}
+										@alertdialog.Footer(alertdialog.FooterProps{}) {
+											@alertdialog.Cancel(alertdialog.CancelProps{}) {
+												Cancel
+											}
+											@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit, Attributes: templ.Attributes{"form": "mailbox-disconnect-form"}}) {
+												Yes, disconnect
+											}
+										}
+									}
+								}
+							</form>
 						}
-					</form>
-				</div>
+					</div>
+				}
+			}
+		}
+		if !data.ResetBlocked {
+			@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "connect-heading"}}) {
+				@card.Content(card.ContentProps{Class: "gap-4"}) {
+					<h2 id="connect-heading" class="cn-card-title">
+						if data.SelectedProvider == "" {
+							1. Choose your provider
+						} else if data.SelectedProvider == string(mailbox.ProviderMicrosoft) {
+							2. Connect Microsoft 365
+						} else {
+							2. Connect Titan
+						}
+					</h2>
+					if data.SenderAddress != "" {
+						<p class="text-muted-foreground text-sm">Connecting the same mailbox again reconnects it and keeps its history. A different mailbox requires an explicit replacement confirmation and resets this workspace's sending data.</p>
+					} else if data.SelectedProvider == "" {
+						<p class="text-muted-foreground text-sm">Choose a provider to see the credentials needed to connect your mailbox.</p>
+					} else if data.SelectedProvider == string(mailbox.ProviderMicrosoft) && data.MicrosoftReady {
+						<p class="text-muted-foreground text-sm">Your settings are saved. Sign in to finish connecting your mailbox.</p>
+					} else {
+						<p class="text-muted-foreground text-sm">Enter the credentials for the selected provider to connect your mailbox.</p>
+					}
+					if data.SelectedProvider == "" {
+						<div class="grid grid-cols-2 gap-4 max-[760px]:grid-cols-1" aria-label="Choose a mailbox provider">
+							<a class="block rounded-4xl border bg-card p-5 hover:border-primary focus-visible:outline-2" href="/connection?provider=microsoft365"><h3 class="font-semibold">Microsoft 365</h3><p class="mt-2 text-muted-foreground text-sm">Connect with your own Microsoft application registration.</p><span class="mt-4 inline-block text-sm font-semibold">Choose Microsoft 365 →</span></a>
+							<a class="block rounded-4xl border bg-card p-5 hover:border-primary focus-visible:outline-2" href="/connection?provider=godaddy-titan"><h3 class="font-semibold">Titan</h3><p class="mt-2 text-muted-foreground text-sm">Connect with your mailbox address and email password.</p><span class="mt-4 inline-block text-sm font-semibold">Choose Titan →</span></a>
+						</div>
+					} else if data.SelectedProvider == string(mailbox.ProviderTitan) {
+						<p><a class="text-primary underline" href="/connection">← Change provider</a></p>
+					}
+					<div class="grid gap-6 max-[760px]:grid-cols-1">
+						if data.SelectedProvider == string(mailbox.ProviderMicrosoft) {
+							<div class="grid gap-4">
+								<h3 class="font-semibold">Microsoft 365</h3>
+								<p class="text-muted-foreground text-sm">Save your own Entra application registration before signing in. Each operator may use a different tenant and application; nothing is shared with other workspaces.</p>
+								<p class="text-muted-foreground text-sm">Register this exact redirect URI on the application: <code data-callback-url>{ data.CallbackURL }</code></p>
+								if data.MicrosoftSaved || data.MicrosoftPending {
+									<dl class="grid grid-cols-2 gap-5 p-5 bg-muted rounded-4xl [&>div]:block [&_dt]:mb-[.3rem] [&_dt]:text-[.72rem] [&_dd]:font-semibold [&_dd]:wrap-anywhere max-[760px]:grid-cols-1 text-sm">
+										if data.MicrosoftSaved {
+											<div>
+												<dt>Saved Tenant ID</dt>
+												<dd>{ data.MicrosoftTenantID }</dd>
+											</div>
+											<div>
+												<dt>Saved Client ID</dt>
+												<dd>{ data.MicrosoftClientID }</dd>
+											</div>
+										}
+										if data.MicrosoftPending {
+											<div>
+												<dt>Pending Tenant ID</dt>
+												<dd>{ data.MicrosoftPendingTenantID }</dd>
+											</div>
+											<div>
+												<dt>Pending Client ID</dt>
+												<dd>{ data.MicrosoftPendingClientID }</dd>
+											</div>
+										}
+									</dl>
+									<p class="text-muted-foreground text-sm">
+										if data.MicrosoftPending {
+											These staged identifiers replace the saved registration only after a successful sign-in under them. The saved Client Secret is never shown again; enter it only when you change it.
+										} else {
+											The saved Client Secret is never shown again. Save the form again to stage a rotation; it takes effect after you sign in.
+										}
+									</p>
+								}
+								if data.MicrosoftReady {
+									<form method="post" action="/connection/microsoft/connect" class="flex flex-wrap items-center gap-3">
+										@button.Button(button.Props{Type: button.TypeSubmit}) {
+											if data.Status == string(mailbox.StatusReconnectRequired) {
+												Reconnect Microsoft 365
+											} else {
+												Continue with Microsoft 365
+											}
+										}
+										@button.Button(button.Props{Variant: button.VariantGhost, Href: "/connection"}) {
+											Change provider
+										}
+									</form>
+									<details class="rounded-2xl border border-border p-4">
+										<summary class="cursor-pointer font-semibold">Edit application settings</summary>
+										<form method="post" action="/connection/microsoft/settings" class="mt-4 grid gap-3">
+											<div class="grid gap-2">
+												@label.Label(label.Props{For: "microsoft-tenant-id"}) {
+													Tenant ID
+												}
+												@input.Input(input.Props{ID: "microsoft-tenant-id", Name: "tenant_id", Type: "text", Required: true, Value: data.MicrosoftTenantID, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "placeholder": "00000000-0000-0000-0000-000000000000"}})
+											</div>
+											<div class="grid gap-2">
+												@label.Label(label.Props{For: "microsoft-client-id"}) {
+													Client ID
+												}
+												@input.Input(input.Props{ID: "microsoft-client-id", Name: "client_id", Type: "text", Required: true, Value: data.MicrosoftClientID, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "placeholder": "00000000-0000-0000-0000-000000000000"}})
+											</div>
+											<div class="grid gap-2">
+												@label.Label(label.Props{For: "microsoft-client-secret"}) {
+													Client Secret
+												}
+												@input.Input(input.Props{ID: "microsoft-client-secret", Name: "client_secret", Type: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "new-password"}})
+											</div>
+											<div class="flex flex-wrap items-center gap-3">
+												@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeSubmit}) {
+													Save provider settings
+												}
+												@button.Button(button.Props{Variant: button.VariantGhost, Href: "/connection"}) {
+													Change provider
+												}
+											</div>
+										</form>
+									</details>
+								} else {
+									<form method="post" action="/connection/microsoft/settings" class="grid gap-3">
+										<div class="grid gap-2">
+											@label.Label(label.Props{For: "microsoft-tenant-id"}) {
+												Tenant ID
+											}
+											@input.Input(input.Props{ID: "microsoft-tenant-id", Name: "tenant_id", Type: "text", Required: true, Value: data.MicrosoftTenantID, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "placeholder": "00000000-0000-0000-0000-000000000000"}})
+										</div>
+										<div class="grid gap-2">
+											@label.Label(label.Props{For: "microsoft-client-id"}) {
+												Client ID
+											}
+											@input.Input(input.Props{ID: "microsoft-client-id", Name: "client_id", Type: "text", Required: true, Value: data.MicrosoftClientID, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "placeholder": "00000000-0000-0000-0000-000000000000"}})
+										</div>
+										<div class="grid gap-2">
+											@label.Label(label.Props{For: "microsoft-client-secret"}) {
+												Client Secret
+											}
+											@input.Input(input.Props{ID: "microsoft-client-secret", Name: "client_secret", Type: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "new-password"}})
+										</div>
+										<div class="flex flex-wrap items-center gap-3">
+											@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeSubmit}) {
+												Save provider settings
+											}
+											@button.Button(button.Props{Variant: button.VariantGhost, Href: "/connection"}) {
+												Change provider
+											}
+										</div>
+									</form>
+									<p class="text-muted-foreground text-sm">Sign-in becomes available after the settings are saved.</p>
+								}
+							</div>
+						}
+						if data.SelectedProvider == string(mailbox.ProviderTitan) {
+							<form method="post" action="/connection/titan" class="grid gap-3">
+								<h3 class="font-semibold">Titan</h3>
+								<p class="text-muted-foreground text-sm">Use your mailbox address and email password. Validation does not send an email.</p>
+								<div class="grid gap-2">
+									@label.Label(label.Props{For: "titan-address"}) {
+										Mailbox address
+									}
+									@input.Input(input.Props{ID: "titan-address", Name: "address", Type: "email", Required: true, Attributes: templ.Attributes{"autocomplete": "username"}})
+								</div>
+								<div class="grid gap-2">
+									@label.Label(label.Props{For: "titan-password"}) {
+										Email password
+									}
+									@input.Input(input.Props{ID: "titan-password", Name: "password", Type: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "current-password"}})
+								</div>
+								@button.Button(button.Props{Type: button.TypeSubmit}) {
+									Validate Titan mailbox
+								}
+							</form>
+						}
+					</div>
+				}
 			}
 		}
 	}
@@ -363,7 +422,7 @@ func providerLabel(provider string) string {
 	case string(mailbox.ProviderMicrosoft):
 		return "Microsoft 365"
 	case string(mailbox.ProviderTitan):
-		return "GoDaddy Titan"
+		return "Titan"
 	default:
 		return "No provider"
 	}

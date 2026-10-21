@@ -169,7 +169,11 @@ func (s *server) replacementData(ctx context.Context, ownerID string, operation 
 }
 
 func (s *server) handleConnection(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, views.ConnectionPage(s.connectionData(r, connectionNotices[r.URL.Query().Get("notice")])))
+	data := s.connectionData(r, connectionNotices[r.URL.Query().Get("notice")])
+	if provider := r.URL.Query().Get("provider"); mailbox.Provider(provider).Valid() {
+		data.SelectedProvider = provider
+	}
+	s.render(w, r, views.ConnectionPage(data))
 }
 
 func (s *server) handleReplacement(w http.ResponseWriter, r *http.Request) {
@@ -204,11 +208,12 @@ func (s *server) handleMicrosoftSettings(w http.ResponseWriter, r *http.Request)
 			s.app.Logger().Warn("save microsoft provider settings", "error", err)
 		}
 		data := s.connectionData(r, "")
+		data.SelectedProvider = string(mailbox.ProviderMicrosoft)
 		data.LastError = s.settingsMessage(err)
 		s.render(w, r, views.ConnectionPage(data))
 		return
 	}
-	http.Redirect(w, r, "/connection?notice=settings-saved", http.StatusSeeOther)
+	http.Redirect(w, r, "/connection?provider=microsoft365&notice=settings-saved", http.StatusSeeOther)
 }
 
 // settingsMessage maps a rejected settings save to operator text. Only field
@@ -231,7 +236,9 @@ func (s *server) handleMicrosoftConnect(w http.ResponseWriter, r *http.Request) 
 	authURL, err := s.connections.BeginAuth(r.Context(), record.Id)
 	if err != nil {
 		s.app.Logger().Error("begin microsoft authorization", "error", err)
-		s.render(w, r, views.ConnectionPage(s.connectionData(r, s.connectionMessage(err))))
+		data := s.connectionData(r, s.connectionMessage(err))
+		data.SelectedProvider = string(mailbox.ProviderMicrosoft)
+		s.render(w, r, views.ConnectionPage(data))
 		return
 	}
 	http.Redirect(w, r, authURL, http.StatusSeeOther)
@@ -244,7 +251,7 @@ func (s *server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	code := r.URL.Query().Get("code")
 	if state == "" || code == "" {
-		http.Redirect(w, r, "/connection?notice=incomplete", http.StatusSeeOther)
+		http.Redirect(w, r, "/connection?provider=microsoft365&notice=incomplete", http.StatusSeeOther)
 		return
 	}
 	_, err := s.connections.CompleteAuth(r.Context(), record.Id, state, code)
@@ -258,7 +265,7 @@ func (s *server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		s.app.Logger().Error("complete microsoft authorization", "error", err)
 		// Leave the single-use callback URL so refreshing the error page cannot
 		// replay it and obscure the original failure.
-		http.Redirect(w, r, "/connection?notice="+connectionErrorCode(err), http.StatusSeeOther)
+		http.Redirect(w, r, "/connection?provider=microsoft365&notice="+connectionErrorCode(err), http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, "/connection", http.StatusSeeOther)
@@ -267,20 +274,25 @@ func (s *server) handleCallback(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleTitanConnect(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	ownerID := recordFromContext(r).Id
+	renderError := func(message string) {
+		data := s.connectionData(r, message)
+		data.SelectedProvider = string(mailbox.ProviderTitan)
+		s.render(w, r, views.ConnectionPage(data))
+	}
 	address := mailbox.CanonicalSender(r.FormValue("address"))
 	password := r.FormValue("password")
 	parsed, err := mail.ParseAddress(address)
 	if err != nil || parsed.Address != address {
-		s.render(w, r, views.ConnectionPage(s.connectionData(r, connectionNotices["titan-address"])))
+		renderError(connectionNotices["titan-address"])
 		return
 	}
 	if password == "" {
-		s.render(w, r, views.ConnectionPage(s.connectionData(r, connectionNotices["titan-password"])))
+		renderError(connectionNotices["titan-password"])
 		return
 	}
 	if err := sending.ValidateTitan(r.Context(), s.cfg.Titan.Address, address, password, sending.TitanOptions{Timeout: 20 * time.Second}); err != nil {
 		s.app.Logger().Warn("validate titan mailbox", "error", err)
-		s.render(w, r, views.ConnectionPage(s.connectionData(r, connectionNotices[connectionErrorCode(err)])))
+		renderError(connectionNotices[connectionErrorCode(err)])
 		return
 	}
 
@@ -294,22 +306,22 @@ func (s *server) handleTitanConnect(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, mailbox.ErrNotConnected):
 		if _, err := s.mailboxes.Install(r.Context(), candidate); err != nil {
-			s.render(w, r, views.ConnectionPage(s.connectionData(r, s.connectionMessage(err))))
+			renderError(s.connectionMessage(err))
 			return
 		}
 	case err != nil:
 		s.app.Logger().Error("read mailbox connection", "error", err)
-		s.render(w, r, views.ConnectionPage(s.connectionData(r, s.connectionMessage(err))))
+		renderError(s.connectionMessage(err))
 		return
 	case current.Provider == mailbox.ProviderTitan && current.Sender == address:
 		// Same mailbox: reconnect it, keeping history and approvals.
 		if err := s.mailboxes.Reconnect(r.Context(), current, candidate.Credential); err != nil {
-			s.render(w, r, views.ConnectionPage(s.connectionData(r, s.connectionMessage(err))))
+			renderError(s.connectionMessage(err))
 			return
 		}
 	default:
 		if _, err := s.mailboxes.StageReplacement(r.Context(), candidate); err != nil {
-			s.render(w, r, views.ConnectionPage(s.connectionData(r, s.connectionMessage(err))))
+			renderError(s.connectionMessage(err))
 			return
 		}
 		http.Redirect(w, r, "/connection/replace", http.StatusSeeOther)

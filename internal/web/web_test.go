@@ -529,7 +529,7 @@ func TestConnectionPage(t *testing.T) {
 		cookie := login(t, handler)
 		owner := operatorID(t, app)
 
-		rec := do(t, handler, http.MethodGet, "/connection", nil, withCookie(cookie))
+		rec := do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(cookie))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -550,8 +550,8 @@ func TestConnectionPage(t *testing.T) {
 		if strings.Contains(body, ">Continue with Microsoft 365<") {
 			t.Fatal("sign-in is offered before any registration is saved")
 		}
-		if !strings.Contains(body, `action="/connection/titan"`) || !strings.Contains(body, ">Validate Titan mailbox<") {
-			t.Fatalf("Titan must stay usable without Microsoft settings: %.600s", body)
+		if strings.Contains(body, `action="/connection/titan"`) {
+			t.Fatal("Microsoft selection rendered the Titan credentials")
 		}
 
 		// Sign-in without saved settings reports the actionable requirement.
@@ -578,10 +578,10 @@ func TestConnectionPage(t *testing.T) {
 		rec = do(t, handler, http.MethodPost, "/connection/microsoft/settings", url.Values{
 			"tenant_id": {"11111111-1111-1111-1111-111111111111"}, "client_id": {"22222222-2222-2222-2222-222222222222"}, "client_secret": {"super-secret-value"},
 		}, withCookie(cookie))
-		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection?notice=settings-saved" {
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection?provider=microsoft365&notice=settings-saved" {
 			t.Fatalf("save settings: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 		}
-		rec = do(t, handler, http.MethodGet, "/connection", nil, withCookie(cookie))
+		rec = do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(cookie))
 		body = rec.Body.String()
 		for _, want := range []string{
 			"11111111-1111-1111-1111-111111111111",
@@ -629,7 +629,7 @@ func TestConnectionPage(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		rec := do(t, handler, http.MethodGet, "/connection", nil, withCookie(cookie))
+		rec := do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(cookie))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -662,7 +662,7 @@ func TestConnectionPage(t *testing.T) {
 			t.Fatalf("save first: status=%d body=%.300s", rec.Code, rec.Body.String())
 		}
 
-		rec = do(t, handler, http.MethodGet, "/connection", nil, withCookie(second))
+		rec = do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(second))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("second page: status=%d", rec.Code)
 		}

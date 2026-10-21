@@ -267,7 +267,7 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 	}
 
 	session := env.signIn()
-	if rec := env.request(http.MethodGet, "/connection", []*http.Cookie{session}, nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "disconnected") {
+	if rec := env.request(http.MethodGet, "/connection", []*http.Cookie{session}, nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "1. Choose your provider") {
 		t.Fatalf("connection page before connect: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
 
@@ -324,7 +324,7 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 	}
 
 	// A replayed callback must not install credentials again.
-	if rec := env.request(http.MethodGet, "/connection/callback?state="+url.QueryEscape(state)+"&code=authorization-code", []*http.Cookie{session}, nil); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection?notice=state" {
+	if rec := env.request(http.MethodGet, "/connection/callback?state="+url.QueryEscape(state)+"&code=authorization-code", []*http.Cookie{session}, nil); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection?provider=microsoft365&notice=state" {
 		t.Fatalf("replayed callback: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 	env.mu.Lock()
@@ -371,7 +371,7 @@ func TestAcceptanceRestartDuringMicrosoftSignIn(t *testing.T) {
 
 	callback := "/connection/callback?state=" + url.QueryEscape(oldURL.Query().Get("state")) + "&code=old-code"
 	stale := env.request(http.MethodGet, callback, cookies, nil)
-	if stale.Code != http.StatusSeeOther || stale.Header().Get("Location") != "/connection?notice=state" {
+	if stale.Code != http.StatusSeeOther || stale.Header().Get("Location") != "/connection?provider=microsoft365&notice=state" {
 		t.Fatalf("stale callback: status=%d location=%q", stale.Code, stale.Header().Get("Location"))
 	}
 	if stale.Header().Get("Cache-Control") != "no-store" || stale.Header().Get("Referrer-Policy") != "no-referrer" {
@@ -422,7 +422,7 @@ func TestAcceptanceCallbackFailureRedirects(t *testing.T) {
 		{"?state=unknown&code=private-code", "state"},
 	} {
 		rec := env.request(http.MethodGet, "/connection/callback"+tc.query, []*http.Cookie{session}, nil)
-		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection?notice="+tc.notice {
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection?provider=microsoft365&notice="+tc.notice {
 			t.Fatalf("callback failure: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 		}
 		for _, secret := range []string{"provider-secret", "private-code", "unknown"} {

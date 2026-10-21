@@ -88,7 +88,7 @@ operator's sign-in.
 ## 5. Save the settings on the connection page
 
 1. Sign in at `<APP_ORIGIN>/login` with the operator account.
-2. Open **`/connection`** and use the **Microsoft 365** section.
+2. Open **`/connection`**, choose **Microsoft 365**, then use its setup form.
 3. Enter the **Tenant ID** — the directory UUID of the operator's tenant.
    Shared aliases such as `common` or `organizations` are rejected: the tenant
    must be explicit, so the verified identity stays tenant-qualified.
@@ -146,8 +146,9 @@ limiting and cookie protection.
 
 1. Start the server and open `<APP_ORIGIN>/login`.
 2. Sign in with the operator credentials.
-3. Open **`/connection`** and choose **Connect**. You are redirected to
-   Microsoft; sign in with **that operator's own mailbox address** in their
+3. Open **`/connection`**, choose **Microsoft 365**, save your registration
+   settings if needed, then choose **Continue with Microsoft 365**. You are
+   redirected to Microsoft; sign in with **that operator's own mailbox address** in their
    own tenant.
 4. Approve the delegated permissions. You are redirected back to
    `/connection/callback`.

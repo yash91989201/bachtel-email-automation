@@ -15,10 +15,9 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 )
 
-// TestConnectionPageOffersBothProviders pins the operator-facing copy and the
-// provider options, including the disabled Microsoft controls when settings
-// are missing.
-func TestConnectionPageOffersBothProviders(t *testing.T) {
+// TestConnectionPageRequiresProviderSelection keeps credentials out of the
+// initial page and renders only the selected provider's form.
+func TestConnectionPageRequiresProviderSelection(t *testing.T) {
 	cfg := testConfig("http://127.0.0.1:8090")
 	app, handler := newTestServer(t, cfg)
 	provisionOperator(t, app)
@@ -38,13 +37,23 @@ func TestConnectionPageOffersBothProviders(t *testing.T) {
 	if !strings.Contains(body, "Mailbox connection") {
 		t.Fatalf("connection page missing heading copy: %.400s", body)
 	}
-	// Both providers render with their post targets. Microsoft starts with its
-	// own saved-setup form; no shared deployment registration exists.
-	if !strings.Contains(body, `action="/connection/microsoft/settings"`) || !strings.Contains(body, `action="/connection/titan"`) {
-		t.Fatalf("connection page must offer Microsoft setup and Titan: %.400s", body)
+	if !strings.Contains(body, `href="/connection?provider=microsoft365"`) || !strings.Contains(body, `href="/connection?provider=godaddy-titan"`) {
+		t.Fatalf("connection page must offer both providers: %.400s", body)
 	}
-	if strings.Contains(body, "MS_TENANT_ID") || strings.Contains(body, "MS_CLIENT_SECRET") {
-		t.Fatalf("connection page still names shared Microsoft environment settings: %.400s", body)
+	if strings.Contains(body, `action="/connection/microsoft/settings"`) || strings.Contains(body, `action="/connection/titan"`) {
+		t.Fatal("initial page rendered provider credentials before selection")
+	}
+	if strings.Contains(body, "GoDaddy") {
+		t.Fatalf("mailbox UI must call this provider Titan: %.400s", body)
+	}
+
+	microsoft := do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(cookie))
+	if microsoft.Code != http.StatusOK {
+		t.Fatalf("Microsoft selection status=%d", microsoft.Code)
+	}
+	body = microsoft.Body.String()
+	if !strings.Contains(body, `action="/connection/microsoft/settings"`) || strings.Contains(body, `action="/connection/titan"`) {
+		t.Fatal("Microsoft selection must show only its credential form")
 	}
 	for _, name := range []string{"tenant_id", "client_id", "client_secret"} {
 		if !strings.Contains(body, `name="`+name+`"`) {
@@ -54,13 +63,17 @@ func TestConnectionPageOffersBothProviders(t *testing.T) {
 	if strings.Contains(body, ">Continue with Microsoft 365<") {
 		t.Fatal("Microsoft sign-in is offered before any registration is saved")
 	}
-	// Titan stays usable: its form carries no disabled attribute.
-	titanStart := strings.Index(body, `action="/connection/titan"`)
-	titanEnd := strings.Index(body[titanStart:], "</form>")
-	titanForm := body[titanStart : titanStart+titanEnd]
-	if strings.Contains(titanForm, " data-disabled") {
-		t.Fatalf("Titan form is disabled while only Microsoft settings are missing: %.400s", titanForm)
+	titan := do(t, handler, http.MethodGet, "/connection?provider=godaddy-titan", nil, withCookie(cookie))
+	if titan.Code != http.StatusOK {
+		t.Fatalf("Titan selection status=%d", titan.Code)
 	}
+	titanBody := titan.Body.String()
+	if !strings.Contains(titanBody, `action="/connection/titan"`) || strings.Contains(titanBody, `action="/connection/microsoft/settings"`) {
+		t.Fatal("Titan selection must show only its credential form")
+	}
+	titanStart := strings.Index(titanBody, `action="/connection/titan"`)
+	titanEnd := strings.Index(titanBody[titanStart:], "</form>")
+	titanForm := titanBody[titanStart : titanStart+titanEnd]
 	if !strings.Contains(titanForm, "name=\"address\"") || !strings.Contains(titanForm, "name=\"password\"") {
 		t.Fatalf("Titan form missing credential inputs: %.400s", titanForm)
 	}
@@ -76,6 +89,36 @@ func TestConnectionPageOffersBothProviders(t *testing.T) {
 		if strings.Contains(body, secret) {
 			t.Fatalf("connection page leaked %q", secret)
 		}
+	}
+}
+
+func TestSavedMicrosoftSettingsPrioritizeSignIn(t *testing.T) {
+	cfg := testConfig("http://127.0.0.1:8090")
+	app, handler := newTestServer(t, cfg)
+	provisionOperator(t, app)
+	cookie := login(t, handler)
+	owner := operatorID(t, app)
+	if _, err := mailbox.NewStore(app, testKey).SaveSettings(context.Background(), owner, mailbox.ProviderMicrosoft,
+		"11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "saved-secret"); err != nil {
+		t.Fatal(err)
+	}
+
+	page := do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(cookie))
+	if page.Code != http.StatusOK {
+		t.Fatalf("saved Microsoft page status=%d", page.Code)
+	}
+	body := page.Body.String()
+	connect := strings.Index(body, `action="/connection/microsoft/connect"`)
+	details := strings.Index(body, "<details")
+	settings := strings.Index(body, `action="/connection/microsoft/settings"`)
+	if connect < 0 || details < connect || settings < details || strings.Count(body, `action="/connection/microsoft/connect"`) != 1 {
+		t.Fatal("saved settings must show one sign-in action before collapsed settings editing")
+	}
+	if !strings.Contains(body, "<summary class=\"cursor-pointer font-semibold\">Edit application settings</summary>") {
+		t.Fatal("saved settings editor is missing its native disclosure summary")
+	}
+	if strings.Contains(body, "saved-secret") {
+		t.Fatal("saved client secret was rendered")
 	}
 }
 

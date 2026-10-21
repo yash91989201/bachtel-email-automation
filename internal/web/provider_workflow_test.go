@@ -162,7 +162,7 @@ func TestProviderWorkflowAcrossIndependentRegistrations(t *testing.T) {
 	// A different registration never widens the mailbox claim: B signing in
 	// with A's mailbox is refused without disclosing A.
 	env.saveMicrosoftSettings(sessionB, secondTenantID, secondClientID, secondSecret)
-	if rec := env.connectMicrosoft(sessionB, "code-shared"); rec.Header().Get("Location") != "/connection?notice=claimed" {
+	if rec := env.connectMicrosoft(sessionB, "code-shared"); rec.Header().Get("Location") != "/connection?provider=microsoft365&notice=claimed" {
 		t.Fatalf("cross-operator claim: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 	if current := env.connection(t, ownerB); current.ID != connectionB.ID || current.Status != mailbox.StatusConnected {
@@ -241,7 +241,7 @@ func TestProviderWorkflowAcrossIndependentRegistrations(t *testing.T) {
 	if after := env.connection(t, ownerA); after.SettingsGeneration != 2 {
 		t.Fatalf("operator A's registration changed from B's failure: %+v", after)
 	}
-	if rec := env.request(http.MethodGet, "/connection", []*http.Cookie{sessionA}, nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), rotatedClientID) {
+	if rec := env.request(http.MethodGet, "/connection?provider=microsoft365", []*http.Cookie{sessionA}, nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), rotatedClientID) {
 		t.Fatalf("operator A's saved registration is not shown: status=%d", rec.Code)
 	}
 
