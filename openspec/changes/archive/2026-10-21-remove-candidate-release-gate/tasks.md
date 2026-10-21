@@ -8,4 +8,4 @@
 
 ## 2. Integration verification
 
-- [ ] 2.1 Run make fmt, make lint, make check, make vulncheck, make verify-converter and strict OpenSpec validation. Record actual outcomes and any blockers without sending real emails or restarting the live application.
+- [x] 2.1 Run make fmt, make lint, make check, make vulncheck, make verify-converter and strict OpenSpec validation. Record actual outcomes and any blockers without sending real emails or restarting the live application.

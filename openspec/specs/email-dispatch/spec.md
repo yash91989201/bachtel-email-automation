@@ -2,12 +2,12 @@
 
 ## Purpose
 
-Run approved personalized email tasks on the server with bounded concurrency, shared mailbox pacing and accurate operator-visible progress.
+Run approved personalized email tasks on the server with per-mailbox concurrency and pacing and accurate operator-visible progress.
 
 ## Requirements
 
 ### Requirement: Configuration-specific test approval
-The system SHALL require a successfully submitted test email and the operator's explicit confirmation of received formatting for the exact configuration revision before candidate sending. A submission response alone SHALL NOT grant approval.
+The system SHALL require a successfully submitted test email and the operator's explicit confirmation of received formatting for the exact configuration revision and current mailbox connection before candidate sending. A submission response alone SHALL NOT grant approval.
 
 #### Scenario: First candidate batch
 - **WHEN** a validated task has no approved test for its configuration
@@ -18,12 +18,35 @@ The system SHALL require a successfully submitted test email and the operator's 
 - **THEN** the new revision requires a new test and approval
 - **AND** an already running task keeps its original approved snapshot
 
+#### Scenario: Candidate actions without release verification
+- **WHEN** the operator requests a candidate start, resume, retry or resend without recorded production release verification
+- **THEN** no global release gate blocks the action
+- **AND** the action still requires exact-configuration test approval and the existing explicit confirmations
+
+#### Scenario: Candidate action without approval
+- **WHEN** the operator confirms a candidate start, resume, retry or resend without approval for the exact configuration
+- **THEN** the action is refused without reserving candidates or creating candidate attempts
+
+#### Scenario: Mailbox replacement invalidates approval
+- **WHEN** the operator replaces their mailbox or provider while retaining campaign revisions
+- **THEN** no prior formatting approval authorizes candidate sending
+- **AND** each reused revision requires a newly submitted test and explicit received-format approval through the replacement connection
+
+#### Scenario: Another operator's approval
+- **WHEN** an operator attempts to use another operator's test or approval identifier
+- **THEN** no approval is accepted and no candidate work is reserved or submitted
+
+#### Scenario: Same-mailbox application settings rotation
+- **WHEN** the owner validates new provider application credentials for the same verified mailbox
+- **THEN** applicable exact-configuration formatting approvals remain valid for the unchanged mailbox
+- **AND** changing application settings does not create another sender claim or automatically start or resume sending
+
 ### Requirement: Test sends at any time
 The system SHALL let the operator explicitly send a test during setup, normal use and task interruption when authorization is usable. Tests SHALL use the selected sample content with a test-recipient override and SHALL NOT change candidate status or resume a task.
 
 #### Scenario: Test after service interruption
 - **WHEN** authorization is usable and the operator requests a test for a paused task
-- **THEN** the test uses the shared sending controls and its own attempt record
+- **THEN** the test uses the owning mailbox's sending controls and its own attempt record
 - **AND** the task remains paused until explicitly resumed
 
 #### Scenario: Expired connection
@@ -39,7 +62,7 @@ The system SHALL show a fresh eligible count, sender, pinned configuration, appr
 
 #### Scenario: Schedule enabled once
 - **WHEN** the operator enables a schedule for a validated, approved task with an acceptable future time
-- **THEN** the recorded confirmation captures the fresh counts and the pinned configuration revision as that task's start authorization
+- **THEN** the recorded confirmation captures the owning operator, current mailbox connection, fresh counts and pinned configuration revision as that task's start authorization
 - **AND** resubmitting the same schedule does not create a second start
 
 ### Requirement: Background execution
@@ -51,15 +74,21 @@ The system SHALL execute accepted tasks independently of browser connections and
 - **AND** reopening the authenticated task page shows current durable progress
 
 ### Requirement: Shared bounded concurrency
-The system SHALL allow at most four simultaneous submission requests across all tasks, tests and retries for the mailbox. Multiple tasks SHALL share this capacity without bypassing campaign candidate reservations.
+The system SHALL allow at most four simultaneous submission requests across all tasks, tests and retries for each mailbox connection. A mailbox already at that limit SHALL NOT delay launches for another mailbox. Multiple tasks SHALL share their mailbox's capacity fairly without bypassing campaign candidate reservations.
 
 #### Scenario: Several tasks and a test
 - **WHEN** multiple tasks are ready and the operator requests a test
-- **THEN** total in-flight requests never exceed four
+- **THEN** that mailbox's in-flight requests never exceed four
 - **AND** the test obtains a normal paced opportunity without bypassing the limit
 
+#### Scenario: Several independent mailboxes
+- **WHEN** multiple operators have ready tasks
+- **THEN** each mailbox uses its own four submission slots regardless of the other mailboxes' in-flight work
+- **AND** one mailbox's cooldown or saturated slots do not block another mailbox's paced opportunity
+- **AND** the dispatcher does not indefinitely starve a ready mailbox
+
 ### Requirement: Configurable bounded pacing
-The system SHALL default to 25 submission starts per minute and accept only configured integer rates from 1 through 30. Pacing SHALL be shared across tasks, tests, automatic retries and manual actions, evenly spaced without restart or batch bursts.
+The system SHALL default to 25 submission starts per minute and accept only configured integer rates from 1 through 30. Pacing SHALL be independent per mailbox and shared across its tasks, tests, automatic retries and manual actions, evenly spaced without restart or batch bursts.
 
 #### Scenario: Invalid setting
 - **WHEN** the operator submits a rate above 30, below 1 or a non-integer
@@ -68,23 +97,42 @@ The system SHALL default to 25 submission starts per minute and accept only conf
 #### Scenario: Concurrent dispatch
 - **WHEN** four request slots are available at a configured rate of 30 per minute
 - **THEN** new starts remain paced rather than launching four simultaneously
-- **AND** no rolling 60-second interval exceeds the configured application allowance
+- **AND** no rolling 60-second interval exceeds that mailbox's configured allowance
+
+#### Scenario: Different mailbox rates
+- **WHEN** two operators choose different valid rates
+- **THEN** each mailbox observes its own rolling allowance and even spacing
+- **AND** tests, retries and schedules cannot bypass that mailbox's controls
 
 ### Requirement: Provider throttling
-The system SHALL stop launching affected mailbox requests for Microsoft's Retry-After interval when throttled. Without that header it SHALL use bounded exponential backoff. Throttling SHALL be visible and SHALL NOT consume or clear candidate submission eligibility.
+The system SHALL stop affected mailbox launches for a provider's indicated retry interval or bounded exponential backoff when no interval is supplied. Throttling SHALL be visible to the owner, SHALL NOT consume candidate eligibility, and SHALL NOT pause other usable mailboxes. Automatic retry SHALL require evidence that the provider did not accept the submission.
 
 #### Scenario: One worker receives throttling
 - **WHEN** Microsoft returns 429 with Retry-After
-- **THEN** the shared mailbox dispatcher observes that cooldown before new requests
-- **AND** concurrent workers do not independently continue launching submissions
+- **THEN** all work for that mailbox observes the interval before new requests
+- **AND** other usable mailboxes retain normal paced opportunities
+
+#### Scenario: Titan temporarily rejects a submission
+- **WHEN** Titan returns a definite temporary rejection without a retry interval
+- **THEN** the mailbox observes bounded backoff and the existing retry limit
+- **AND** a missing response after possible acceptance is instead held for review
 
 ### Requirement: Submission semantics
-The system SHALL send individually addressed HTML emails from hr@bachtelcorporation.com, without attachments, and record SUBMITTED only when Microsoft returns a definite acceptance. It SHALL explain that acceptance does not confirm delivery.
+The system SHALL send individually addressed HTML messages without attachments from the owning operator's current verified mailbox. It SHALL record SUBMITTED only after definite provider acceptance and explain that acceptance does not confirm delivery. Provider diagnostics SHALL NOT expose credentials or private server responses to operators.
 
 #### Scenario: Accepted request
 - **WHEN** Graph returns 202 Accepted
 - **THEN** the attempt is recorded as SUBMITTED with its timestamp
 - **AND** the UI does not label it delivered
+
+#### Scenario: Accepted Titan submission
+- **WHEN** Titan confirms acceptance after the complete SMTP message data
+- **THEN** the attempt is recorded as SUBMITTED with its timestamp
+- **AND** a later connection-cleanup failure does not undo that acceptance
+
+#### Scenario: Uncertain SMTP completion
+- **WHEN** the complete message might have reached Titan but its final acceptance response is unavailable
+- **THEN** the attempt is held for review and is not automatically retried
 
 ### Requirement: Batched live task progress
 The system SHALL refresh progress in grouped updates every few seconds, including submitted, remaining, invalid, duplicate, failed, held and in-flight counts, recent outcomes and pause/wait reasons. Reconnection SHALL reconstruct progress from durable state.
@@ -119,7 +167,7 @@ The system SHALL accept one per-task schedule as a date and time entered in 12-h
 - **AND** its manual Start action remains available
 
 ### Requirement: Single-shot scheduled start
-The system SHALL start an authorized scheduled task once, when its stored time is reached with a running server, using the pinned configuration revision and its approved test, independently of browser connections and operator sessions. It SHALL start only the candidates free at that moment and SHALL NOT fire again after the task has started, completed or stopped.
+The system SHALL start an authorized scheduled task once, when its stored time is reached with a running server, using the pinned configuration revision, owning mailbox connection and its approved test, independently of browser connections and operator sessions. It SHALL start only the candidates free at that moment and SHALL NOT fire again after the task has started, completed or stopped.
 
 #### Scenario: Scheduled time reached
 - **WHEN** the stored time is reached while the server runs and the task is still scheduled
@@ -142,10 +190,15 @@ The system SHALL start an authorized scheduled task once, when its stored time i
 - **AND** it requires revalidation and approval before any candidate sending
 
 #### Scenario: Production release gate closed
-- **WHEN** candidate sending is disabled by the production release gate
-- **THEN** a scheduled fire does not transmit candidate email
-- **AND** the task shows the gate reason
+- **WHEN** an explicitly authorized schedule becomes due with matching configuration and test approval
+- **THEN** the task starts without requiring recorded production release verification
+- **AND** all other scheduling, eligibility and dispatch protections apply
 
 #### Scenario: Already started
 - **WHEN** a scheduled task was already started, completed or stopped
 - **THEN** its schedule does not fire again
+
+#### Scenario: Connection changed after authorization
+- **WHEN** a scheduled task references a connection that was disconnected, replaced or reset
+- **THEN** it does not send using a newly connected account or a different operator's account
+- **AND** fresh validation, test approval and operator authorization are required before candidate sending

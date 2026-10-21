@@ -28,3 +28,16 @@ Implementation tasks 1.1–1.3 are complete. Task 2.1 remains unchecked because
 `make vulncheck` did not pass. Resolving the existing dependency advisories is
 separate from removing the release gate. No vulnerability check was weakened,
 and this work does not claim production release acceptance.
+
+## Integration verification rerun (2026-10-21)
+
+- `make fmt`: passed (no pending formatting).
+- `make lint`: passed, 0 issues.
+- `make check`: passed (formatting, generated-output consistency, lint, race suite, production build).
+- `make vulncheck`: passed with 0 reachable vulnerabilities on the current tree. The tree pins `github.com/xuri/excelize/v2 v2.11.1-0.20261020033641-611b222fd8f7` (untagged commit), which clears the four advisories recorded above; that dependency bump is separate from this change and still needs review.
+- `make verify-converter`: passed (packaged-Pandoc converter-test stage built and its suite ran).
+- `openspec validate --all --strict --json --no-interactive`: passed, 14/14 items.
+
+The release-gate removal stays as implemented: no global release switch, and
+candidate actions require exact-configuration test approval plus the existing
+explicit confirmations.

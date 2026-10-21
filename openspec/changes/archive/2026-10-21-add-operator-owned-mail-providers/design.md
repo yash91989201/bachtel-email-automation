@@ -65,13 +65,19 @@ Reuse pinned `github.com/domodwyer/mailyak/v3 v3.6.2` for MIME construction wher
 
 Transport-specific endpoint overrides stay test-only; the Titan UI does not accept arbitrary SMTP hosts. Secrets never enter logs or provider-error text saved for operators.
 
+### 4a. Provider-first connection UI
+
+Use a native server-rendered provider chooser before setup fields. A validated provider query parameter selects the one visible setup panel; the internal Titan provider key remains unchanged, while every visible label uses only `Microsoft 365` or `Titan`. Ordinary links keep keyboard access and a no-JavaScript path. Unknown selections show the chooser rather than arbitrary forms.
+
+Keep existing connection status and management separate from setup. Do not render an empty status detail list or an initial Microsoft-only connection button. For Microsoft place callback guidance, registration settings and the save/sign-in steps together; for Titan show only mailbox credentials and its validation action. Retain the selected provider through POST errors, settings-save redirects and OAuth error callbacks. GET selection changes presentation only; ownership, credentials, reset confirmation and send authorization remain enforced by existing POST handlers.
+
 ### 5. Durable dispatch per connection
 
 Resolve task owner and immutable mailbox connection/generation when authorizing work. Bind approval to configuration content/revision plus that connection generation. A same-identity credential refresh/reconnect does not change identity generation, while replacement always invalidates approval. Recheck owner, connection, approval and candidate claims at manual start/resume/retry/resend, schedule authorization and fire, and before a queued send acquires its launch permission.
 
-Retain one dispatcher owner for the datastore, with a total four-request ceiling and at most four per mailbox. Use round-robin selection among ready mailboxes so a blocked mailbox does not hold the dispatcher or consume all opportunities. Keep evenly spaced starts, existing rolling-window checks and persisted cooldowns per connection at the existing 25/min default and 1-30 setting bounds. These application ceilings do not override provider quotas. Every test, schedule and retry uses the same controls. Refresh preparation must not hold a global paced-launch barrier.
+Retain one dispatcher owner for the datastore, with at most four in-flight requests per mailbox connection and no application-wide submission ceiling. Use round-robin selection among ready mailboxes so a blocked or saturated mailbox does not hold the dispatcher or consume another mailbox's opportunities. Keep evenly spaced starts, existing rolling-window checks and persisted cooldowns per connection at the existing 25/min default and 1-30 setting bounds. These per-mailbox ceilings do not override provider quotas. Every test, schedule and retry uses the same controls. Refresh preparation must not hold a global paced-launch barrier.
 
-A provider auth/throttle/service failure pauses or delays only that connection. Shared inability to persist results stops all affected launches. Workers are server-owned, have bounded exit conditions and honor process shutdown without inheriting the originating browser request's lifetime.
+A provider auth/throttle/service failure pauses or delays only that connection and must not stop another mailbox's launches, so a mailbox-scoped pause never sets a process-wide launch barrier. Shared inability to persist results stops all affected launches. Workers are server-owned, have bounded exit conditions and honor process shutdown without inheriting the originating browser request's lifetime.
 
 ### 6. Preserve semantic outcomes without hidden retries
 

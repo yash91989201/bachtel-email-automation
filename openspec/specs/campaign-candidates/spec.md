@@ -7,7 +7,7 @@ Maintain campaign-scoped candidate identity and immutable task data so later upl
 ## Requirements
 
 ### Requirement: Campaign-scoped recipient identity
-The system SHALL identify a candidate by campaign plus trimmed lowercase email, generate internal IDs without requiring an input ID column, and allow the same email in a different campaign.
+The system SHALL identify a candidate by an operator-owned campaign plus trimmed lowercase email, generate internal IDs without requiring an input ID column, and allow the same email in a different campaign.
 
 #### Scenario: Existing candidate reappears
 - **WHEN** a unique valid-address row has a key already present in the campaign
@@ -16,6 +16,11 @@ The system SHALL identify a candidate by campaign plus trimmed lowercase email, 
 #### Scenario: Same recipient in a new campaign
 - **WHEN** a recipient submitted in one campaign appears in a new campaign
 - **THEN** the prior campaign does not make the new campaign's candidate ineligible
+
+#### Scenario: Same recipient across operators
+- **WHEN** two operators import the same address into their own campaigns
+- **THEN** each campaign retains independent candidate identity and eligibility
+- **AND** neither operator sees the other's candidate or submission state
 
 ### Requirement: Immutable task snapshots
 The system SHALL retain raw and normalized mapped values, source row location and configuration revision for each admitted task-candidate. Once sending begins, later uploads and campaign edits SHALL NOT alter that task's personalized content or prior attempts.
@@ -74,3 +79,9 @@ The system SHALL allow a new task with corrected data without deleting prior tas
 #### Scenario: Address changes
 - **WHEN** a new upload uses a different normalized address for the same name
 - **THEN** it is treated as a new candidate key and the app does not infer identity from the name
+
+#### Scenario: Explicit mailbox replacement reset
+- **WHEN** the owner confirms mailbox replacement through its reset flow
+- **THEN** that operator's candidates and task history are deleted as disclosed
+- **AND** their campaigns and template revisions remain available for new uploads
+- **AND** an ordinary corrected upload or same-mailbox reconnect cannot trigger that reset

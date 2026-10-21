@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Configuration-specific test approval
-The system SHALL require a successfully submitted test email and the operator's explicit confirmation of received formatting for the exact configuration revision before candidate sending. A submission response alone SHALL NOT grant approval.
+The system SHALL require a successfully submitted test email and the operator's explicit confirmation of received formatting for the exact configuration revision and current mailbox connection before candidate sending. A submission response alone SHALL NOT grant approval.
 
 #### Scenario: First candidate batch
 - **WHEN** a validated task has no approved test for its configuration
@@ -21,8 +21,22 @@ The system SHALL require a successfully submitted test email and the operator's 
 - **WHEN** the operator confirms a candidate start, resume, retry or resend without approval for the exact configuration
 - **THEN** the action is refused without reserving candidates or creating candidate attempts
 
+#### Scenario: Mailbox replacement invalidates approval
+- **WHEN** the operator replaces their mailbox or provider while retaining campaign revisions
+- **THEN** no prior formatting approval authorizes candidate sending
+- **AND** each reused revision requires a newly submitted test and explicit received-format approval through the replacement connection
+
+#### Scenario: Another operator's approval
+- **WHEN** an operator attempts to use another operator's test or approval identifier
+- **THEN** no approval is accepted and no candidate work is reserved or submitted
+
+#### Scenario: Same-mailbox application settings rotation
+- **WHEN** the owner validates new provider application credentials for the same verified mailbox
+- **THEN** applicable exact-configuration formatting approvals remain valid for the unchanged mailbox
+- **AND** changing application settings does not create another sender claim or automatically start or resume sending
+
 ### Requirement: Single-shot scheduled start
-The system SHALL start an authorized scheduled task once, when its stored time is reached with a running server, using the pinned configuration revision and its approved test, independently of browser connections and operator sessions. It SHALL start only the candidates free at that moment and SHALL NOT fire again after the task has started, completed or stopped.
+The system SHALL start an authorized scheduled task once, when its stored time is reached with a running server, using the pinned configuration revision, owning mailbox connection and its approved test, independently of browser connections and operator sessions. It SHALL start only the candidates free at that moment and SHALL NOT fire again after the task has started, completed or stopped.
 
 #### Scenario: Scheduled time reached
 - **WHEN** the stored time is reached while the server runs and the task is still scheduled
@@ -52,3 +66,8 @@ The system SHALL start an authorized scheduled task once, when its stored time i
 #### Scenario: Already started
 - **WHEN** a scheduled task was already started, completed or stopped
 - **THEN** its schedule does not fire again
+
+#### Scenario: Connection changed after authorization
+- **WHEN** a scheduled task references a connection that was disconnected, replaced or reset
+- **THEN** it does not send using a newly connected account or a different operator's account
+- **AND** fresh validation, test approval and operator authorization are required before candidate sending

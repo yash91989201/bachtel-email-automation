@@ -61,18 +61,18 @@ The system SHALL show a fresh eligible count, sender, pinned configuration, appr
 - **AND** resubmitting the same schedule does not create a second start
 
 ### Requirement: Shared bounded concurrency
-The system SHALL allow at most four simultaneous submission requests across all tasks, tests and retries for the mailbox. The application SHALL also bound total submission concurrency to four across all mailboxes. Multiple tasks SHALL share capacity fairly without bypassing campaign candidate reservations.
+The system SHALL allow at most four simultaneous submission requests across all tasks, tests and retries for each mailbox connection. A mailbox already at that limit SHALL NOT delay launches for another mailbox. Multiple tasks SHALL share their mailbox's capacity fairly without bypassing campaign candidate reservations.
 
 #### Scenario: Several tasks and a test
 - **WHEN** multiple tasks are ready and the operator requests a test
-- **THEN** mailbox and application in-flight requests never exceed four
+- **THEN** that mailbox's in-flight requests never exceed four
 - **AND** the test obtains a normal paced opportunity without bypassing the limit
 
 #### Scenario: Several independent mailboxes
 - **WHEN** multiple operators have ready tasks
-- **THEN** the dispatcher allocates bounded capacity without indefinitely starving a ready mailbox
-- **AND** one mailbox's cooldown does not block another mailbox's paced opportunity
-
+- **THEN** each mailbox uses its own four submission slots regardless of the other mailboxes' in-flight work
+- **AND** one mailbox's cooldown or saturated slots do not block another mailbox's paced opportunity
+- **AND** the dispatcher does not indefinitely starve a ready mailbox
 
 ### Requirement: Configurable bounded pacing
 The system SHALL default to 25 submission starts per minute and accept only configured integer rates from 1 through 30. Pacing SHALL be independent per mailbox and shared across its tasks, tests, automatic retries and manual actions, evenly spaced without restart or batch bursts.
@@ -84,7 +84,7 @@ The system SHALL default to 25 submission starts per minute and accept only conf
 #### Scenario: Concurrent dispatch
 - **WHEN** four request slots are available at a configured rate of 30 per minute
 - **THEN** new starts remain paced rather than launching four simultaneously
-- **AND** no rolling 60-second interval exceeds the configured application allowance
+- **AND** no rolling 60-second interval exceeds that mailbox's configured allowance
 
 #### Scenario: Different mailbox rates
 - **WHEN** two operators choose different valid rates

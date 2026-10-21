@@ -169,3 +169,32 @@ The system SHALL allow the owner to correct or rotate provider application setti
 - **WHEN** sign-in under proposed application settings verifies a different mailbox
 - **THEN** the application requires the explicit mailbox-replacement flow before changing the connection
 - **AND** submitting application settings alone cannot trigger the destructive reset
+
+
+### Requirement: Provider-first mailbox setup
+The system SHALL require a provider choice before showing setup fields for an unconfigured mailbox. Only the selected provider's credentials and next action SHALL be shown. Visible provider names SHALL be Microsoft 365 and Titan. The user SHALL be able to change their selection without changing a saved connection or sending mail.
+
+#### Scenario: Start mailbox setup
+- **WHEN** an operator with no connected mailbox opens mailbox settings without selecting a provider
+- **THEN** the page offers Microsoft 365 and Titan as distinct choices
+- **AND** neither provider's credential form or premature sign-in action is displayed
+
+#### Scenario: Select Microsoft 365
+- **WHEN** the operator chooses Microsoft 365
+- **THEN** the page shows only Microsoft setup, its callback guidance and a clear save-then-sign-in sequence
+- **AND** Titan credential fields are absent
+
+#### Scenario: Select Titan
+- **WHEN** the operator chooses Titan
+- **THEN** the page shows only the mailbox address, email password and Titan connection action
+- **AND** Microsoft registration fields and sign-in actions are absent
+
+#### Scenario: Save settings or correct an error
+- **WHEN** settings are saved or selected-provider validation fails
+- **THEN** the page retains that provider selection and shows the relevant next step or error
+- **AND** secrets are not echoed back
+
+#### Scenario: Existing mailbox management
+- **WHEN** an operator manages an existing mailbox
+- **THEN** its identity and current state remain visible with relevant management controls
+- **AND** choosing another provider does not bypass replacement confirmation or an unfinished-reset block

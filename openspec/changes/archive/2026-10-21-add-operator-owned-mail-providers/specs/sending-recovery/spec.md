@@ -37,7 +37,7 @@ The system SHALL pause the affected mailbox for authentication/permission failur
 - **THEN** other operators' valid mailbox connections can continue sending
 - **AND** reconnecting the failed mailbox does not automatically resume its tasks
 
-#### Scenario: Shared storage failure
+#### Scenario: Deployment-wide storage failure
 - **WHEN** a database or storage failure prevents reliable outcome persistence across mailboxes
 - **THEN** new launches stop across the affected application
 - **AND** existing intents are recovered conservatively rather than automatically retried

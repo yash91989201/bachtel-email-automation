@@ -160,3 +160,88 @@ requires a reviewed dependency upgrade, which is outside this change. This
 work does not claim a hosted CI run, a deployment, or release acceptance. Local
 data written by the previous singleton schema is not migrated: the documented
 `reset-local-data` path must be run explicitly before using this build locally.
+
+
+## Provider-first mailbox UI correction (2026-10-21)
+
+The mailbox page now starts with Microsoft 365 and Titan provider choices.
+Only the selected provider's credentials render. Selection survives Microsoft
+settings saves, authorization failures and Titan validation errors. A new
+workspace has no empty mailbox status card or premature Microsoft sign-in
+button. Microsoft settings editing collapses after save, leaving a single
+Continue/Reconnect action. Reset-blocked setup remains unavailable. Home and
+connection provider labels use Titan; the internal provider identifier is unchanged.
+
+Verification uses temporary stores and dummy credentials only. The live data
+store and local .env were not loaded, and no real email or provider sign-in was
+performed. Setup documentation and the change's behavior/design/tasks were updated.
+
+- Worker: go test ./internal/web -count=1 passed before the saved-state polish.
+- Focused connection tests, including TestConnectionPageRequiresProviderSelection
+  and TestSavedMicrosoftSettingsPrioritizeSignIn, passed after the final template change.
+- make fmt and targeted template generation completed; make lint reported zero issues.
+- Desktop browser checks used the opt-in simulated acceptance harness and a new
+  disposable operator: chooser, Titan-only fields, Microsoft-only registration,
+  saved-settings selection and visible Continue action were verified.
+- Mobile (390px viewport) chooser and Titan form were visually checked. The
+  saved Microsoft view was checked through DOM bounds: document width and
+  scroll width both 375px (viewport minus scrollbar), with actions within bounds.
+  A mobile screenshot attempt timed out; the viewport was restored afterward.
+- git diff --check passed. Strict OpenSpec validation passed all 13 items.
+- make vulncheck failed on four reachable advisories in the existing
+  github.com/xuri/excelize/v2 v2.11.0: GO-2026-6689, GO-2026-6688,
+  GO-2026-6685 and GO-2026-6684. This UI correction changes no dependencies;
+  the verification task remains open pending a separate dependency remediation.
+- An earlier make check was superseded after the final UI polish. A generation
+  consistency run exposed differing templ source filename prefixes; targeted
+  regeneration from internal/web and staging only the two intentional generated
+  outputs resolved that mismatch. The final make check result is recorded below.
+
+Final verification results:
+
+- The production binary compiled successfully with CGO_ENABLED=0, trimpath and
+  release ldflags to a temporary output path.
+- The final make check passed format, generated-output consistency and lint,
+  then failed because the internal/sending package exceeded its default 10-minute
+  package test budget. TestTwoOperatorWorkflow was running for 2m38s when the
+  package alarm fired. The web race package passed in 381.761s. No race report
+  appeared in the check log. This is a failed full check, not a clean project pass.
+- The interrupted sending workflow is being checked separately with the same
+  race detector and unchanged default timeout; its result follows below.
+- The current UI task (5.7) is verified. Overall verification task 6.5 remains
+  unchecked because make check and make vulncheck did not pass. No tests,
+  timeouts, lint rules or vulnerability checks were weakened.
+
+- Isolated rerun: `go test -race ./internal/sending -run '^TestTwoOperatorWorkflow$' -count=1`
+  passed in 214.112s. This confirms the interrupted workflow in isolation; it
+  does not replace the failed full-suite result or clear the vulnerability gate.
+- After the whitespace-only final template cleanup, focused connection tests,
+  make check-generated, make check-format and git diff --check passed again.
+- No dependency, timeout or test-policy changes were made. No converter check
+  was required for this mailbox UI-only correction, and no fresh checkout was
+  created (so npm ci was not repeated). Browser fixture services were stopped.
+
+## Per-mailbox capacity correction (2026-10-21)
+
+The dispatcher had a single application-wide counter that capped total
+in-flight submissions at four. Two operators could not send at the same time:
+with one mailbox holding four requests, the other mailbox launched nothing.
+
+Correction: the only submission bound is four in-flight requests per mailbox
+connection. Mailbox selection skips saturated connections instead of stopping
+the coordinator, and a mailbox-scoped pause (uncertain or auth outcome) no
+longer sets a process-wide launch barrier; shared storage failure still stops
+all launches.
+
+Evidence, temporary stores and simulated senders only, no real email:
+
+- `go test ./internal/sending -run 'TestAcceptancePerMailboxCapacityIsIndependent|TestAcceptanceMailboxPauseDoesNotStallAnotherOperator|TestWorkerMailboxPauseStopsOnlyItsOwnWork|TestWorkerSaturatedMailboxesWaitWithoutRescanning|TestWorkerInFlightForCountsOnlyOwnerRequests' -count=1` — passed. The capacity test holds four requests on operator A's mailbox while operator B's mailbox fills its own four slots; the pause test pauses A with an uncertain outcome and completes B's 12 submissions with no wake or synchronize.
+- `make fmt`, `make check-format` — passed; targeted template regeneration left no generated-output drift.
+- `make lint` — passed, 0 issues.
+- `make check` — passed: format, generated-output consistency, shared lint policy, race suite (18 packages) and production build.
+- `make vulncheck` — passed: 0 reachable vulnerabilities on the current tree. The working tree pins `github.com/xuri/excelize/v2 v2.11.1-0.20261020033641-611b222fd8f7`, an untagged commit that resolves the four advisories recorded above; that dependency bump is not part of this change's edits and still needs its own review and version justification.
+- `make verify-converter` — passed (packaged-Pandoc converter-test stage built and ran).
+- `openspec validate --all --strict --json --no-interactive` — passed, 14/14 items.
+
+README, `docs/background-sending.md` and the sending-page pacing help no longer
+describe an application-wide cap.
