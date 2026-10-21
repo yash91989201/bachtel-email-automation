@@ -15,7 +15,7 @@ func clearEnvironment(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
 		EnvOrigin, EnvEncryptionKey, EnvTenantID, EnvClientID, EnvClientSecret,
-		EnvRedirectURL, EnvSenderAddress, EnvAuthorityURL, EnvGraphBaseURL,
+		EnvRedirectURL, EnvTitanSMTPAddress, EnvAuthorityURL, EnvGraphBaseURL,
 		EnvIntakeMaxUploadBytes, EnvIntakeUnzipSizeLimit, EnvIntakeUnzipXMLSizeLimit,
 		EnvRestoreReview,
 	} {
@@ -39,11 +39,23 @@ func TestLoadDefaults(t *testing.T) {
 	if got, want := cfg.Microsoft.RedirectURL, DefaultOrigin+CallbackPath; got != want {
 		t.Fatalf("redirect url = %q, want %q", got, want)
 	}
-	if got := cfg.Microsoft.SenderAddress; got != DefaultSenderAddress {
-		t.Fatalf("sender = %q, want %q", got, DefaultSenderAddress)
+	if got := cfg.Titan.Address; got != DefaultTitanSMTPAddress {
+		t.Fatalf("titan endpoint = %q, want %q", got, DefaultTitanSMTPAddress)
 	}
 	if missing := cfg.Microsoft.Missing(); len(missing) != 3 {
 		t.Fatalf("expected tenant/client/secret to be reported missing, got %v", missing)
+	}
+}
+
+func TestLoadTitanEndpointOverride(t *testing.T) {
+	clearEnvironment(t)
+	t.Setenv(EnvTitanSMTPAddress, "127.0.0.1:2525")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Titan.Address != "127.0.0.1:2525" {
+		t.Fatalf("titan endpoint = %q, want the simulated override", cfg.Titan.Address)
 	}
 }
 

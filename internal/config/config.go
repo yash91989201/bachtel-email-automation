@@ -37,9 +37,6 @@ const (
 	// EnvRedirectURL overrides the Microsoft redirect URI. It defaults to the
 	// callback path appended to EnvOrigin and must match the registration.
 	EnvRedirectURL = "MS_REDIRECT_URL"
-	// EnvSenderAddress overrides the single mailbox allowed to connect. It
-	// exists so a test or staging tenant can point at another address.
-	EnvSenderAddress = "MS_SENDER_ADDRESS"
 	// EnvAuthorityURL overrides the Microsoft authority origin, used by
 	// simulated authorization servers in tests.
 	EnvAuthorityURL = "MS_AUTHORITY_URL"
@@ -65,14 +62,18 @@ const (
 const (
 	// DefaultOrigin is used when EnvOrigin is unset (local development).
 	DefaultOrigin = "http://127.0.0.1:8090"
-	// DefaultSenderAddress is the fixed HR mailbox the application connects to.
-	DefaultSenderAddress = "hr@bachtelcorporation.com"
 	// DefaultAuthorityURL is the public Microsoft Entra authority origin.
 	DefaultAuthorityURL = "https://login.microsoftonline.com"
 	// DefaultGraphBaseURL is the Microsoft Graph v1.0 base URL.
 	DefaultGraphBaseURL = "https://graph.microsoft.com/v1.0"
 	// CallbackPath is the Microsoft redirect path served by internal/web.
 	CallbackPath = "/connection/callback"
+	// EnvTitanSMTPAddress overrides the Titan SMTP endpoint. The UI never
+	// accepts a host, and this setting exists for simulated test servers.
+	EnvTitanSMTPAddress = "TITAN_SMTP_ADDRESS"
+	// DefaultTitanSMTPAddress is GoDaddy's documented outgoing SMTP endpoint
+	// for Titan mailboxes: implicit TLS on port 465.
+	DefaultTitanSMTPAddress = "smtpout.secureserver.net:465"
 	// EncryptionKeySize is the required AES-256 key length in bytes.
 	EncryptionKeySize = 32
 )
@@ -111,17 +112,26 @@ type Config struct {
 	// RestoreReview keeps candidate dispatch disabled after a backup restore
 	// until the operator reconciles submissions that postdate the backup.
 	RestoreReview bool
+	// Titan holds the GoDaddy Titan SMTP endpoint. It is fixed by the provider;
+	// only a test can override it.
+	Titan Titan
 }
 
-// Microsoft holds the Microsoft Entra application and mailbox settings.
+// Microsoft holds the shared Microsoft Entra application settings. Each
+// operator connects their own mailbox in the configured tenant; there is no
+// fixed sender address.
 type Microsoft struct {
-	TenantID      string
-	ClientID      string
-	ClientSecret  string
-	RedirectURL   string
-	SenderAddress string
-	AuthorityURL  string
-	GraphBaseURL  string
+	TenantID     string
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+	AuthorityURL string
+	GraphBaseURL string
+}
+
+// Titan holds the GoDaddy Titan SMTP endpoint shared by every Titan connection.
+type Titan struct {
+	Address string
 }
 
 // Load reads configuration from the environment. Values needed only by the
@@ -134,13 +144,12 @@ func Load() (Config, error) {
 	}
 
 	microsoft := Microsoft{
-		TenantID:      strings.TrimSpace(os.Getenv(EnvTenantID)),
-		ClientID:      strings.TrimSpace(os.Getenv(EnvClientID)),
-		ClientSecret:  os.Getenv(EnvClientSecret),
-		RedirectURL:   strings.TrimSpace(env(EnvRedirectURL, origin+CallbackPath)),
-		SenderAddress: strings.ToLower(strings.TrimSpace(env(EnvSenderAddress, DefaultSenderAddress))),
-		AuthorityURL:  strings.TrimSuffix(strings.TrimSpace(env(EnvAuthorityURL, DefaultAuthorityURL)), "/"),
-		GraphBaseURL:  strings.TrimSuffix(strings.TrimSpace(env(EnvGraphBaseURL, DefaultGraphBaseURL)), "/"),
+		TenantID:     strings.TrimSpace(os.Getenv(EnvTenantID)),
+		ClientID:     strings.TrimSpace(os.Getenv(EnvClientID)),
+		ClientSecret: os.Getenv(EnvClientSecret),
+		RedirectURL:  strings.TrimSpace(env(EnvRedirectURL, origin+CallbackPath)),
+		AuthorityURL: strings.TrimSuffix(strings.TrimSpace(env(EnvAuthorityURL, DefaultAuthorityURL)), "/"),
+		GraphBaseURL: strings.TrimSuffix(strings.TrimSpace(env(EnvGraphBaseURL, DefaultGraphBaseURL)), "/"),
 	}
 	if microsoft.RedirectURL == "" {
 		return Config{}, fmt.Errorf("%s must not be empty", EnvRedirectURL)
@@ -167,6 +176,9 @@ func Load() (Config, error) {
 		PandocPath:    strings.TrimSpace(os.Getenv(EnvPandocPath)),
 		Intake:        intakeLimits,
 		RestoreReview: restoreReview,
+		Titan: Titan{
+			Address: strings.TrimSpace(env(EnvTitanSMTPAddress, DefaultTitanSMTPAddress)),
+		},
 	}, nil
 }
 
@@ -234,11 +246,10 @@ func (m Microsoft) Endpoints() (authorizeURL, tokenURL string) {
 func (m Microsoft) Missing() []string {
 	var missing []string
 	for name, value := range map[string]string{
-		EnvTenantID:      m.TenantID,
-		EnvClientID:      m.ClientID,
-		EnvClientSecret:  m.ClientSecret,
-		EnvRedirectURL:   m.RedirectURL,
-		EnvSenderAddress: m.SenderAddress,
+		EnvTenantID:     m.TenantID,
+		EnvClientID:     m.ClientID,
+		EnvClientSecret: m.ClientSecret,
+		EnvRedirectURL:  m.RedirectURL,
 	} {
 		if strings.TrimSpace(value) == "" {
 			missing = append(missing, name)
