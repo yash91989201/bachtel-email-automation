@@ -4,6 +4,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	m "github.com/pocketbase/pocketbase/migrations"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
+	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 )
 
 // Campaigns own reusable email configuration. Rules stay nil on both
@@ -18,11 +19,19 @@ import (
 // hash, so renaming a result column does not invalidate content approval.
 func init() {
 	m.Register(func(app core.App) error {
+		operators, err := app.FindCollectionByNameOrId(operator.CollectionName)
+		if err != nil {
+			return err
+		}
 		// The campaign is saved first: PocketBase validates a relation target
 		// when the collection holding the relation is saved, so each side of
 		// the pair needs the other's generated id.
 		campaigns := core.NewBaseCollection(campaign.CampaignsCollection)
 		campaigns.Fields.Add(
+			// Every campaign belongs to one operator. Candidates, tasks,
+			// revisions, attempts and exports inherit that owner through the
+			// campaign, so no direct owner column is repeated on child records.
+			&core.RelationField{Name: "owner", Required: true, MaxSelect: 1, CollectionId: operators.Id},
 			&core.TextField{Name: "name", Required: true, Max: 200},
 			// Expected source header for the recipient column. Change 3
 			// compares it against the uploaded worksheet headers.
@@ -33,6 +42,10 @@ func init() {
 			&core.AutodateField{Name: "created", OnCreate: true},
 			&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
 		)
+		if err := app.Save(campaigns); err != nil {
+			return err
+		}
+		campaigns.AddIndex("idx_campaigns_owner", false, "owner", "")
 		if err := app.Save(campaigns); err != nil {
 			return err
 		}

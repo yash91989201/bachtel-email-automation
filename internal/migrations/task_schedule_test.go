@@ -38,6 +38,7 @@ func TestTaskScheduleMigrationAddsFieldsAndDefaultsExistingTask(t *testing.T) {
 	}
 	target := core.NewRecord(campaigns)
 	target.Set("name", "Existing campaign")
+	target.Set("owner", newOperator(t, app))
 	target.Set("source_headers", []string{"Email"})
 	if err = app.Save(target); err != nil {
 		t.Fatal(err)

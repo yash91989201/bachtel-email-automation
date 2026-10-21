@@ -6,6 +6,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 )
 
 // Generated downloads carry their own durable state so a failed or interrupted
@@ -19,6 +20,10 @@ import (
 // configured when the operator downloads it later.
 func init() {
 	m.Register(func(app core.App) error {
+		operators, err := app.FindCollectionByNameOrId(operator.CollectionName)
+		if err != nil {
+			return err
+		}
 		attempts, err := app.FindCollectionByNameOrId("submission_attempts")
 		if err != nil {
 			return err
@@ -39,6 +44,10 @@ func init() {
 
 		artifacts := core.NewBaseCollection(exports.ArtifactsCollection)
 		artifacts.Fields.Add(
+			// Every artifact belongs to one operator, recorded from its campaign
+			// so a background generation can enforce the boundary without a
+			// session.
+			&core.RelationField{Name: "owner", Required: true, MaxSelect: 1, CollectionId: operators.Id},
 			// task_results | campaign_report | campaign_package
 			&core.TextField{Name: "kind", Required: true, Max: 32},
 			&core.RelationField{Name: "campaign", Required: true, MaxSelect: 1, CollectionId: campaigns.Id},

@@ -6,6 +6,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
+	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 )
 
 func TestRecipientMappingReplacesCampaignHeaderSchema(t *testing.T) {
@@ -33,6 +34,7 @@ func TestRecipientMappingReplacesCampaignHeaderSchema(t *testing.T) {
 	}
 	record := core.NewRecord(collection)
 	record.Set("name", "Development campaign")
+	record.Set("owner", newOperator(t, app))
 	record.Set("recipient_header", "Email, Name")
 	if err := app.Save(record); err != nil {
 		t.Fatal(err)
@@ -60,4 +62,27 @@ func TestRecipientMappingReplacesCampaignHeaderSchema(t *testing.T) {
 	if len(saved.GetStringSlice("source_headers")) != 0 {
 		t.Fatal("old recipient selection was converted to draft hints")
 	}
+}
+
+// newOperator creates one operator record for fixtures that must satisfy the
+// campaign owner relation. It uses PocketBase password handling, exactly like
+// the provisioning command.
+func newOperator(t *testing.T, app core.App, email ...string) string {
+	t.Helper()
+	address := "fixture@example.test"
+	if len(email) > 0 {
+		address = email[0]
+	}
+	collection, err := app.FindCollectionByNameOrId(operator.CollectionName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := core.NewRecord(collection)
+	record.SetEmail(address)
+	record.SetPassword("correct-horse-battery")
+	record.SetVerified(true)
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	return record.Id
 }
