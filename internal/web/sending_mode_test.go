@@ -205,13 +205,18 @@ func TestSendingModeSavedScheduleSurvivesChooserAndReload(t *testing.T) {
 func TestSendingTypePOSTValidationAndStateGuards(t *testing.T) {
 	f := newScheduleFixture(t)
 	path := "/campaigns/" + f.campaignID + "/tasks/" + f.taskID + "/sending-type"
+	// The upload fixture records its required Direct/Scheduled preference.
+	uploaded := taskSendingTypeStored(t, f)
+	if uploaded != views.TaskSendingTypeDirect {
+		t.Fatalf("upload stored sending type = %q, want %q", uploaded, views.TaskSendingTypeDirect)
+	}
 	for _, value := range []string{"", "choose", "invalid"} {
 		rec := do(t, f.handler, http.MethodPost, path, url.Values{"sending_type": {value}}, withCookie(f.cookie))
 		if rec.Code < http.StatusBadRequest || rec.Code >= http.StatusInternalServerError {
 			t.Errorf("invalid sending_type %q status=%d, want client error", value, rec.Code)
 		}
 	}
-	if got := taskSendingTypeStored(t, f); got != "" {
+	if got := taskSendingTypeStored(t, f); got != uploaded {
 		t.Fatalf("invalid selection changed stored type to %q", got)
 	}
 
@@ -223,7 +228,7 @@ func TestSendingTypePOSTValidationAndStateGuards(t *testing.T) {
 		if rec.Code < http.StatusBadRequest || rec.Code >= http.StatusInternalServerError {
 			t.Errorf("switch to direct with schedule state %q status=%d, want client error", state, rec.Code)
 		}
-		if got := taskSendingTypeStored(t, f); got != "" {
+		if got := taskSendingTypeStored(t, f); got != uploaded {
 			t.Errorf("schedule state %q changed stored type to %q", state, got)
 		}
 	}
@@ -422,19 +427,13 @@ func sendingModeAssertScheduleEditor(t *testing.T, doc *html.Node, want bool) {
 	}
 }
 
-func sendingModeHasFormIDPrefix(doc *html.Node, prefix string) bool {
-	return sendingModeNode(doc, func(n *html.Node) bool {
-		return n.Type == html.ElementNode && n.Data == "form" && strings.HasPrefix(sendingModeAttr(n, "id"), prefix)
-	}) != nil
-}
-
 func sendingModeAssertChoices(t *testing.T, doc *html.Node) {
 	t.Helper()
 	form := sendingModeNode(doc, func(n *html.Node) bool {
-		return n.Type == html.ElementNode && n.Data == "form" && sendingModeAttr(n, "method") == "get"
+		return n.Type == html.ElementNode && n.Data == "form" && sendingModeAttr(n, "method") == "post" && strings.HasSuffix(sendingModeAttr(n, "action"), "/sending-type")
 	})
 	if form == nil {
-		t.Fatal("mode chooser has no native GET form")
+		t.Fatal("mode chooser has no native POST form")
 	}
 	for _, value := range []string{views.TaskSendingTypeDirect, views.TaskSendingTypeScheduled} {
 		button := sendingModeNode(form, func(n *html.Node) bool {

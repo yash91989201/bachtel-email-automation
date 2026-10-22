@@ -354,7 +354,7 @@ func TestTaskShellKeepsNavigationOutsidePolling(t *testing.T) {
 		if content == nil {
 			t.Fatalf("disclosure %q is missing from the live region", id)
 		}
-		if !hasWorkspaceAttr(content.Parent, "data-workspace-persist") {
+		if !hasWorkspaceAttr(content, "data-workspace-persist") {
 			t.Errorf("disclosure %q is not marked for restoration", id)
 		}
 	}

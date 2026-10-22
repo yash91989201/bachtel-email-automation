@@ -373,6 +373,9 @@ func TestTaskUploadRejection(t *testing.T) {
 	t.Run("missing file", func(t *testing.T) {
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
+		if err := writer.WriteField("sending_type", "direct"); err != nil {
+			t.Fatal(err)
+		}
 		if err := writer.Close(); err != nil {
 			t.Fatal(err)
 		}
@@ -383,6 +386,32 @@ func TestTaskUploadRejection(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "choose an XLSX workbook to upload") {
 			t.Fatalf("missing file: status=%d body=%.400s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("missing sending preference", func(t *testing.T) {
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		part, err := writer.CreateFormFile("workbook", "book.xlsx")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write(mixedWorkbook(t)); err != nil {
+			t.Fatal(err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/campaigns/"+id+"/tasks", body)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "choose Direct or Scheduled sending") {
+			t.Fatalf("missing sending preference: status=%d body=%.400s", rec.Code, rec.Body.String())
+		}
+		if stored, err := app.FindRecordsByFilter(intake.TasksCollection, "", "", 0, 0); err != nil || len(stored) != 0 {
+			t.Fatalf("refused upload stored %d tasks, err=%v", len(stored), err)
 		}
 	})
 

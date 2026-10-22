@@ -197,8 +197,20 @@ func TestCandidateControlsRequireTestApprovalWithoutReleaseGate(t *testing.T) {
 		button = findViewNode(doc, func(n *html.Node) bool {
 			return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Schedule start"
 		})
-		if button == nil || hasViewAttr(button, "disabled") == approved {
-			t.Errorf("Schedule start with approved=%t: expected disabled=%t", approved, !approved)
+		if button == nil || !hasViewAttr(button, "disabled") {
+			t.Errorf("Schedule start with approved=%t: expected disabled until its confirmation is checked", approved)
+		}
+		bind := workspaceAttr(button, "x-bind:disabled")
+		if !strings.Contains(bind, "!confirmed") || !strings.Contains(bind, "!eligible") {
+			t.Errorf("Schedule start with approved=%t: confirmation/eligibility binding = %q", approved, bind)
+		}
+		form := button.Parent
+		for form != nil && form.Data != "form" {
+			form = form.Parent
+		}
+		wantEligible := map[bool]string{true: "eligible: true", false: "eligible: false"}[approved && data.Remaining > 0]
+		if form == nil || !strings.Contains(workspaceAttr(form, "x-data"), wantEligible) {
+			t.Errorf("Schedule start with approved=%t: x-data missing %q", approved, wantEligible)
 		}
 	}
 }
