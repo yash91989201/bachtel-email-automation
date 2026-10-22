@@ -19,6 +19,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/item"
 	uilabel "github.com/yash91989201/bachtel-email-automation/internal/web/ui/label"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/nativeselect"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/scrollarea"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/table"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tabs"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tooltip"
@@ -1402,36 +1403,38 @@ templ taskAttemptHistory(data TaskPageData) {
 				}
 				@accordion.Content(accordion.ContentProps{Class: "space-y-3 pb-5"}) {
 					<p class="text-sm text-muted-foreground">Times use India time (+05:30). “Submitted” means the provider accepted the request; it does not confirm delivery. Tests are kept separate from candidate totals.</p>
-					@item.Group(item.GroupProps{}) {
-						if len(data.Recent) == 0 && len(data.Resolutions) == 0 {
-							@item.Item(item.Props{}) {
-								@item.Content(item.ContentProps{}) {
-									@item.Description(item.DescriptionProps{}) {
-										No attempts recorded for this task yet.
+					@scrollarea.ScrollArea(scrollarea.Props{Class: "[&_[data-slot=scroll-area-viewport]]:h-auto [&_[data-slot=scroll-area-viewport]]:max-h-[min(28rem,60vh)]"}) {
+						@item.Group(item.GroupProps{Class: "p-1 pr-3"}) {
+							if len(data.Recent) == 0 && len(data.Resolutions) == 0 {
+								@item.Item(item.Props{}) {
+									@item.Content(item.ContentProps{}) {
+										@item.Description(item.DescriptionProps{}) {
+											No attempts recorded for this task yet.
+										}
 									}
 								}
 							}
-						}
-						for _, outcome := range data.Recent {
-							@item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}) {
-								@item.Content(item.ContentProps{}) {
-									@item.Title(item.TitleProps{}) {
-										{ outcome.Time } · { outcome.Kind } · { outcome.Recipient }
-									}
-									@item.Description(item.DescriptionProps{}) {
-										{ outcome.State } · { outcome.Reason }
+							for _, outcome := range data.Recent {
+								@item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}) {
+									@item.Content(item.ContentProps{}) {
+										@item.Title(item.TitleProps{}) {
+											{ outcome.Time } · { outcome.Kind } · { outcome.Recipient }
+										}
+										@item.Description(item.DescriptionProps{}) {
+											{ outcome.State } · { outcome.Reason }
+										}
 									}
 								}
 							}
-						}
-						for _, resolution := range data.Resolutions {
-							@item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}) {
-								@item.Content(item.ContentProps{}) {
-									@item.Title(item.TitleProps{}) {
-										{ resolution.Time } · Worksheet row { resolution.Row } marked already submitted
-									}
-									@item.Description(item.DescriptionProps{}) {
-										Basis: { resolution.Basis } · Recorded by { resolution.Actor }
+							for _, resolution := range data.Resolutions {
+								@item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}) {
+									@item.Content(item.ContentProps{}) {
+										@item.Title(item.TitleProps{}) {
+											{ resolution.Time } · Worksheet row { resolution.Row } marked already submitted
+										}
+										@item.Description(item.DescriptionProps{}) {
+											Basis: { resolution.Basis } · Recorded by { resolution.Actor }
+										}
 									}
 								}
 							}
