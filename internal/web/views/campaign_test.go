@@ -1,51 +1,16 @@
 package views
 
 import (
-	"context"
 	"strings"
 	"testing"
 
 	"golang.org/x/net/html"
 )
 
-func TestCampaignTabsExposeTheRelevantPanel(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		data    CampaignPageData
-		visible string
-		tabs    int
-	}{
-		{name: "draft has no preview tab", visible: "template", tabs: 3},
-		{name: "revision error opens template", data: CampaignPageData{HasRevision: true, RevisionError: "Invalid mapping"}, visible: "template", tabs: 4},
-		{name: "label error opens settings", data: CampaignPageData{HasRevision: true, LabelsError: "Duplicate labels"}, visible: "settings", tabs: 4},
-		{name: "deletion error opens settings", data: CampaignPageData{HasRevision: true, DeleteError: "Campaign is active"}, visible: "settings", tabs: 4},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var page strings.Builder
-			if err := CampaignPage(tc.data).Render(context.Background(), &page); err != nil {
-				t.Fatal(err)
-			}
-			assertWorkspaceTabs(t, page.String(), "campaign", tc.visible, tc.tabs)
-			doc, err := html.Parse(strings.NewReader(page.String()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			root := workspaceNode(doc, "data-slot", "tabs")
-			if !hasWorkspaceAttr(root, "data-workspace-tabs") {
-				t.Fatal("campaign workspace is not marked for the adapter")
-			}
-			wantIgnore := tc.data.RevisionError != "" || tc.data.LabelsError != "" || tc.data.DeleteError != ""
-			if got := hasWorkspaceAttr(root, "data-workspace-ignore-hash"); got != wantIgnore {
-				t.Errorf("ignore-hash = %t, want %t", got, wantIgnore)
-			}
-		})
-	}
-}
-
-// The revision form leads with the fields the operator fills in and keeps the
-// mapping reference behind a disclosure. The reference content must stay
-// reachable, and every help panel an input points at must exist.
-func TestCampaignRevisionFormRevealsItsReferenceOnDemand(t *testing.T) {
+// Template & preview shows the current configuration, mapping guidance, the
+// explicit revision form, the sample preview and the revision history in that
+// order, with the later-revision form closed until the operator chooses it.
+func TestCampaignTemplateSectionOrderAndGuidance(t *testing.T) {
 	data := CampaignPageData{
 		ID:              "camp1",
 		Name:            "Test campaign",
@@ -53,130 +18,234 @@ func TestCampaignRevisionFormRevealsItsReferenceOnDemand(t *testing.T) {
 		ExampleVariable: "candidate_name",
 		ExampleHeader:   "Candidate Name",
 		MappingDraft:    "candidate_name | Candidate Name | required | text",
+		HasRevision:     true,
+		Revision:        2,
+		Subject:         "Hello {{candidate_name}}",
+		Approved:        true,
+		Variables:       []PreviewVariable{{Name: "candidate_name", Required: true}},
 	}
-	var page strings.Builder
-	if err := CampaignPage(data).Render(context.Background(), &page); err != nil {
-		t.Fatal(err)
-	}
-	doc, err := html.Parse(strings.NewReader(page.String()))
-	if err != nil {
-		t.Fatal(err)
-	}
+	doc := parseView(t, CampaignPage(data))
 
-	byID := map[string]*html.Node{}
-	var describeTargets []string
-	var inspect func(*html.Node)
-	inspect = func(node *html.Node) {
-		attrs := map[string]string{}
-		for _, attr := range node.Attr {
-			attrs[attr.Key] = attr.Val
-		}
-		if id, ok := attrs["id"]; ok {
-			byID[id] = node
-		}
-		if described, ok := attrs["aria-describedby"]; ok {
-			describeTargets = append(describeTargets, strings.Fields(described)...)
-		}
-		for child := node.FirstChild; child != nil; child = child.NextSibling {
-			inspect(child)
-		}
-	}
-	inspect(doc)
-
-	for _, id := range []string{"revision-document", "revision-subject", "revision-mappings", "revision-mappings-hint", "revision-mappings-help", "revision-document-help", "revision-subject-help"} {
-		if _, ok := byID[id]; !ok {
-			t.Errorf("missing element %q", id)
-		}
-	}
-	for _, id := range describeTargets {
-		if _, ok := byID[id]; !ok {
-			t.Errorf("aria-describedby points at missing element %q", id)
-		}
-	}
-
-	// The draft still reaches the textarea.
-	if got := textOf(byID["revision-mappings"]); got != data.MappingDraft {
-		t.Errorf("mapping draft = %q, want %q", got, data.MappingDraft)
-	}
-
-	// The mapping rules stay reachable through the help panel.
-	hint := textOf(byID["revision-mappings-help"])
-	for _, want := range []string{"candidate_email | Candidate Email | recipient | email", "recipient"} {
-		if !strings.Contains(hint, want) {
-			t.Errorf("mapping help %q does not mention %q", hint, want)
-		}
-	}
-
-	// The content fields show a placeholder example that matches the draft.
-	for _, id := range []string{"revision-subject-help", "revision-document-help"} {
-		panel := textOf(byID[id])
-		if want := "{{" + data.ExampleVariable + "}}"; !strings.Contains(panel, want) {
-			t.Errorf("help panel %q does not show the placeholder example %q", panel, want)
-		}
-	}
-
-	// The template tab shows the current revision, the mapping reference and
-	// the revision form in that order. The first two are collapsed items of
-	// one accordion; the form stays open.
-	revision := findCard(doc, "revision-heading")
-	reference := findCard(doc, "mapping-reference-heading")
+	current := findCard(doc, "current-revision-heading")
+	guidance := findCard(doc, "mapping-reference-heading")
 	form := findCard(doc, "upload-heading")
-	for name, node := range map[string]*html.Node{"current revision": revision, "mapping reference": reference, "revision form": form} {
+	preview := findCard(doc, "preview-heading")
+	history := findCard(doc, "revision-history-heading")
+	for name, node := range map[string]*html.Node{
+		"current configuration": current,
+		"mapping guidance":      guidance,
+		"revision form":         form,
+		"sample preview":        preview,
+		"revision history":      history,
+	} {
 		if node == nil {
 			t.Fatalf("the campaign page has no %s section", name)
 		}
 	}
-	for name, item := range map[string]*html.Node{"current revision": revision, "mapping reference": reference} {
-		if got := workspaceAttr(item, "data-slot"); got != "accordion-item" {
-			t.Errorf("the %s section is a %q, want an accordion item", name, got)
+	if !before(doc, current, guidance) || !before(doc, guidance, form) || !before(doc, form, preview) || !before(doc, preview, history) {
+		t.Fatal("template sections are out of the prescribed order")
+	}
+
+	// A later revision is explicit: the form's disclosure starts closed; a
+	// campaign without a revision opens it.
+	if got := workspaceAttr(form, "data-slot"); got != "accordion-item" {
+		t.Fatalf("the revision form is a %q, want an explicit disclosure", got)
+	}
+	if !hasWorkspaceAttr(form, "data-closed") {
+		t.Error("the later-revision form must not be open by default")
+	}
+	draft := parseView(t, CampaignPage(CampaignPageData{ID: "camp1", Name: "Draft", MappingDraft: data.MappingDraft}))
+	openForm := findCard(draft, "upload-heading")
+	if !hasWorkspaceAttr(openForm, "data-open") {
+		t.Error("the first-revision form must open by default")
+	}
+	if got := textOf(workspaceNode(draft, "id", "revision-mappings")); !strings.Contains(got, "candidate_name | Candidate Name | required | text") {
+		t.Errorf("first-revision draft = %q, want the derived mapping draft", got)
+	}
+	// A later revision starts empty: only an operator's rejected draft is kept.
+	later := parseView(t, CampaignPage(CampaignPageData{ID: "camp2", Name: "Later", HasRevision: true}))
+	if got := textOf(workspaceNode(later, "id", "revision-mappings")); got != "" {
+		t.Errorf("later revision form carried %q, want an empty form", got)
+	}
+	rejected := parseView(t, CampaignPage(CampaignPageData{ID: "camp1", Name: "Edit", HasRevision: true, MappingDraft: "bad draft"}))
+	if got := textOf(workspaceNode(rejected, "id", "revision-mappings")); got != "bad draft" {
+		t.Errorf("rejected mapping draft = %q, want the supplied text preserved", got)
+	}
+
+	// Guidance stays outside placeholders and carries the worked example.
+	guidanceText := textOf(guidance)
+	for _, want := range []string{
+		"variable | source header | role | format | fallback",
+		"Mark exactly one row as recipient",
+		"candidate_name | Candidate Name | required | text",
+		"{{candidate_name}}",
+		"Rendered value",
+	} {
+		if !strings.Contains(guidanceText, want) {
+			t.Errorf("mapping guidance missing %q", want)
 		}
-		if !hasWorkspaceAttr(item, "data-closed") || hasWorkspaceAttr(item, "data-open") {
-			t.Errorf("the %s accordion item does not start closed", name)
+	}
+	for _, id := range []string{"revision-mappings-hint", "revision-mappings-help"} {
+		if workspaceNode(doc, "id", id) == nil {
+			t.Errorf("mapping help %q is missing", id)
 		}
 	}
-	if group := revision.Parent; group == nil || group != reference.Parent {
-		t.Error("the current revision and mapping reference are not in one accordion")
-	} else if group.Parent != form.Parent {
-		t.Error("the accordion is not a sibling of the revision form card")
+	if got := workspaceAttr(workspaceNode(doc, "id", "revision-mappings"), "aria-describedby"); got != "revision-mappings-hint revision-mappings-help" {
+		t.Errorf("mapping textarea described by %q", got)
 	}
-	if got := workspaceAttr(form, "data-slot"); got != "card" {
-		t.Errorf("the revision form card is a %q, want an always-open card", got)
+	if !strings.Contains(textOf(workspaceNode(doc, "id", "revision-document-help")), "selected again") {
+		t.Error("DOCX reselection guidance is missing")
 	}
-	for node := byID["upload-heading"]; node != nil; node = node.Parent {
-		if node == reference {
-			t.Fatalf("the mapping reference is inside the revision form card")
+}
+
+func TestCampaignHintButtonsStayInertAndDescribed(t *testing.T) {
+	doc := parseView(t, CampaignPage(CampaignPageData{ID: "campaign-1", Name: "Synthetic campaign"}))
+	for _, id := range []string{"revision-subject-help", "revision-document-help", "revision-mappings-help"} {
+		button := workspaceNode(doc, "aria-describedby", id)
+		if button == nil || button.Data != "button" || workspaceAttr(button, "type") != "button" {
+			t.Errorf("hint %q must use a non-submitting button", id)
+			continue
+		}
+		note := workspaceNode(doc, "id", id)
+		if note == nil || workspaceAttr(note, "role") != "note" {
+			t.Errorf("hint %q must describe a note with the same id", id)
+		}
+		if workspaceAttr(button, "hx-post") != "" || workspaceAttr(button, "hx-trigger") != "" || workspaceAttr(button, "x-on:click") != "" || workspaceAttr(button, "x-on:submit") != "" {
+			t.Errorf("hint %q must not trigger a submission or action", id)
 		}
 	}
-	order := map[*html.Node]int{}
-	index := 0
+}
+
+// The Tasks section identifies each workbook, shows only the derived status
+// and the eligible count, and offers the next action the workspace rule chose.
+// Reference, upload time, saved revision, status explanation and the remaining
+// recipient counts stay behind each cell's tooltip.
+func TestCampaignTasksSectionShowsOperationalContext(t *testing.T) {
+	doc := parseView(t, CampaignPage(CampaignPageData{
+		ID: "camp1", Name: "Hiring", HasRevision: true, Revision: 2, Approved: true,
+		Tasks: []CampaignTaskRow{
+			{ID: "task-1", Filename: "recipients.xlsx", Reference: "abcd1234", UploadedAt: "22 Oct 2026, 11:12 AM +05:30", HasSavedRevision: true, SavedRevision: 2, Status: "Ready to send", StatusClass: "status-success", StatusDetail: "Validated and approved.", Recipients: "2 eligible", RecipientsDetail: []string{"Input rows: 3", "Submitted: 0", "Need attention: 1"}, NextLabel: "Choose sending time", NextSection: TaskSectionSending},
+			{ID: "task-2", Filename: "recipients.xlsx", Reference: "efgh5678", UploadedAt: "22 Oct 2026, 12:40 PM +05:30", Status: "Needs worksheet selection", StatusClass: "status-warning", Recipients: "Not validated", NextLabel: "Validate workbook", NextSection: TaskSectionRecipients},
+		},
+	}))
+	text := textOf(doc)
+	for _, want := range []string{
+		"recipients.xlsx",
+		"Reference abcd1234",
+		"Reference efgh5678",
+		"Uploaded 22 Oct 2026, 11:12 AM +05:30",
+		"Saved revision 2",
+		"Ready to send",
+		"Validated and approved.",
+		"Needs worksheet selection",
+		"2 eligible",
+		"Input rows: 3",
+		"Need attention: 1",
+		"Not validated",
+		"Choose sending time",
+		"Validate workbook",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("tasks section is missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{"Header row", "Worksheet"} {
+		if workspaceNode(doc, "data-slot", "table") != nil && strings.Contains(text, unwanted) {
+			if columnsContain(doc, unwanted) {
+				t.Errorf("the task list must not keep a %q column; keep it inside the task", unwanted)
+			}
+		}
+	}
+	// The workbook name is the task's identity: it opens the task at its
+	// Overview, while only the next action deep-links into a section.
+	if link := workspaceNode(doc, "href", "/campaigns/camp1/tasks/task-1"); link == nil || workspaceAttr(link, "href") == "/campaigns/camp1/tasks/task-1#sending" {
+		t.Error("the workbook name does not open the task overview")
+	}
+	if link := workspaceNode(doc, "href", "/campaigns/camp1/tasks/task-1#sending"); link == nil {
+		t.Error("the next action does not link to the task's Sending section")
+	}
+	if link := workspaceNode(doc, "href", "/campaigns/camp1/tasks/task-2#recipients"); link == nil {
+		t.Error("the staging row does not link to Recipients")
+	}
+	// Each tooltip trigger describes content that exists in the page.
+	for _, id := range []string{"task-workbook-detail-task-1", "task-status-detail-task-1", "task-recipients-detail-task-1"} {
+		trigger := workspaceNode(doc, "aria-describedby", id)
+		if trigger == nil {
+			t.Errorf("tooltip %q has no trigger", id)
+			continue
+		}
+		if note := workspaceNode(doc, "id", id); note == nil || workspaceAttr(note, "role") != "tooltip" {
+			t.Errorf("tooltip %q has no describing content", id)
+		}
+	}
+}
+
+// columnsContain reports whether a table header cell contains the label.
+func columnsContain(doc *html.Node, label string) bool {
+	var found bool
 	var walk func(*html.Node)
-	walk = func(node *html.Node) {
-		order[node] = index
-		index++
-		for child := node.FirstChild; child != nil; child = child.NextSibling {
+	walk = func(n *html.Node) {
+		if n.Data == "th" && strings.TrimSpace(viewText(n)) == label {
+			found = true
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
 			walk(child)
 		}
 	}
 	walk(doc)
-	if order[revision] > order[reference] || order[reference] > order[form] {
-		t.Errorf("cards are out of order: revision=%d reference=%d form=%d", order[revision], order[reference], order[form])
-	}
-	for node := byID["revision-mappings"]; node != nil; node = node.Parent {
-		if node == reference {
-			t.Fatalf("mapping table is inside the reference card")
+	return found
+}
+
+func TestCampaignTasksEmptyAndNoTemplateStates(t *testing.T) {
+	empty := parseView(t, CampaignPage(CampaignPageData{ID: "camp1", Name: "Hiring", HasRevision: true}))
+	text := textOf(empty)
+	for _, want := range []string{"No tasks yet", "Each workbook creates a separate task", "+ New Task"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("empty Tasks section is missing %q", want)
 		}
 	}
-	referenceText := textOf(reference)
-	for _, want := range []string{
-		"Mapping reference",
-		data.SourceHeaders,
-		"Column order",
-		"candidate_name | Candidate Name | required | text",
-		"Revisions are immutable",
-	} {
-		if !strings.Contains(referenceText, want) {
-			t.Errorf("reference card does not contain %q", want)
+	noTemplate := parseView(t, CampaignPage(CampaignPageData{ID: "camp1", Name: "Hiring"}))
+	text = textOf(noTemplate)
+	for _, want := range []string{"Add an email template to validate recipient workbooks", "Add template", "You can upload a workbook now"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("no-template Tasks section is missing %q", want)
 		}
+	}
+	if workspaceNode(noTemplate, "href", "/campaigns/camp1#template") == nil {
+		t.Error("the no-template guidance does not link to Template & preview")
+	}
+}
+
+func TestCampaignActivityAndSettingsHaveDistinctPurposes(t *testing.T) {
+	doc := parseView(t, CampaignPage(CampaignPageData{
+		ID: "camp1", Name: "Hiring", HasRevision: true, Revision: 1,
+		Attempts: []AttemptRow{{ID: "attempt-1", Kind: "candidate", Recipient: "a@example.test", State: "submitted", FinishedAt: "22 Oct 2026, 11:12 AM +05:30"}},
+	}))
+	activity := workspaceNode(doc, "id", "campaign-activity")
+	if activity == nil {
+		t.Fatal("activity section is missing")
+	}
+	activityText := textOf(activity)
+	for _, want := range []string{"Activity & downloads", "Campaign report", "Campaign package", "Tests stay separate from candidate totals"} {
+		if !strings.Contains(activityText, want) {
+			t.Errorf("activity section is missing %q", want)
+		}
+	}
+	if strings.Contains(activityText, "Revision history") {
+		t.Error("revision history belongs to Template & preview, not activity")
+	}
+	settings := workspaceNode(doc, "id", "campaign-settings-workspace")
+	if settings == nil {
+		t.Fatal("settings section is missing")
+	}
+	settingsText := textOf(settings)
+	for _, want := range []string{"Result column labels", "Delete campaign & all history", "duplicate-prevention history"} {
+		if !strings.Contains(settingsText, want) {
+			t.Errorf("settings section is missing %q", want)
+		}
+	}
+	if strings.Contains(settingsText, "Campaign report") {
+		t.Error("campaign downloads belong to activity, not settings")
 	}
 }
 
@@ -196,7 +265,7 @@ func TestCampaignSamplePreviewGatesOnRequiredValues(t *testing.T) {
 			doc := parseView(t, CampaignPage(CampaignPageData{
 				ID: "camp1", Name: "Test campaign", HasRevision: true, Variables: tc.variables,
 			}))
-			form := workspaceNode(doc, "action", "/campaigns/camp1/preview")
+			form := workspaceNode(doc, "action", "/campaigns/camp1/preview#template")
 			if form == nil || form.Data != "form" {
 				t.Fatal("the campaign page has no sample preview form")
 			}
@@ -206,8 +275,6 @@ func TestCampaignSamplePreviewGatesOnRequiredValues(t *testing.T) {
 			if workspaceAttr(form, "hx-target") != "#preview-result" || workspaceAttr(form, "hx-swap") != "innerHTML" {
 				t.Error("the preview must stay an in-place swap into its own result region")
 			}
-
-			// Nothing renders before the operator asks for a preview.
 			result := workspaceNode(doc, "id", "preview-result")
 			if result == nil {
 				t.Fatal("preview result region is missing")
@@ -215,8 +282,6 @@ func TestCampaignSamplePreviewGatesOnRequiredValues(t *testing.T) {
 			if result.FirstChild != nil {
 				t.Errorf("preview result must start empty, got %q", viewText(result))
 			}
-
-			// Every required input says so and carries the constraint the gate reads.
 			for _, variable := range tc.variables {
 				sample := workspaceNode(form, "id", "sample-"+variable.Name)
 				if sample == nil || sample.Data != "input" || workspaceAttr(sample, "name") != variable.Name {
@@ -232,11 +297,7 @@ func TestCampaignSamplePreviewGatesOnRequiredValues(t *testing.T) {
 				if label := viewText(fieldLabel); !strings.Contains(label, "Sample value for "+variable.Name) {
 					t.Errorf("label %q does not name the variable", label)
 				}
-				if label := viewText(fieldLabel); variable.Required && !strings.Contains(label, "(required)") {
-					t.Errorf("label %q does not mark the variable required", label)
-				}
 			}
-
 			render := findViewNode(form, func(n *html.Node) bool {
 				return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Render preview"
 			})
@@ -271,7 +332,6 @@ func TestPreviewResultCanBeClosed(t *testing.T) {
 	if got, want := workspaceAttr(closeButton, "x-on:click"), "open = false"; got != want {
 		t.Errorf("close click = %q, want %q", got, want)
 	}
-	// Closing dismisses the rendered content too, not only the heading.
 	if findViewNode(card, func(n *html.Node) bool {
 		return strings.Contains(workspaceAttr(n, "class"), "rounded-card border border-border p-4")
 	}) == nil {

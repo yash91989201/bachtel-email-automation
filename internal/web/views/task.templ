@@ -1,103 +1,55 @@
 package views
 
 import (
+	"encoding/hex"
+	"strconv"
 	"strings"
 
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/accordion"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alert"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alertdialog"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/badge"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
-	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/empty"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/checkbox"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/collapsible"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/field"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/icon"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/input"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/item"
+	uilabel "github.com/yash91989201/bachtel-email-automation/internal/web/ui/label"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/nativeselect"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/table"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tabs"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tooltip"
 )
 
-// TaskListData is the safe view model for a campaign's task list. It carries
-// ids and fixed status text only, never storage detail.
-type TaskListData struct {
-	CampaignID   string
-	CampaignName string
-	Tasks        []TaskListRow
-}
+// Task workspace sections. Their order is the navigation order.
+const (
+	TaskSectionOverview   = "overview"
+	TaskSectionRecipients = "recipients"
+	TaskSectionTest       = "test"
+	TaskSectionSending    = "sending"
+	TaskSectionResults    = "results"
+)
 
-// TaskListRow summarizes one task for the list page.
-type TaskListRow struct {
-	ID        string
-	Status    string
-	Sheet     string
-	HeaderRow int
-	Total     int
-	Eligible  int
-}
+// Sending types select a first-start view; they never authorize dispatch.
+const (
+	TaskSendingTypeDirect    = "direct"
+	TaskSendingTypeScheduled = "scheduled"
+	TaskSendingTypeChoose    = "choose"
+)
 
-templ TaskList(data TaskListData) {
-	@Layout("Tasks", true, "campaigns") {
-		<header class="flex items-center justify-between gap-6 pt-1 pb-2.5 [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
-			<div>
-				@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Email tasks"})
-				<h1>Email tasks</h1>
-				<p class="max-w-170 mt-3 text-muted-foreground text-[.9375rem]">Upload an Excel workbook, confirm its worksheet and header row, then review the validated snapshot for { data.CampaignName }. Nothing on this page sends email.</p>
-			</div>
-			<div class="action-bar">
-				<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/new" }>Upload workbook</a>
-			</div>
-		</header>
-		if len(data.Tasks) == 0 {
-			@empty.Empty(empty.Props{Class: "border"}) {
-				@empty.Header(empty.HeaderProps{}) {
-					@empty.Title(empty.TitleProps{}) {
-						No tasks yet
-					}
-					@empty.Description(empty.DescriptionProps{}) {
-						Upload an XLSX workbook to create the first task for this campaign.
-					}
-				}
-			}
-		} else {
-			@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-label": "Tasks"}}) {
-				@card.Content(card.ContentProps{Class: "table-scroll"}) {
-					@table.Table(table.Props{}) {
-						<thead>
-							<tr>
-								<th>Status</th>
-								<th>Worksheet</th>
-								<th>Header row</th>
-								<th>Total rows</th>
-								<th>Eligible rows</th>
-								<th><span class="sr-only">Actions</span></th>
-							</tr>
-						</thead>
-						<tbody>
-							for _, row := range data.Tasks {
-								<tr>
-									<td>
-										@taskStatusBadge(row.Status)
-									</td>
-									<td><code>{ row.Sheet }</code></td>
-									<td>{ row.HeaderRow }</td>
-									<td>{ row.Total }</td>
-									<td>{ row.Eligible }</td>
-									<td><a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + row.ID }>Review task</a></td>
-								</tr>
-							}
-						</tbody>
-					}
-				}
-			}
-		}
-	}
-}
-
-// TaskUploadData is the view model for the workbook upload page. The limits
-// are the configured byte bounds, rendered as literal numbers so the operator
-// sees exactly what the server enforces.
+// TaskUploadData is the view model for the workbook upload page: campaign
+// context, readable bounds and the mapped-column prerequisite.
 type TaskUploadData struct {
+	SendingType       string
 	CampaignID        string
 	CampaignName      string
 	Error             string
+	HasRevision       bool
+	Revision          int
+	MappedColumns     []string
 	MaxUploadBytes    int64
 	UnzipSizeLimit    int64
 	UnzipXMLSizeLimit int64
@@ -105,92 +57,212 @@ type TaskUploadData struct {
 
 templ TaskUpload(data TaskUploadData) {
 	@Layout("New task", true, "campaigns") {
-		<header class="flex items-center justify-between gap-6 pt-1 pb-2.5 [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
-			<div>
-				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 1 · Upload</p>
-				<h1>Upload a task workbook</h1>
-				<p class="max-w-170 mt-3 text-muted-foreground text-[.9375rem]">Uploading stores the workbook as a staging task for { data.CampaignName }. Next, confirm the worksheet and header row before validation.</p>
-			</div>
-			<div class="action-bar">
-				<a class={ button.Variants(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks" }>Back to task list</a>
-			</div>
+		<header class="space-y-3 pt-1 pb-2.5">
+			@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Tasks", Href: "/campaigns/" + data.CampaignID + "#tasks"}, breadcrumbEntry{Label: "Upload workbook"})
+			<h1>Upload a task workbook</h1>
+			<p class="max-w-170 text-muted-foreground text-[.9375rem]">Uploading stores the workbook as a staging task for <strong>{ data.CampaignName }</strong>. Next, confirm the worksheet and header row before validation.</p>
+			<p class="text-sm text-muted-foreground">
+				if data.HasRevision {
+					Template: <strong class="text-foreground">Revision { data.Revision }</strong>
+				} else {
+					Template: <strong class="text-foreground">No template</strong> — you can stage a workbook now; validation needs a template.
+				}
+			</p>
 		</header>
 		if data.Error != "" {
 			@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
 				{ data.Error }
 			}
 		}
+		if !data.HasRevision {
+			@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
+				@alert.Title(alert.TitleProps{}) {
+					Add a template before validating this workbook
+				}
+				@alert.Description(alert.DescriptionProps{}) {
+					<p>The upload is stored, but mapped header names and validation are only available once the campaign has a template.</p>
+					<a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "#template" }>Add template</a>
+				}
+			}
+		}
 		<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks" } enctype="multipart/form-data">
 			@card.Card(card.Props{}) {
 				@card.Content(card.ContentProps{Class: "gap-4"}) {
 					<h2 class="font-bold text-[1.2rem] tracking-[-.02em]">Choose a workbook</h2>
-					<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Select the XLSX file to create a staging task.</p>
 					@field.Field(field.Props{}) {
 						@field.Label(field.LabelProps{For: "task-workbook"}) {
 							Workbook (XLSX)
 						}
-						@input.Input(input.Props{ID: "task-workbook", Name: "workbook", Type: "file", Accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Required: true})
+						@input.Input(input.Props{ID: "task-workbook", Name: "workbook", Type: "file", Accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Required: true, Attributes: templ.Attributes{"aria-describedby": "workbook-guidance"}})
 					}
+					<div id="workbook-guidance" class="space-y-2 text-sm text-muted-foreground">
+						<p>Format: <code>.xlsx</code> · upload size limit: { readableBytes(data.MaxUploadBytes) } · support bound: 1,000 data rows per task. Split larger lists across several tasks.</p>
+						if data.HasRevision {
+							<p>Every mapped column is mandatory in the chosen header row, including optional-value mappings: <span class="wrap-anywhere">{ joinList(data.MappedColumns) }</span>.</p>
+						}
+					</div>
+					<div class="max-w-md">
+						@field.Field(field.Props{}) {
+							@field.Label(field.LabelProps{For: "task-sending-type"}) {
+								Sending type
+							}
+							@nativeselect.NativeSelect(nativeselect.Props{ID: "task-sending-type", Name: "sending_type", Required: true, Class: "w-full", Attributes: templ.Attributes{"aria-describedby": "task-sending-type-help"}}) {
+								<option value="">Choose Direct or Scheduled</option>
+								<option value={ TaskSendingTypeDirect } selected?={ data.SendingType == TaskSendingTypeDirect }>Direct — send after confirmation</option>
+								<option value={ TaskSendingTypeScheduled } selected?={ data.SendingType == TaskSendingTypeScheduled }>Scheduled — choose a future start</option>
+							}
+						}
+					</div>
+					<p id="task-sending-type-help" class="text-sm text-muted-foreground">You can change this before sending starts. Creating a task never sends email or authorizes a schedule.</p>
 					<div class="app-card-actions">
 						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
 							Upload workbook
 						}
+						<a class={ button.Variants(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "#tasks" }>Cancel</a>
 					</div>
 				}
 			}
 		</form>
-		<section class="p-[1.1rem] border border-border rounded-4xl bg-muted" aria-labelledby="constraints-heading">
-			<div class="space-y-2">
-				<h2 id="constraints-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Workbook requirements</h2>
-				<ul class="list-inside list-disc space-y-1 text-sm text-muted-foreground">
-					<li>Format: <code>.xlsx</code> only, with no password and no legacy <code>.xls</code> file; password-protected and macro containers are rejected.</li>
-					<li>Upload size limit: { data.MaxUploadBytes } bytes.</li>
-					<li>Expanded workbook archive limit: { data.UnzipSizeLimit } bytes, and { data.UnzipXMLSizeLimit } bytes for a single expanded XML part.</li>
-					<li>Support bound of 1,000 rows carrying data per task; split larger lists across several tasks.</li>
+		@collapsible.Collapsible(collapsible.Props{ID: "technical-limits", Class: "p-[1.1rem] border border-border rounded-4xl bg-muted", Attributes: templ.Attributes{"data-workspace-persist": true}}) {
+			<button class="cursor-pointer text-left font-semibold bg-transparent border-0 p-0" { collapsible.Trigger(ctx)... }>Technical limits</button>
+			@collapsible.Content(collapsible.ContentProps{Class: "mt-3 space-y-2 text-sm text-muted-foreground"}) {
+				{{ sizeLine := "Expanded workbook archive limit: " + readableBytes(data.UnzipSizeLimit) + ", and " + readableBytes(data.UnzipXMLSizeLimit) + " for a single expanded XML part." }}
+				<ul class="list-inside list-disc space-y-1">
+					<li>{ sizeLine }</li>
+					<li>Password-protected workbooks, legacy <code>.xls</code> files and macro containers are rejected.</li>
 					<li>Header labels are matched after trimming surrounding whitespace, are case sensitive, and each required label must appear exactly once in the chosen header row.</li>
 					<li>A formula cell is read as its cached value; the workbook's formulas are never evaluated.</li>
-					<li>Duplicate recipient addresses are held for a corrected upload; every row of a duplicate group stays out of the snapshot.</li>
 				</ul>
-			</div>
-		</section>
+			}
+		}
 	}
 }
 
-// TaskPageData is the safe view model for one task page. A staging task uses
-// the selection fields; a ready task uses the review fields. Error is a fixed
-// inline message from a failed selection or revalidation, ValidationError is
-// the failure recorded on the staging task itself.
+// TaskPageData is the safe view model for the one task workspace. Every fact is
+// derived from the task record or an existing service answer; nothing here is
+// stored UI state.
 type TaskPageData struct {
 	CampaignID   string
 	CampaignName string
 	TaskID       string
-	Status       string
 
-	Error           string
+	// Section selects the rendered panel; IgnoreHash makes the server's choice
+	// win over an obsolete URL fragment after an error.
+	Section    string
+	IgnoreHash bool
+	Error      string
+
+	Filename  string
+	Reference string
+
+	UploadedAt         string
+	StoredStatus       string
+	StatusLabel        string
+	StatusExplanation  string
+	StatusClass        string
+	NextLabel          string
+	NextHref           string
+	Lifecycle          []LifecycleStep
+	Blockers           []TaskBlocker
+	HasSavedRevision   bool
+	SavedRevision      int
+	HasCurrentRevision bool
+	CurrentRevision    int
+	Worksheet          string
+	HeaderRow          int
+	Sender             string
+	SenderStatus       string
+	Approved           bool
+	Stale              bool
+	RestoreReview      bool
+	ScheduleAt         string
+	SendingType        string
+	ScheduleState      string
+	ScheduleMinDate    string
+
 	ValidationError string
+	Sheets          []TaskSheetOption
+	DefaultSheet    string
+	// Submitted worksheet/header choice retained after a refused selection.
+	SheetDraft     string
+	HeaderRowDraft int
+	// Submitted schedule fields retained after a refused schedule.
+	ScheduleDraftDate string
+	ScheduleDraftTime string
 
-	Sheets       []TaskSheetOption
-	DefaultSheet string
-	HeaderRow    int
+	Counts           TaskCounts
+	Summary          TaskSummaryView
+	Categories       []TaskCategory
+	ResultLabels     []string
+	HeldRows         []TaskHeldRow
+	Rows             []TaskAdmittedRow
+	HasRows          bool
+	AlreadyScheduled int
 
-	Counts       TaskCounts
-	ResultLabels []string
-	Revision     int
-	ContentHash  string
-	Approved     bool
-	Stale        bool
-	HeldRows     []TaskHeldRow
-	Rows         []TaskAdmittedRow
+	PreviewRowID string
+	Preview      TaskPreviewData
 
-	ScheduleAt    string
-	ScheduleState string
+	Hash        string
+	LatestTest  string
+	Recent      []TaskAttemptRow
+	Resolutions []TaskResolutionRow
 
-	// ResultsState is the generated workbook state: empty, generating, ready
-	// or failed. ResultsError carries the fixed retry message.
-	ResultsState string
-	ResultsError string
-	ResultsAsOf  string
-	ResultsReady bool
+	Eligible        int
+	Remaining       int
+	Submitted       int
+	Failed          int
+	RetryableFailed int
+	Held            int
+	InFlight        int
+	Reserved        int
+	Invalid         int
+	Duplicate       int
+	Ineligible      int
+	Rate            int
+	Cooldown        string
+	CooldownReason  string
+	ActionID        string
+	Controls        TaskControls
+
+	ResultsState   string
+	ResultsError   string
+	ResultsAsOf    string
+	ResultsReady   bool
+	ResultEligible bool
+}
+
+// TaskControls is the rendered subset of the action matrix.
+type TaskControls struct {
+	Validate       bool
+	Revalidate     bool
+	Start          bool
+	Schedule       bool
+	SendNowInstead bool
+	EditSchedule   bool
+	ClearSchedule  bool
+	Stop           bool
+	Resume         bool
+	RetryAll       bool
+	RetryRow       bool
+	ResendRow      bool
+	ResolveRow     bool
+	GenerateResult bool
+	RetryResult    bool
+}
+
+// LifecycleStep is one evidence-based lifecycle entry.
+type LifecycleStep struct {
+	Name     string
+	State    string
+	Complete bool
+}
+
+// TaskBlocker is one reason an otherwise relevant action cannot proceed.
+type TaskBlocker struct {
+	Label   string
+	Remedy  string
+	Section string
+	Href    string
 }
 
 // TaskSheetOption is one stored worksheet of the uploaded workbook.
@@ -212,367 +284,1143 @@ type TaskCounts struct {
 	ReviewRequired   int
 }
 
-// TaskHeldRow is one manifest row held back from candidate storage, with the
-// fixed operator-facing reason text already resolved.
+// TaskSummaryView is the validated summary line: total, eligible at
+// validation, excluded at validation and the current rechecked scope.
+type TaskSummaryView struct {
+	Total                int
+	Eligible             int
+	ExcludedAtValidation int
+	CurrentEligible      int
+}
+
+// TaskCategory is one mutually exclusive validation category.
+type TaskCategory struct {
+	Label string
+	Count int
+}
+
+// TaskHeldRow is one manifest row held back from candidate storage.
 type TaskHeldRow struct {
-	Row    int
-	Reason string
+	Row       int
+	Recipient string
+	Reason    string
 }
 
 // TaskAdmittedRow is one admitted snapshot row for the review tables.
 type TaskAdmittedRow struct {
-	ID     string
-	Row    int
-	State  string
-	Reason string
+	ID        string
+	Row       int
+	Recipient string
+	State     string
+	Reason    string
+	// Prior attempt evidence for a recovery row.
+	AttemptID        string
+	AttemptRecipient string
+	AttemptState     string
+	AttemptTime      string
+	AttemptReason    string
+}
+
+// TaskAttemptRow is one recorded task attempt.
+type TaskAttemptRow struct {
+	ID        string
+	Kind      string
+	Recipient string
+	State     string
+	Reason    string
+	Time      string
+	Test      bool
+	HTMLHref  string
+}
+
+// TaskResolutionRow is one manual outcome resolution recorded for the task.
+type TaskResolutionRow struct {
+	Row   int
+	Actor string
+	Basis string
+	Time  string
 }
 
 templ TaskPage(data TaskPageData) {
 	@Layout("Task", true, "campaigns") {
-		<header class="flex items-center justify-between gap-6 pt-1 pb-2.5 [&>div]:min-w-0 [&>.action-bar]:shrink-0 [&>.action-bar]:max-w-full max-[960px]:flex-col max-[960px]:items-start max-[760px]:flex-col max-[760px]:items-start max-[760px]:gap-4">
-			<div>
-				@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Email tasks", Href: "/campaigns/" + data.CampaignID + "/tasks"}, breadcrumbEntry{Label: "Task"})
-				<h1>Task for { data.CampaignName }</h1>
-				if data.Status == "staging" {
-					<p class="max-w-170 mt-3 text-muted-foreground text-[.9375rem]">Choose the worksheet and header row to validate your recipient workbook.</p>
-				} else {
-					<p class="max-w-170 mt-3 text-muted-foreground text-[.9375rem]">Review the recipient snapshot and exclusions before continuing to test and approval.</p>
+		<header class="space-y-3 pt-1 pb-2.5">
+			@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Tasks", Href: "/campaigns/" + data.CampaignID + "#tasks"}, breadcrumbEntry{Label: data.Filename})
+			<div class="flex flex-wrap items-center gap-3">
+				<h1 class="min-w-0 wrap-anywhere">{ data.Filename }</h1>
+				<div class="shrink-0">
+					@taskStatusBadge(data.StatusLabel, data.StatusClass)
+				</div>
+			</div>
+			if data.Error != "" {
+				@alert.Alert(alert.Props{Variant: alert.VariantDestructive, Class: "status-danger"}) {
+					{ data.Error }
 				}
-			</div>
-			<div class="action-bar">
-				@taskStatusBadge(data.Status)
-			</div>
-		</header>
-		if data.Error != "" {
-			@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
-				{ data.Error }
 			}
-		}
-		@tabs.Tabs(tabs.Props{ID: "task", Class: "grid grid-cols-[240px_minmax(0,1fr)] gap-8 items-start max-[760px]:grid-cols-1 max-[760px]:gap-5", Orientation: tabs.OrientationVertical, DefaultValue: "review", Attributes: templ.Attributes{"data-workspace-tabs": true}}) {
-			<aside class="sticky top-6 max-[760px]:static **:data-[slot=tabs-list]:grid! **:data-[slot=tabs-list]:grid-cols-1 **:data-[slot=tabs-list]:w-full! **:data-[slot=tabs-list]:gap-[.6rem] **:data-[slot=tabs-list]:p-0! **:data-[slot=tabs-list]:bg-transparent **:data-[slot=tabs-list]:rounded-none! **:data-[slot=tabs-trigger]:w-full! **:data-[slot=tabs-trigger]:h-auto! **:data-[slot=tabs-trigger]:whitespace-normal! **:data-[slot=tabs-trigger]:wrap-anywhere **:data-[slot=tabs-trigger]:p-[.9rem_.75rem]! **:data-[slot=tabs-trigger]:rounded-[.5rem]! **:data-[slot=tabs-trigger]:border-transparent **:data-[slot=tabs-trigger]:text-left **:data-[slot=tabs-trigger]:block! **:data-[slot=tabs-trigger]:cursor-pointer **:data-[slot=tabs-trigger]:text-foreground! **:data-[slot=tabs-trigger]:bg-transparent! [&_[data-slot=tabs-trigger]:hover]:bg-accent! [&_[data-slot=tabs-trigger]:hover]:text-accent-foreground! [&_[data-slot=tabs-trigger][data-active]]:bg-accent! [&_[data-slot=tabs-trigger][data-active]]:text-accent-foreground! [&_[data-slot=tabs-trigger]>span]:block [&_[data-slot=tabs-trigger]>span]:text-[.84rem] [&_[data-slot=tabs-trigger]>span]:font-bold [&_[data-slot=tabs-trigger]>small]:block [&_[data-slot=tabs-trigger]>small]:text-[.7rem] [&_[data-slot=tabs-trigger]>small]:mt-[.2rem] [&_[data-slot=tabs-trigger]>small]:text-muted-foreground [&_[data-slot=tabs-trigger]:is(:hover,[data-active])>small]:text-inherit max-[760px]:**:data-[slot=tabs-list]:grid-cols-2" aria-label="Task navigation">
-				if data.Status != "staging" && (data.Counts.Eligible > 0 || data.Status != "ready") {
-					<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault, Class: "flex w-full justify-between min-h-12 mb-5 text-[.875rem]"}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending" }>Continue to test & approval <span aria-hidden="true">→</span></a>
+			if data.RestoreReview {
+				@alert.Alert(alert.Props{Variant: alert.VariantDestructive, Class: "status-danger"}) {
+					Restore review is active. Sending, scheduling, retries and resends are disabled until submissions made after the restored backup are reconciled and the server is restarted without APP_RESTORE_REVIEW. Stop and manual outcome resolution stay available.
 				}
+			}
+		</header>
+		@tabs.Tabs(tabs.Props{ID: "task", Class: "grid grid-cols-[240px_minmax(0,1fr)] gap-8 items-start max-[760px]:grid-cols-1 max-[760px]:gap-5", Orientation: tabs.OrientationVertical, DefaultValue: taskInitialSection(data), Attributes: taskTabAttributes(data)}) {
+			<aside class="sticky top-6 max-[760px]:static **:data-[slot=tabs-list]:grid! **:data-[slot=tabs-list]:grid-cols-1 **:data-[slot=tabs-list]:w-full! **:data-[slot=tabs-list]:gap-[.6rem] **:data-[slot=tabs-list]:p-0! **:data-[slot=tabs-list]:bg-transparent **:data-[slot=tabs-list]:rounded-none! **:data-[slot=tabs-trigger]:w-full! **:data-[slot=tabs-trigger]:h-auto! **:data-[slot=tabs-trigger]:whitespace-normal! **:data-[slot=tabs-trigger]:wrap-anywhere **:data-[slot=tabs-trigger]:p-[.9rem_.75rem]! **:data-[slot=tabs-trigger]:rounded-[.5rem]! **:data-[slot=tabs-trigger]:border-transparent **:data-[slot=tabs-trigger]:text-left **:data-[slot=tabs-trigger]:block! **:data-[slot=tabs-trigger]:cursor-pointer **:data-[slot=tabs-trigger]:text-foreground! **:data-[slot=tabs-trigger]:bg-transparent! [&_[data-slot=tabs-trigger]:hover]:bg-accent! [&_[data-slot=tabs-trigger]:hover]:text-accent-foreground! [&_[data-slot=tabs-trigger][data-active]]:bg-accent! [&_[data-slot=tabs-trigger][data-active]]:text-accent-foreground! [&_[data-slot=tabs-trigger]>span]:block [&_[data-slot=tabs-trigger]>span]:text-[.84rem] [&_[data-slot=tabs-trigger]>span]:font-bold [&_[data-slot=tabs-trigger]>small]:block [&_[data-slot=tabs-trigger]>small]:text-[.7rem] [&_[data-slot=tabs-trigger]>small]:mt-[.2rem] [&_[data-slot=tabs-trigger]>small]:text-muted-foreground [&_[data-slot=tabs-trigger]:is(:hover,[data-active])>small]:text-inherit max-[760px]:**:data-[slot=tabs-list]:grid-cols-2" aria-label="Task navigation">
 				@tabs.List(tabs.ListProps{Attributes: templ.Attributes{"aria-label": "Task sections"}}) {
-					if data.Status == "staging" {
-						@tabs.Trigger(tabs.TriggerProps{Value: "review"}) {
-							<span>Worksheet setup</span><small>Choose sheet & header row</small>
-						}
-					} else {
-						@tabs.Trigger(tabs.TriggerProps{Value: "review"}) {
-							<span>Review snapshot</span><small>Counts, content & approval</small>
-						}
-						if len(data.Rows) > 0 {
-							@tabs.Trigger(tabs.TriggerProps{Value: "preview"}) {
-								<span>Recipient preview</span><small>Check a personalized email</small>
-							}
-						}
-						<div class="border-t border-t-border mt-[.65rem] pt-[.4rem] max-[760px]:col-span-full" aria-hidden="true"></div>
-						@tabs.Trigger(tabs.TriggerProps{Value: "rows"}) {
-							<span>Rows & exclusions</span><small>Admitted rows & held reasons</small>
-						}
-						@tabs.Trigger(tabs.TriggerProps{Value: "results"}) {
-							<span>Results workbook</span><small>Generate & download results</small>
-						}
+					@tabs.Trigger(tabs.TriggerProps{Value: TaskSectionOverview}) {
+						<span>Overview</span><small>Progress & task details</small>
+					}
+					@tabs.Trigger(tabs.TriggerProps{Value: TaskSectionRecipients}) {
+						<span>Recipients</span><small>Validate & preview rows</small>
+					}
+					@tabs.Trigger(tabs.TriggerProps{Value: TaskSectionTest}) {
+						<span>Test & approve</span><small>Formatting test</small>
+					}
+					@tabs.Trigger(tabs.TriggerProps{Value: TaskSectionSending}) {
+						<span>Sending</span><small>Start, stop & recover</small>
+					}
+					@tabs.Trigger(tabs.TriggerProps{Value: TaskSectionResults}) {
+						<span>Results</span><small>Workbook & history</small>
 					}
 				}
 			</aside>
 			<div class="min-w-0 **:data-[slot=tabs-content]:min-w-0">
-				if data.Status == "staging" {
-					@tabs.Content(tabs.ContentProps{Value: "review", Class: "space-y-6"}) {
-						if data.ValidationError != "" {
-							@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
-								{ data.ValidationError }
+				@tabs.Content(tabs.ContentProps{Value: TaskSectionOverview, Class: "space-y-6"}) {
+					@taskOverview(data)
+				}
+				@tabs.Content(tabs.ContentProps{Value: TaskSectionRecipients, Class: "space-y-6"}) {
+					@taskRecipients(data)
+				}
+				@tabs.Content(tabs.ContentProps{Value: TaskSectionTest, Class: "space-y-6"}) {
+					@taskTest(data)
+				}
+				@tabs.Content(tabs.ContentProps{Value: TaskSectionSending, Class: "space-y-6"}) {
+					@TaskSendingLive(data)
+				}
+				@tabs.Content(tabs.ContentProps{Value: TaskSectionResults, Class: "space-y-6"}) {
+					@taskResults(data)
+				}
+			</div>
+		}
+	}
+}
+
+templ taskOverview(data TaskPageData) {
+	<section class="space-y-6" aria-labelledby="overview-heading">
+		<h2 id="overview-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Overview</h2>
+		@taskLifecycle(data)
+		@card.Card(card.Props{Attributes: templ.Attributes{"aria-labelledby": "task-details-heading"}}) {
+			@card.Content(card.ContentProps{Class: "gap-4"}) {
+				<h3 id="task-details-heading" class="cn-card-title">Task details</h3>
+				<dl class="grid grid-cols-2 gap-4 text-sm *:min-w-0 [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:wrap-anywhere max-[760px]:grid-cols-1">
+					<div><dt>Uploaded</dt><dd>{ data.UploadedAt }</dd></div>
+					<div><dt>Campaign</dt><dd><a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "#tasks" }>{ data.CampaignName }</a></dd></div>
+					<div>
+						<dt>Saved revision</dt>
+						<dd>
+							if data.HasSavedRevision {
+								{ data.SavedRevision }
+							} else {
+								Not validated
 							}
-						}
-						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "selection-heading"}}) {
-							@card.Content(card.ContentProps{Class: "gap-4"}) {
-								<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 2 · Configure</p>
-								<h2 id="selection-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Choose the worksheet and header row</h2>
-								<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Confirm which worksheet contains recipients and which row names its columns. Current default: <code>{ data.DefaultSheet }</code>, row { data.HeaderRow }.</p>
-								<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/select" } class="grid grid-cols-2 gap-4 *:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1">
-									@field.Field(field.Props{}) {
-										@field.Label(field.LabelProps{For: "select-sheet"}) {
-											Worksheet
+						</dd>
+					</div>
+					<div>
+						<dt>Formatting</dt>
+						<dd>
+							@revisionState(data.HasSavedRevision, data.Approved)
+						</dd>
+					</div>
+					if data.Worksheet != "" {
+						<div><dt>Worksheet</dt><dd>{ data.Worksheet }</dd></div>
+						<div><dt>Header row</dt><dd>{ data.HeaderRow }</dd></div>
+					}
+					<div><dt>Sender</dt><dd><strong data-sender-status={ data.SenderStatus }>{ data.Sender }</strong> ({ data.SenderStatus })</dd></div>
+					if data.ScheduleAt != "" {
+						<div><dt>Scheduled start</dt><dd>{ data.ScheduleAt } ({ data.ScheduleState })</dd></div>
+					}
+				</dl>
+				<details class="text-xs text-muted-foreground">
+					<summary class="cursor-pointer">Technical details</summary>
+					<p class="mt-1">Reference: { data.Reference }</p>
+					<p class="mt-1">Task ID: <code class="break-all">{ data.TaskID }</code> · Stored status: <code>{ data.StoredStatus }</code></p>
+				</details>
+			}
+		}
+	</section>
+}
+
+templ taskLifecycle(data TaskPageData) {
+	<div class="space-y-4">
+		<h3 class="text-sm font-semibold text-muted-foreground">Task progress</h3>
+		<ol class="grid grid-cols-5 gap-4 text-sm max-[1100px]:grid-cols-1" aria-label="Task lifecycle">
+			for index, step := range data.Lifecycle {
+				{{ section := taskLifecycleSection(step.Name) }}
+				{{ current := section == taskLifecycleNextSection(data) }}
+				{{ href := "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "#" + section }}
+				<li class="group relative min-w-0" data-complete={ strconv.FormatBool(step.Complete) } data-next={ strconv.FormatBool(!step.Complete && current) }>
+					if index < len(data.Lifecycle)-1 {
+						<span aria-hidden="true" class="absolute top-4 left-8 -right-4 h-px bg-border group-data-[complete=true]:bg-primary/40 max-[1100px]:top-8 max-[1100px]:left-4 max-[1100px]:right-auto max-[1100px]:-bottom-4 max-[1100px]:h-auto max-[1100px]:w-px"></span>
+					}
+					<div class="relative flex flex-col items-start gap-2 max-[1100px]:flex-row max-[1100px]:gap-3">
+						<span aria-hidden="true" class="grid size-8 shrink-0 place-items-center rounded-full border border-border bg-background text-xs font-semibold text-muted-foreground group-data-[complete=true]:border-primary group-data-[complete=true]:bg-primary group-data-[complete=true]:text-primary-foreground group-data-[next=true]:border-primary group-data-[next=true]:text-primary group-data-[next=true]:ring-4 group-data-[next=true]:ring-primary/10">
+							if step.Complete {
+								@icon.Check(icon.Props{Size: 16})
+							} else {
+								{ index + 1 }
+							}
+						</span>
+						<div class="flex min-w-0 flex-col items-start gap-2">
+							<div class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+								<span class={ templ.KV("text-primary", current), "font-semibold" }>{ step.Name }</span>
+								@tooltip.Tooltip(tooltip.Props{ID: "task-progress-help-" + section}) {
+									<button type="button" class="relative inline-flex size-4 shrink-0 items-center justify-center rounded-full border border-border text-[.6rem] font-semibold before:absolute before:-inset-1 text-muted-foreground cursor-help hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" aria-label={ "About " + step.Name } aria-describedby={ "task-progress-help-" + section } data-templ-tooltip-open-on-press { tooltip.Trigger(ctx)... }>
+										<span aria-hidden="true">i</span>
+									</button>
+									@tooltip.Content(tooltip.ContentProps{Side: tooltip.SideBottom, Class: "block max-w-60! space-y-1 px-2! py-1.5! text-[.7rem]! leading-snug", Attributes: templ.Attributes{"role": "tooltip"}}) {
+										if current && data.StatusExplanation != "" {
+											<p>{ data.StatusExplanation }</p>
+										} else {
+											<p>{ taskLifecycleHelp(step.Name) }</p>
 										}
-										@nativeselect.NativeSelect(nativeselect.Props{ID: "select-sheet", Name: "sheet", Class: "w-full"}) {
-											for _, sheet := range data.Sheets {
-												if sheet.Selected {
-													<option value={ sheet.Name } selected>
-														@sheetLabel(sheet)
-													</option>
-												} else {
-													<option value={ sheet.Name }>
-														@sheetLabel(sheet)
-													</option>
-												}
+										for _, blocker := range data.Blockers {
+											if taskLifecycleBlockerSection(blocker) == section {
+												<p><strong>{ blocker.Label }.</strong> { blocker.Remedy }</p>
 											}
 										}
 									}
-									@field.Field(field.Props{}) {
-										@field.Label(field.LabelProps{For: "select-header-row"}) {
-											Header row
-										}
-										@input.Input(input.Props{ID: "select-header-row", Type: "number", Name: "header_row", Required: true, Attributes: templ.Attributes{"min": "1", "value": data.HeaderRow}})
+								}
+							</div>
+							<p class="text-xs text-muted-foreground wrap-anywhere">{ step.State }</p>
+							for _, blocker := range data.Blockers {
+								if taskLifecycleBlockerSection(blocker) == section {
+									<p class="text-xs status-warning">{ blocker.Label }</p>
+									if blocker.Href != "" && blocker.Href != href && (!current || blocker.Href != data.NextHref) {
+										<a class="app-link text-xs text-primary" href={ blocker.Href }>{ blocker.Label } →</a>
 									}
-									<div class="action-bar">
-										@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
-											Validate task
+								}
+							}
+							if current && data.NextHref != "" && data.NextLabel != "" {
+								@button.Button(button.Props{Href: data.NextHref, Size: button.SizeSm, Class: "h-auto! min-h-9! max-w-full whitespace-normal py-2! text-left text-xs! leading-4"}) {
+									{ data.NextLabel } <span aria-hidden="true">→</span>
+								}
+								if data.NextHref != href {
+									<a class="app-link text-xs text-primary" href={ href }>{ "Open " + step.Name }</a>
+								}
+							}
+						</div>
+					</div>
+				</li>
+			}
+		</ol>
+	</div>
+}
+
+// External prerequisites still belong to the stage they prevent.
+func taskLifecycleNextSection(data TaskPageData) string {
+	for _, section := range []string{TaskSectionOverview, TaskSectionRecipients, TaskSectionTest, TaskSectionSending, TaskSectionResults} {
+		if strings.HasSuffix(data.NextHref, "#"+section) {
+			return section
+		}
+	}
+	if strings.HasSuffix(data.NextHref, "#template") {
+		return TaskSectionRecipients
+	}
+	return TaskSectionSending
+}
+
+func taskLifecycleBlockerSection(blocker TaskBlocker) string {
+	if blocker.Section != "" {
+		return blocker.Section
+	}
+	return TaskSectionSending
+}
+
+func taskLifecycleHelp(name string) string {
+	switch name {
+	case "Upload":
+		return "Original workbook saved. Upload details and its reference are below."
+	case "Recipients":
+		return "Validate the workbook and review recipients, previews and exclusions."
+	case "Test & approve":
+		return "Approve a received formatting test for this saved content and current mailbox."
+	case "Sending":
+		return "Choose Direct or Scheduled, then confirm sending. Manage progress and recovery here."
+	case "Results":
+		return "Review results and attempt history. Submitted means provider acceptance, not delivery."
+	default:
+		return "Open this step to review its current state."
+	}
+}
+
+func taskLifecycleSection(name string) string {
+	switch name {
+	case "Recipients":
+		return TaskSectionRecipients
+	case "Test & approve":
+		return TaskSectionTest
+	case "Sending":
+		return TaskSectionSending
+	case "Results":
+		return TaskSectionResults
+	default:
+		return TaskSectionOverview
+	}
+}
+
+templ taskRecipients(data TaskPageData) {
+	<section class="space-y-6" id="task-recipients-summary" aria-labelledby="recipients-heading">
+		<h2 id="recipients-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Recipients</h2>
+		if data.StoredStatus == "staging" {
+			if data.ValidationError != "" {
+				@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
+					{ data.ValidationError }
+				}
+			}
+			@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "selection-heading"}}) {
+				@card.Content(card.ContentProps{Class: "gap-4"}) {
+					<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 1 · Configure</p>
+					<h3 id="selection-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Choose the worksheet and header row</h3>
+					<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Confirm which worksheet contains recipients and which row names its columns. Current selection: <code>{ data.DefaultSheet }</code>, row { data.HeaderRow }.</p>
+					if data.HasCurrentRevision {
+						<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/select#recipients" } class="grid grid-cols-2 gap-4 *:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1">
+							@field.Field(field.Props{}) {
+								@field.Label(field.LabelProps{For: "select-sheet"}) {
+									Worksheet
+								}
+								@nativeselect.NativeSelect(nativeselect.Props{ID: "select-sheet", Name: "sheet", Class: "w-full"}) {
+									for _, sheet := range data.Sheets {
+										switch  {
+											case data.SheetDraft != "" && sheet.Name == data.SheetDraft:
+												<option value={ sheet.Name } selected>
+													@sheetLabel(sheet)
+												</option>
+											case data.SheetDraft == "" && sheet.Selected:
+												<option value={ sheet.Name } selected>
+													@sheetLabel(sheet)
+												</option>
+											default:
+												<option value={ sheet.Name }>
+													@sheetLabel(sheet)
+												</option>
 										}
-									</div>
+									}
+								}
+							}
+							@field.Field(field.Props{}) {
+								@field.Label(field.LabelProps{For: "select-header-row"}) {
+									Header row
+								}
+								{{ headerRowValue := data.HeaderRow }}
+								if data.HeaderRowDraft > 0 {
+									{{ headerRowValue = data.HeaderRowDraft }}
+								}
+								@input.Input(input.Props{ID: "select-header-row", Type: "number", Name: "header_row", Required: true, Attributes: templ.Attributes{"min": "1", "value": strconv.Itoa(headerRowValue)}})
+							}
+							<div class="action-bar">
+								@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+									Validate workbook
+								}
+							</div>
+						</form>
+					} else {
+						@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
+							@alert.Title(alert.TitleProps{}) {
+								Add a template before validating this workbook
+							}
+							@alert.Description(alert.DescriptionProps{}) {
+								<p>The workbook is stored and its worksheet choices stay recorded. Validation is unavailable until the campaign has a template.</p>
+								<a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "#template" }>Add template</a>
+							}
+						}
+					}
+				}
+			}
+		} else {
+			@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "summary-heading"}}) {
+				@card.Content(card.ContentProps{Class: "gap-4"}) {
+					<h3 id="summary-heading" class="cn-card-title">Validation summary</h3>
+					<p class="text-sm">
+						{ strconv.Itoa(data.Summary.Total) } input rows · { strconv.Itoa(data.Summary.Eligible) } eligible at validation · { strconv.Itoa(data.Summary.ExcludedAtValidation) } excluded at validation
+					</p>
+					<p class="text-sm text-muted-foreground">Current eligible/safe remaining: <strong>{ data.Summary.CurrentEligible }</strong>. Rechecked before sending.</p>
+					if data.Stale {
+						@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
+							@alert.Title(alert.TitleProps{}) {
+								The campaign content changed after this task was validated
+							}
+							@alert.Description(alert.DescriptionProps{}) {
+								if data.ScheduleState == "scheduled" {
+									<p>Clear the scheduled start first, then revalidate against Revision { data.CurrentRevision }. The old schedule must not authorize revised content.</p>
+								} else {
+									<p>Revalidate this task to rebuild the snapshot against Revision { data.CurrentRevision }.</p>
+								}
+								<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate#recipients" }>
+									@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeSm, Disabled: data.ScheduleState == "scheduled"}) {
+										Revalidate with current template
+									}
 								</form>
 							}
 						}
 					}
-				} else {
-					@tabs.Content(tabs.ContentProps{Value: "review", Class: "space-y-6"}) {
-						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "counts-heading"}}) {
-							@card.Content(card.ContentProps{Class: "gap-4"}) {
-								<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 3 · Review</p>
-								<div class="action-bar">
-									<h2 id="counts-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Validation snapshot</h2>@revisionState(true, data.Approved)
-								</div>
-								<dl class="grid grid-cols-4 gap-3 max-[760px]:grid-cols-2">
-									<div class="p-4 bg-muted border border-border rounded-4xl [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground">
-										<dt class="font-semibold">Total rows:</dt>
-										<dd>{ data.Counts.Total }</dd>
-									</div>
-									<div class="p-4 bg-muted border border-border rounded-4xl [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground">
-										<dt class="font-semibold">Eligible:</dt>
-										<dd>{ data.Counts.Eligible }</dd>
-									</div>
-									<div class="p-4 bg-muted border border-border rounded-4xl [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground">
-										<dt class="font-semibold">Ineligible:</dt>
-										<dd>{ data.Counts.Ineligible }</dd>
-									</div>
-									<div class="p-4 bg-muted border border-border rounded-4xl [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground">
-										<dt class="font-semibold">Duplicate:</dt>
-										<dd>{ data.Counts.Duplicate }</dd>
-									</div>
-									<div class="p-4 bg-muted border border-border rounded-4xl [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground">
-										<dt class="font-semibold">Invalid address:</dt>
-										<dd>{ data.Counts.Invalid }</dd>
-									</div>
-									<div class="p-4 bg-muted border border-border rounded-4xl [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground">
-										<dt class="font-semibold">Already submitted:</dt>
-										<dd>{ data.Counts.AlreadySubmitted }</dd>
-									</div>
-									<div class="p-4 bg-muted border border-border rounded-4xl [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground">
-										<dt class="font-semibold">Already scheduled:</dt>
-										<dd>{ data.Counts.AlreadyScheduled }</dd>
-									</div>
-									<div class="p-4 bg-muted border border-border rounded-4xl [&_dt]:text-[.72rem] [&_dt]:font-[550] [&_dt]:text-muted-foreground [&_dd]:mt-[.4rem] [&_dd]:text-[1.65rem] [&_dd]:font-bold [&_dd]:leading-[1.2] [&_dd]:text-foreground">
-										<dt class="font-semibold">Review required:</dt>
-										<dd>{ data.Counts.ReviewRequired }</dd>
-									</div>
-								</dl>
-								if data.Counts.Eligible == 0 && data.Status == "ready" {
-									<div class="status-warning" role="status">No eligible recipients. Review the held rows in Rows & exclusions, correct the workbook and upload a new task.</div>
+					@collapsible.Collapsible(collapsible.Props{ID: "validation-breakdown", Attributes: templ.Attributes{"data-workspace-persist": true}}) {
+						<button class="cursor-pointer text-sm font-semibold text-muted-foreground bg-transparent border-0 p-0" { collapsible.Trigger(ctx)... }>Validation breakdown</button>
+						@collapsible.Content(collapsible.ContentProps{Class: "mt-2"}) {
+							<div class="table-scroll">
+								@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Validation categories"}}) {
+									<thead><tr><th>Category</th><th>Rows</th></tr></thead>
+									<tbody>
+										for _, category := range data.Categories {
+											<tr><td>{ category.Label }</td><td>{ category.Count }</td></tr>
+										}
+									</tbody>
 								}
-								<p class="text-sm text-muted-foreground">Send a test email and approve its received formatting before starting or scheduling candidate sending. Tests, approval, progress and recovery controls are available on the sending page.</p>
-								<div class="p-[1.1rem] border border-border rounded-4xl bg-muted">
-									<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Result labels</p>
-									<p>{ joinLabels(data.ResultLabels) }</p>
-								</div>
-								<details class="text-[.8125rem] border-t border-t-border pt-4 [&_dl]:mt-4">
-									<summary>Snapshot details · revision { data.Revision }</summary>
-									<dl class="space-y-1 text-sm">
-										<div class="flex gap-2">
-											<dt class="font-semibold">Revision:</dt>
-											<dd>{ data.Revision }</dd>
-										</div>
-										<div class="flex gap-2">
-											<dt class="font-semibold">Content hash:</dt>
-											<dd><code class="break-all">{ data.ContentHash }</code></dd>
-										</div>
-										<div class="flex gap-2">
-											<dt class="font-semibold">Approval:</dt>
-											<dd>
-												@revisionState(true, data.Approved)
-											</dd>
-										</div>
-									</dl>
-								</details>
-							}
-						}
-						if data.ScheduleAt != "" {
-							<p class="font-semibold">Scheduled start: { data.ScheduleAt } ({ data.ScheduleState })</p>
-							switch data.ScheduleState {
-								case "missed":
-									<p class="text-warning-foreground">The scheduled time passed without starting. Review this task and schedule a new start.</p>
-								case "fired":
-									<p class="text-sm text-muted-foreground">This schedule started the task once.</p>
-							}
-						}
-						if data.Stale {
-							@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
-								@alert.Title(alert.TitleProps{}) {
-									The campaign content changed after this task was validated
-								}
-								@alert.Description(alert.DescriptionProps{}) {
-									Revalidate this task to rebuild the snapshot against the current revision.
-								}
-								<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate" }>
-									@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeSm, Class: "status-warning"}) {
-										Revalidate
-									}
-								</form>
-							}
+							</div>
 						}
 					}
-					@tabs.Content(tabs.ContentProps{Value: "rows", Class: "space-y-6"}) {
-						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "download-heading"}}) {
-							@card.Content(card.ContentProps{Class: "gap-2"}) {
-								<h2 id="download-heading" class="cn-card-title">Exclusion report</h2>
-								<p class="text-sm text-muted-foreground">Every held row with its original columns, available even when no row is eligible.</p>
-								<div class="app-card-actions">
-									<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download exclusion report</a>
-								</div>
-							}
-						}
-						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "held-heading"}}) {
-							@card.Content(card.ContentProps{}) {
-								<h2 id="held-heading" class="cn-card-title">Held rows</h2>
-								if len(data.HeldRows) == 0 {
-									<p class="text-muted-foreground">No held rows: every candidate row was admitted.</p>
-								} else {
-									<div class="table-scroll">
-										@table.Table(table.Props{Class: "cn-table-compact"}) {
-											<thead>
-												<tr>
-													<th>Worksheet row</th>
-													<th>Reason</th>
-												</tr>
-											</thead>
-											<tbody>
-												for _, held := range data.HeldRows {
-													<tr>
-														<td>{ held.Row }</td>
-														<td>{ held.Reason }</td>
-													</tr>
-												}
-											</tbody>
-										}
-									</div>
-								}
-							}
-						}
-						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "rows-heading"}}) {
-							@card.Content(card.ContentProps{}) {
-								<h2 id="rows-heading" class="cn-card-title">Admitted rows</h2>
-								if len(data.Rows) == 0 {
-									<p class="text-muted-foreground">No admitted rows in this snapshot.</p>
-								} else {
-									<div class="table-scroll">
-										@table.Table(table.Props{Class: "cn-table-compact"}) {
-											<thead>
-												<tr>
-													<th>Worksheet row</th>
-													<th>State</th>
-													<th>Reason</th>
-												</tr>
-											</thead>
-											<tbody>
-												for _, row := range data.Rows {
-													<tr>
-														<td>{ row.Row }</td>
-														<td><code>{ row.State }</code></td>
-														<td>{ row.Reason }</td>
-													</tr>
-												}
-											</tbody>
-										}
-									</div>
-								}
-							}
-						}
+					if data.Counts.AlreadyScheduled > 0 {
+						<p class="text-sm text-muted-foreground">“Already scheduled” means another task claimed the recipient. That is separate from this task's future scheduled start.</p>
 					}
-					if len(data.Rows) > 0 {
-						@tabs.Content(tabs.ContentProps{Value: "preview", Class: "space-y-6"}) {
-							@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "preview-heading"}}) {
-								@card.Content(card.ContentProps{Class: "gap-4"}) {
-									<h2 id="preview-heading" class="cn-card-title">Row preview</h2>
-									<p class="text-sm text-muted-foreground">Render one admitted row through the pinned revision. Nothing is stored and nothing is sent.</p>
-									<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-post={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-target="#task-preview-result" hx-swap="innerHTML" hx-disabled-elt="this" class="space-y-4">
-										@field.Field(field.Props{}) {
-											@field.Label(field.LabelProps{For: "preview-row"}) {
-												Row
-											}
-											@nativeselect.NativeSelect(nativeselect.Props{ID: "preview-row", Name: "row", Class: "w-full"}) {
-												for _, row := range data.Rows {
-													<option value={ row.ID }>Worksheet row { row.Row } ({ row.State })</option>
-												}
-											}
-										}
-										<div class="action-bar">
-											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
-												Render preview
-											}
-										</div>
-									</form>
-									<div id="task-preview-result" role="status" aria-live="polite">
-										<p class="text-muted-foreground">Submit a row to render its pinned email here.</p>
-									</div>
-								}
+					<div class="app-card-actions">
+						<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download exclusion report</a>
+					</div>
+				}
+			}
+			@taskPreview(data)
+			@taskRowReasons(data)
+		}
+	</section>
+}
+
+templ taskPreview(data TaskPageData) {
+	<section class="space-y-4" id="task-preview" aria-labelledby="preview-heading">
+		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "preview-heading"}}) {
+			@card.Content(card.ContentProps{Class: "gap-4"}) {
+				<h3 id="preview-heading" class="cn-card-title">Recipient preview</h3>
+				if len(data.Rows) > 0 {
+					<p class="text-sm text-muted-foreground">Select an admitted row to render its saved revision. Nothing is stored and nothing is sent.</p>
+					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview#recipients" } hx-post={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-target="#task-preview-result" hx-swap="innerHTML" hx-trigger="change, submit" hx-indicator="#task-preview-loading" class="space-y-3">
+						@field.Field(field.Props{}) {
+							@field.Label(field.LabelProps{For: "preview-row"}) {
+								Row
 							}
-						}
-					}
-					@tabs.Content(tabs.ContentProps{Value: "results", Class: "space-y-6"}) {
-						@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "results-heading"}}) {
-							@card.Content(card.ContentProps{Class: "gap-4"}) {
-								<h2 id="results-heading" class="cn-card-title">Task results workbook</h2>
-								<p>The workbook keeps every original worksheet, row and cell, and adds the result columns after the source columns. It is built from retained records only; generating it never sends or retries an email.</p>
-								if data.ResultsReady {
-									<dl class="space-y-1 text-sm">
-										<div class="flex gap-2">
-											<dt class="font-semibold">As of:</dt>
-											<dd>{ data.ResultsAsOf }</dd>
-										</div>
-									</dl>
-									<div class="app-card-actions">
-										<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results.xlsx" }>Download results</a>
-										<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results" }>
-											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantGhost, Size: button.SizeDefault}) {
-												Regenerate
-											}
-										</form>
-										<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results/delete#results" }>
-											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantGhost, Size: button.SizeDefault}) {
-												Remove generated file
-											}
-										</form>
-									</div>
-									<p class="text-sm text-muted-foreground">Removing this file deletes only the generated workbook. Candidate eligibility, uploads and attempt history stay unchanged, and the workbook can be generated again.</p>
-								} else {
-									if data.ResultsState == "generating" {
-										<p>Generating the workbook now. Reload this page shortly.</p>
-									} else if data.ResultsState == "failed" {
-										if data.ResultsError != "" {
-											@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
-												{ data.ResultsError }
-											}
-										}
-										<p>The last generation did not finish, so no download is presented. Retrying rebuilds the file from retained records.</p>
-									} else if data.Status == "completed" || data.Status == "stopped" || data.Status == "interrupted" {
-										<p>No workbook is published yet. Generate it now, or wait for the background worker to consume the recorded marker.</p>
+							@nativeselect.NativeSelect(nativeselect.Props{ID: "preview-row", Name: "row", Class: "w-full"}) {
+								for _, row := range data.Rows {
+									if row.ID == data.PreviewRowID {
+										<option value={ row.ID } selected>{ previewRowLabel(row) }</option>
 									} else {
-										<p>A results workbook becomes available after the task completes, stops or recovers from an interruption. Current status: <code>{ data.Status }</code>.</p>
+										<option value={ row.ID }>{ previewRowLabel(row) }</option>
 									}
-									if data.Status == "completed" || data.Status == "stopped" || data.Status == "interrupted" {
-										<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results" }>
-											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
-												Generate results workbook
-											}
-										</form>
+								}
+							}
+						}
+						<div class="app-card-actions items-center">
+							@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm}) {
+								Refresh preview
+							}
+							<span id="task-preview-loading" class="htmx-indicator text-sm text-muted-foreground" role="status">Rendering preview…</span>
+						</div>
+					</form>
+				} else {
+					<p class="text-muted-foreground">No admitted row is previewable. Review the row reasons and the exclusion report.</p>
+				}
+				<div id="task-preview-result" role="status" aria-live="polite">
+					@TaskPreviewResult(data.Preview)
+				</div>
+			}
+		}
+	</section>
+}
+
+// previewRowLabel names a row recognizably: worksheet row plus mapped address
+// or state.
+func previewRowLabel(row TaskAdmittedRow) string {
+	label := "Worksheet row " + strconv.Itoa(row.Row)
+	if row.Recipient != "" {
+		label += " · " + row.Recipient
+	}
+	if row.State != "" && row.State != "eligible" {
+		label += " (" + row.State + ")"
+	}
+	return label
+}
+
+templ taskRowReasons(data TaskPageData) {
+	<section class="space-y-6" id="task-row-reasons">
+		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "held-heading"}}) {
+			@card.Content(card.ContentProps{}) {
+				<h3 id="held-heading" class="cn-card-title">Rows needing attention</h3>
+				if len(data.HeldRows) == 0 && len(data.Rows) == 0 {
+					<p class="text-muted-foreground">No candidate rows in this snapshot.</p>
+				} else {
+					<div class="table-scroll">
+						@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Row reasons"}}) {
+							<thead>
+								<tr><th>Worksheet row</th><th>Recipient</th><th>State</th><th>Reason</th></tr>
+							</thead>
+							<tbody>
+								for _, held := range data.HeldRows {
+									<tr>
+										<td>{ held.Row }</td>
+										<td>{ held.Recipient }</td>
+										<td>Excluded at validation</td>
+										<td>{ held.Reason }</td>
+									</tr>
+								}
+								for _, row := range data.Rows {
+									if row.State == "eligible" && row.Reason == "" {
+										{{ continue }}
 									}
+									<tr>
+										<td>{ row.Row }</td>
+										<td>{ row.Recipient }</td>
+										<td><code>{ row.State }</code></td>
+										<td>{ row.Reason }</td>
+									</tr>
+								}
+							</tbody>
+						}
+					</div>
+				}
+				<p class="text-sm text-muted-foreground">Corrected data is uploaded as a new task; this saved snapshot is never edited in place.</p>
+			}
+		}
+	</section>
+}
+
+templ taskTest(data TaskPageData) {
+	<section class="space-y-6" id="task-test" aria-labelledby="test-heading">
+		<h2 id="test-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Test & approve</h2>
+		if data.StoredStatus == "staging" {
+			<p class="text-muted-foreground">Validate the workbook in <a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "#recipients" }>Recipients</a> first. Candidate tests and approval are unavailable until the workbook has a validation snapshot.</p>
+		} else {
+			@taskApprovalSummary(data)
+			if len(data.Rows) > 0 {
+				if data.Approved {
+					<details id="formatting-review" class="space-y-6" open?={ data.Error != "" }>
+						<summary class={ "list-none cursor-pointer [&::-webkit-details-marker]:hidden", button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) }>Change formatting</summary>
+						<div class="space-y-6">
+							<p class="text-sm text-muted-foreground">Your current approval stays valid while you review. To change the content, <a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "#template" }>create a template revision</a>, then revalidate an unstarted task and test the new configuration. Tasks that have started keep their saved revision.</p>
+							@taskDiagnostics(data)
+							@taskApprovalForm(data)
+						</div>
+					</details>
+				} else {
+					@taskDiagnostics(data)
+					@taskApprovalForm(data)
+				}
+			}
+		}
+	</section>
+}
+
+templ taskApprovalSummary(data TaskPageData) {
+	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "approval-summary-heading"}}) {
+		@card.Content(card.ContentProps{Class: "gap-3"}) {
+			<h3 id="approval-summary-heading" class="cn-card-title">Approval summary</h3>
+			<p>Sending mailbox: <strong>{ data.Sender }</strong> ({ data.SenderStatus }) · Saved revision: { data.SavedRevision }</p>
+			if data.Approved {
+				<p class="text-success">Formatting approved for this saved configuration and current mailbox generation.</p>
+				if data.LatestTest != "" {
+					<p class="text-sm text-muted-foreground">Recorded evidence: submitted test { data.LatestTest }. The approval may come from another task with the same saved configuration and mailbox.</p>
+				} else {
+					<p class="text-sm text-muted-foreground">A qualifying test recorded on another task established this reusable approval.</p>
+				}
+			} else {
+				<p class="status-warning">Formatting is not approved for this saved configuration and current mailbox. A test is required before candidate sending.</p>
+				<p class="text-sm text-muted-foreground">Changing personalized content or replacing the mailbox invalidates approval; rotating settings on the same verified mailbox does not.</p>
+			}
+			<details class="text-sm">
+				<summary class="cursor-pointer text-muted-foreground">Content hash</summary>
+				<p class="mt-2"><code class="break-all">{ data.Hash }</code></p>
+			</details>
+		}
+	}
+}
+
+templ taskDiagnostics(data TaskPageData) {
+	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "sending-test-heading"}}) {
+		@card.Content(card.ContentProps{Class: "gap-4"}) {
+			<h3 id="sending-test-heading" class="cn-card-title">Send formatting test</h3>
+			<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Choose a valid sample row and enter the test address. Tests use a separate attempt and never submit a candidate or resume work.</p>
+			<form id="sending-diagnostic-test" hx-preserve method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending/test#test" } class="space-y-3">
+				<input type="hidden" name="action_id" value={ data.ActionID + "test" }/>
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-sample-row"}) {
+						Sample row
+					}
+					@nativeselect.NativeSelect(nativeselect.Props{ID: "sending-sample-row", Name: "member_id", Required: true, Class: "w-full"}) {
+						for _, row := range data.Rows {
+							if row.State == "eligible" {
+								@nativeselect.Option(nativeselect.OptionProps{Value: row.ID}) {
+									Worksheet row { row.Row }
 								}
 							}
 						}
 					}
 				}
-			</div>
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-test-address"}) {
+						Test recipient
+					}
+					@input.Input(input.Props{ID: "sending-test-address", Type: "email", Name: "test_address", Required: true})
+				}
+				<div class="action-bar">
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
+						{ "Send formatting test" }
+					}
+				</div>
+			</form>
 		}
 	}
+}
+
+templ taskApprovalForm(data TaskPageData) {
+	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "sending-approval-heading"}}) {
+		@card.Content(card.ContentProps{Class: "gap-4"}) {
+			<h3 id="sending-approval-heading" class="cn-card-title">Approve received formatting</h3>
+			<p>Select the qualifying submitted test, then confirm you received and checked its formatting.</p>
+			<form id={ approvalFormID(data) } hx-preserve method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending/approve#test" } class="space-y-3">
+				<input type="hidden" name="action_id" value={ data.ActionID + "approve" }/>
+				<input type="hidden" name="content_hash" value={ data.Hash }/>
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-approval-attempt"}) {
+						Successful diagnostic test
+					}
+					@nativeselect.NativeSelect(nativeselect.Props{ID: "sending-approval-attempt", Name: "attempt_id", Required: true, Class: "w-full"}) {
+						<option value="">Choose a submitted test for this configuration</option>
+						if data.LatestTest != "" {
+							<option value={ data.LatestTest }>Latest successful test: { data.LatestTest }</option>
+						}
+						for _, outcome := range data.Recent {
+							if outcome.Test && outcome.State == "submitted" && outcome.ID != data.LatestTest {
+								<option value={ outcome.ID }>{ outcome.Recipient } · { outcome.Time } · { outcome.ID }</option>
+							}
+						}
+					}
+				}
+				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-approve-received", Name: "received_checked", Value: "yes", Required: true})
+					I received this test and checked its subject, personalized values and HTML formatting.
+				}
+				<div class="action-bar">
+					@button.Button(button.Props{Type: button.TypeSubmit}) {
+						{ "Approve received formatting" }
+					}
+				</div>
+			</form>
+		}
+	}
+}
+
+templ TaskSendingLive(data TaskPageData) {
+	<div id="sending-live" class="space-y-6" hx-get={ sendingBase(data) + "/progress" + sendingChooserQuery(data.SendingType) } hx-trigger="every 2s" hx-swap="outerHTML">
+		<section class="space-y-4" aria-labelledby="sending-heading">
+			<h2 id="sending-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Sending</h2>
+			<div class="rounded-card border border-border bg-muted/50 p-4" aria-live="polite">
+				<p class="font-semibold">{ data.StatusLabel }</p>
+				<p class="text-sm text-muted-foreground">{ data.StatusExplanation }</p>
+				<dl class="mt-3 grid grid-cols-3 gap-3 text-sm max-[760px]:grid-cols-2">
+					<div><dt class="text-muted-foreground">Safe remaining</dt><dd class="text-xl font-bold">{ data.Remaining }</dd></div>
+					<div><dt class="text-muted-foreground">Submitted</dt><dd class="text-xl font-bold">{ data.Submitted }</dd></div>
+					<div><dt class="text-muted-foreground">Definite failures</dt><dd class="text-xl font-bold">{ data.RetryableFailed }</dd></div>
+					<div><dt class="text-muted-foreground">Uncertain</dt><dd class="text-xl font-bold">{ data.Held }</dd></div>
+					<div><dt class="text-muted-foreground">In flight</dt><dd class="text-xl font-bold">{ data.InFlight }</dd></div>
+					<div><dt class="text-muted-foreground">Reserved</dt><dd class="text-xl font-bold">{ data.Reserved }</dd></div>
+				</dl>
+				<p class="mt-2 text-xs text-muted-foreground">Exclusions: invalid { data.Invalid }, duplicate { data.Duplicate }, ineligible { data.Ineligible }. Counts refresh before each action; changed exclusions require another confirmation.</p>
+			</div>
+			if data.StoredStatus == "staging" {
+				<p class="text-muted-foreground">Validate the workbook in <a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "#recipients" }>Recipients</a> first. Candidate actions and scheduling are unavailable until then.</p>
+			} else {
+				@taskSendingControls(data)
+				@taskRecovery(data)
+				@taskPacing(data)
+			}
+		</section>
+	</div>
+}
+
+templ taskSendingControls(data TaskPageData) {
+	{{ mode := taskSendingType(data) }}
+	@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "controls-heading"}}) {
+		@card.Content(card.ContentProps{Class: "gap-4"}) {
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<h3 id="controls-heading" class="cn-card-title">
+					switch  {
+						case mode == TaskSendingTypeDirect:
+							Direct sending
+						case mode == TaskSendingTypeScheduled:
+							Scheduled sending
+						case taskCanChooseSendingType(data):
+							Choose a sending type
+						default:
+							Sending controls
+					}
+				</h3>
+				if taskCanChooseSendingType(data) && mode != "" {
+					<a class="app-link text-primary text-sm" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "?sending_type=choose#sending" }>Change sending type</a>
+				}
+			</div>
+			switch  {
+				case taskCanChooseSendingType(data) && mode == "":
+					<p class="text-sm text-muted-foreground">How should this task send? Your choice is saved for this task across the app. Changing it resets unsaved sending inputs; it does not send email or authorize a schedule.</p>
+					if data.ScheduleState == "scheduled" || data.ScheduleState == "missed" {
+						<p class="text-sm status-warning">Stored scheduled start: { data.ScheduleAt }. Clear this schedule before choosing Direct sending.</p>
+					}
+					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending-type" } class="grid grid-cols-2 gap-4 max-[760px]:grid-cols-1">
+						<button type="submit" name="sending_type" value={ TaskSendingTypeDirect } class="rounded-xl border border-border p-5 text-left space-y-2 cursor-pointer hover:border-primary hover:bg-accent/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+							<span class="block font-semibold">Direct sending</span>
+							<span class="block text-sm text-muted-foreground">Send when you confirm the current recipient count.</span>
+							<span class="block text-sm font-semibold text-primary">Choose Direct →</span>
+						</button>
+						<button type="submit" name="sending_type" value={ TaskSendingTypeScheduled } class="rounded-xl border border-border p-5 text-left space-y-2 cursor-pointer hover:border-primary hover:bg-accent/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+							<span class="block font-semibold">Scheduled sending</span>
+							<span class="block text-sm text-muted-foreground">Choose a future date and time, then confirm the schedule.</span>
+							<span class="block text-sm font-semibold text-primary">Choose Scheduled →</span>
+						</button>
+					</form>
+					if data.Controls.ClearSchedule {
+						@taskClearSchedule(data)
+					}
+				case mode == TaskSendingTypeScheduled:
+					@taskSchedule(data)
+				default:
+					if !taskCanChooseSendingType(data) && data.StoredStatus != "ready" {
+						<p class="text-sm text-muted-foreground">The initial sending type cannot be changed after this task has started or paused after a missed start. Use the available stop, resume or recovery controls.</p>
+					}
+					@taskSendingActions(data)
+					if data.Controls.ClearSchedule {
+						@taskClearSchedule(data)
+					}
+			}
+		}
+	}
+}
+
+templ taskSendingActions(data TaskPageData) {
+	<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Sending requires approval of the saved content for the current mailbox and explicit confirmation of the fresh count. A validated task never starts by itself.</p>
+	if data.ScheduleState == "missed" {
+		@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
+			@alert.Title(alert.TitleProps{}) {
+				Missed scheduled start
+			}
+			@alert.Description(alert.DescriptionProps{}) {
+				if data.StoredStatus == "ready" {
+					<p>Stored start: { data.ScheduleAt }. This start did not run. Send now after fresh checks, or clear the schedule and choose a new one after resolving any blocker.</p>
+				} else {
+					<p>Stored start: { data.ScheduleAt }. This start was missed during downtime and the task is paused. Resume its safe remainder after fresh checks. Clearing the missed schedule leaves the task paused; a new first-start schedule is unavailable.</p>
+				}
+			}
+		}
+	}
+	if data.ScheduleState == "scheduled" {
+		<p class="text-sm">Scheduled start: <strong>{ data.ScheduleAt }</strong>. It remains active until you confirm Send now instead or cancel it below. Choosing a type alone does not change the schedule.</p>
+	}
+	<div class="flex flex-wrap gap-4 items-start [&>form]:min-w-0 [&_label]:text-sm">
+		if data.Controls.Start && data.StoredStatus == "ready" {
+			@sendingAction(data, "start", "Send now", data.Remaining)
+		}
+		if data.Controls.Resume {
+			@sendingAction(data, "resume", "Resume safe remainder", data.Remaining)
+		}
+		if data.Controls.SendNowInstead && data.StoredStatus == "ready" {
+			@sendingAction(data, "start", "Send now instead", data.Remaining)
+		}
+		if data.Controls.RetryAll {
+			@sendingAction(data, "retry_all", "Retry failed recipients", data.RetryableFailed)
+		}
+		if data.Controls.Stop {
+			<form id={ "sending-stop-" + data.StoredStatus + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/stop#sending" }>
+				<input type="hidden" name="action_id" value={ data.ActionID + "stop" }/>
+				<input type="hidden" name="expected_count" value="0"/>
+				<input type="hidden" name="confirmed" value="yes"/>
+				@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantSecondary, Class: "status-warning"}) {
+					{ "Stop sending" }
+				}
+				if data.StoredStatus == "paused" || data.StoredStatus == "interrupted" {
+					<p class="text-xs text-muted-foreground">Settles the task without launching more work; results become available after it stops.</p>
+				}
+			</form>
+		}
+	</div>
+	if data.Controls.Revalidate {
+		<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate#sending" } class="space-y-2">
+			<p class="text-sm status-warning">The saved snapshot differs from the current template.</p>
+			@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantSecondary, Disabled: data.ScheduleState == "scheduled"}) {
+				Revalidate with current template
+			}
+		</form>
+	}
+	if data.Controls.Start || data.Controls.Resume || data.Controls.SendNowInstead || data.Controls.RetryAll || data.Controls.Stop || data.Controls.Revalidate || data.Controls.Schedule || data.Controls.EditSchedule || data.Controls.ClearSchedule {
+		if data.Remaining == 0 && data.RetryableFailed == 0 && data.Held == 0 && (data.Controls.Start || data.Controls.Resume) {
+			<p class="text-sm status-warning">No currently eligible recipients remain. Review the exclusions and row reasons before any further action.</p>
+		}
+	} else if data.StoredStatus == "stopping" {
+		<p>Stopping: no new sends while active requests settle.</p>
+	} else if data.StoredStatus == "running" || data.StoredStatus == "waiting" {
+		<p>Current progress is shown above with its wait reason when known.</p>
+	} else {
+		<p class="text-sm text-muted-foreground">No candidate action is applicable in this state.</p>
+	}
+}
+
+templ sendingAction(data TaskPageData, kind string, label string, count int) {
+	<form id={ "sending-action-" + kind + "-" + strconv.Itoa(count) + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/" + kind + "#sending" } class="space-y-2">
+		<input type="hidden" name="action_id" value={ data.ActionID + kind }/>
+		<input type="hidden" name="expected_count" value={ strconv.Itoa(count) }/>
+		<label class="block">
+			@checkbox.Checkbox(checkbox.Props{ID: "sending-confirm-" + kind, Name: "confirmed", Value: "yes", Required: true})
+			Confirm { count } recipients
+		</label>
+		@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Approved || count == 0}) {
+			{ label }
+		}
+	</form>
+}
+
+templ taskSchedule(data TaskPageData) {
+	<div class="space-y-4">
+		if data.ScheduleAt != "" {
+			<p class="text-sm">Stored scheduled start: <strong>{ data.ScheduleAt }</strong> ({ data.ScheduleState }).</p>
+		}
+		<p class="text-sm text-muted-foreground">India time (+05:30) · At least 30 minutes from now. Saving authorizes a one-time start at your chosen time.</p>
+		<details id="schedule-help" hx-preserve class="text-sm text-muted-foreground">
+			<summary class="cursor-pointer text-primary">How scheduling works</summary>
+			<div class="mt-2 max-w-[75ch] space-y-2">
+				<p>The saved schedule starts without another confirmation. Only recipients still eligible at that time are included.</p>
+				<p>If the scheduled time passes while the server is offline, the task pauses for review instead of sending automatically when it restarts.</p>
+				<p>Changing sending type resets unsaved input. A saved schedule stays active until you explicitly clear or replace it.</p>
+			</div>
+		</details>
+		if data.Stale {
+			<p class="text-sm status-warning">Clear the existing schedule before revalidating against the current template.</p>
+		}
+		if data.ScheduleState == "missed" {
+			<p class="text-sm status-warning">This scheduled start was missed. Clear it before choosing a new schedule or switching to Direct sending.</p>
+		}
+		if data.Controls.Schedule || data.Controls.EditSchedule {
+			<form id={ "sending-schedule-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/schedule#sending" } x-data={ "{ confirmed: false, eligible: " + strconv.FormatBool(data.Approved && data.Remaining > 0) + " }" } x-on:change="if ($event.target.matches('input[name=confirmed]')) confirmed = $event.target.checked" class="grid grid-cols-2 gap-4 *:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1">
+				<input type="hidden" name="action_id" value={ data.ActionID + "schedule" }/>
+				<input type="hidden" name="expected_count" value={ strconv.Itoa(data.Remaining) }/>
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-schedule-time"}) {
+						Start time (India time)
+					}
+					@input.Input(input.Props{ID: "sending-schedule-time", Type: "time", Name: "schedule_time", Required: true, Value: data.ScheduleDraftTime, Attributes: templ.Attributes{"step": "60"}})
+				}
+				@field.Field(field.Props{}) {
+					@input.Input(input.Props{ID: "sending-schedule-date", Type: "date", Name: "schedule_date", Required: true, Value: data.ScheduleDraftDate, Attributes: templ.Attributes{"min": data.ScheduleMinDate}})
+					@field.Label(field.LabelProps{For: "sending-schedule-date"}) {
+						Start date
+					}
+				}
+				@uilabel.Label(uilabel.Props{Class: "cn-label col-span-full"}) {
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-schedule-confirm", Name: "confirmed", Value: "yes", Required: true})
+					I confirm the fresh counts for this scheduled start.
+				}
+				<div class="action-bar col-span-full">
+					@button.Button(button.Props{Type: button.TypeSubmit, Disabled: true, Attributes: templ.Attributes{"name": "schedule_action", "value": "enable", "x-bind:disabled": "!confirmed || !eligible"}}) {
+						{ "Schedule start" }
+					}
+				</div>
+			</form>
+		}
+		if data.Controls.ClearSchedule {
+			@taskClearSchedule(data)
+		}
+	</div>
+}
+
+templ taskClearSchedule(data TaskPageData) {
+	<form id={ "sending-schedule-clear-" + data.ScheduleState + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/schedule#sending" } class="space-y-2 border-t border-border pt-4">
+		<input type="hidden" name="action_id" value={ data.ActionID + "scheduleclear" }/>
+		@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Attributes: templ.Attributes{"name": "schedule_action", "value": "clear"}}) {
+			if taskCanChooseSendingType(data) && taskSendingType(data) == TaskSendingTypeDirect {
+				Cancel schedule and use direct sending
+			} else {
+				Clear schedule
+			}
+		}
+		<p class="text-xs text-muted-foreground">Cancels only the scheduled start; no email is sent. Clearing a missed schedule never resumes sending or erases a recorded pause reason.</p>
+	</form>
+}
+
+templ taskRecovery(data TaskPageData) {
+	if sendingHasRecovery(data.Rows) || data.Held > 0 {
+		<section class="space-y-4" id="task-recovery" aria-labelledby="recovery-heading">
+			<h3 id="recovery-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Recovery</h3>
+			@card.Card(card.Props{}) {
+				@card.Content(card.ContentProps{Class: "gap-4"}) {
+					<p class="text-sm text-muted-foreground">Definite failures can be retried; uncertain outcomes need review. Manual resolution records external verification and never submits email.</p>
+					for _, row := range data.Rows {
+						if taskRowNeedsRecovery(row) {
+							@taskRecoveryRow(data, row)
+						}
+					}
+				}
+			}
+		</section>
+	}
+}
+
+templ taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) {
+	<div class="p-[1.1rem] border border-border rounded-4xl bg-muted space-y-2">
+		<h4 class="font-semibold">Recovery · worksheet row { row.Row }</h4>
+		<p>{ row.State } · { row.Reason }</p>
+		if row.Recipient != "" {
+			<p class="text-sm text-muted-foreground">Recipient: { row.Recipient }</p>
+		}
+		if row.AttemptID != "" {
+			<p class="text-sm text-muted-foreground">Prior attempt { row.AttemptID }: { row.AttemptRecipient } · { row.AttemptState } · { row.AttemptTime } · { row.AttemptReason }</p>
+		}
+		switch row.State {
+			case "manually_submitted":
+				<p>Marked already submitted. This operator resolution does not establish a Microsoft acceptance timestamp.</p>
+			case "correction_required":
+				<p>Correct the recipient or required values in the source workbook and upload a corrected task. This unchanged snapshot cannot be retried.</p>
+			case "review_required":
+				if data.Controls.ResendRow {
+					<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resend#sending" } class="space-y-2">
+						@sendingRowFields(data, row)
+						@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+							@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-duplicate-" + row.ID, Name: "duplicate_risk", Value: "yes", Required: true})
+							The earlier request may have been accepted. Sending again can create a duplicate.
+						}
+						@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+							@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+							Confirm sending this 1 recipient again.
+						}
+						@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Approved, Class: "status-warning"}) {
+							{ "Send again — duplicate risk" }
+						}
+					</form>
+				}
+				if data.Controls.ResolveRow {
+					<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resolve#sending" } class="space-y-2">
+						@sendingRowFields(data, row)
+						@field.Field(field.Props{}) {
+							@field.Label(field.LabelProps{For: "sending-resolution-basis-" + row.ID}) {
+								Basis for resolution
+							}
+							@input.Input(input.Props{ID: "sending-resolution-basis-" + row.ID, Name: "basis", Required: true, Attributes: templ.Attributes{"maxlength": "2000"}})
+						}
+						@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+							@checkbox.Checkbox(checkbox.Props{ID: "sending-resolve-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+							I verified this recipient was already submitted.
+						}
+						@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit}) {
+							{ "Mark already submitted" }
+						}
+						<p class="text-xs text-muted-foreground">Records the operator, basis and resolution time. Does not invent a Microsoft acceptance timestamp.</p>
+					</form>
+				}
+			default:
+				if data.Controls.RetryRow {
+					<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/retry#sending" }>
+						@sendingRowFields(data, row)
+						@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+							@checkbox.Checkbox(checkbox.Props{ID: "sending-retry-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+							Retry this 1 definite failure using its unchanged snapshot.
+						}
+						@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Approved}) {
+							{ "Retry" }
+						}
+					</form>
+				}
+		}
+	</div>
+}
+
+templ sendingRowFields(data TaskPageData, row TaskAdmittedRow) {
+	<input type="hidden" name="action_id" value={ data.ActionID + "row" + row.ID }/>
+	<input type="hidden" name="member_id" value={ row.ID }/>
+	<input type="hidden" name="expected_count" value="1"/>
+}
+
+templ taskPacing(data TaskPageData) {
+	@accordion.Accordion(accordion.Props{ID: "sending-settings", Class: "rounded-4xl", Attributes: templ.Attributes{"data-workspace-persist": true}}) {
+		@accordion.Item(accordion.ItemProps{ID: "sending-settings-item", Value: "pacing", Class: "data-open:bg-transparent"}) {
+			@accordion.Trigger(accordion.TriggerProps{Class: "p-5 font-semibold hover:no-underline"}) {
+				Sending settings
+			}
+			@accordion.Content(accordion.ContentProps{Class: "space-y-5 px-1 pb-5"}) {
+				<p class="text-sm text-muted-foreground">Control how quickly this mailbox starts emails across all tasks, formatting tests and retries.</p>
+				<dl class="grid grid-cols-3 gap-3 max-[760px]:grid-cols-1">
+					<div class="rounded-2xl bg-muted p-4">
+						<dt class="text-xs text-muted-foreground">Current pacing</dt>
+						<dd class="mt-1 font-semibold"><span id="sending-current-rate">{ data.Rate }</span> <span class="text-sm font-normal text-muted-foreground">starts / minute</span></dd>
+					</div>
+					<div class="rounded-2xl bg-muted p-4">
+						<dt class="text-xs text-muted-foreground">Concurrent submissions</dt>
+						<dd class="mt-1 font-semibold">Up to 4 <span class="text-sm font-normal text-muted-foreground">in flight</span></dd>
+					</div>
+					<div class="rounded-2xl bg-muted p-4">
+						<dt class="text-xs text-muted-foreground">Mailbox cooldown</dt>
+						<dd class="mt-1 text-sm font-semibold break-words">
+							if data.Cooldown != "" {
+								Until { data.Cooldown }
+							} else {
+								No active cooldown
+							}
+						</dd>
+						if data.CooldownReason != "" {
+							<p class="mt-2 text-xs text-muted-foreground">{ data.CooldownReason }</p>
+						}
+					</div>
+				</dl>
+				<form id={ "sending-rate-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/rate#sending" } class="flex flex-col items-start gap-3">
+					<input type="hidden" name="action_id" value={ data.ActionID + "rate" }/>
+					<div class="min-w-0 w-full max-w-sm space-y-2">
+						@field.Field(field.Props{}) {
+							@field.Label(field.LabelProps{For: "sending-rate"}) {
+								Starts per minute
+							}
+							<p id="sending-rate-help" class="text-xs text-muted-foreground">Choose 1–30. Default: 25. Applies to this mailbox.</p>
+							@input.Input(input.Props{ID: "sending-rate", Name: "rate", Type: "number", Class: "w-full", Value: strconv.Itoa(data.Rate), Required: true, Attributes: templ.Attributes{"min": "1", "max": "30", "step": "1", "aria-describedby": "sending-rate-help"}})
+						}
+					</div>
+					@button.Button(button.Props{Type: button.TypeSubmit, Class: "shrink-0"}) {
+						Update pacing
+					}
+				</form>
+				<p class="text-xs text-muted-foreground">Pacing and cooldown are shared by this mailbox only. Other mail clients also consume provider capacity, which this app cannot track.</p>
+				<div class="grid grid-cols-2 gap-4 border-t border-border pt-4 text-xs text-muted-foreground max-[760px]:grid-cols-1">
+					<p><strong class="font-medium text-foreground">Delivery status:</strong> Submitted means the provider accepted the request; it does not confirm delivery.</p>
+					<p><strong class="font-medium text-foreground">Background sending:</strong> Closing the browser does not stop server work.</p>
+				</div>
+			}
+		}
+	}
+}
+
+templ taskResults(data TaskPageData) {
+	<section class="space-y-6" id="task-results" aria-labelledby="results-heading">
+		<h2 id="results-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Results</h2>
+		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "results-workbook-heading"}}) {
+			@card.Content(card.ContentProps{Class: "gap-4"}) {
+				<h3 id="results-workbook-heading" class="cn-card-title">Results workbook</h3>
+				if len(data.ResultLabels) > 0 {
+					<p class="text-sm text-muted-foreground">Result columns: { joinLabels(data.ResultLabels) }</p>
+				}
+				if data.ResultsReady {
+					<p>The workbook keeps every original worksheet, row and cell, and adds the result columns after the source columns.</p>
+					<p class="text-sm">As of { data.ResultsAsOf }. This is a saved snapshot; sending resumed after it would need a refreshed workbook.</p>
+					<div class="app-card-actions">
+						<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results.xlsx" }>Download results workbook</a>
+						if data.ResultEligible {
+							<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results" }>
+								@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantGhost, Size: button.SizeDefault}) {
+									Regenerate results
+								}
+							</form>
+						}
+						<form id="task-results-delete-form" method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results/delete#results" }>
+							@alertdialog.AlertDialog(alertdialog.Props{ID: "task-results-delete"}) {
+								@button.Button(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault, Attributes: alertdialog.Trigger(ctx)}) {
+									Remove generated file
+								}
+								@alertdialog.Content(alertdialog.ContentProps{}) {
+									@alertdialog.Header(alertdialog.HeaderProps{}) {
+										@alertdialog.Title(alertdialog.TitleProps{}) {
+											Remove this generated workbook?
+										}
+										@alertdialog.Description(alertdialog.DescriptionProps{}) {
+											This deletes only the generated file. The original workbook, attempt history and candidate eligibility stay intact, and results can be generated again.
+										}
+									}
+									@uilabel.Label(uilabel.Props{Class: "cursor-pointer justify-start gap-3"}) {
+										@checkbox.Checkbox(checkbox.Props{ID: "task-results-delete-confirm", Name: "confirm", Value: "delete", Required: true, Form: "task-results-delete-form"})
+										<span>I understand only the generated workbook is removed.</span>
+									}
+									@alertdialog.Footer(alertdialog.FooterProps{}) {
+										@alertdialog.Cancel(alertdialog.CancelProps{}) {
+											Cancel
+										}
+										@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit, Attributes: templ.Attributes{"form": "task-results-delete-form"}}) {
+											Remove generated workbook
+										}
+									}
+								}
+							}
+						</form>
+					</div>
+				} else if data.ResultsState == "pending" || data.ResultsState == "generating" {
+					<p>Preparing results. The background worker builds the file; no incomplete download is offered.</p>
+				} else if data.ResultsState == "failed" {
+					if data.ResultsError != "" {
+						@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+							{ data.ResultsError }
+						}
+					}
+					<p>The last generation did not finish. Retrying rebuilds the file from retained records and never sends or retries email.</p>
+					if data.Controls.RetryResult {
+						<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results" }>
+							@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+								Retry result generation
+							}
+						</form>
+					}
+				} else if data.ResultEligible {
+					<p>No workbook is published yet. Generate it from retained records; this never sends or retries email.</p>
+					if data.Controls.GenerateResult {
+						<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results" }>
+							@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+								Generate results workbook
+							}
+						</form>
+					}
+				} else {
+					<p>Results are not available yet. Automatic generation follows completion, a settled stop or a recovered interruption.</p>
+					if data.StoredStatus == "stopping" {
+						<p class="text-sm text-muted-foreground">Stopping: active outcomes must settle before the workbook is built.</p>
+					}
+					<p class="text-sm text-muted-foreground">Current status: { data.StatusLabel }. Any recorded attempts are listed below.</p>
+				}
+			}
+		}
+		@taskAttemptHistory(data)
+	</section>
+}
+
+templ taskAttemptHistory(data TaskPageData) {
+	<section class="space-y-3" id="task-results-history" aria-labelledby="history-heading">
+		<h3 id="history-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Task history</h3>
+		<p class="text-sm text-muted-foreground">Times use India time (+05:30). “Submitted” means the provider accepted the request; it does not confirm delivery. Tests are kept separate from candidate totals.</p>
+		@item.Group(item.GroupProps{}) {
+			if len(data.Recent) == 0 && len(data.Resolutions) == 0 {
+				@item.Item(item.Props{}) {
+					@item.Content(item.ContentProps{}) {
+						@item.Description(item.DescriptionProps{}) {
+							No attempts recorded for this task yet.
+						}
+					}
+				}
+			}
+			for _, outcome := range data.Recent {
+				@item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}) {
+					@item.Content(item.ContentProps{}) {
+						@item.Title(item.TitleProps{}) {
+							{ outcome.Time } · { outcome.Kind } · { outcome.Recipient }
+						}
+						@item.Description(item.DescriptionProps{}) {
+							{ outcome.State } · { outcome.Reason }
+						}
+					}
+				}
+			}
+			for _, resolution := range data.Resolutions {
+				@item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}) {
+					@item.Content(item.ContentProps{}) {
+						@item.Title(item.TitleProps{}) {
+							{ resolution.Time } · Worksheet row { resolution.Row } marked already submitted
+						}
+						@item.Description(item.DescriptionProps{}) {
+							Basis: { resolution.Basis } · Recorded by { resolution.Actor }
+						}
+					}
+				}
+			}
+		}
+	</section>
 }
 
 // TaskPreviewData is the view model for the preview partial. The error is a
@@ -586,32 +1434,19 @@ type TaskPreviewData struct {
 	SourceRow   int
 	ContentHash string
 	Approved    bool
+	Loading     bool
 }
 
 templ TaskPreviewResult(data TaskPreviewData) {
 	<div class="p-[1.1rem] border border-border rounded-4xl bg-muted space-y-4">
-		<h3 class="font-bold text-[1.2rem] tracking-[-.02em]">Preview result</h3>
 		if data.Error != "" {
 			@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
 				{ data.Error }
 			}
+			<p class="text-sm">Choose another row, or review the row reasons above.</p>
+		} else if data.SourceRow == 0 {
+			<p class="text-muted-foreground">No previewable row is selected.</p>
 		} else {
-			<dl class="space-y-1 text-sm">
-				<div class="flex gap-2">
-					<dt class="font-semibold">Worksheet row:</dt>
-					<dd>{ data.SourceRow }</dd>
-				</div>
-				<div class="flex gap-2">
-					<dt class="font-semibold">Content hash:</dt>
-					<dd><code class="break-all">{ data.ContentHash }</code></dd>
-				</div>
-				<div class="flex gap-2">
-					<dt class="font-semibold">Approval:</dt>
-					<dd>
-						@revisionState(true, data.Approved)
-					</dd>
-				</div>
-			</dl>
 			<div class="space-y-1">
 				<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">To</p>
 				<p class="font-semibold">{ data.Recipient }</p>
@@ -626,46 +1461,142 @@ templ TaskPreviewResult(data TaskPreviewData) {
 					@templ.Raw(data.Body)
 				</div>
 			</div>
-			<div class="table-scroll">
-				@table.Table(table.Props{Class: "cn-table-compact"}) {
-					<thead>
-						<tr>
-							<th>Variable</th>
-							<th>Source header</th>
-							<th>Raw value</th>
-							<th>Used value</th>
-						</tr>
-					</thead>
-					<tbody>
-						for _, value := range data.Values {
-							<tr>
-								<td>{ value.Variable }</td>
-								<td><code>{ value.Header }</code></td>
-								<td><code>{ value.Raw }</code></td>
-								<td><code>{ value.Normalized }</code></td>
-							</tr>
-						}
-					</tbody>
-				}
-			</div>
+			<details class="text-sm">
+				<summary class="cursor-pointer text-muted-foreground">Preview details</summary>
+				<dl class="mt-2 space-y-1">
+					<div class="flex gap-2"><dt class="font-semibold">Worksheet row:</dt><dd>{ data.SourceRow }</dd></div>
+					<div class="flex gap-2"><dt class="font-semibold">Content hash:</dt><dd><code class="break-all">{ data.ContentHash }</code></dd></div>
+					<div class="flex gap-2">
+						<dt class="font-semibold">Approval:</dt>
+						<dd>
+							@revisionState(true, data.Approved)
+						</dd>
+					</div>
+				</dl>
+				<div class="table-scroll mt-2">
+					@table.Table(table.Props{Class: "cn-table-compact"}) {
+						<thead><tr><th>Variable</th><th>Source header</th><th>Raw value</th><th>Used value</th></tr></thead>
+						<tbody>
+							for _, value := range data.Values {
+								<tr><td>{ value.Variable }</td><td><code>{ value.Header }</code></td><td><code>{ value.Raw }</code></td><td><code>{ value.Normalized }</code></td></tr>
+							}
+						</tbody>
+					}
+				</div>
+			</details>
 		}
 	</div>
 }
 
-// joinLabels renders the task's resolved result labels as one line.
-func joinLabels(labels []string) string {
-	return strings.Join(labels, ", ")
+// taskInitialSection selects the rendered panel. An error wins over the URL so
+// the message can never be hidden behind another section.
+func taskInitialSection(data TaskPageData) string {
+	switch {
+	case data.Error != "" || data.ValidationError != "":
+		if data.Section != "" {
+			return data.Section
+		}
+		return TaskSectionRecipients
+	case data.Section != "":
+		return data.Section
+	default:
+		return TaskSectionOverview
+	}
 }
 
-templ taskStatusBadge(status string) {
-	if status == "ready" {
-		@badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: "status-success"}) {
-			{ "Ready" }
+// taskTabAttributes marks the workspace for the adapter. An error keeps the
+// server-selected panel, so the fragment cannot hide it.
+func taskTabAttributes(data TaskPageData) templ.Attributes {
+	attrs := templ.Attributes{"data-workspace-tabs": true, "data-workspace-default": taskInitialSection(data)}
+	if data.IgnoreHash || data.Error != "" || data.ValidationError != "" {
+		attrs["data-workspace-ignore-hash"] = true
+	}
+	return attrs
+}
+
+// taskCanChooseSendingType limits the chooser to existing first-start controls.
+func taskCanChooseSendingType(data TaskPageData) bool {
+	return data.StoredStatus == "ready" && (data.Controls.Start || data.Controls.Schedule || data.Controls.EditSchedule || data.Controls.SendNowInstead || data.Controls.ClearSchedule)
+}
+
+func taskSendingType(data TaskPageData) string {
+	if !taskCanChooseSendingType(data) {
+		return ""
+	}
+	switch data.SendingType {
+	case TaskSendingTypeDirect, TaskSendingTypeScheduled:
+		return data.SendingType
+	case "":
+		if data.ScheduleState == "scheduled" || data.ScheduleState == "missed" {
+			return TaskSendingTypeScheduled
 		}
-	} else {
-		@badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: "status-warning"}) {
-			{ "Staging" }
+	}
+	return ""
+}
+
+// Only the transient editor is URL state; the selected type is stored on task.
+func sendingChooserQuery(value string) string {
+	if value == TaskSendingTypeChoose {
+		return "?sending_type=choose"
+	}
+	return ""
+}
+
+// sendingBase is the existing mutation base for this task.
+func sendingBase(data TaskPageData) string {
+	return "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending"
+}
+
+// sendingControlKey changes whenever a fact relevant to a confirmation changes,
+// so a stale checkbox is discarded even when the numeric count is unchanged.
+func sendingControlKey(data TaskPageData) string {
+	key := data.StoredStatus + "-" + strconv.FormatBool(data.Approved) + "-" + strconv.Itoa(data.Remaining) + "-" + strconv.Itoa(data.Submitted) + "-" + strconv.Itoa(data.Failed) + "-" + strconv.Itoa(data.Held) + "-" + strconv.Itoa(data.InFlight) + "-" + strconv.Itoa(data.Reserved) + "-" + strconv.Itoa(data.Invalid) + "-" + strconv.Itoa(data.Duplicate) + "-" + strconv.Itoa(data.Ineligible) + "-" + data.ScheduleState + "-" + data.Hash + "-" + data.Sender + "-" + data.SenderStatus + "-" + data.SendingType
+	// htmx restores hx-preserve elements using CSS ID selectors. Encoding keeps
+	// mailbox/hash punctuation safe without discarding changes to their values.
+	return hex.EncodeToString([]byte(key))
+}
+
+// approvalFormID names the approval form by the content hash, the latest test
+// and the approval state, so a changed configuration or a fresh test discards a
+// stale confirmation. Only selector-safe characters are kept.
+func approvalFormID(data TaskPageData) string {
+	raw := "sending-approval-" + data.Hash + "-" + data.LatestTest + "-" + strconv.FormatBool(data.Approved) + "-" + data.Sender
+	safe := make([]byte, 0, len(raw))
+	for i := 0; i < len(raw); i++ {
+		switch r := raw[i]; {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+			safe = append(safe, r)
 		}
+	}
+	return string(safe)
+}
+
+// taskRowNeedsRecovery reports whether one membership row belongs in the
+// recovery groups.
+func taskRowNeedsRecovery(row TaskAdmittedRow) bool {
+	switch row.State {
+	case "definite_failure", "failed", "auth_failure", "correction_required", "manually_submitted", "review_required":
+		return true
+	default:
+		return false
+	}
+}
+
+// sendingHasRecovery reports whether any row or recorded outcome needs a
+// recovery action or detail.
+func sendingHasRecovery(rows []TaskAdmittedRow) bool {
+	for _, row := range rows {
+		if taskRowNeedsRecovery(row) {
+			return true
+		}
+	}
+	return false
+}
+
+// taskStatusBadge renders the derived main status, with a non-color text label.
+templ taskStatusBadge(label, class string) {
+	@badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: class}) {
+		{ label }
 	}
 }
 
@@ -676,4 +1607,30 @@ templ sheetLabel(sheet TaskSheetOption) {
 		default:
 			{ sheet.Name } (hidden)
 	}
+}
+
+// readableBytes renders a byte bound in readable units for operator guidance.
+func readableBytes(value int64) string {
+	switch {
+	case value <= 0:
+		return "not configured"
+	case value >= 1<<20:
+		return strconv.FormatFloat(float64(value)/(1<<20), 'f', 1, 64) + " MiB"
+	case value >= 1<<10:
+		return strconv.FormatFloat(float64(value)/(1<<10), 'f', 1, 64) + " KiB"
+	default:
+		return strconv.FormatInt(value, 10) + " bytes"
+	}
+}
+
+// joinList renders names as one readable line.
+func joinList(items []string) string {
+	result := ""
+	for index, item := range items {
+		if index > 0 {
+			result += ", "
+		}
+		result += item
+	}
+	return result
 }

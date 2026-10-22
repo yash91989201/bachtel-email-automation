@@ -21,6 +21,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/presentation"
 	"github.com/yash91989201/bachtel-email-automation/internal/retention"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
@@ -61,15 +62,23 @@ func (s *server) handleCampaignList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, c := range campaigns {
-		row := views.CampaignListRow{ID: c.ID, Name: c.Name, SourceHeaders: strings.Join(c.SourceHeaders, ", ")}
-		if c.CurrentRevisionID != "" {
-			row.HasRevision = true
-			row.Revision = c.Revision
-			configuration, err := s.campaigns.LoadConfiguration(ctx, ownerID, c.CurrentRevisionID)
-			if err != nil {
-				s.app.Logger().Error("load current configuration", "campaign", c.ID, "error", err)
-			} else {
-				row.Approved = configuration.ApprovalCurrent()
+		row := views.CampaignListRow{ID: c.ID, Name: c.Name, Revision: c.Revision, HasRevision: c.CurrentRevisionID != ""}
+		overview, err := s.loadCampaignOverview(ctx, ownerID, c.ID)
+		if err != nil {
+			s.app.Logger().Error("load campaign summary", "campaign", c.ID, "error", err)
+			row.AttentionError = "Unavailable; retry"
+			data.Campaigns = append(data.Campaigns, row)
+			continue
+		}
+		row.Approved = overview.Approved
+		row.TaskCount = len(overview.Tasks)
+		if overview.SummaryError != "" {
+			row.AttentionError = "Unavailable; retry"
+		} else {
+			for _, task := range overview.Tasks {
+				if presentation.NeedsAttention(task.Facts) {
+					row.AttentionCount++
+				}
 			}
 		}
 		data.Campaigns = append(data.Campaigns, row)
@@ -112,11 +121,11 @@ func (s *server) handleCampaignCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to create campaign", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+created.ID, http.StatusSeeOther)
+	http.Redirect(w, r, "/campaigns/"+created.ID+"#template", http.StatusSeeOther)
 }
 
 func (s *server) handleCampaignDetail(w http.ResponseWriter, r *http.Request) {
-	data, err := s.campaignPageData(r, r.PathValue("id"), r.URL.Query()["warning"])
+	data, err := s.campaignPageData(r, r.PathValue("id"), "", r.URL.Query()["warning"])
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
@@ -127,23 +136,23 @@ func (s *server) handleCampaignDetail(w http.ResponseWriter, r *http.Request) {
 // handleCampaignExportsGenerate rebuilds the campaign report and ZIP from one
 // consistent snapshot. Export generation never touches email state.
 func (s *server) handleCampaignExportsGenerate(w http.ResponseWriter, r *http.Request) {
-	page, err := s.campaignPageData(r, r.PathValue("id"), nil)
+	page, err := s.campaignPageData(r, r.PathValue("id"), "", nil)
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
 	}
 	if err = s.exports.GenerateCampaign(r.Context(), recordFromContext(r).Id, page.ID, true); err != nil {
 		if errors.Is(err, exports.ErrInProgress) {
-			page.RevisionError = "export generation is already in progress; reload this page shortly"
+			page.ExportError = "export generation is already in progress; reload this page shortly"
 			s.renderWithStatus(w, r, http.StatusConflict, views.CampaignPage(page))
 			return
 		}
 		s.app.Logger().Error("generate campaign exports", "campaign", page.ID, "error", err)
-		page.RevisionError = "the campaign downloads could not be generated; retry"
+		page.ExportError = "the campaign downloads could not be generated; retry"
 		s.renderWithStatus(w, r, http.StatusInternalServerError, views.CampaignPage(page))
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+page.ID, http.StatusSeeOther)
+	http.Redirect(w, r, "/campaigns/"+page.ID+"#activity", http.StatusSeeOther)
 }
 
 // handleCampaignExportsDelete removes only the generated report and package.
@@ -151,17 +160,17 @@ func (s *server) handleCampaignExportsGenerate(w http.ResponseWriter, r *http.Re
 func (s *server) handleCampaignExportsDelete(w http.ResponseWriter, r *http.Request) {
 	target := r.PathValue("id")
 	if err := s.exports.DeleteCampaign(r.Context(), recordFromContext(r).Id, target); err != nil {
-		page, dataErr := s.campaignPageData(r, target, nil)
+		page, dataErr := s.campaignPageData(r, target, "", nil)
 		if dataErr != nil {
 			s.campaignLoadFailure(w, r, dataErr)
 			return
 		}
 		s.app.Logger().Error("delete campaign exports", "campaign", target, "error", err)
-		page.RevisionError = "the generated downloads could not be removed; retry"
+		page.ExportError = "the generated downloads could not be removed; retry"
 		s.renderWithStatus(w, r, http.StatusInternalServerError, views.CampaignPage(page))
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+target, http.StatusSeeOther)
+	http.Redirect(w, r, "/campaigns/"+target+"#activity", http.StatusSeeOther)
 }
 
 func (s *server) handleCampaignReportDownload(w http.ResponseWriter, r *http.Request) {
@@ -211,7 +220,7 @@ func (s *server) handleAttemptHTML(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleCampaignDelete(w http.ResponseWriter, r *http.Request) {
 	target := r.PathValue("id")
 	if strings.TrimSpace(r.FormValue("confirm")) != "delete" {
-		page, err := s.campaignPageData(r, target, nil)
+		page, err := s.campaignPageData(r, target, "", nil)
 		if err != nil {
 			s.campaignLoadFailure(w, r, err)
 			return
@@ -226,7 +235,7 @@ func (s *server) handleCampaignDelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, retention.ErrCampaignActive) {
-			page, dataErr := s.campaignPageData(r, target, nil)
+			page, dataErr := s.campaignPageData(r, target, "", nil)
 			if dataErr != nil {
 				s.campaignLoadFailure(w, r, dataErr)
 				return
@@ -256,7 +265,7 @@ func (s *server) handleCampaignRevision(w http.ResponseWriter, r *http.Request) 
 	// One 10 MiB document plus ~1 MiB of multipart framing: the body is
 	// bounded before any part is read into memory.
 	r.Body = http.MaxBytesReader(w, r.Body, campaign.MaxDocumentBytes+(1<<20))
-	page, err := s.campaignPageData(r, r.PathValue("id"), nil)
+	page, err := s.campaignPageData(r, r.PathValue("id"), "", nil)
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
@@ -324,16 +333,16 @@ func (s *server) handleCampaignRevision(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	// The warnings travel through the redirect so the refreshed page shows
-	// what the conversion dropped.
+	// what the conversion dropped; the fragment opens Template & preview.
 	target := "/campaigns/" + page.ID
 	if len(warnings) > 0 {
 		target += "?" + url.Values{"warning": warnings}.Encode()
 	}
-	http.Redirect(w, r, target, http.StatusSeeOther)
+	http.Redirect(w, r, target+"#template", http.StatusSeeOther)
 }
 
 func (s *server) handleCampaignLabels(w http.ResponseWriter, r *http.Request) {
-	page, err := s.campaignPageData(r, r.PathValue("id"), nil)
+	page, err := s.campaignPageData(r, r.PathValue("id"), "", nil)
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
@@ -352,7 +361,7 @@ func (s *server) handleCampaignLabels(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to save result labels", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+page.ID, http.StatusSeeOther)
+	http.Redirect(w, r, "/campaigns/"+page.ID+"#settings", http.StatusSeeOther)
 }
 
 // handleCampaignPreview renders one in-memory sample row through the current
@@ -414,55 +423,78 @@ func (s *server) handleCampaignPreview(w http.ResponseWriter, r *http.Request) {
 	s.renderWithStatus(w, r, http.StatusOK, views.PreviewResult(data))
 }
 
-// campaignPageData builds the safe view model for one campaign page: header,
-// current revision, the revision, labels and preview forms, and the immutable
-// history. Warnings are the fixed inspection messages of the last conversion,
-// passed by the caller.
-func (s *server) campaignPageData(r *http.Request, id string, warnings []string) (views.CampaignPageData, error) {
+// campaignPageData builds the safe view model for one campaign workspace:
+// header, the current revision, the four sections and their forms, and the
+// immutable history. Warnings are the fixed inspection messages of the last
+// conversion; section is the panel the server should render when no error
+// applies.
+func (s *server) campaignPageData(r *http.Request, id, section string, warnings []string) (views.CampaignPageData, error) {
 	ctx := r.Context()
 	ownerID := recordFromContext(r).Id
-	data := views.CampaignPageData{Warnings: warnings}
-	loaded, err := s.campaigns.LoadCampaign(ctx, ownerID, id)
+	data := views.CampaignPageData{ID: id, Section: section, Warnings: warnings}
+	overview, err := s.loadCampaignOverview(ctx, ownerID, id)
 	if err != nil {
 		return data, err
 	}
-	data.ID = loaded.ID
-	data.Name = loaded.Name
-	data.SourceHeaders = strings.Join(loaded.SourceHeaders, ", ")
-	data.ResultLabels = strings.Join(loaded.ResultLabels, ", ")
+	data.Name = overview.Campaign.Name
+	data.SourceHeaders = strings.Join(overview.Campaign.SourceHeaders, ", ")
+	data.ResultLabels = strings.Join(overview.Campaign.ResultLabels, ", ")
+	data.HasRevision = overview.HasRevision
+	data.Revision = overview.Revision
+	data.Approved = overview.Approved
+	data.TasksError = overview.SummaryError
 	// The help's worked example follows this campaign's own headers, so it never
 	// teaches a variable name the draft spells differently.
-	data.ExampleVariable, data.ExampleHeader = exampleMapping(loaded.SourceHeaders)
-	if loaded.CurrentRevisionID != "" {
-		configuration, err := s.campaigns.LoadConfiguration(ctx, ownerID, loaded.CurrentRevisionID)
-		if err != nil {
-			return data, err
+	data.ExampleVariable, data.ExampleHeader = exampleMapping(overview.Campaign.SourceHeaders)
+
+	// One revision query supplies both the revision history and each task's
+	// saved revision number.
+	history, err := s.campaigns.Revisions(ctx, ownerID, id)
+	if err != nil {
+		return data, err
+	}
+	revisionByConfiguration := make(map[string]int, len(history))
+	for _, revision := range history {
+		revisionByConfiguration[revision.ID] = revision.Revision
+		approved := false
+		if overview.HasRevision && revision.Revision == overview.Revision {
+			approved = overview.Approved
+		} else if approvedForRevision, err := s.sending.ApprovedFor(ctx, ownerID, revision.ID, revision.ContentHash); err == nil {
+			approved = approvedForRevision
 		}
-		data.HasRevision = true
-		data.Revision = configuration.Revision
+		data.History = append(data.History, views.RevisionRow{
+			Revision:    revision.Revision,
+			ContentHash: revision.ContentHash,
+			Approved:    approved,
+		})
+	}
+	if configuration := overview.Configuration; configuration != nil {
 		data.Subject = configuration.Subject
 		data.Converter = configuration.Converter
 		data.ContentHash = configuration.ContentHash
-		data.Approved = configuration.ApprovalCurrent()
 		for _, mapping := range configuration.Mappings {
 			data.Variables = append(data.Variables, views.PreviewVariable{Name: mapping.Variable, Required: mapping.Required})
+		}
+		if len(configuration.Mappings) > 0 {
+			data.ExampleVariable = configuration.Mappings[0].Variable
+			data.ExampleHeader = configuration.Mappings[0].Header
 		}
 	} else {
 		// A campaign without a revision has no operator mappings yet: offer the
 		// source headers as the draft table.
-		data.MappingDraft = mappingDraftText(campaign.DefaultMappings(loaded.SourceHeaders))
+		data.MappingDraft = mappingDraftText(campaign.DefaultMappings(overview.Campaign.SourceHeaders))
 	}
-	history, err := s.campaigns.Revisions(ctx, ownerID, data.ID)
-	if err != nil {
-		return data, err
+	ids := make([]string, 0, len(overview.Tasks))
+	for _, task := range overview.Tasks {
+		ids = append(ids, task.Task.ID)
 	}
-	for _, revision := range history {
-		data.History = append(data.History, views.RevisionRow{
-			Revision:    revision.Revision,
-			ContentHash: revision.ContentHash,
-			Approved:    revision.ApprovalCurrent(),
-		})
+	refs := presentation.ShortRefs(ids)
+	for _, task := range overview.Tasks {
+		row := campaignTaskRow(overview, task, revisionByConfiguration)
+		row.Reference = refs[task.Task.ID]
+		data.Tasks = append(data.Tasks, row)
 	}
+
 	artifacts, err := s.exports.CampaignArtifacts(ctx, ownerID, data.ID)
 	if err != nil {
 		return data, err
@@ -473,12 +505,12 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 			data.ReportState = artifact.State
 			data.ReportError = artifact.Error
 			data.ReportReady = artifact.Ready
-			data.ReportAsOf = sending.DisplayTime(artifact.AsOf)
+			data.ReportAsOf = presentation.Timestamp(artifact.AsOf)
 		case exports.KindCampaignPackage:
 			data.PackageState = artifact.State
 			data.PackageError = artifact.Error
 			data.PackageReady = artifact.Ready
-			data.PackageAsOf = sending.DisplayTime(artifact.AsOf)
+			data.PackageAsOf = presentation.Timestamp(artifact.AsOf)
 		}
 	}
 	attempts, err := s.app.FindRecordsByFilter(sending.AttemptsCollection, "task.campaign={:c}", "-created,-id", 100, 0, dbx.Params{"c": data.ID})
@@ -493,11 +525,60 @@ func (s *server) campaignPageData(r *http.Request, id string, warnings []string)
 			Subject:    attempt.GetString("subject"),
 			State:      attempt.GetString("state"),
 			Reason:     attempt.GetString("reason"),
-			FinishedAt: sending.DisplayTime(attempt.GetDateTime("finished_at").Time().UTC()),
+			FinishedAt: presentation.Timestamp(attempt.GetDateTime("finished_at").Time().UTC()),
 			Test:       attempt.GetString("kind") == sending.KindTest,
 		})
 	}
 	return data, nil
+}
+
+// campaignTaskRow maps one task's derived facts to the campaign Tasks section.
+// The next-action link comes from the same presentation rule the task header
+// uses, so the list and the task agree.
+func campaignTaskRow(overview *campaignOverview, task taskOverview, revisions map[string]int) views.CampaignTaskRow {
+	status := presentation.MainStatus(task.Facts)
+	next := presentation.NextAction(task.Facts)
+	filename := task.Task.SourceName
+	if filename == "" {
+		filename = "Workbook"
+	}
+	row := views.CampaignTaskRow{
+		ID:               task.Task.ID,
+		Reference:        presentation.ShortRef(task.Task.ID),
+		Filename:         filename,
+		UploadedAt:       presentation.Timestamp(task.Task.UploadedAt),
+		Status:           status.Label,
+		StatusClass:      statusClass(status),
+		StatusDetail:     status.Explanation,
+		Recipients:       task.Recipients.Label(),
+		RecipientsDetail: task.Recipients.Details(),
+		NextLabel:        sendingTypeNextLabel(next.Label, task.Task.SendingType),
+		NextSection:      next.Section,
+		NextDestination:  next.Destination,
+		NeedsAttention:   presentation.NeedsAttention(task.Facts),
+	}
+	if revision, ok := revisions[task.Task.ConfigurationID]; ok && task.Task.ConfigurationID != "" {
+		row.HasSavedRevision = true
+		row.SavedRevision = revision
+	}
+	if overview.SummaryError != "" {
+		row.Recipients = "Unavailable; retry"
+		row.RecipientsDetail = nil
+		row.StatusDetail = "Task metadata is unavailable; retry this page."
+	}
+	return row
+}
+
+// statusClass maps a derived status to the existing badge styling classes.
+func statusClass(status presentation.TaskStatus) string {
+	switch {
+	case status.Warning:
+		return "status-warning"
+	case status.Success:
+		return "status-success"
+	default:
+		return "status-muted"
+	}
 }
 
 // campaignLoadFailure answers a failed campaign load without leaking storage

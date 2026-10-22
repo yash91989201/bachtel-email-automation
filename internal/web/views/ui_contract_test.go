@@ -46,7 +46,7 @@ func TestCampaignRevisionFormNativeContract(t *testing.T) {
 	doc := parseView(t, CampaignPage(CampaignPageData{
 		ID: "campaign-1", Name: "Synthetic campaign", MappingDraft: "recipient | Contact Email | recipient | email",
 	}))
-	form := workspaceNode(doc, "action", "/campaigns/campaign-1/revisions")
+	form := workspaceNode(doc, "action", "/campaigns/campaign-1/revisions#template")
 	if form == nil || form.Data != "form" || workspaceAttr(form, "method") != "post" || workspaceAttr(form, "enctype") != "multipart/form-data" {
 		t.Fatal("revision form must post multipart data to the campaign revision route")
 	}
@@ -86,31 +86,13 @@ func TestCampaignRevisionFormNativeContract(t *testing.T) {
 	assertSubmitButton(t, form, "Create revision")
 }
 
-func TestCampaignHintButtonsStayInertAndDescribed(t *testing.T) {
-	doc := parseView(t, CampaignPage(CampaignPageData{ID: "campaign-1", Name: "Synthetic campaign"}))
-	for _, id := range []string{"revision-subject-help", "revision-document-help", "revision-mappings-help"} {
-		button := workspaceNode(doc, "aria-describedby", id)
-		if button == nil || button.Data != "button" || workspaceAttr(button, "type") != "button" {
-			t.Errorf("hint %q must use a non-submitting button", id)
-			continue
-		}
-		note := workspaceNode(doc, "id", id)
-		if note == nil || workspaceAttr(note, "role") != "note" {
-			t.Errorf("hint %q must describe a note with the same id", id)
-		}
-		if workspaceAttr(button, "hx-post") != "" || workspaceAttr(button, "hx-trigger") != "" || workspaceAttr(button, "x-on:click") != "" || workspaceAttr(button, "x-on:submit") != "" {
-			t.Errorf("hint %q must not trigger a submission or action", id)
-		}
-	}
-}
-
 func TestTaskWorksheetSelectionNativeContract(t *testing.T) {
 	doc := parseView(t, TaskPage(TaskPageData{
-		CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic campaign", Status: "staging",
-		DefaultSheet: "Recipients", HeaderRow: 4,
+		CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic campaign", StoredStatus: "staging",
+		HasCurrentRevision: true, DefaultSheet: "Recipients", HeaderRow: 4,
 		Sheets: []TaskSheetOption{{Name: "Archive"}, {Name: "Recipients", Selected: true}},
 	}))
-	form := workspaceNode(doc, "action", "/campaigns/campaign-1/tasks/task-1/select")
+	form := workspaceNode(doc, "action", "/campaigns/campaign-1/tasks/task-1/select#recipients")
 	if form == nil || workspaceAttr(form, "method") != "post" {
 		t.Fatal("worksheet selection form must post to its task route")
 	}
@@ -129,7 +111,7 @@ func TestTaskWorksheetSelectionNativeContract(t *testing.T) {
 	if workspaceAttr(header, "value") != "4" || workspaceAttr(header, "min") != "1" || !hasViewAttr(header, "required") {
 		t.Error("header row must retain its selected value, minimum, and required constraint")
 	}
-	assertSubmitButton(t, form, "Validate task")
+	assertSubmitButton(t, form, "Validate workbook")
 }
 
 func TestCampaignDeleteConfirmationContract(t *testing.T) {
@@ -171,8 +153,11 @@ func TestCampaignDeleteConfirmationContract(t *testing.T) {
 }
 
 func TestSendingDiagnosticTestFormContract(t *testing.T) {
-	doc := parseView(t, SendingDiagnostics(SendingData{
-		Base: "/campaigns/campaign-1/tasks/task-1/sending", ActionID: "test-key-", Rows: []SendingRow{{ID: "candidate-1", Number: 2, SampleEligible: true}},
+	doc := parseView(t, TaskPage(TaskPageData{
+		CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic campaign",
+		StoredStatus: "ready", Section: TaskSectionTest, ActionID: "test-key-",
+		SavedRevision: 2, HasSavedRevision: true,
+		Rows: []TaskAdmittedRow{{ID: "candidate-1", Row: 2, State: "eligible"}},
 	}))
 	form := workspaceNode(doc, "id", "sending-diagnostic-test")
 	if form == nil || form.Data != "form" || workspaceAttr(form, "method") != "post" || workspaceAttr(form, "action") != "/campaigns/campaign-1/tasks/task-1/sending/test#test" || !hasViewAttr(form, "hx-preserve") {
@@ -189,38 +174,50 @@ func TestSendingDiagnosticTestFormContract(t *testing.T) {
 	if address == nil || workspaceAttr(address, "type") != "email" || workspaceAttr(address, "name") != "test_address" || !hasViewAttr(address, "required") {
 		t.Error("diagnostic test must require an email recipient")
 	}
-	assertSubmitButton(t, form, "Send diagnostic test")
+	assertSubmitButton(t, form, "Send formatting test")
 }
 
 func TestCandidateControlsRequireTestApprovalWithoutReleaseGate(t *testing.T) {
 	for _, approved := range []bool{false, true} {
-		doc := parseView(t, SendingPage(SendingData{Base: "/sending", Status: "ready", Remaining: 2, Approved: approved}))
-		if strings.Contains(viewText(doc), "production release verification") {
+		data := TaskPageData{
+			CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic campaign",
+			StoredStatus: "ready", Section: TaskSectionSending, Remaining: 2, Approved: approved,
+			Controls: TaskControls{Start: true}, ActionID: "actions-", SendingType: TaskSendingTypeDirect,
+		}
+		doc := parseView(t, TaskPage(data))
+		if strings.Contains(viewText(doc), "release readiness") || strings.Contains(viewText(doc), "production release verification") {
 			t.Fatal("obsolete release warning is still shown")
 		}
-		for _, label := range []string{"Start", "Schedule start"} {
-			button := findViewNode(doc, func(n *html.Node) bool {
-				return n.Data == "button" && strings.TrimSpace(viewText(n)) == label
-			})
-			if button == nil || hasViewAttr(button, "disabled") == approved {
-				t.Errorf("%s with approved=%t: expected disabled=%t", label, approved, !approved)
-			}
+		button := findViewNode(doc, func(n *html.Node) bool { return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Send now" })
+		if button == nil || hasViewAttr(button, "disabled") == approved {
+			t.Errorf("Send now with approved=%t: expected disabled=%t", approved, !approved)
+		}
+		data.SendingType, data.Controls = TaskSendingTypeScheduled, TaskControls{Schedule: true}
+		doc = parseView(t, TaskPage(data))
+		button = findViewNode(doc, func(n *html.Node) bool {
+			return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Schedule start"
+		})
+		if button == nil || hasViewAttr(button, "disabled") == approved {
+			t.Errorf("Schedule start with approved=%t: expected disabled=%t", approved, !approved)
 		}
 	}
 }
 
 func TestSendingStartAndRecoveryConfirmations(t *testing.T) {
 	base := "/campaigns/campaign-1/tasks/task-1/sending"
-	controls := SendingControls(SendingData{Base: base, ActionID: "actions-", Approved: false, Remaining: 2})
-	doc := parseView(t, controls)
-	start := workspaceNode(doc, "action", base+"/start#send")
+	doc := parseView(t, TaskPage(TaskPageData{
+		CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic campaign",
+		StoredStatus: "ready", SendingType: TaskSendingTypeDirect, Section: TaskSectionSending, ActionID: "actions-", Approved: false,
+		Remaining: 2, Controls: TaskControls{Start: true},
+	}))
+	start := workspaceNode(doc, "action", base+"/start#sending")
 	if start == nil || !hasViewAttr(start, "hx-preserve") {
 		t.Fatal("candidate start form must preserve state across progress updates")
 	}
 	if checkbox := workspaceNode(start, "name", "confirmed"); checkbox == nil || workspaceAttr(checkbox, "type") != "checkbox" || workspaceAttr(checkbox, "value") != "yes" || !hasViewAttr(checkbox, "required") {
 		t.Error("candidate start must require an explicit count confirmation")
 	}
-	startButton := findViewNode(start, func(n *html.Node) bool { return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Start" })
+	startButton := findViewNode(start, func(n *html.Node) bool { return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Send now" })
 	if startButton == nil || workspaceAttr(startButton, "type") != "submit" || !hasViewAttr(startButton, "disabled") {
 		t.Error("candidate start must be an explicit submit button disabled until test formatting is approved")
 	}
@@ -228,11 +225,19 @@ func TestSendingStartAndRecoveryConfirmations(t *testing.T) {
 	for _, tc := range []struct {
 		name, state, action, expectedButton string
 	}{
-		{name: "definite failure retry", state: "definite_failure", action: "/retry#recovery", expectedButton: "Retry"},
-		{name: "uncertain outcome resend", state: "review_required", action: "/resend#recovery", expectedButton: "Send again — duplicate risk"},
+		{name: "definite failure retry", state: "definite_failure", action: "/retry#sending", expectedButton: "Retry"},
+		{name: "uncertain outcome resend", state: "review_required", action: "/resend#sending", expectedButton: "Send again — duplicate risk"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			doc := parseView(t, SendingRecovery(SendingData{Base: base, Rows: []SendingRow{{ID: "candidate-1", State: tc.state, Attempt: SendingOutcome{ID: "attempt-1"}, ActionID: "row-key-"}}}))
+			page := renderWorkspace(t, taskRecovery(TaskPageData{
+				CampaignID: "campaign-1", TaskID: "task-1", StoredStatus: "stopped", ActionID: "row-key-",
+				Approved: true, Held: 1, Controls: TaskControls{RetryRow: true, ResendRow: true, ResolveRow: true},
+				Rows: []TaskAdmittedRow{{ID: "candidate-1", Row: 2, State: tc.state}},
+			}))
+			doc, err := html.Parse(strings.NewReader(page))
+			if err != nil {
+				t.Fatal(err)
+			}
 			form := workspaceNode(doc, "action", base+tc.action)
 			if form == nil || !hasViewAttr(form, "hx-preserve") {
 				t.Fatal("recovery form must preserve state across progress updates")
@@ -271,12 +276,14 @@ func TestPagesKeepLabelledRegionsAndControls(t *testing.T) {
 		"campaign list":           CampaignList(CampaignListData{}),
 		"campaign form":           CampaignForm(CampaignFormData{}),
 		"campaign page":           CampaignPage(CampaignPageData{ID: "campaign-1", Name: "Synthetic", HasRevision: true, Variables: []PreviewVariable{{Name: "recipient", Required: true}}}),
-		"task list":               TaskList(TaskListData{CampaignID: "campaign-1", Tasks: []TaskListRow{{ID: "task-1", Status: "ready"}}}),
-		"task upload":             TaskUpload(TaskUploadData{CampaignID: "campaign-1"}),
-		"task page":               TaskPage(TaskPageData{CampaignID: "campaign-1", TaskID: "task-1", Status: "ready", Rows: []TaskAdmittedRow{{ID: "member", Row: 2, State: "eligible"}}}),
-		"sending page":            SendingPage(SendingData{Base: "/sending", Status: "ready", Rows: []SendingRow{{ID: "member", Number: 2, State: "review_required"}}}),
-		"sending fragment":        SendingProgress(SendingData{Base: "/sending", Status: "ready"}),
-		"campaign list with rows": CampaignList(CampaignListData{Campaigns: []CampaignListRow{{ID: "campaign-1", Name: "Synthetic", HasRevision: true}}}),
+		"campaign tasks":          CampaignPage(CampaignPageData{ID: "campaign-1", Name: "Synthetic", HasRevision: true, Section: CampaignSectionTasks, Tasks: []CampaignTaskRow{{ID: "task-1", Filename: "recipients.xlsx", Reference: "abcd1234", Status: "Ready to send", Recipients: "1 eligible", RecipientsDetail: []string{"Input rows: 1", "Submitted: 0", "Need attention: 0"}, NextLabel: "Choose sending time", NextSection: TaskSectionSending}}}),
+		"task upload":             TaskUpload(TaskUploadData{CampaignID: "campaign-1", CampaignName: "Synthetic", HasRevision: true, MappedColumns: []string{"Candidate Email"}}),
+		"task staging":            TaskPage(TaskPageData{CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic", Filename: "recipients.xlsx", Reference: "abcd1234", StoredStatus: "staging", HasCurrentRevision: true, DefaultSheet: "People", Sheets: []TaskSheetOption{{Name: "People", Selected: true}}, HeaderRow: 1}),
+		"task recipients":         TaskPage(TaskPageData{CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic", Filename: "recipients.xlsx", Reference: "abcd1234", StoredStatus: "ready", HasSavedRevision: true, SavedRevision: 1, Hash: "sha256:abc", ActionID: "actions-", Rows: []TaskAdmittedRow{{ID: "member", Row: 2, State: "eligible"}}}),
+		"task sending":            TaskPage(TaskPageData{CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic", Filename: "recipients.xlsx", Reference: "abcd1234", StoredStatus: "ready", SendingType: TaskSendingTypeDirect, Section: TaskSectionSending, ActionID: "actions-", Remaining: 2, Controls: TaskControls{Start: true}, Rows: []TaskAdmittedRow{{ID: "member", Row: 2, State: "review_required"}}}),
+		"task results":            TaskPage(TaskPageData{CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic", Filename: "recipients.xlsx", Reference: "abcd1234", StoredStatus: "completed", Section: TaskSectionResults, ResultsReady: true, ResultsAsOf: "22 Oct 2026, 11:12 AM +05:30", ResultEligible: true}),
+		"sending fragment":        TaskSendingLive(TaskPageData{CampaignID: "campaign-1", TaskID: "task-1", StoredStatus: "ready", Approved: true, Remaining: 2, Controls: TaskControls{Start: true, Schedule: true}, ActionID: "actions-"}),
+		"campaign list with rows": CampaignList(CampaignListData{Campaigns: []CampaignListRow{{ID: "campaign-1", Name: "Synthetic", HasRevision: true, Approved: true, TaskCount: 2, AttentionCount: 1}}}),
 	}
 	for name, component := range pages {
 		t.Run(name, func(t *testing.T) {
@@ -381,5 +388,23 @@ func assertSubmitButton(t *testing.T, form *html.Node, label string) {
 	})
 	if button == nil || workspaceAttr(button, "type") != "submit" {
 		t.Errorf("%q must be an explicit submit button", label)
+	}
+}
+
+func TestTaskUploadSendingTypeSelection(t *testing.T) {
+	for _, mode := range []string{TaskSendingTypeDirect, TaskSendingTypeScheduled} {
+		t.Run(mode, func(t *testing.T) {
+			doc := parseView(t, TaskUpload(TaskUploadData{CampaignID: "campaign-1", CampaignName: "Synthetic", SendingType: mode}))
+			control := workspaceNode(doc, "id", "task-sending-type")
+			if control == nil || control.Data != "select" || workspaceAttr(control, "name") != "sending_type" || !hasViewAttr(control, "required") {
+				t.Fatal("upload must offer a required native sending type selection")
+			}
+			selected := findViewNode(control, func(node *html.Node) bool {
+				return node.Type == html.ElementNode && node.Data == "option" && hasViewAttr(node, "selected")
+			})
+			if selected == nil || workspaceAttr(selected, "value") != mode {
+				t.Fatal("upload error must retain the selected sending type")
+			}
+		})
 	}
 }

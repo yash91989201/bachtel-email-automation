@@ -52,7 +52,7 @@ func TestDiagnosticRejectsDisconnectedBeforeQueue(t *testing.T) {
 	}
 	taskID := stageTask(t, handler, cookie, id, mixedWorkbook(t))
 	rec := do(t, handler, http.MethodPost, "/campaigns/"+id+"/tasks/"+taskID+"/sending/test", url.Values{"action_id": {"test-disconnected-123456"}, "test_address": {"operator@example.com"}}, withCookie(cookie))
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "Diagnostic test was not queued") {
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "reconnect the mailbox before sending a test") {
 		t.Fatalf("test: %d %.300s", rec.Code, rec.Body.String())
 	}
 	attempts, err := app.FindAllRecords(sending.AttemptsCollection)
@@ -65,26 +65,41 @@ func TestDiagnosticRejectsDisconnectedBeforeQueue(t *testing.T) {
 }
 
 func TestSendingPollRefreshesConfirmationIdentityAndRecovery(t *testing.T) {
-	data := views.SendingData{Base: "/sending", Hash: "hash", Status: "paused", Approved: true, Remaining: 2, Rate: 17, LatestTest: "new-successful-test", Rows: []views.SendingRow{{ID: "member", Number: 2, State: "auth_failure", Reason: "Reconnect Microsoft", Attempt: views.SendingOutcome{ID: "old-attempt-outside-recents", Recipient: "candidate@example.com", State: "auth_failure", Time: "2026-10-18T12:00:00+05:30"}}}}
-	render := func(data views.SendingData) string {
+	data := views.TaskPageData{
+		CampaignID: "campaign-1", TaskID: "task-1", StoredStatus: "paused", Approved: true,
+		Remaining: 2, Rate: 17, Hash: "hash", LatestTest: "new-successful-test", ActionID: "actions-",
+		Controls: views.TaskControls{Resume: true, RetryRow: true, ResolveRow: true},
+		Rows: []views.TaskAdmittedRow{{
+			ID: "member", Row: 2, State: "auth_failure", Reason: "Reconnect Microsoft",
+			AttemptID: "old-attempt-outside-recents", AttemptRecipient: "candidate@example.com",
+			AttemptState: "auth_failure", AttemptTime: "18 Oct 2026, 12:00 PM +05:30",
+		}},
+	}
+	render := func(data views.TaskPageData) string {
 		var out bytes.Buffer
-		if err := views.SendingProgress(data).Render(context.Background(), &out); err != nil {
+		if err := views.TaskSendingLive(data).Render(context.Background(), &out); err != nil {
 			t.Fatal(err)
 		}
 		return out.String()
 	}
 	before := render(data)
-	for _, want := range []string{"new-successful-test", "sending-retry-member", "old-attempt-outside-recents", "candidate@example.com", "Current pacing: 17", "Reconnect Microsoft"} {
+	for _, want := range []string{"old-attempt-outside-recents", "candidate@example.com", `id="sending-current-rate">17`, "Reconnect Microsoft", "sending-retry-member"} {
 		if !strings.Contains(before, want) {
 			t.Errorf("poll missing %q", want)
 		}
 	}
-	ids := regexp.MustCompile(`id="(sending-action-start-[^"]+)"`)
+	ids := regexp.MustCompile(`id="(sending-action-resume-[^"]+)"`)
 	oldID := ids.FindStringSubmatch(before)
 	data.Remaining = 1
 	freshID := ids.FindStringSubmatch(render(data))
 	if len(oldID) != 2 || len(freshID) != 2 || oldID[1] == freshID[1] {
 		t.Fatal("fresh count retained stale confirmation form identity")
+	}
+	// A same-count mailbox or approval change still invalidates the confirmation.
+	data.Remaining = 2
+	data.SenderStatus = "disconnected"
+	if ids.FindStringSubmatch(render(data))[1] == oldID[1] {
+		t.Fatal("same-count mailbox change retained a stale confirmation")
 	}
 }
 
@@ -139,12 +154,12 @@ func TestSendingPacingAndTaskOwnership(t *testing.T) {
 		t.Fatalf("persisted pacing: %+v %v", settings, err)
 	}
 	page := do(t, handler, http.MethodGet, base+"/progress", nil, withCookie(cookie))
-	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Current pacing: 17") {
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `id="sending-current-rate">17`) {
 		t.Fatalf("pacing poll: %d", page.Code)
 	}
 	// The sending page shows the operator's own mailbox and its state.
 	full := do(t, handler, http.MethodGet, base, nil, withCookie(cookie))
-	if full.Code != http.StatusOK || !strings.Contains(full.Body.String(), "Sending mailbox: <strong>sender@example.test</strong> <span data-sender-status=\"connected\">(connected)</span>") {
+	if full.Code != http.StatusOK || !strings.Contains(full.Body.String(), "<dt>Sender</dt><dd><strong data-sender-status=\"connected\">sender@example.test</strong> (connected)") {
 		t.Fatalf("sending mailbox summary: %d %.400s", full.Code, full.Body.String())
 	}
 	wrongCampaign := createCampaign(t, handler, cookie, "Another")

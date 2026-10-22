@@ -125,6 +125,7 @@ func createCampaign(t *testing.T, handler http.Handler, cookie *http.Cookie, nam
 	}
 	id := strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/")
 	id, _, _ = strings.Cut(id, "?")
+	id, _, _ = strings.Cut(id, "#")
 	if id == "" {
 		t.Fatalf("no campaign id in location %q", rec.Header().Get("Location"))
 	}
@@ -410,20 +411,12 @@ func TestCampaignDetailApprovalAndHistory(t *testing.T) {
 	}
 	secondID := currentConfigurationID(t, app, id)
 	second := configurationRecord(t, app, secondID)
-	// Approval normally arrives with a test email in a later change; setting
-	// the approved hash directly exercises ApprovalCurrent() on the page.
-	second.Set("approved_hash", second.GetString("content_hash"))
-	if err := app.Save(second); err != nil {
-		t.Fatal(err)
-	}
-
 	rec := do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		`status-success">Approved`,
 		`status-warning">Not approved`,
 		"Revision 1",
 		"Revision 2",
@@ -476,7 +469,7 @@ func TestCampaignMappingDraft(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
-	id := strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/")
+	id, _, _ := strings.Cut(strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/"), "#")
 
 	draft := "candidate_name | Candidate Name | required | text\n" +
 		"candidate_email | Candidate Email | required | text\n" +
@@ -542,7 +535,7 @@ func TestCampaignMappingHelpExample(t *testing.T) {
 			if rec.Code != http.StatusSeeOther {
 				t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
 			}
-			id := strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/")
+			id, _, _ := strings.Cut(strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/"), "#")
 
 			page := do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
 			if page.Code != http.StatusOK {

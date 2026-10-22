@@ -86,10 +86,11 @@ func (s *server) connectionMessage(err error) string {
 func (s *server) connectionData(r *http.Request, notice string) views.ConnectionData {
 	ownerID := recordFromContext(r).Id
 	data := views.ConnectionData{
-		Status:       string(mailbox.StatusDisconnected),
-		Notice:       notice,
-		TitanAddress: s.cfg.Titan.Address,
-		CallbackURL:  s.cfg.CallbackURL(),
+		Status:              string(mailbox.StatusDisconnected),
+		Notice:              notice,
+		TitanAddress:        s.cfg.Titan.Address,
+		CallbackURL:         s.cfg.CallbackURL(),
+		ShowProviderChooser: r.URL.Query().Get("change_provider") == "1",
 	}
 	if settings, err := s.mailboxes.Settings(r.Context(), ownerID); err == nil {
 		data.MicrosoftSaved = settings.Saved()

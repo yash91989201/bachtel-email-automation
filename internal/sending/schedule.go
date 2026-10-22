@@ -3,7 +3,6 @@ package sending
 import (
 	"context"
 	"errors"
-	"strconv"
 	"strings"
 	"time"
 
@@ -14,35 +13,19 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 )
 
-// ParseSchedule maps the operator's 12-hour form fields to one absolute UTC
-// instant. The wall-clock time is interpreted in the fixed +05:30 zone, never
-// the process's local zone.
-func ParseSchedule(date, hour, minute, meridiem string) (time.Time, error) {
+// ParseSchedule maps native date and time fields to one UTC instant. The
+// wall-clock time always uses India time, regardless of browser/server zone.
+func ParseSchedule(date, clock string) (time.Time, error) {
 	day, err := time.ParseInLocation("2006-01-02", strings.TrimSpace(date), ScheduleZone)
 	if err != nil {
 		return time.Time{}, &ScheduleRefusal{Reason: "choose a valid start date"}
 	}
-	h, err := strconv.Atoi(strings.TrimSpace(hour))
-	if err != nil || h < 1 || h > 12 {
-		return time.Time{}, &ScheduleRefusal{Reason: "choose an hour from 1 through 12"}
+	clock = strings.TrimSpace(clock)
+	at, err := time.Parse("15:04", clock)
+	if err != nil || at.Format("15:04") != clock {
+		return time.Time{}, &ScheduleRefusal{Reason: "choose a valid start time"}
 	}
-	m, err := strconv.Atoi(strings.TrimSpace(minute))
-	if err != nil || m < 0 || m > 59 {
-		return time.Time{}, &ScheduleRefusal{Reason: "choose a minute from 0 through 59"}
-	}
-	switch strings.ToUpper(strings.TrimSpace(meridiem)) {
-	case "AM":
-		if h == 12 {
-			h = 0
-		}
-	case "PM":
-		if h < 12 {
-			h += 12
-		}
-	default:
-		return time.Time{}, &ScheduleRefusal{Reason: "choose AM or PM"}
-	}
-	return time.Date(day.Year(), day.Month(), day.Day(), h, m, 0, 0, ScheduleZone).UTC(), nil
+	return time.Date(day.Year(), day.Month(), day.Day(), at.Hour(), at.Minute(), 0, 0, ScheduleZone).UTC(), nil
 }
 
 // DisplayDate renders the operator-facing calendar date of a stored instant.

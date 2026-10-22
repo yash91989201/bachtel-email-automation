@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
@@ -42,60 +41,6 @@ func actionID() string {
 	return hex.EncodeToString(id[:])
 }
 
-func (s *server) sendingData(r *http.Request) (views.SendingData, error) {
-	ownerID := recordFromContext(r).Id
-	task, err := s.tasks.LoadTask(r.Context(), ownerID, r.PathValue("task"))
-	if err != nil {
-		return views.SendingData{}, err
-	}
-	progress, err := s.sending.Preview(r.Context(), ownerID, task.ID)
-	if err != nil {
-		return views.SendingData{}, err
-	}
-	sender, senderStatus := s.mailboxSummary(r.Context(), ownerID)
-	data := views.SendingData{ArtifactNeeded: progress.ArtifactNeeded, Base: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/sending", TaskURL: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID, Sender: sender, SenderStatus: senderStatus, Hash: progress.ContentHash, Approved: progress.Approved, Status: progress.Status, Reason: progress.Reason, Eligible: progress.Eligible, Remaining: progress.Remaining, Submitted: progress.Submitted, Failed: progress.Failed, RetryableFailed: progress.RetryableFailed, Held: progress.Held, InFlight: progress.InFlight, Reserved: progress.Reserved, Invalid: progress.Invalid, Duplicate: progress.Duplicate, Ineligible: progress.Ineligible, ActionID: actionID()}
-	data.RestoreReview = progress.RestoreReview
-	if artifact, e := s.exports.TaskArtifact(r.Context(), ownerID, task.ID); e == nil && artifact != nil {
-		data.ResultsState = artifact.State
-		data.ResultsReady = artifact.Ready
-	}
-	data.ScheduleAt = sending.DisplayTime(task.ScheduleAt)
-	data.ScheduleState = task.ScheduleState
-	data.ScheduleMinDate = sending.DisplayDate(time.Now())
-	if connection, e := s.mailboxes.Current(r.Context(), ownerID); e == nil {
-		settings, e := s.sending.DispatcherState(r.Context(), connection.ID, ownerID)
-		if e != nil {
-			return data, e
-		}
-		data.Rate = settings.Rate
-		data.Cooldown = sending.DisplayTime(settings.CooldownUntil)
-		data.CooldownReason = settings.Reason
-	}
-	for _, row := range progress.Members {
-		viewRow := views.SendingRow{ResolutionActor: row.ResolutionActor, ResolutionBasis: row.ResolutionBasis, ResolvedAt: sending.DisplayTime(row.ResolvedAt), SampleEligible: row.SampleEligible, ID: row.ID, Number: row.SourceRow, State: row.State, Reason: row.Reason, ActionID: actionID()}
-		if row.LatestAttempt != nil {
-			a := row.LatestAttempt
-			when := a.FinishedAt
-			if when.IsZero() {
-				when = a.StartedAt
-			}
-			viewRow.Attempt = views.SendingOutcome{ID: a.ID, Kind: a.Kind, Recipient: a.Recipient, State: a.State, Reason: a.Reason, Time: sending.DisplayTime(when)}
-		}
-		data.Rows = append(data.Rows, viewRow)
-	}
-	if progress.LatestSuccessfulTestID != "" {
-		data.LatestTest = progress.LatestSuccessfulTestID
-	}
-	for _, attempt := range progress.Recent {
-		when := attempt.FinishedAt
-		if when.IsZero() {
-			when = attempt.StartedAt
-		}
-		data.Recent = append(data.Recent, views.SendingOutcome{ID: attempt.ID, Kind: attempt.Kind, Recipient: attempt.Recipient, State: attempt.State, Reason: attempt.Reason, Time: sending.DisplayTime(when)})
-	}
-	return data, nil
-}
-
 // mailboxSummary renders the owning operator's sending mailbox and its state.
 // A workspace without a usable connection can review history but cannot send.
 func (s *server) mailboxSummary(ctx context.Context, ownerID string) (sender, status string) {
@@ -106,29 +51,49 @@ func (s *server) mailboxSummary(ctx context.Context, ownerID string) (sender, st
 	return connection.Sender, string(connection.Status)
 }
 
+// handleSending opens the one task workspace on its Sending section. The old
+// sending route stays as a bookmark-compatible entry point.
 func (s *server) handleSending(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.loadCampaignTask(w, r); !ok {
+	task, ok := s.loadCampaignTask(w, r)
+	if !ok {
 		return
 	}
-	data, err := s.sendingData(r)
+	data, err := s.taskPageData(r, task, views.TaskSectionSending)
 	if err != nil {
 		s.taskLoadFailure(w, r, err)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	s.render(w, r, views.SendingPage(data))
+	s.renderWithStatus(w, r, http.StatusOK, views.TaskPage(data))
 }
+
+// handleSendingProgress returns only the Sending section's live evidence. The
+// shell, identity, lifecycle and navigation stay outside this swap.
 func (s *server) handleSendingProgress(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.loadCampaignTask(w, r); !ok {
+	task, ok := s.loadCampaignTask(w, r)
+	if !ok {
 		return
 	}
-	data, err := s.sendingData(r)
+	data, err := s.taskPageData(r, task, views.TaskSectionSending)
 	if err != nil {
 		s.taskLoadFailure(w, r, err)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	s.render(w, r, views.SendingProgress(data))
+	s.renderWithStatus(w, r, http.StatusOK, views.TaskSendingLive(data))
+}
+
+// sendingSection names the section a mutation belongs to, so a refused action
+// re-renders the workspace where its controls are.
+func sendingSection(kind string) string {
+	switch kind {
+	case "test", "approve":
+		return views.TaskSectionTest
+	case "artifacts":
+		return views.TaskSectionResults
+	default:
+		return views.TaskSectionSending
+	}
 }
 
 func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
@@ -186,7 +151,7 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 			case "clear":
 				request = sending.ScheduleRequest{ActionID: id, TaskID: task.ID, Actor: actor}
 			case "enable":
-				at, e := sending.ParseSchedule(r.FormValue("schedule_date"), r.FormValue("schedule_hour"), r.FormValue("schedule_minute"), r.FormValue("schedule_meridiem"))
+				at, e := sending.ParseSchedule(r.FormValue("schedule_date"), r.FormValue("schedule_time"))
 				if e != nil {
 					err = e
 					break
@@ -231,25 +196,15 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 		}
 		if err != nil {
 			s.app.Logger().Warn("sending action rejected", "kind", kind, "task", task.ID, "error", err)
-			data, e := s.sendingData(r)
-			if e != nil {
-				s.taskLoadFailure(w, r, e)
-				return
-			}
-			const actionRejected = "Action was not accepted. Refresh the counts and check approval, selected row, confirmations, and release readiness."
-			switch kind {
-			case "test":
-				data.Error = "Diagnostic test was not queued. Check the test recipient and sample row, and reconnect Microsoft if the connection needs attention."
-			case "schedule":
-				if refusal, ok := errors.AsType[*sending.ScheduleRefusal](err); ok {
-					data.Error = refusal.Reason
-				} else {
-					data.Error = actionRejected
+			message := s.sendingRefusalMessage(err)
+			adjust := func(data *views.TaskPageData) {
+				if kind != "schedule" {
+					return
 				}
-			default:
-				data.Error = actionRejected
+				data.ScheduleDraftDate = r.FormValue("schedule_date")
+				data.ScheduleDraftTime = r.FormValue("schedule_time")
 			}
-			s.renderWithStatus(w, r, http.StatusBadRequest, views.SendingPage(data))
+			s.renderTaskMessageWith(w, r, task, sendingSection(kind), message, http.StatusBadRequest, adjust)
 			return
 		}
 		if kind == "artifacts" {
@@ -259,9 +214,54 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 				s.app.Logger().Error("generate task results after request", "task", task.ID, "error", err)
 			}
 			s.exports.Trigger()
-		} else if s.dispatcher != nil {
+			http.Redirect(w, r, taskPath(task)+"#results", http.StatusSeeOther)
+			return
+		}
+		if s.dispatcher != nil {
 			s.dispatcher.Wake()
 		}
-		http.Redirect(w, r, "/campaigns/"+task.CampaignID+"/tasks/"+task.ID+"/sending", http.StatusSeeOther)
+		http.Redirect(w, r, taskPath(task)+"#"+sendingSection(kind), http.StatusSeeOther)
 	}
+}
+
+// knownSendingMessages are the sending service's fixed, operator-facing
+// refusals. They name the actual prerequisite; everything else stays generic so
+// a storage or provider diagnostic never reaches the page.
+var knownSendingMessages = map[string]struct{}{
+	"a mailbox replacement is in progress; finish it before changing sending work":        {},
+	"explicit confirmation is required":                                                   {},
+	"validate the task before sending":                                                    {},
+	"connect a usable sending mailbox before starting, retrying or resending":             {},
+	"approve a successfully submitted formatting test first":                              {},
+	"the configuration changed; revalidate this task":                                     {},
+	"use resume or retry for an existing task":                                            {},
+	"resume requires a previously started task":                                           {},
+	"resume requires a paused, interrupted, stopped or previously started completed task": {},
+	"stop or pause the task before changing its work":                                     {},
+	"select one candidate":                                                                {},
+	"confirm the possible duplicate-send risk":                                            {},
+	"record the actor and external verification basis":                                    {},
+	"eligible count changed; refresh and confirm the current count":                       {},
+	"no eligible candidates remain; refresh the counts":                                   {},
+	"choose a valid sample in this task":                                                  {},
+	"choose a submitted test for the current mailbox connection":                          {},
+	"choose a submitted test for this exact configuration":                                {},
+	"approval requires an actor and action ID":                                            {},
+	"result generation requires a terminal or recovered task":                             {},
+	"reconnect the mailbox before sending a test":                                         {},
+	"an action ID is required":                                                            {},
+}
+
+// sendingRefusalMessage maps a refused action to a safe, specific reason and
+// remedy. A schedule refusal carries its own fixed message; a known sending
+// prerequisite is shown as-is; anything unexpected is logged and replaced.
+func (s *server) sendingRefusalMessage(err error) string {
+	if refusal, ok := errors.AsType[*sending.ScheduleRefusal](err); ok {
+		return refusal.Reason
+	}
+	if _, ok := knownSendingMessages[err.Error()]; ok {
+		return err.Error()
+	}
+	s.app.Logger().Error("unexpected sending action failure", "error", err)
+	return "The action was not accepted. Reload this page, check the saved revision, approval, mailbox and fresh counts, and confirm again. No duplicate email was sent by this refused request."
 }

@@ -1,6 +1,6 @@
 package web
 
-// Schedule submission tests: the 12-hour start form posts behind the dispatch
+// Schedule submission tests: the native date/time start form posts behind the dispatch
 // barrier, renders its stored state on the sending and task pages, refuses a
 // too-soon instant with the exact reason, and clears with a fresh action ID.
 
@@ -8,7 +8,6 @@ import (
 	"context"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/presentation"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 )
 
@@ -76,27 +76,17 @@ func newScheduleFixture(t *testing.T) *scheduleFixture {
 	}
 }
 
-// scheduleForm maps one absolute instant to the enable form fields. The mixed
+// scheduleForm maps one absolute instant to the native date/time form fields. The mixed
 // workbook leaves exactly one eligible row, so the expected count is 1.
 func scheduleForm(actionID string, at time.Time) url.Values {
 	local := at.In(sending.ScheduleZone)
-	hour := local.Hour() % 12
-	meridiem := "AM"
-	if local.Hour() >= 12 {
-		meridiem = "PM"
-	}
-	if hour == 0 {
-		hour = 12
-	}
 	return url.Values{
-		"action_id":         {actionID},
-		"schedule_action":   {"enable"},
-		"schedule_date":     {local.Format("2006-01-02")},
-		"schedule_hour":     {strconv.Itoa(hour)},
-		"schedule_minute":   {strconv.Itoa(local.Minute())},
-		"schedule_meridiem": {meridiem},
-		"confirmed":         {"yes"},
-		"expected_count":    {"1"},
+		"action_id":       {actionID},
+		"schedule_action": {"enable"},
+		"schedule_date":   {local.Format("2006-01-02")},
+		"schedule_time":   {local.Format("15:04")},
+		"confirmed":       {"yes"},
+		"expected_count":  {"1"},
 	}
 }
 
@@ -108,6 +98,16 @@ func (f *scheduleFixture) storedScheduleAt(t *testing.T) time.Time {
 		t.Fatal(err)
 	}
 	return task.GetDateTime("schedule_at").Time().UTC()
+}
+
+// storedScheduleState returns the task's recorded schedule state.
+func (f *scheduleFixture) storedScheduleState(t *testing.T) string {
+	t.Helper()
+	task, err := f.app.FindRecordById(intake.TasksCollection, f.taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return task.GetString("schedule_state")
 }
 
 func TestScheduleEnableTooSoonTaskPageAndClear(t *testing.T) {
@@ -124,7 +124,7 @@ func TestScheduleEnableTooSoonTaskPageAndClear(t *testing.T) {
 	}
 	stored := f.storedScheduleAt(t)
 	page := do(t, f.handler, http.MethodGet, f.base, nil, withCookie(f.cookie))
-	for _, want := range []string{sending.DisplayTime(stored), "scheduled"} {
+	for _, want := range []string{presentation.Timestamp(stored), "scheduled"} {
 		if !strings.Contains(page.Body.String(), want) {
 			t.Fatalf("sending page missing %q after schedule: %.600s", want, page.Body.String())
 		}
@@ -152,7 +152,7 @@ func TestScheduleEnableTooSoonTaskPageAndClear(t *testing.T) {
 
 	// The task page shows the stored instant and state.
 	taskPage := do(t, f.handler, http.MethodGet, "/campaigns/"+f.campaignID+"/tasks/"+f.taskID, nil, withCookie(f.cookie))
-	for _, want := range []string{sending.DisplayTime(stored), "scheduled"} {
+	for _, want := range []string{presentation.Timestamp(stored), "scheduled"} {
 		if !strings.Contains(taskPage.Body.String(), want) {
 			t.Fatalf("task page missing %q after schedule: %.600s", want, taskPage.Body.String())
 		}
@@ -172,5 +172,40 @@ func TestScheduleEnableTooSoonTaskPageAndClear(t *testing.T) {
 	}
 	if cleared.GetString("schedule_state") != intake.ScheduleNone {
 		t.Fatalf("schedule state after clear = %q, want %q", cleared.GetString("schedule_state"), intake.ScheduleNone)
+	}
+}
+
+// A refused schedule keeps the operator's entered date and time, names the
+// problem, and records no schedule.
+func TestScheduleRefusalRetainsEnteredTime(t *testing.T) {
+	f := newScheduleFixture(t)
+	selectMode := do(t, f.handler, http.MethodPost, "/campaigns/"+f.campaignID+"/tasks/"+f.taskID+"/sending-type", url.Values{"sending_type": {"scheduled"}}, withCookie(f.cookie))
+	if selectMode.Code != http.StatusSeeOther {
+		t.Fatalf("select scheduled mode: %d %.300s", selectMode.Code, selectMode.Body.String())
+	}
+	fields := url.Values{
+		"action_id":       {"schedule-retain-123456"},
+		"schedule_action": {"enable"},
+		"expected_count":  {"2"},
+		"confirmed":       {"yes"},
+		"schedule_date":   {"2020-01-02"},
+		"schedule_time":   {"21:05"},
+	}
+	rec := do(t, f.handler, http.MethodPost, f.base+"/schedule", fields, withCookie(f.cookie))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("too-soon schedule: %d %.400s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"choose a start time at least 30 minutes from now",
+		`value="2020-01-02"`,
+		`value="21:05"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("refused schedule missing %q: %.600s", want, body)
+		}
+	}
+	if state := f.storedScheduleState(t); state != intake.ScheduleNone {
+		t.Fatalf("refused schedule stored state %q, want none", state)
 	}
 }

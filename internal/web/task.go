@@ -6,6 +6,7 @@ package web
 // a later change.
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -13,10 +14,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
+	"github.com/yash91989201/bachtel-email-automation/internal/presentation"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
@@ -28,6 +32,7 @@ func (s *server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /campaigns/{id}/tasks/new", s.requireOperator(s.handleTaskNew))
 	mux.HandleFunc("POST /campaigns/{id}/tasks", s.requireOperator(s.handleTaskCreate))
 	mux.HandleFunc("GET /campaigns/{id}/tasks/{task}", s.requireOperator(s.handleTaskDetail))
+	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/sending-type", s.requireOperator(s.handleTaskSendingType))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/select", s.requireOperator(s.handleTaskSelect))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/revalidate", s.requireOperator(s.handleTaskRevalidate))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/preview", s.requireOperator(s.handleTaskPreview))
@@ -37,37 +42,20 @@ func (s *server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/results/delete", s.requireOperator(s.handleTaskResultsDelete))
 }
 
-// handleTaskList lists a campaign's tasks with their status and counts.
+// handleTaskList renders the campaign workspace on its Tasks section. The
+// dedicated route stays for old links; the content and navigation are the same
+// as the campaign root.
 func (s *server) handleTaskList(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	ownerID := recordFromContext(r).Id
-	id := r.PathValue("id")
-	loaded, err := s.campaigns.LoadCampaign(ctx, ownerID, id)
+	data, err := s.campaignPageData(r, r.PathValue("id"), views.CampaignSectionTasks, nil)
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
 	}
-	tasks, err := s.tasks.ListTasks(ctx, ownerID, id)
-	if err != nil {
-		s.app.Logger().Error("list tasks", "campaign", id, "error", err)
-		http.Error(w, "Unable to load tasks", http.StatusInternalServerError)
-		return
-	}
-	data := views.TaskListData{CampaignID: loaded.ID, CampaignName: loaded.Name}
-	for _, task := range tasks {
-		data.Tasks = append(data.Tasks, views.TaskListRow{
-			ID:        task.ID,
-			Status:    task.Status,
-			Sheet:     task.Sheet,
-			HeaderRow: task.HeaderRow,
-			Total:     task.Counts.Total,
-			Eligible:  task.Counts.Eligible,
-		})
-	}
-	s.renderWithStatus(w, r, http.StatusOK, views.TaskList(data))
+	s.renderWithStatus(w, r, http.StatusOK, views.CampaignPage(data))
 }
 
-// handleTaskNew renders the upload form with the configured workbook limits.
+// handleTaskNew renders the guided upload form with campaign context, the
+// current mapped columns and the configured workbook limits.
 func (s *server) handleTaskNew(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ownerID := recordFromContext(r).Id
@@ -76,7 +64,7 @@ func (s *server) handleTaskNew(w http.ResponseWriter, r *http.Request) {
 		s.campaignLoadFailure(w, r, err)
 		return
 	}
-	s.renderWithStatus(w, r, http.StatusOK, views.TaskUpload(s.taskUploadData(loaded.ID, loaded.Name, "")))
+	s.renderWithStatus(w, r, http.StatusOK, views.TaskUpload(s.taskUploadData(ctx, ownerID, loaded.ID, loaded.Name, "")))
 }
 
 // handleTaskCreate stores one uploaded workbook as a staging task. The body is
@@ -95,8 +83,11 @@ func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 	// before any part is read into memory.
 	r.Body = http.MaxBytesReader(w, r.Body, s.cfg.Intake.MaxUploadBytes+(1<<20))
 
+	sendingType := ""
 	uploadError := func(message string) {
-		s.renderWithStatus(w, r, http.StatusBadRequest, views.TaskUpload(s.taskUploadData(loaded.ID, loaded.Name, message)))
+		data := s.taskUploadData(ctx, ownerID, loaded.ID, loaded.Name, message)
+		data.SendingType = sendingType
+		s.renderWithStatus(w, r, http.StatusBadRequest, views.TaskUpload(data))
 	}
 
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
@@ -105,6 +96,11 @@ func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 		} else {
 			uploadError("the form could not be read; choose an XLSX workbook and try again")
 		}
+		return
+	}
+	sendingType = r.FormValue("sending_type")
+	if sendingType != intake.TaskSendingTypeDirect && sendingType != intake.TaskSendingTypeScheduled {
+		uploadError("choose Direct or Scheduled sending")
 		return
 	}
 	file, header, err := r.FormFile("workbook")
@@ -132,7 +128,7 @@ func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	task, err := s.tasks.Stage(ctx, ownerID, id, header.Filename, data)
+	task, err := s.tasks.StageWithSendingType(ctx, ownerID, id, header.Filename, data, sendingType)
 	if err != nil {
 		if message := intakeErrorMessage(err); message != "" {
 			uploadError(message)
@@ -142,17 +138,17 @@ func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 		uploadError("the workbook could not be uploaded; try again")
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+id+"/tasks/"+task.ID, http.StatusSeeOther)
+	http.Redirect(w, r, taskPath(task)+"#recipients", http.StatusSeeOther)
 }
 
-// handleTaskDetail shows the selection form for a staging task and the review
-// page for a ready one.
+// handleTaskDetail renders the one task workspace. Without a recognized
+// fragment the selected section is Overview.
 func (s *server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 	task, ok := s.loadCampaignTask(w, r)
 	if !ok {
 		return
 	}
-	data, err := s.taskPageData(r, task)
+	data, err := s.taskPageData(r, task, "")
 	if err != nil {
 		s.taskLoadFailure(w, r, err)
 		return
@@ -160,9 +156,31 @@ func (s *server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 	s.renderWithStatus(w, r, http.StatusOK, views.TaskPage(data))
 }
 
+// handleTaskSendingType persists the shared task preference. GET navigation
+// cannot change it and saving it never starts mail or creates a schedule.
+func (s *server) handleTaskSendingType(w http.ResponseWriter, r *http.Request) {
+	task, ok := s.loadCampaignTask(w, r)
+	if !ok {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid sending type form", http.StatusBadRequest)
+		return
+	}
+	if err := s.tasks.SetSendingType(r.Context(), recordFromContext(r).Id, task.ID, r.PostForm.Get("sending_type")); err != nil {
+		if validation, ok := errors.AsType[*intake.ValidationError](err); ok {
+			s.renderTaskMessage(w, r, task, views.TaskSectionSending, validation.Message, http.StatusBadRequest)
+			return
+		}
+		s.taskLoadFailure(w, r, err)
+		return
+	}
+	http.Redirect(w, r, taskPath(task)+"#sending", http.StatusSeeOther)
+}
+
 // handleTaskSelect confirms the worksheet and header row of a staging task.
-// Success redirects to the task page; a validation failure re-renders it with
-// the fixed message inline and status 400.
+// Success redirects to Recipients; a validation failure re-renders it inline.
 func (s *server) handleTaskSelect(w http.ResponseWriter, r *http.Request) {
 	task, ok := s.loadCampaignTask(w, r)
 	if !ok {
@@ -172,22 +190,27 @@ func (s *server) handleTaskSelect(w http.ResponseWriter, r *http.Request) {
 	ownerID := recordFromContext(r).Id
 	headerRow, err := strconv.Atoi(strings.TrimSpace(r.FormValue("header_row")))
 	if err != nil {
-		s.renderTaskMessage(w, r, task, intake.ErrInvalidHeaderRow.Error(), http.StatusBadRequest)
+		s.renderTaskMessage(w, r, task, views.TaskSectionRecipients, intake.ErrInvalidHeaderRow.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := s.tasks.Validate(ctx, ownerID, task.ID, r.FormValue("sheet"), headerRow); err != nil {
+	sheet := r.FormValue("sheet")
+	if err := s.tasks.Validate(ctx, ownerID, task.ID, sheet, headerRow); err != nil {
 		if validation, ok := errors.AsType[*intake.ValidationError](err); ok {
-			s.renderTaskMessage(w, r, task, validation.Message, http.StatusBadRequest)
+			s.renderTaskMessageWith(w, r, task, views.TaskSectionRecipients, validation.Message, http.StatusBadRequest, func(data *views.TaskPageData) {
+				data.SheetDraft = sheet
+				data.HeaderRowDraft = headerRow
+			})
 			return
 		}
 		s.taskLoadFailure(w, r, err)
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+task.CampaignID+"/tasks/"+task.ID, http.StatusSeeOther)
+	http.Redirect(w, r, taskPath(task)+"#recipients", http.StatusSeeOther)
 }
 
 // handleTaskRevalidate rebuilds the snapshot against the campaign's current
-// revision. Success redirects; a validation failure stays inline with 400.
+// revision. An enabled schedule refuses the change inside the service
+// transaction; the message is shown at Recipients.
 func (s *server) handleTaskRevalidate(w http.ResponseWriter, r *http.Request) {
 	task, ok := s.loadCampaignTask(w, r)
 	if !ok {
@@ -195,18 +218,18 @@ func (s *server) handleTaskRevalidate(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.tasks.Revalidate(r.Context(), recordFromContext(r).Id, task.ID); err != nil {
 		if validation, ok := errors.AsType[*intake.ValidationError](err); ok {
-			s.renderTaskMessage(w, r, task, validation.Message, http.StatusBadRequest)
+			s.renderTaskMessage(w, r, task, views.TaskSectionRecipients, validation.Message, http.StatusBadRequest)
 			return
 		}
 		s.taskLoadFailure(w, r, err)
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+task.CampaignID+"/tasks/"+task.ID, http.StatusSeeOther)
+	http.Redirect(w, r, taskPath(task)+"#recipients", http.StatusSeeOther)
 }
 
-// handleTaskPreview renders one admitted row through the pinned revision as an
-// htmx partial. A row outside this task, a render failure, or any unexpected
-// error is reported with a fixed message at status 200, never as a 500 page.
+// handleTaskPreview renders one admitted row through the saved revision as an
+// htmx partial. A row outside this task, a render failure, or an unexpected
+// error is reported with a fixed message, never as a 500 page.
 func (s *server) handleTaskPreview(w http.ResponseWriter, r *http.Request) {
 	task, ok := s.loadCampaignTask(w, r)
 	if !ok {
@@ -319,14 +342,14 @@ func (s *server) handleTaskResultsGenerate(w http.ResponseWriter, r *http.Reques
 	err := s.exports.GenerateTask(r.Context(), recordFromContext(r).Id, task.ID, true)
 	switch {
 	case err == nil:
-		http.Redirect(w, r, "/campaigns/"+task.CampaignID+"/tasks/"+task.ID, http.StatusSeeOther)
+		http.Redirect(w, r, taskPath(task)+"#results", http.StatusSeeOther)
 	case errors.Is(err, exports.ErrInProgress):
-		s.renderTaskMessage(w, r, task, "result generation is already in progress; reload this page shortly", http.StatusConflict)
+		s.renderTaskMessage(w, r, task, views.TaskSectionResults, "result generation is already in progress; reload this page shortly", http.StatusConflict)
 	case errors.Is(err, exports.ErrNotTerminal):
-		s.renderTaskMessage(w, r, task, err.Error(), http.StatusBadRequest)
+		s.renderTaskMessage(w, r, task, views.TaskSectionResults, err.Error(), http.StatusBadRequest)
 	default:
 		s.app.Logger().Error("generate task results", "task", task.ID, "error", err)
-		s.renderTaskMessage(w, r, task, "the results workbook could not be generated; retry", http.StatusInternalServerError)
+		s.renderTaskMessage(w, r, task, views.TaskSectionResults, "the results workbook could not be generated; retry", http.StatusInternalServerError)
 	}
 }
 
@@ -338,12 +361,16 @@ func (s *server) handleTaskResultsDelete(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	if err := s.exports.DeleteTask(r.Context(), recordFromContext(r).Id, task.ID); err != nil {
-		s.app.Logger().Error("delete task results", "task", task.ID, "error", err)
-		s.renderTaskMessage(w, r, task, "the generated workbook could not be removed; retry", http.StatusInternalServerError)
+	if strings.TrimSpace(r.FormValue("confirm")) != "delete" {
+		s.renderTaskMessage(w, r, task, views.TaskSectionResults, "confirm that only the generated workbook is removed", http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+task.CampaignID+"/tasks/"+task.ID, http.StatusSeeOther)
+	if err := s.exports.DeleteTask(r.Context(), recordFromContext(r).Id, task.ID); err != nil {
+		s.app.Logger().Error("delete task results", "task", task.ID, "error", err)
+		s.renderTaskMessage(w, r, task, views.TaskSectionResults, "the generated workbook could not be removed; retry", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, taskPath(task)+"#results", http.StatusSeeOther)
 }
 
 // loadCampaignTask loads the path's task and confirms it belongs to the
@@ -382,20 +409,48 @@ func (s *server) taskLoadFailure(w http.ResponseWriter, r *http.Request, err err
 	http.Error(w, "Unable to load the task", http.StatusInternalServerError)
 }
 
-// taskPageData builds the safe view model for one task page: the recorded
-// selection state for a staging task, and the pinned revision, counts, held
-// rows and admitted rows for a ready one.
-func (s *server) taskPageData(r *http.Request, task *intake.Task) (views.TaskPageData, error) {
+// taskPageData builds the one task workspace view model: identity, the saved
+// and current revision, current mailbox approval, validation evidence, fresh
+// sending facts, recovery rows, results state and the derived status, blockers
+// and controls. Loading it writes nothing and creates no attempt.
+func (s *server) taskPageData(r *http.Request, task *intake.Task, section string) (views.TaskPageData, error) {
+	ctx := r.Context()
+	ownerID := recordFromContext(r).Id
 	data := views.TaskPageData{
 		CampaignID:      task.CampaignID,
 		CampaignName:    task.CampaignName,
 		TaskID:          task.ID,
-		Status:          task.Status,
+		Section:         section,
+		Filename:        task.SourceName,
+		Reference:       presentation.ShortRef(task.ID),
+		UploadedAt:      presentation.Timestamp(task.UploadedAt),
+		StoredStatus:    task.Status,
 		ValidationError: task.ValidationError,
 		DefaultSheet:    task.Sheet,
 		HeaderRow:       task.HeaderRow,
-		ScheduleAt:      sending.DisplayTime(task.ScheduleAt),
+		Worksheet:       task.Sheet,
+		ScheduleAt:      presentation.Timestamp(task.ScheduleAt),
 		ScheduleState:   task.ScheduleState,
+		SendingType:     "",
+		ScheduleMinDate: sending.DisplayDate(time.Now()),
+		ResultLabels:    task.ResultLabels,
+		ActionID:        actionID(),
+	}
+	data.SendingType = task.SendingType
+	if task.ScheduleState == intake.ScheduleScheduled || task.ScheduleState == intake.ScheduleMissed {
+		data.SendingType = views.TaskSendingTypeScheduled
+	}
+	// This query opens the editor only. Direct/Scheduled always come from storage.
+	if r.URL.Query().Get("sending_type") == views.TaskSendingTypeChoose {
+		data.SendingType = views.TaskSendingTypeChoose
+	}
+	if task.ScheduleState == intake.ScheduleScheduled && !task.ScheduleAt.IsZero() {
+		local := task.ScheduleAt.In(sending.ScheduleZone)
+		data.ScheduleDraftDate = local.Format("2006-01-02")
+		data.ScheduleDraftTime = local.Format("15:04")
+	}
+	if data.Filename == "" {
+		data.Filename = "Workbook"
 	}
 	for _, sheet := range task.Sheets {
 		data.Sheets = append(data.Sheets, views.TaskSheetOption{
@@ -404,28 +459,33 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task) (views.TaskPag
 			Selected: sheet.Name == task.Sheet,
 		})
 	}
-	if task.Status == intake.TaskStaging {
-		return data, nil
-	}
 
-	ctx := r.Context()
-	ownerID := recordFromContext(r).Id
-	configuration, err := s.campaigns.LoadConfiguration(ctx, ownerID, task.ConfigurationID)
+	loaded, err := s.campaigns.LoadCampaign(ctx, ownerID, task.CampaignID)
 	if err != nil {
 		return data, err
 	}
-	preflight, err := s.tasks.Preflight(ctx, ownerID, task.ID)
-	if err != nil {
-		return data, err
+	data.CampaignName = loaded.Name
+	var current *campaign.Configuration
+	if loaded.CurrentRevisionID != "" {
+		current, err = s.campaigns.LoadConfiguration(ctx, ownerID, loaded.CurrentRevisionID)
+		if err != nil {
+			return data, err
+		}
+		data.HasCurrentRevision = true
+		data.CurrentRevision = current.Revision
 	}
-	manifest, err := s.tasks.Manifest(ctx, ownerID, task.ID)
-	if err != nil {
-		return data, err
+	if task.ConfigurationID != "" {
+		saved, err := s.campaigns.LoadConfiguration(ctx, ownerID, task.ConfigurationID)
+		if err != nil {
+			return data, err
+		}
+		data.HasSavedRevision = true
+		data.SavedRevision = saved.Revision
 	}
-	rows, err := s.tasks.Rows(ctx, ownerID, task.ID)
-	if err != nil {
-		return data, err
-	}
+	sender, senderStatus := s.mailboxSummary(ctx, ownerID)
+	data.Sender = sender
+	data.SenderStatus = senderStatus
+	mailboxUsable := senderStatus == string(mailbox.StatusConnected)
 
 	data.Counts = views.TaskCounts{
 		Total:            task.Counts.Total,
@@ -437,67 +497,319 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task) (views.TaskPag
 		AlreadyScheduled: task.Counts.AlreadyScheduled,
 		ReviewRequired:   task.Counts.ReviewRequired,
 	}
-	data.ResultLabels = task.ResultLabels
-	if artifact, err := s.exports.TaskArtifact(ctx, ownerID, task.ID); err == nil && artifact != nil {
+	summary := presentation.Summarize(task.Counts)
+	data.Summary = views.TaskSummaryView{
+		Total:                summary.Total,
+		Eligible:             summary.Eligible,
+		ExcludedAtValidation: summary.ExcludedAtValidation,
+	}
+	for _, category := range summary.Categories {
+		data.Categories = append(data.Categories, views.TaskCategory{Label: category.Label, Count: category.Count})
+	}
+
+	facts := presentation.Facts{
+		Staging:         task.Status == intake.TaskStaging,
+		ValidationError: task.ValidationError,
+		Status:          task.Status,
+		HasRevision:     data.HasCurrentRevision,
+		MailboxUsable:   mailboxUsable,
+		ScheduleState:   task.ScheduleState,
+	}
+	facts.Stale = task.Status == intake.TaskReady && (current == nil || task.ContentHash != current.ContentHash)
+	data.Stale = facts.Stale
+
+	var progress *sending.Progress
+	if task.Status != intake.TaskStaging {
+		progress, err = s.sending.Preview(ctx, ownerID, task.ID)
+		if err != nil {
+			s.app.Logger().Error("load sending progress", "task", task.ID, "error", err)
+			data.Error = "Sending and approval metadata is unavailable; retry this page."
+		}
+	}
+	if progress != nil {
+		facts.Approved = progress.Approved
+		facts.RestoreReview = progress.RestoreReview
+		facts.Eligible = progress.Eligible
+		facts.Remaining = progress.Remaining
+		facts.Submitted = progress.Submitted
+		facts.Failed = progress.Failed
+		facts.RetryableFailed = progress.RetryableFailed
+		facts.Uncertain = progress.Held
+		facts.Held = progress.Held
+		data.Eligible = progress.Eligible
+		data.Remaining = progress.Remaining
+		data.Submitted = progress.Submitted
+		data.Failed = progress.Failed
+		data.RetryableFailed = progress.RetryableFailed
+		data.Held = progress.Held
+		data.InFlight = progress.InFlight
+		data.Reserved = progress.Reserved
+		data.Invalid = progress.Invalid
+		data.Duplicate = progress.Duplicate
+		data.Ineligible = progress.Ineligible
+		data.Approved = progress.Approved
+		data.RestoreReview = progress.RestoreReview
+		data.Hash = progress.ContentHash
+		data.LatestTest = progress.LatestSuccessfulTestID
+		data.Summary.CurrentEligible = progress.Remaining
+		if progress.Reason != "" {
+			data.StatusExplanation = progress.Reason
+		}
+		for _, attempt := range progress.Recent {
+			when := attempt.FinishedAt
+			if when.IsZero() {
+				when = attempt.StartedAt
+			}
+			data.Recent = append(data.Recent, views.TaskAttemptRow{
+				ID:        attempt.ID,
+				Kind:      attempt.Kind,
+				Recipient: attempt.Recipient,
+				State:     attempt.State,
+				Reason:    attempt.Reason,
+				Time:      presentation.Timestamp(when),
+				Test:      attempt.Kind == sending.KindTest,
+				HTMLHref:  "/campaigns/" + task.CampaignID + "/attempts/" + attempt.ID + "/email.html",
+			})
+		}
+		if connection, e := s.mailboxes.Current(ctx, ownerID); e == nil {
+			settings, e := s.sending.DispatcherState(ctx, connection.ID, ownerID)
+			if e != nil {
+				return data, e
+			}
+			data.Rate = settings.Rate
+			data.Cooldown = presentation.Timestamp(settings.CooldownUntil)
+			data.CooldownReason = settings.Reason
+		}
+	}
+
+	if artifact, err := s.exports.TaskArtifact(ctx, ownerID, task.ID); err != nil {
+		return data, err
+	} else if artifact != nil {
 		data.ResultsState = artifact.State
 		data.ResultsError = artifact.Error
 		data.ResultsReady = artifact.Ready
-		data.ResultsAsOf = sending.DisplayTime(artifact.AsOf)
-	} else if err != nil {
-		return data, err
+		data.ResultsAsOf = presentation.Timestamp(artifact.AsOf)
+		facts.ResultState = artifact.State
+		facts.ResultReady = artifact.Ready
 	}
-	data.Revision = configuration.Revision
-	data.ContentHash = task.ContentHash
-	data.Approved = configuration.ApprovalCurrent()
-	data.Stale = preflight.Stale
-	for _, row := range manifest.Rows {
-		if !row.Excluded() {
-			continue
+
+	if task.Status != intake.TaskStaging {
+		manifest, err := s.tasks.Manifest(ctx, ownerID, task.ID)
+		if err != nil {
+			return data, err
 		}
-		reasons := make([]string, 0, len(row.Reasons))
-		for _, code := range row.Reasons {
-			reasons = append(reasons, intake.ReasonText(code))
+		emailByRow := make(map[int]string, len(manifest.Rows))
+		for _, row := range manifest.Rows {
+			emailByRow[row.Row] = row.EmailKey
+			if !row.Excluded() {
+				continue
+			}
+			reasons := make([]string, 0, len(row.Reasons))
+			for _, code := range row.Reasons {
+				reasons = append(reasons, intake.ReasonText(code))
+			}
+			data.HeldRows = append(data.HeldRows, views.TaskHeldRow{
+				Row:       row.Row,
+				Recipient: row.EmailKey,
+				Reason:    strings.Join(reasons, "; "),
+			})
 		}
-		data.HeldRows = append(data.HeldRows, views.TaskHeldRow{
-			Row:    row.Row,
-			Reason: strings.Join(reasons, "; "),
+		if progress != nil {
+			for _, member := range progress.Members {
+				row := views.TaskAdmittedRow{
+					ID:        member.ID,
+					Row:       member.SourceRow,
+					Recipient: emailByRow[member.SourceRow],
+					State:     member.State,
+					Reason:    member.Reason,
+				}
+				if attempt := member.LatestAttempt; attempt != nil {
+					when := attempt.FinishedAt
+					if when.IsZero() {
+						when = attempt.StartedAt
+					}
+					row.AttemptID = attempt.ID
+					row.AttemptRecipient = attempt.Recipient
+					row.AttemptState = attempt.State
+					row.AttemptTime = presentation.Timestamp(when)
+					row.AttemptReason = attempt.Reason
+				}
+				data.Rows = append(data.Rows, row)
+				if !member.ResolvedAt.IsZero() {
+					data.Resolutions = append(data.Resolutions, views.TaskResolutionRow{
+						Row:   member.SourceRow,
+						Actor: member.ResolutionActor,
+						Basis: member.ResolutionBasis,
+						Time:  presentation.Timestamp(member.ResolvedAt),
+					})
+				}
+			}
+			for _, row := range data.Rows {
+				if row.State != intake.RowEligible {
+					continue
+				}
+				data.PreviewRowID = row.ID
+				preview, err := s.tasks.Preview(ctx, ownerID, task.ID, row.ID)
+				if err != nil {
+					data.Preview = views.TaskPreviewData{Error: s.taskPreviewMessage(err), SourceRow: row.Row}
+				} else {
+					data.Preview = taskPreviewData(preview)
+				}
+				break
+			}
+		}
+	}
+
+	status := presentation.MainStatus(facts)
+	data.StatusLabel = status.Label
+	data.StatusClass = statusClass(status)
+	if data.StatusExplanation == "" {
+		data.StatusExplanation = status.Explanation
+	}
+	for _, blocker := range presentation.Blockers(facts) {
+		data.Blockers = append(data.Blockers, views.TaskBlocker{
+			Label:   blocker.Label,
+			Remedy:  blocker.Remedy,
+			Section: blocker.Section,
+			Href:    blockerHref(task, blocker),
 		})
 	}
-	for _, row := range rows {
-		data.Rows = append(data.Rows, views.TaskAdmittedRow{
-			ID:     row.ID,
-			Row:    row.SourceRow,
-			State:  row.State,
-			Reason: row.Reason,
-		})
+	for _, step := range presentation.Lifecycle(facts) {
+		data.Lifecycle = append(data.Lifecycle, views.LifecycleStep{Name: step.Name, State: step.State, Complete: step.Complete})
+	}
+	next := presentation.NextAction(facts)
+	data.NextLabel = next.Label
+	data.NextHref = nextHref(task, next)
+	data.NextLabel = sendingTypeNextLabel(data.NextLabel, task.SendingType)
+
+	if section == "" {
+		data.Section = views.TaskSectionOverview
+	}
+	data.ResultEligible = facts.ResultEligible()
+	controls := presentation.AvailableControls(facts)
+	data.Controls = views.TaskControls{
+		Validate:       controls.Validate,
+		Revalidate:     controls.Revalidate,
+		Start:          controls.Start,
+		Schedule:       controls.Schedule,
+		SendNowInstead: controls.SendNowInstead,
+		EditSchedule:   controls.EditSchedule,
+		ClearSchedule:  controls.ClearSchedule,
+		Stop:           controls.Stop,
+		Resume:         controls.Resume,
+		RetryAll:       controls.RetryAll,
+		RetryRow:       controls.RetryRow,
+		ResendRow:      controls.ResendRow,
+		ResolveRow:     controls.ResolveRow,
+		GenerateResult: controls.GenerateResult,
+		RetryResult:    controls.RetryResult,
+	}
+	if data.Error != "" {
+		data.StatusLabel = "Status unavailable"
+		data.StatusClass = "status-warning"
+		data.StatusExplanation = data.Error
+		data.Controls = views.TaskControls{}
 	}
 	return data, nil
 }
 
-// renderTaskMessage re-renders one task page with a fixed message inline and
-// an explicit status. The task is reloaded first so a failure recorded on it
-// stays visible; an identical recorded message is dropped to avoid showing the
-// same text twice.
-func (s *server) renderTaskMessage(w http.ResponseWriter, r *http.Request, task *intake.Task, message string, status int) {
+// taskPreviewData maps one rendered preview to its partial view model.
+func taskPreviewData(preview *intake.Preview) views.TaskPreviewData {
+	data := views.TaskPreviewData{
+		SourceRow:   preview.SourceRow,
+		ContentHash: preview.ContentHash,
+		Approved:    preview.Approved,
+		Recipient:   preview.Rendered.Recipient,
+		Subject:     preview.Rendered.Subject,
+		Body:        preview.Rendered.Body,
+	}
+	for _, value := range preview.Rendered.Values {
+		data.Values = append(data.Values, views.PreviewValue{
+			Variable:   value.Variable,
+			Header:     value.Header,
+			Raw:        value.Raw,
+			Normalized: value.Normalized,
+		})
+	}
+	return data
+}
+
+// taskPath is the canonical task page root.
+func taskPath(task *intake.Task) string {
+	return "/campaigns/" + task.CampaignID + "/tasks/" + task.ID
+}
+
+// sendingTypeNextLabel specializes first-start navigation without replacing
+// prerequisite, progress, saved-schedule or recovery actions.
+func sendingTypeNextLabel(label, sendingType string) string {
+	if label == "Choose sending time" && sendingType == intake.TaskSendingTypeDirect {
+		return "Send"
+	}
+	return label
+}
+
+// nextHref resolves a next action to a navigable destination. External
+// remedies leave the task workspace; internal ones select a task section.
+func nextHref(task *intake.Task, next presentation.NextLink) string {
+	switch next.Destination {
+	case presentation.DestCampaignTemplate:
+		return "/campaigns/" + task.CampaignID + "#template"
+	case presentation.DestCampaignTasks:
+		return "/campaigns/" + task.CampaignID + "#tasks"
+	case presentation.DestMailbox:
+		return "/connection"
+	}
+	if next.Section != "" {
+		return taskPath(task) + "#" + next.Section
+	}
+	return taskPath(task) + "#" + views.TaskSectionRecipients
+}
+
+// blockerHref resolves a blocker remedy to its destination.
+func blockerHref(task *intake.Task, blocker presentation.Blocker) string {
+	if blocker.Destination == presentation.DestMailbox {
+		return "/connection"
+	}
+	if blocker.Section != "" {
+		return taskPath(task) + "#" + blocker.Section
+	}
+	return ""
+}
+
+// renderTaskMessage re-renders the task workspace on one section with a fixed
+// message inline and an explicit status. The task is reloaded first so a
+// failure recorded on it stays visible.
+func (s *server) renderTaskMessage(w http.ResponseWriter, r *http.Request, task *intake.Task, section, message string, status int) {
+	s.renderTaskMessageWith(w, r, task, section, message, status, nil)
+}
+
+// renderTaskMessageWith is renderTaskMessage plus a view-model adjustment, so a
+// refused form keeps the operator's submitted non-secret input.
+func (s *server) renderTaskMessageWith(w http.ResponseWriter, r *http.Request, task *intake.Task, section, message string, status int, adjust func(*views.TaskPageData)) {
 	if fresh, err := s.tasks.LoadTask(r.Context(), recordFromContext(r).Id, task.ID); err == nil {
 		task = fresh
 	}
-	data, err := s.taskPageData(r, task)
+	data, err := s.taskPageData(r, task, section)
 	if err != nil {
 		s.taskLoadFailure(w, r, err)
 		return
 	}
+	data.Section = section
+	data.IgnoreHash = true
 	data.Error = message
+	if adjust != nil {
+		adjust(&data)
+	}
 	if data.ValidationError == message {
 		data.ValidationError = ""
 	}
 	s.renderWithStatus(w, r, status, views.TaskPage(data))
 }
 
-// taskUploadData builds the upload page view model with the configured
-// workbook limits, rendered as literal byte counts.
-func (s *server) taskUploadData(campaignID, campaignName, message string) views.TaskUploadData {
-	return views.TaskUploadData{
+// taskUploadData builds the upload page view model with campaign context, the
+// current mapped columns and the configured workbook limits.
+func (s *server) taskUploadData(ctx context.Context, ownerID, campaignID, campaignName, message string) views.TaskUploadData {
+	data := views.TaskUploadData{
 		CampaignID:        campaignID,
 		CampaignName:      campaignName,
 		Error:             message,
@@ -505,6 +817,16 @@ func (s *server) taskUploadData(campaignID, campaignName, message string) views.
 		UnzipSizeLimit:    s.cfg.Intake.UnzipSizeLimit,
 		UnzipXMLSizeLimit: s.cfg.Intake.UnzipXMLSizeLimit,
 	}
+	if loaded, err := s.campaigns.LoadCampaign(ctx, ownerID, campaignID); err == nil && loaded.CurrentRevisionID != "" {
+		if configuration, err := s.campaigns.LoadConfiguration(ctx, ownerID, loaded.CurrentRevisionID); err == nil {
+			data.HasRevision = true
+			data.Revision = configuration.Revision
+			for _, mapping := range configuration.Mappings {
+				data.MappedColumns = append(data.MappedColumns, mapping.Header)
+			}
+		}
+	}
+	return data
 }
 
 // taskPreviewMessage keeps operator-fixable preview failures inline: the

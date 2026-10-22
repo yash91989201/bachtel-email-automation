@@ -41,7 +41,7 @@ func TestAcceptanceCampaignAuthoringFlow(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
-	detail := rec.Header().Get("Location")
+	detail, _, _ := strings.Cut(rec.Header().Get("Location"), "#")
 	if !strings.HasPrefix(detail, "/campaigns/") {
 		t.Fatalf("create campaign location = %q", detail)
 	}
