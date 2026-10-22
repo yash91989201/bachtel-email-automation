@@ -77,7 +77,13 @@ func NewHandler(app core.App, cfg config.Config, services Services) http.Handler
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("GET /static/", http.FileServerFS(assets))
+	// Embedded assets carry no modification time, so browsers get no validator
+	// and can keep serving a stale app.css after a rebuild. Revalidate instead.
+	staticFiles := http.FileServerFS(assets)
+	mux.Handle("GET /static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		staticFiles.ServeHTTP(w, r)
+	}))
 	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, assets, "static/robots.txt")
 	})

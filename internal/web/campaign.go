@@ -522,6 +522,9 @@ func (s *server) renderWithStatus(w http.ResponseWriter, r *http.Request, status
 		http.Error(w, "Unable to render page", http.StatusInternalServerError)
 		return
 	}
+	// Every rendered page carries operator-private records: never let a
+	// browser serve a stale copy after a state change.
+	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if _, err := w.Write(buf.Bytes()); err != nil {
