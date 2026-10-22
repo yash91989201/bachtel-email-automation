@@ -206,11 +206,11 @@ input[type="checkbox"] {
 
 .cn-alert {
   display: grid;
-  grid-auto-flow: column;
-  grid-template-columns: auto;
+  grid-auto-flow: row;
+  grid-template-columns: minmax(0, 1fr);
   justify-content: start;
   justify-items: start;
-  align-items: center;
+  align-items: start;
   gap: 1rem;
   padding: .75rem 1rem;
   border: 1px solid var(--color-muted);
@@ -290,7 +290,7 @@ input[type="checkbox"] {
 }
 
 
-.cn-alert:has(> :nth-child(2)) { grid-template-columns: auto minmax(auto, 1fr); }
+.cn-alert:has(> svg) { grid-template-columns: auto minmax(0, 1fr); }
 .cn-alert.status-warning { background: var(--color-warning); color: var(--color-warning-foreground); border-color: var(--color-warning); }
 .cn-alert.status-success { background: var(--color-success); color: var(--color-success-foreground); border-color: var(--color-success); }
 .cn-button-variant-destructive { background: var(--color-destructive); color: var(--color-primary-foreground); border-color: color-mix(in oklab, var(--color-destructive), black 5%); }
