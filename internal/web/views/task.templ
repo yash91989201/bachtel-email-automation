@@ -912,7 +912,7 @@ templ taskApprovalForm(data TaskPageData) {
 }
 
 templ TaskSendingLive(data TaskPageData) {
-	<div id="sending-live" class="space-y-6" hx-get={ sendingBase(data) + "/progress" + sendingChooserQuery(data.SendingType) } hx-trigger="every 2s" hx-swap="outerHTML">
+	<div id="sending-live" class="space-y-6" { taskSendingPollAttributes(data)... }>
 		<section class="space-y-4" aria-labelledby="sending-heading">
 			<h2 id="sending-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Sending</h2>
 			<div class="rounded-card border border-border bg-muted/50 p-4" aria-live="polite">
@@ -937,6 +937,18 @@ templ TaskSendingLive(data TaskPageData) {
 			}
 		</section>
 	</div>
+}
+
+func taskSendingPollAttributes(data TaskPageData) templ.Attributes {
+	active := data.StoredStatus == "running" || data.StoredStatus == "waiting" || data.StoredStatus == "stopping"
+	if !active && data.ScheduleState != "scheduled" && data.InFlight == 0 {
+		return nil
+	}
+	return templ.Attributes{
+		"hx-get":     sendingBase(data) + "/progress" + sendingChooserQuery(data.SendingType),
+		"hx-trigger": "every 2s",
+		"hx-swap":    "outerHTML",
+	}
 }
 
 templ taskSendingControls(data TaskPageData) {

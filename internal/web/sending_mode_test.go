@@ -109,8 +109,12 @@ func TestSendingModeURLStateCannotChangeSavedType(t *testing.T) {
 	live := sendingModeNode(pageDoc, func(n *html.Node) bool {
 		return n.Type == html.ElementNode && sendingModeAttr(n, "id") == "sending-live"
 	})
-	if live == nil || sendingModeAttr(live, "hx-get") != f.base+"/progress" {
-		t.Errorf("saved-mode progress URL = %q", sendingModeAttr(live, "hx-get"))
+	if live == nil {
+		t.Fatal("missing live fragment")
+	}
+	// A staged task has no active work, so its live fragment does not poll.
+	if got := sendingModeAttr(live, "hx-get"); got != "" {
+		t.Errorf("idle task polls progress URL %q", got)
 	}
 	if got := sendingModeRecordCount(t, f, sending.AttemptsCollection); got != beforeAttempts {
 		t.Errorf("GET mode navigation created attempts: got %d, before %d", got, beforeAttempts)

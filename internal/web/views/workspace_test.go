@@ -383,6 +383,44 @@ func TestTaskSendingLiveFragmentKeepsIdentity(t *testing.T) {
 	}
 }
 
+func TestTaskSendingLivePollsOnlyActiveWork(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		status   string
+		schedule string
+		inFlight int
+		wantPoll bool
+	}{
+		{"completed", "completed", "", 0, false},
+		{"completed with active request", "completed", "", 1, true},
+		{"running with no remaining rows", "running", "", 0, true},
+		{"waiting", "waiting", "", 0, true},
+		{"stopping", "stopping", "", 1, true},
+		{"ready for scheduled start", "ready", "scheduled", 0, true},
+		{"idle ready", "ready", "none", 0, false},
+		{"paused", "paused", "", 0, false},
+		{"stopped", "stopped", "", 0, false},
+		{"interrupted", "interrupted", "", 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: tc.status, ScheduleState: tc.schedule, InFlight: tc.inFlight}
+			doc, err := html.Parse(strings.NewReader(renderWorkspace(t, TaskSendingLive(data))))
+			if err != nil {
+				t.Fatal(err)
+			}
+			live := workspaceNode(doc, "id", "sending-live")
+			if live == nil {
+				t.Fatal("missing live fragment")
+			}
+			for _, attr := range []string{"hx-get", "hx-trigger", "hx-swap"} {
+				if got := hasWorkspaceAttr(live, attr); got != tc.wantPoll {
+					t.Errorf("%s present = %t, want %t", attr, got, tc.wantPoll)
+				}
+			}
+		})
+	}
+}
+
 func TestTaskSendingTypeChooserAndSelectedControls(t *testing.T) {
 	base := TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "ready", Remaining: 2, Controls: TaskControls{Start: true, Schedule: true}}
 	t.Run("chooser is UI only", func(t *testing.T) {
@@ -513,7 +551,7 @@ func TestTaskSendingTypeSavedScheduleAndStartedStateLimits(t *testing.T) {
 }
 
 func TestTaskSendingLivePollURLHasNoTypeQuery(t *testing.T) {
-	data := TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "ready", SendingType: TaskSendingTypeScheduled}
+	data := TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "ready", ScheduleState: "scheduled", SendingType: TaskSendingTypeScheduled}
 	doc, err := html.Parse(strings.NewReader(renderWorkspace(t, TaskSendingLive(data))))
 	if err != nil {
 		t.Fatal(err)
