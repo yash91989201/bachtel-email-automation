@@ -356,8 +356,8 @@ The system SHALL put fresh action counts, sender, saved revision, approval and e
 - **AND** repeating an already accepted action returns its existing result without duplicate dispatch
 - **AND** no successful operation is inferred solely from a button click or browser timeout
 
-### Requirement: Saved sending type controls first-start navigation
-The task's saved `sending_type` SHALL be the durable source of truth for Direct/Scheduled selections and changes before execution. GET requests SHALL never change or override the saved value. A `sending_type=choose` query may open a chooser without modifying it. A task sending-type POST SHALL persist the selected value before displaying its controls. Changes SHALL be allowed only for staging/ready tasks that have not started. Started tasks SHALL retain their existing state-specific controls and saved type SHALL be immutable.
+### Requirement: Saved sending type is authoritative for first-start navigation
+The task's saved `sending_type` SHALL be the durable source of truth for Direct/Scheduled selection and pre-execution navigation. GET requests SHALL never change or override the saved value, and a `sending_type=choose` query MAY open the chooser without modifying it. A task sending-type POST SHALL persist the selected value before its controls are shown.
 
 #### Scenario: Legacy task chooser and saved type change
 - **WHEN** an older eligible task is ready for its first start with no schedule or saved preference
@@ -373,6 +373,14 @@ The task's saved `sending_type` SHALL be the durable source of truth for Direct/
 - **AND** reload, Back/Forward and progress polling preserve the saved selection
 - **AND** a rejected start or schedule submission returns to its selected mode with relevant draft values and a fresh unchecked confirmation
 
+#### Scenario: Scheduled selection and existing schedule state
+- **WHEN** a task has an enabled or missed schedule
+- **THEN** its saved type continues to select the view, and the schedule's edit/clear or missed-schedule remedy remains visible
+- **AND** selecting Scheduled does not clear the existing schedule or resume a paused task
+
+### Requirement: Sending type changes stay inside the pre-start window
+Sending-type changes SHALL be allowed only for staging or ready tasks that have not started, and a change to Direct SHALL be refused while an enabled or missed schedule remains. No POST or navigation SHALL clear or cancel that schedule implicitly. Started tasks SHALL retain their existing state-specific controls, and their saved sending type SHALL be immutable.
+
 #### Scenario: Direct change with enabled or missed schedule
 - **WHEN** an operator requests a change to Direct while an enabled or missed schedule remains
 - **THEN** the change is refused and the workspace directs the operator to explicitly clear the schedule first
@@ -380,20 +388,22 @@ The task's saved `sending_type` SHALL be the durable source of truth for Direct/
 - **AND** the existing “Send now instead” action remains separately confirmed and may supersede an enabled schedule only when accepted
 - **AND** a missed live-fire refusal that remains unstarted uses the existing first-start path; a downtime-missed schedule that paused execution retains its safe-resume path
 
-#### Scenario: Scheduled selection and existing schedule state
-- **WHEN** a task has an enabled or missed schedule
-- **THEN** its saved type continues to select the view, and the schedule's edit/clear or missed-schedule remedy remains visible
-- **AND** selecting Scheduled does not clear the existing schedule or resume a paused task
-
 #### Scenario: Type changes and forged query on a task that has already started
 - **WHEN** a running, waiting, stopping, paused, interrupted, stopped or completed task is opened with `sending_type=choose|direct|scheduled`
 - **THEN** the saved type cannot be changed, the first-start chooser and forms are not shown, and query values cannot change the saved type or expose first-start controls
 - **AND** applicable Stop, Resume, recovery, schedule-clear and result controls continue to follow the execution-state matrix
 
-### Requirement: Schedule entry communicates authorization and timing
-The system SHALL keep Direct and Scheduled as explicit first-start choices before their respective forms. After Scheduled is selected, schedule entry SHALL use exactly two labeled native inputs for date and time, identify India time (+05:30), explain the minimum 30-minute lead and one-shot behavior, and disclose that saving the schedule authorizes its future start without another confirmation.
+### Requirement: Schedule entry uses native date and time inputs
+The system SHALL keep Direct and Scheduled as explicit first-start choices before their respective forms. After Scheduled is selected, schedule entry SHALL use exactly two labeled native inputs for date and time, with minute precision, in India time (+05:30).
 
-Long eligibility, downtime and sending-type explanations SHALL use progressive disclosure while timezone, minimum lead, one-time start authorization and applicable warnings remain visible.
+#### Scenario: Two-input schedule entry
+- **WHEN** the operator prepares or edits a schedule
+- **THEN** the form provides only a date input and a time input, with minute precision and a visible India-time label
+- **AND** saved schedules prefill both inputs and rejected submissions retain their valid values
+- **AND** the server parses the submitted date and HH:MM time in India time and rejects malformed values without scheduling
+
+### Requirement: Schedule entry discloses authorization and timing
+Schedule entry SHALL state the 30-minute minimum lead and one-shot behavior, and SHALL disclose that saving the schedule authorizes its future start without another confirmation. Long eligibility, downtime and sending-type explanations SHALL use progressive disclosure, while timezone, minimum lead, one-time authorization and applicable warnings remain visible.
 
 #### Scenario: Schedule is accepted or rejected
 - **WHEN** the operator submits a future schedule with explicit confirmation
@@ -409,13 +419,6 @@ Long eligibility, downtime and sending-type explanations SHALL use progressive d
 - **AND** clearing a missed schedule never resumes sending or erases the task's recorded pause reason
 - **AND** a live-fire refusal that leaves the task unstarted uses Send now after fresh checks; a downtime miss that paused the task uses Resume safe remainder
 - **AND** clearing a live-fire miss may remove its obsolete schedule-refusal message without deleting its existing authorization/action records; this does not require a new schedule-audit UI
-
-#### Scenario: Two-input schedule entry
-- **WHEN** the operator prepares or edits a schedule
-- **THEN** the form provides only a date input and a time input, with minute precision and a visible India-time label
-- **AND** saved schedules prefill both inputs and rejected submissions retain their valid values
-- **AND** the server parses the submitted date and HH:MM time in India time and rejects malformed values without scheduling
-
 
 ### Requirement: Recovery differentiates failure from uncertainty
 The system SHALL show recovery within Sending when applicable, with separate groups for retry-eligible definite failures, correction-required rows and uncertain outcomes. It SHALL preserve historical attempts, duplicate-risk confirmation, external-verification evidence and the distinction between manual resolution and provider acceptance.

@@ -70,7 +70,7 @@ The system SHALL offer a protected XLSX duplicate report as soon as validation f
 - **AND** the original task snapshot remains unchanged
 
 ### Requirement: Review before explicit start
-The system SHALL show row counts and reasons in Recipients and fresh action scope in Sending. The saved task `sending_type` SHALL be the source of truth for its first-start view. GET requests SHALL NOT change or override it; `sending_type=choose` may open the chooser without changing the saved value. A submitted type change SHALL be persisted before controls for the new type are shown. Show only the selected form. Type changes never authorize dispatch or mutate schedules; explicit confirmations and server checks remain required.
+The system SHALL show row counts and reasons in Recipients and fresh action scope in Sending. Type changes never authorize dispatch or mutate schedules; explicit confirmations and server checks remain required.
 
 #### Scenario: Configuration changes after upload
 - **WHEN** campaign content changes between upload validation and the first start
@@ -94,18 +94,21 @@ The system SHALL show row counts and reasons in Recipients and fresh action scop
 - **AND** a task with no eligible rows offers neither Start nor a schedule
 - **AND** Recipients continues to expose validation counts and row reasons without duplicating candidate start controls
 
+#### Scenario: Recheck at scheduled fire
+- **WHEN** a schedule was enabled and the campaign configuration or approval changes before its time
+- **THEN** the scheduled fire does not send from the stale snapshot
+- **AND** the task returns to the review state that requires revalidation and approval
+- **AND** the unified workspace explains the blocked/missed start and links to its required remedy without silently starting another schedule
+
+### Requirement: First-start view follows the saved sending type
+The saved task `sending_type` SHALL be the source of truth for its first-start view. GET requests SHALL NOT change or override it; `sending_type=choose` may open the chooser without changing the saved value. A submitted type change SHALL be persisted before controls for the new type are shown, and only the selected form SHALL be shown.
+
 #### Scenario: GET chooser leaves saved type and schedule untouched
 - **WHEN** an eligible unstarted task is opened with the `sending_type=choose` query
 - **THEN** the chooser is shown without changing the saved type or schedule
 - **AND** Direct or Scheduled becomes the saved selection only after the sending-type POST succeeds
 - **AND** an enabled or missed schedule remains active until the operator explicitly clears it or confirms the existing Send now instead action
 - **AND** a paused downtime-missed task retains its explicit safe-resume path and cannot use the first-start type to resume
-
-#### Scenario: Recheck at scheduled fire
-- **WHEN** a schedule was enabled and the campaign configuration or approval changes before its time
-- **THEN** the scheduled fire does not send from the stale snapshot
-- **AND** the task returns to the review state that requires revalidation and approval
-- **AND** the unified workspace explains the blocked/missed start and links to its required remedy without silently starting another schedule
 
 ### Requirement: Upload records initial sending preference
 The system SHALL require a native Direct/Scheduled choice at task upload and persist it as optional task field `sending_type`. The saved value is durable task state and remains authoritative for selections and later changes before execution. Saving it creates no schedule, authorization or candidate action. Older tasks may have no value.
