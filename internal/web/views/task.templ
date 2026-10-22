@@ -1382,39 +1382,47 @@ templ taskResults(data TaskPageData) {
 }
 
 templ taskAttemptHistory(data TaskPageData) {
-	<section class="space-y-3" id="task-results-history" aria-labelledby="history-heading">
-		<h3 id="history-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Task history</h3>
-		<p class="text-sm text-muted-foreground">Times use India time (+05:30). “Submitted” means the provider accepted the request; it does not confirm delivery. Tests are kept separate from candidate totals.</p>
-		@item.Group(item.GroupProps{}) {
-			if len(data.Recent) == 0 && len(data.Resolutions) == 0 {
-				@item.Item(item.Props{}) {
-					@item.Content(item.ContentProps{}) {
-						@item.Description(item.DescriptionProps{}) {
-							No attempts recorded for this task yet.
-						}
-					}
+	<section aria-labelledby="task-history-trigger">
+		@accordion.Accordion(accordion.Props{ID: "task-results-history", Class: "rounded-4xl", Attributes: templ.Attributes{"data-workspace-persist": true}}) {
+			@accordion.Item(accordion.ItemProps{ID: "task-history", Value: "history", Class: "data-open:bg-transparent"}) {
+				@accordion.Trigger(accordion.TriggerProps{Class: "p-5 font-semibold hover:no-underline"}) {
+					Task history
 				}
-			}
-			for _, outcome := range data.Recent {
-				@item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}) {
-					@item.Content(item.ContentProps{}) {
-						@item.Title(item.TitleProps{}) {
-							{ outcome.Time } · { outcome.Kind } · { outcome.Recipient }
+				@accordion.Content(accordion.ContentProps{Class: "space-y-3 pb-5"}) {
+					<p class="text-sm text-muted-foreground">Times use India time (+05:30). “Submitted” means the provider accepted the request; it does not confirm delivery. Tests are kept separate from candidate totals.</p>
+					@item.Group(item.GroupProps{}) {
+						if len(data.Recent) == 0 && len(data.Resolutions) == 0 {
+							@item.Item(item.Props{}) {
+								@item.Content(item.ContentProps{}) {
+									@item.Description(item.DescriptionProps{}) {
+										No attempts recorded for this task yet.
+									}
+								}
+							}
 						}
-						@item.Description(item.DescriptionProps{}) {
-							{ outcome.State } · { outcome.Reason }
+						for _, outcome := range data.Recent {
+							@item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}) {
+								@item.Content(item.ContentProps{}) {
+									@item.Title(item.TitleProps{}) {
+										{ outcome.Time } · { outcome.Kind } · { outcome.Recipient }
+									}
+									@item.Description(item.DescriptionProps{}) {
+										{ outcome.State } · { outcome.Reason }
+									}
+								}
+							}
 						}
-					}
-				}
-			}
-			for _, resolution := range data.Resolutions {
-				@item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}) {
-					@item.Content(item.ContentProps{}) {
-						@item.Title(item.TitleProps{}) {
-							{ resolution.Time } · Worksheet row { resolution.Row } marked already submitted
-						}
-						@item.Description(item.DescriptionProps{}) {
-							Basis: { resolution.Basis } · Recorded by { resolution.Actor }
+						for _, resolution := range data.Resolutions {
+							@item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}) {
+								@item.Content(item.ContentProps{}) {
+									@item.Title(item.TitleProps{}) {
+										{ resolution.Time } · Worksheet row { resolution.Row } marked already submitted
+									}
+									@item.Description(item.DescriptionProps{}) {
+										Basis: { resolution.Basis } · Recorded by { resolution.Actor }
+									}
+								}
+							}
 						}
 					}
 				}

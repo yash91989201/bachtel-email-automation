@@ -126,6 +126,8 @@ Use a single task-results component/view model, backed by the exports service. R
 
 Distinguish a saved ready file from current final results when sending has resumed. Keep the as-of time visible and withhold generation while ineligible. Artifact metadata alone does not prove all candidate work succeeded. Retain generated-only deletion confirmation and the distinction from campaign deletion. Campaign-wide exports stay in Activity & downloads and task-specific attempt history stays in Results; overlap in the underlying audit records is expected, duplication of task controls is not.
 
+Wrap the existing Task history content in the owned accordion, collapsed by default, with stable root/item IDs and `data-workspace-persist`. Retain the existing attempt/resolution items, empty state and submission/timezone guidance inside its panel. The workspace adapter expands an accordion targeted by a legacy fragment before scrolling to it and remembers that choice for later swaps.
+
 ### 7. Preserve the visual system while reducing layout competition
 
 Keep the existing fonts, colors, branded header, component styling and blue linked breadcrumbs. Use compact summaries and section spacing instead of adding another dashboard or a metric-card grid. The spec defines information order and hierarchy; exact CSS values can be tuned within the supported widths without changing behavior.

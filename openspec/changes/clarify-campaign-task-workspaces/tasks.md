@@ -164,3 +164,5 @@ All boxes track implementation and verification, not proposal authoring. Leave t
 - [ ] 8.14 Use the owned accordion for Sending settings with a full-width header trigger, chevron and preserved expansion across progress updates. Reduce Scheduled sending copy using progressive disclosure while retaining visible timezone, minimum lead, authorization and applicable warnings. Implementation added; verification deferred until queued work is finished.
 
 - [ ] 8.15 Keep Schedule start disabled until its confirmation is checked, retaining approval/count eligibility, reset-on-scope-change and server confirmation checks. Implementation added; verification deferred with the queued work.
+
+- [ ] 8.16 Show Task history in a collapsed-by-default owned accordion with a full-width header, chevron, keyboard operation and preserved expansion through progress updates. Keep the existing attempts, resolutions, empty state and time/submission guidance; legacy history bookmarks open the accordion. Implementation and rendered-view regression coverage added; verification deferred with the queued work.

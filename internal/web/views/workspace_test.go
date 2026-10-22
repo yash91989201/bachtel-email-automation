@@ -808,3 +808,52 @@ func TestSendingSettingsUsesAccordion(t *testing.T) {
 		t.Fatal("pacing control missing from accordion")
 	}
 }
+
+func TestTaskHistoryUsesAccordion(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data TaskPageData
+		want []string
+	}{
+		{name: "empty", want: []string{"No attempts recorded for this task yet."}},
+		{
+			name: "attempts and resolutions",
+			data: TaskPageData{
+				Recent: []TaskAttemptRow{
+					{Kind: "candidate", Recipient: "candidate@example.test", State: "submitted", Time: "22 Oct 2026, 07:24 PM +05:30"},
+					{Kind: "test", Recipient: "test@example.test", State: "uncertain", Reason: "Review required"},
+				},
+				Resolutions: []TaskResolutionRow{{Row: 3, Basis: "Confirmed in sent mail", Actor: "Operator"}},
+			},
+			want: []string{"candidate@example.test", "test@example.test", "submitted", "uncertain", "Review required", "22 Oct 2026, 07:24 PM +05:30", "Worksheet row 3 marked already submitted", "Confirmed in sent mail", "Operator"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc, err := html.Parse(strings.NewReader(renderWorkspace(t, taskAttemptHistory(tc.data))))
+			if err != nil {
+				t.Fatal(err)
+			}
+			root := workspaceNode(doc, "id", "task-results-history")
+			if root == nil || workspaceAttr(root, "data-slot") != "accordion" || !hasWorkspaceAttr(root, "data-workspace-persist") {
+				t.Fatal("history must use a persistent accordion at the legacy bookmark target")
+			}
+			trigger := workspaceNode(root, "data-slot", "accordion-trigger")
+			if trigger == nil || trigger.Data != "button" || workspaceAttr(trigger, "aria-expanded") != "false" || !strings.Contains(viewText(trigger), "Task history") {
+				t.Fatal("history needs a collapsed accordion button")
+			}
+			if workspaceNode(trigger, "data-slot", "accordion-trigger-icon") == nil {
+				t.Fatal("history needs its disclosure indicator")
+			}
+			panel := workspaceNode(root, "data-slot", "accordion-content")
+			if panel == nil || !hasWorkspaceAttr(panel, "hidden") || workspaceAttr(panel, "aria-labelledby") != workspaceAttr(trigger, "id") {
+				t.Fatal("history panel must start hidden and be labelled by its trigger")
+			}
+			text := viewText(panel)
+			for _, want := range append(tc.want, "Times use India time (+05:30)", "does not confirm delivery", "Tests are kept separate from candidate totals") {
+				if !strings.Contains(text, want) {
+					t.Errorf("history panel missing %q", want)
+				}
+			}
+		})
+	}
+}

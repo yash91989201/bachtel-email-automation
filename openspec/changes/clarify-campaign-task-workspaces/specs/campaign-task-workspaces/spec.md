@@ -482,6 +482,8 @@ The system SHALL place the task result workbook, export state, as-of time and ta
 #### Scenario: Attempt history is inspected
 - **WHEN** the operator opens recorded task outcomes
 - **THEN** Results shows test/candidate kind, recipient, attempt state, date/time +05:30 and available stored-email/resolution details
+- **AND** Task history is a collapsed-by-default accordion with a full-width, keyboard-operable header and expansion indicator; opening it reveals the existing entries, resolutions and empty-state guidance
+- **AND** its expansion choice survives progress updates, and a legacy history bookmark opens the accordion in Results
 - **AND** “Submitted” is explained as accepted by the provider, not confirmed delivery
 - **AND** test totals, manual resolutions and uncertain attempts are distinguished from provider-confirmed candidate submissions
 

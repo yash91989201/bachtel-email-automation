@@ -77,7 +77,16 @@
       history.replaceState(null, "", "#" + requested.value);
     }
     if (requested?.target) {
-      document.getElementById(requested.target)?.scrollIntoView({ block: "start" });
+      const target = document.getElementById(requested.target);
+      if (target?.matches('[data-slot="accordion"]')) {
+        const item = target.querySelector('[data-slot="accordion-item"]');
+        const value = item?.getAttribute("data-templ-value");
+        if (value && window.templ?.accordion) {
+          window.templ.accordion.setValues(target, [value]);
+          accordionState.set(target.id, [value]);
+        }
+      }
+      target?.scrollIntoView({ block: "start" });
     }
   }
 
