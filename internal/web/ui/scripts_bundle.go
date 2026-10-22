@@ -2,4 +2,4 @@
 
 package ui
 
-const bundleSrc = "/static/shadcn-templ-cecc214bac71383a.js"
+const bundleSrc = "/static/shadcn-templ-e57500c0848fad64.js"

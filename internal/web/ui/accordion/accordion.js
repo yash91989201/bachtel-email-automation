@@ -81,6 +81,25 @@
     });
   }
 
+  function setValues(accordion, values) {
+    if (accordion.hasAttribute("data-templ-value")) return false;
+    const requested = new Set(Array.isArray(values) ? values : []);
+    const items = [...accordion.querySelectorAll('[data-slot="accordion-item"]')].filter(
+      (item) => item.closest('[data-slot="accordion"]') === accordion,
+    );
+    let opened = false;
+    for (const item of items) {
+      const shouldOpen = requested.has(valueOf(item)) &&
+        (accordion.hasAttribute("data-templ-multiple") || !opened);
+      const isOpen = triggerOf(item)?.getAttribute("aria-expanded") === "true";
+      if (shouldOpen && !isOpen) openItem(item);
+      else if (!shouldOpen && isOpen) closeItem(item);
+      if (shouldOpen) opened = true;
+    }
+    syncRootValue(accordion);
+    return true;
+  }
+
   function requestValueChange(accordion, item) {
     const open = triggerOf(item).getAttribute("aria-expanded") === "true";
     let values = valuesOf(accordion);
@@ -133,4 +152,5 @@
   window.templ.lifecycle.register('[data-slot="accordion-content"]', {
     init: (panel) => window.templ.collapsiblePanel.mount(panel, VARS, !panel.hidden),
   });
+  window.templ.accordion = { setValues };
 })();

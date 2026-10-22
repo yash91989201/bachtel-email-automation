@@ -147,11 +147,11 @@
     joinGroup(content);
     portal(content);
     positionerOf(content).hidden = false;
-    // TooltipRoot's useDismiss: a press on the trigger closes (closeOnClick).
+    // Default triggers dismiss on press; information buttons opt into press-to-open.
     content._templDismiss ??= window.templ.dismiss.useDismiss({
       floating: positionerOf(content),
       reference: trigger,
-      referencePress: true,
+      referencePress: !trigger.hasAttribute("data-templ-tooltip-open-on-press"),
       onOpenChange: (open, reason, event) => requestOpenChange(trigger, open, { reason, event }),
     });
     emitOpenChange(content, true, details.reason);
@@ -241,9 +241,17 @@
     };
     trigger.addEventListener("pointerdown", cancelPendingOpen);
     trigger.addEventListener("click", cancelPendingOpen);
+    // Information buttons can opt in to opening on touch/click as well as focus.
+    const openOnPress = (event) => {
+      if (trigger.hasAttribute("data-templ-tooltip-open-on-press")) {
+        requestOpenChange(trigger, true, { reason: "trigger-press", event });
+      }
+    };
+    trigger.addEventListener("click", openOnPress);
     content._templHoverCleanups.push(() => {
       trigger.removeEventListener("pointerdown", cancelPendingOpen);
       trigger.removeEventListener("click", cancelPendingOpen);
+      trigger.removeEventListener("click", openOnPress);
     });
   }
 
