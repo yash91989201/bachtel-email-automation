@@ -49,6 +49,10 @@ const (
 	ScheduleFired = "fired"
 	// ScheduleMissed records a schedule that could not start sending.
 	ScheduleMissed = "missed"
+	// TaskSendingTypeDirect and TaskSendingTypeScheduled are the saved first-start
+	// preferences. They select a view only and never authorize dispatch.
+	TaskSendingTypeDirect    = "direct"
+	TaskSendingTypeScheduled = "scheduled"
 )
 
 // MaxCandidateRows is the supported number of rows carrying data in one task's
@@ -342,12 +346,19 @@ type Task struct {
 	ValidationError string
 	SourceName      string
 	SourceDigest    string
+	// UploadedAt is the stored creation time of the task record. It is
+	// immutable: a later validation, revalidation or status change never
+	// rewrites it, so two uploads of the same filename stay distinguishable.
+	UploadedAt time.Time
 	// ScheduleAt is the stored UTC instant of the task's single-shot start
 	// schedule. It stays set after a fire as history and is zero when the
 	// operator cleared it.
 	ScheduleAt time.Time
 	// ScheduleState is one of none, scheduled, fired or missed.
 	ScheduleState string
+	// SendingType is the shared first-start choice saved at upload or changed
+	// before execution. Empty means the operator has not chosen a type.
+	SendingType string
 }
 
 // Admitted reports whether the task holds a published validation snapshot.

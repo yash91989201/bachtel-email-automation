@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -106,6 +107,18 @@ type Preview struct {
 // first: an unsupported, corrupt, oversized or password-protected file is
 // rejected here, before any record exists. A staged task is never sendable.
 func (s *Service) Stage(ctx context.Context, ownerID, campaignID, filename string, data []byte) (*Task, error) {
+	return s.StageWithSendingType(ctx, ownerID, campaignID, filename, data, "")
+}
+
+// StageWithSendingType stores the optional first-start preference atomically
+// with the staged upload. The preference selects future page state only; it
+// does not validate, schedule or start candidate sending.
+func (s *Service) StageWithSendingType(ctx context.Context, ownerID, campaignID, filename string, data []byte, sendingType string) (*Task, error) {
+	switch sendingType {
+	case "", TaskSendingTypeDirect, TaskSendingTypeScheduled:
+	default:
+		return nil, errors.New("choose Direct or Scheduled sending")
+	}
 	if err := s.guard(ctx, ownerID); err != nil {
 		return nil, err
 	}
@@ -142,6 +155,7 @@ func (s *Service) Stage(ctx context.Context, ownerID, campaignID, filename strin
 	record.Set("campaign", campaignID)
 	record.Set("status", TaskStaging)
 	record.Set("schedule_state", ScheduleNone)
+	record.Set("sending_type", sendingType)
 	record.Set("source", source)
 	record.Set("source_name", sourceName(filename))
 	record.Set("source_digest", WorkbookDigest(data))
@@ -152,6 +166,34 @@ func (s *Service) Stage(ctx context.Context, ownerID, campaignID, filename strin
 		return nil, err
 	}
 	return taskFromRecord(record, target.Name), nil
+}
+
+// SetSendingType saves the task's first-start choice without authorizing work.
+// The transaction serializes the choice with schedule and execution changes.
+func (s *Service) SetSendingType(ctx context.Context, ownerID, taskID, sendingType string) error {
+	if sendingType != TaskSendingTypeDirect && sendingType != TaskSendingTypeScheduled {
+		return &ValidationError{Message: "choose Direct or Scheduled sending"}
+	}
+	if err := s.guard(ctx, ownerID); err != nil {
+		return err
+	}
+	return s.app.RunInTransaction(func(txApp core.App) error {
+		txService := *s
+		txService.app = txApp
+		record, err := txService.ownedTask(ctx, ownerID, taskID)
+		if err != nil {
+			return err
+		}
+		status := record.GetString("status")
+		if (status != TaskStaging && status != TaskReady) || record.GetString("schedule_state") == ScheduleFired {
+			return &ValidationError{Message: "sending type cannot be changed after this task has started"}
+		}
+		if sendingType == TaskSendingTypeDirect && (record.GetString("schedule_state") == ScheduleScheduled || record.GetString("schedule_state") == ScheduleMissed) {
+			return &ValidationError{Message: "clear the saved schedule before choosing Direct sending"}
+		}
+		record.Set("sending_type", sendingType)
+		return txApp.Save(record)
+	})
 }
 
 // LoadTask returns one task of the operator.
@@ -727,6 +769,19 @@ func (s *Service) publish(ctx context.Context, input publishInput) error {
 	manifest.Groups = duplicateGroups(input.admissions)
 
 	err := s.app.RunInTransaction(func(txApp core.App) error {
+		// An enabled future schedule is the task's explicit start
+		// authorization for its current snapshot. Publishing a new snapshot
+		// while it is enabled would let the old authorization start revised
+		// content, so the request is refused here, inside the same
+		// transaction that would repin the task. The check is not merely a
+		// hidden form: a forged or stale request gets the same refusal.
+		current, err := txApp.FindRecordById(TasksCollection, input.task.ID)
+		if err != nil {
+			return err
+		}
+		if current.GetString("schedule_state") == ScheduleScheduled {
+			return &ValidationError{Message: "clear the scheduled start before revalidating this task; the saved schedule must not authorize revised content"}
+		}
 		if _, err := txApp.DB().NewQuery("DELETE FROM " + TaskCandidatesCollection + " WHERE task = {:task}").
 			Bind(dbx.Params{"task": input.task.ID}).
 			Execute(); err != nil {
@@ -1034,8 +1089,10 @@ func taskFromRecord(record *core.Record, campaignName string) *Task {
 		ValidationError: record.GetString("validation_error"),
 		SourceName:      record.GetString("source_name"),
 		SourceDigest:    record.GetString("source_digest"),
+		UploadedAt:      record.GetDateTime("created").Time().UTC().Truncate(time.Millisecond),
 		ScheduleAt:      record.GetDateTime("schedule_at").Time().UTC(),
 		ScheduleState:   record.GetString("schedule_state"),
+		SendingType:     record.GetString("sending_type"),
 	}
 	if task.ScheduleState == "" {
 		task.ScheduleState = ScheduleNone

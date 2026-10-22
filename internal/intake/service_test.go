@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
@@ -1429,5 +1430,104 @@ func TestWriteGuardBlocksNewSendingDataWrites(t *testing.T) {
 	env.service.SetWriteGuard(nil)
 	if err := env.service.Validate(ctx, env.owner, task.ID, "Candidates", 1); err != nil {
 		t.Fatalf("validate after the guard lifted: %v", err)
+	}
+}
+
+// A task read model exposes the original filename, an immutable upload time
+// and a stable id reference, and never another operator's task.
+func TestTaskReadModelKeepsUploadIdentity(t *testing.T) {
+	env := newEnv(t)
+	ctx := context.Background()
+	workbook := buildWorkbook(t, sheetSpec{name: "Candidates", rows: [][]string{
+		{"Email", "Applicant Full Name"},
+		{"ada@example.com", "Ada Lovelace"},
+	}})
+	first := env.stage(workbook, "recipients.xlsx")
+	second := env.stage(workbook, "recipients.xlsx")
+	if first.ID == second.ID || first.SourceName != "recipients.xlsx" || second.SourceName != "recipients.xlsx" {
+		t.Fatalf("two same-name uploads are not distinguishable: %+v / %+v", first, second)
+	}
+	if first.UploadedAt.IsZero() || second.UploadedAt.IsZero() {
+		t.Fatal("upload time was not exposed on the task read model")
+	}
+	if err := env.service.Validate(ctx, env.owner, first.ID, "Candidates", 1); err != nil {
+		t.Fatal(err)
+	}
+	validated := env.mustLoad(first.ID)
+	if !validated.UploadedAt.Equal(first.UploadedAt) {
+		t.Fatalf("upload time changed on validation: %v then %v", first.UploadedAt, validated.UploadedAt)
+	}
+	if validated.SourceName != first.SourceName || validated.ContentHash == "" {
+		t.Fatalf("validated read model lost identity: %+v", validated)
+	}
+
+	other := newOperator(t, env.app, "other-intake@bachtelcorporation.com")
+	if _, err := env.service.LoadTask(ctx, other, first.ID); !errors.Is(err, intake.ErrNotFound) {
+		t.Fatalf("foreign task load error = %v, want ErrNotFound", err)
+	}
+}
+
+// An enabled future schedule authorizes the current snapshot only. Revalidation
+// is refused inside the publishing transaction and leaves the snapshot intact.
+func TestRevalidateRefusedWhileScheduleEnabled(t *testing.T) {
+	env := newEnv(t)
+	ctx := context.Background()
+	task := env.validate(buildWorkbook(t, sheetSpec{name: "Candidates", rows: [][]string{
+		{"Email", "Applicant Full Name"},
+		{"carol@example.com", "Carol Danvers"},
+	}}))
+	original := env.mustLoad(task.ID)
+
+	// A newer revision would change the snapshot on revalidation.
+	revision, _, err := env.campaigns.CreateRevision(ctx, env.owner, env.campaign, campaign.RevisionInput{
+		Subject:      "Interview for {{candidate_name}}",
+		Document:     docxFixture(t),
+		DocumentName: "body.docx",
+		Mappings: []campaign.Mapping{
+			{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail},
+			{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: campaign.FormatName},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	record, err := env.app.FindRecordById(intake.TasksCollection, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Set("schedule_state", intake.ScheduleScheduled)
+	record.Set("schedule_at", original.UploadedAt.Add(24*time.Hour))
+	if err := env.app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+
+	err = env.service.Revalidate(ctx, env.owner, task.ID)
+	var validation *intake.ValidationError
+	if !errors.As(err, &validation) || !strings.Contains(validation.Message, "clear the scheduled start") {
+		t.Fatalf("revalidate error = %v, want the clear-schedule refusal", err)
+	}
+	unchanged := env.mustLoad(task.ID)
+	if unchanged.ContentHash != original.ContentHash || unchanged.Counts.Total != original.Counts.Total {
+		t.Fatalf("refused revalidation changed the snapshot: %+v -> %+v", original, unchanged)
+	}
+	if rows := env.rows(task.ID); len(rows) != len(env.rows(task.ID)) || len(rows) == 0 {
+		t.Fatal("refused revalidation dropped the membership snapshot")
+	}
+
+	record, err = env.app.FindRecordById(intake.TasksCollection, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Set("schedule_state", intake.ScheduleNone)
+	record.Set("schedule_at", "")
+	if err := env.app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.service.Revalidate(ctx, env.owner, task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := env.mustLoad(task.ID).ContentHash; got != revision.ContentHash {
+		t.Fatalf("revalidated hash = %q, want the current revision", got)
 	}
 }
