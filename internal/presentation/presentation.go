@@ -438,6 +438,7 @@ func Lifecycle(f Facts) []Step {
 		sending.State = "Stopped"
 	case f.Status == StatusCompleted:
 		sending.State = "Finished"
+		sending.Complete = true
 	}
 	results := Step{Name: "Results", State: "Not available yet"}
 	if f.ResultReady {

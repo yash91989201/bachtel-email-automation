@@ -248,6 +248,29 @@ func TestLifecycleUsesSavedEvidence(t *testing.T) {
 	}
 }
 
+func TestLifecycleSendingCompletion(t *testing.T) {
+	for _, status := range []string{
+		presentation.StatusStaging, presentation.StatusReady, presentation.StatusRunning,
+		presentation.StatusWaiting, presentation.StatusStopping, presentation.StatusPaused,
+		presentation.StatusInterrupted, presentation.StatusStopped, presentation.StatusCompleted,
+	} {
+		for _, resultReady := range []bool{false, true} {
+			facts := presentation.Facts{Status: status, ResultReady: resultReady}
+			steps := presentation.Lifecycle(facts)
+			wantComplete := status == presentation.StatusCompleted
+			if steps[3].Complete != wantComplete {
+				t.Errorf("status=%s resultsReady=%t: sending completion = %t, want %t", status, resultReady, steps[3].Complete, wantComplete)
+			}
+			if wantComplete && steps[3].State != "Finished" {
+				t.Errorf("completed sending state = %q, want Finished", steps[3].State)
+			}
+			if steps[4].Complete != resultReady {
+				t.Errorf("status=%s: results completion = %t, want %t", status, steps[4].Complete, resultReady)
+			}
+		}
+	}
+}
+
 func TestSummarizePartitionsValidation(t *testing.T) {
 	counts := intake.Counts{Total: 10, Eligible: 3, Ineligible: 2, Duplicate: 2, Invalid: 1, AlreadySubmitted: 1, AlreadyScheduled: 1, ReviewRequired: 0}
 	summary := presentation.Summarize(counts)
