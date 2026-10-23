@@ -111,6 +111,17 @@ SUBMITTED means acceptance for processing, never delivery. A manual resolution
 does not fabricate a provider acceptance timestamp or provider message ID.
 Local attempt IDs are audit identifiers, not Microsoft idempotency guarantees.
 
+A provider that does not save Sent copies itself receives a separate copy step
+after its accepted outcome is committed. That step shares the request deadline,
+runs outside dispatcher locks and database transactions, and keeps the mailbox's
+in-flight slot until it settles, so stop, disconnect and replacement still drain
+it. A copy failure leaves SUBMITTED, its acceptance timestamp and eligibility
+unchanged and adds a fixed warning to the attempt details; it never pauses
+sending, resends the message or is retried. Copy saving applies only to sends
+made by this version: earlier attempts are untouched, and a process failure
+between acceptance and copy confirmation leaves the missing copy unrepaired by
+design.
+
 ## Pacing and provider responses
 
 Each mailbox has one coordinator using `golang.org/x/time/rate` with burst 1.

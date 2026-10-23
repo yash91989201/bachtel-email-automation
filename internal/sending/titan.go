@@ -29,11 +29,12 @@ var (
 // internally, and treats a lost final response as uncertain rather than
 // retryable.
 type Titan struct {
-	address  string
-	username string
-	password string
-	timeout  time.Duration
-	tls      *tls.Config
+	address     string
+	imapAddress string
+	username    string
+	password    string
+	timeout     time.Duration
+	tls         *tls.Config
 }
 
 // TitanOptions configures one Titan sender. Address is the provider endpoint;
@@ -42,6 +43,11 @@ type Titan struct {
 type TitanOptions struct {
 	Timeout time.Duration
 	TLS     *tls.Config
+	// IMAPAddress is the mailbox endpoint used to save a Sent copy after
+	// definite acceptance. It shares the SMTP endpoint's credentials and is
+	// configured the same way: a fixed provider value, overridable only by
+	// simulated tests.
+	IMAPAddress string
 }
 
 // NewTitan binds a sender to one authenticated mailbox. The full mailbox
@@ -51,7 +57,7 @@ func NewTitan(address, username, password string, options TitanOptions) *Titan {
 	if timeout <= 0 || timeout > 30*time.Second {
 		timeout = 20 * time.Second
 	}
-	return &Titan{address: address, username: username, password: password, timeout: timeout, tls: options.TLS}
+	return &Titan{address: address, imapAddress: options.IMAPAddress, username: username, password: password, timeout: timeout, tls: options.TLS}
 }
 
 // ValidateTitan proves control of a Titan mailbox without sending a message:
@@ -120,7 +126,9 @@ func (t *Titan) Send(ctx context.Context, message Message) SendResult {
 	}
 	// Acceptance is now definite. A later QUIT/close failure cannot undo it.
 	quitSession(client)
-	return SendResult{Kind: OutcomeSubmitted}
+	// Titan's SMTP submission saves no Sent copy, so the exact transmitted MIME
+	// travels with the accepted result as the separate post-submission step.
+	return SendResult{Kind: OutcomeSubmitted, SaveCopy: t.sentCopy(payload)}
 }
 
 // mime builds the single-recipient HTML message with the shared MIME builder.

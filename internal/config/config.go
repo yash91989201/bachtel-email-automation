@@ -64,6 +64,13 @@ const (
 	// DefaultTitanSMTPAddress is GoDaddy's documented outgoing SMTP endpoint
 	// for Titan mailboxes: implicit TLS on port 465.
 	DefaultTitanSMTPAddress = "smtpout.secureserver.net:465"
+	// EnvTitanIMAPAddress overrides the Titan IMAP endpoint used to save a
+	// Sent copy after definite acceptance. The UI never accepts a host, and
+	// this setting exists for simulated test servers.
+	EnvTitanIMAPAddress = "TITAN_IMAP_ADDRESS"
+	// DefaultTitanIMAPAddress is GoDaddy's documented mailbox endpoint for
+	// Titan mailboxes: implicit TLS on port 993.
+	DefaultTitanIMAPAddress = "imap.secureserver.net:993"
 	// EncryptionKeySize is the required AES-256 key length in bytes.
 	EncryptionKeySize = 32
 )
@@ -100,8 +107,8 @@ type Config struct {
 	// RestoreReview keeps candidate dispatch disabled after a backup restore
 	// until the operator reconciles submissions that postdate the backup.
 	RestoreReview bool
-	// Titan holds the GoDaddy Titan SMTP endpoint. It is fixed by the provider;
-	// only a test can override it.
+	// Titan holds the GoDaddy Titan endpoints. They are fixed by the provider;
+	// only a test can override them.
 	Titan Titan
 }
 
@@ -116,9 +123,13 @@ type Microsoft struct {
 	GraphBaseURL string
 }
 
-// Titan holds the GoDaddy Titan SMTP endpoint shared by every Titan connection.
+// Titan holds the GoDaddy Titan endpoints shared by every Titan connection.
 type Titan struct {
+	// Address is the outgoing SMTP endpoint used to submit a message.
 	Address string
+	// IMAPAddress is the mailbox endpoint used only to save the Sent copy of an
+	// already accepted message. Both share the connection's credentials.
+	IMAPAddress string
 }
 
 // Load reads configuration from the environment. Values needed only by the
@@ -151,7 +162,8 @@ func Load() (Config, error) {
 		Intake:        intakeLimits,
 		RestoreReview: restoreReview,
 		Titan: Titan{
-			Address: strings.TrimSpace(env(EnvTitanSMTPAddress, DefaultTitanSMTPAddress)),
+			Address:     strings.TrimSpace(env(EnvTitanSMTPAddress, DefaultTitanSMTPAddress)),
+			IMAPAddress: strings.TrimSpace(env(EnvTitanIMAPAddress, DefaultTitanIMAPAddress)),
 		},
 	}, nil
 }

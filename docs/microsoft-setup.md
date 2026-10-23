@@ -211,3 +211,8 @@ The result:
 - **Settings are private to their owner.** Another operator cannot read or use
   them, and one operator's missing, invalid or expired registration never
   disables another operator's Microsoft or Titan connection.
+- **Microsoft saves Sent Items itself.** The send request keeps Graph's default
+  Sent Items saving for the authenticated mailbox, so the application creates no
+  second copy and requests no mailbox-reading permission. A `202` means accepted
+  for processing: the Sent item and delivery complete asynchronously, so an item
+  that is not visible yet is never treated as a failure, polled for, or resent.

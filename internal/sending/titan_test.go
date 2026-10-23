@@ -34,6 +34,9 @@ type simulatedSMTP struct {
 	dropAfterData bool
 	quitCode      int
 	ehloNoAuth    bool
+	// certificate lets a test share one throwaway certificate with another
+	// simulated service, so one root pool verifies both.
+	certificate *tls.Certificate
 
 	mu           sync.Mutex
 	commands     []string
@@ -44,6 +47,10 @@ type simulatedSMTP struct {
 func (s *simulatedSMTP) start(t *testing.T) (address string, roots *x509.CertPool) {
 	t.Helper()
 	certificate, roots := selfSignedCertificate(t)
+	if s.certificate != nil {
+		certificate = *s.certificate
+		roots = nil
+	}
 	listener, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12})
 	if err != nil {
 		t.Fatal(err)

@@ -85,6 +85,7 @@ runtime container.
 | `APP_RESTORE_REVIEW` | only after a restore | `true` disables sending, scheduling, retries and resends |
 | `INTAKE_*` | optional | Upload and expanded-archive bounds |
 | `TITAN_SMTP_ADDRESS` | optional | Titan SMTP endpoint override for simulated servers only; leave unset in production |
+| `TITAN_IMAP_ADDRESS` | optional | Titan mailbox endpoint override used for Sent copies, for simulated servers only; leave unset in production |
 
 These are the deployment settings. There are no Microsoft tenant, client id,
 client secret or redirect environment variables: each operator saves their own

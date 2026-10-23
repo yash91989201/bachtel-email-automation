@@ -77,6 +77,13 @@ func TestConnectionPageRequiresProviderSelection(t *testing.T) {
 	if !strings.Contains(titanForm, "name=\"address\"") || !strings.Contains(titanForm, "name=\"password\"") {
 		t.Fatalf("Titan form missing credential inputs: %.400s", titanForm)
 	}
+	// Sent copies reuse the fixed mailbox endpoint: the operator configures no
+	// host, port, folder or copy switch.
+	for _, forbidden := range []string{`name="host`, `name="port`, `name="imap`, `name="folder`, `name="smtp`} {
+		if strings.Contains(titanForm, forbidden) {
+			t.Fatalf("Titan form gained an endpoint input %s: %.400s", forbidden, titanForm)
+		}
+	}
 	// No configured secret value reaches the page.
 	for _, secret := range []string{"value=\"client-secret", "value=\"super-secret", "value=\""} {
 		if secret == "value=\"" {

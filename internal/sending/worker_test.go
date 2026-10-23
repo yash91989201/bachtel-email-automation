@@ -28,6 +28,13 @@ type workerFixture struct {
 	recovered                                 bool
 	nextWorkCalls, deadlineCalls, settleCalls int
 	fireCalls                                 int
+	// copyCalls, copySawResults and warnings record the Sent-copy handoff:
+	// how often the hook ran, how many outcomes were already persisted when it
+	// did, and how many copy warnings the dispatcher stored.
+	copyCalls, copySawResults int
+	warnings                  int
+	warningError              bool
+	lastWarning               string
 }
 
 func (f *workerFixture) clock() time.Time { f.mu.Lock(); defer f.mu.Unlock(); return f.now }
@@ -118,6 +125,16 @@ func (f *workerFixture) CompleteAttempt(context.Context, string, Outcome) error 
 		return errors.New("disk failure")
 	}
 	f.results++
+	return nil
+}
+func (f *workerFixture) RecordCopyWarning(_ context.Context, _, _, _, warning string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.warningError {
+		return errors.New("disk failure")
+	}
+	f.warnings++
+	f.lastWarning = warning
 	return nil
 }
 func (f *workerFixture) SetCooldown(_ context.Context, _, _ string, until time.Time, _ string) error {
@@ -714,4 +731,234 @@ func TestWorkerGraphPOSTStartsStaySpacedAfterDelayedAuthorization(t *testing.T) 
 			t.Fatal("POST did not start")
 		}
 	}
+}
+
+// TestWorkerCopyHookRunsOnlyAfterDurableSubmission proves the ordering the
+// recovery rules depend on: the accepted outcome and its timestamp are stored
+// before any separate copy work starts.
+func TestWorkerCopyHookRunsAfterDurableSubmission(t *testing.T) {
+	f := newWorkerFixture(1)
+	startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted, SaveCopy: func(ctx context.Context, acceptedAt time.Time) error {
+			if _, ok := ctx.Deadline(); !ok {
+				t.Error("copy work must carry a bounded deadline")
+			}
+			if acceptedAt.IsZero() {
+				t.Error("copy work must receive the recorded acceptance time")
+			}
+			f.mu.Lock()
+			f.copyCalls++
+			f.copySawResults = f.results
+			f.mu.Unlock()
+			return nil
+		}}
+	}))
+	eventually(t, func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.copyCalls == 1 })
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.results != 1 || f.copySawResults != 1 {
+		t.Fatalf("outcomes=%d, outcomes at copy time=%d; the submission must be durable first", f.results, f.copySawResults)
+	}
+	if f.warnings != 0 {
+		t.Fatalf("copy warnings = %d, want none for a confirmed copy", f.warnings)
+	}
+}
+
+// TestWorkerHoldsInFlightUntilCopySettles proves a launched copy keeps its
+// mailbox slot and its owner's drain obligation.
+func TestWorkerHoldsInFlightUntilCopySettles(t *testing.T) {
+	f := newWorkerFixture(1)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	d := startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted, SaveCopy: func(context.Context, time.Time) error {
+			close(entered)
+			<-release
+			return nil
+		}}
+	}))
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("copy work did not start")
+	}
+	f.mu.Lock()
+	results := f.results
+	f.mu.Unlock()
+	if results != 1 {
+		t.Fatalf("outcomes = %d while the copy was open, want the durable submission first", results)
+	}
+	for _, name := range []string{"global", "owner"} {
+		var count int
+		var err error
+		if name == "global" {
+			count, err = d.InFlight(context.Background())
+		} else {
+			count, err = d.InFlightFor(context.Background(), fixtureOwner)
+		}
+		if err != nil || count != 1 {
+			t.Fatalf("%s in-flight = %d (%v) while copy was open, want one", name, count, err)
+		}
+	}
+	close(release)
+	eventually(t, func() bool {
+		global, err := d.InFlight(context.Background())
+		return err == nil && global == 0
+	})
+}
+
+// TestWorkerCopyFailureWarnsWithoutStoppingSending proves a failed copy is a
+// warning on the accepted attempt, not a sending failure: no pause and the
+// mailbox keeps launching.
+func TestWorkerCopyFailureWarnsWithoutStoppingSending(t *testing.T) {
+	f := newWorkerFixture(2)
+	startFixture(t, f, workerSender(func(_ context.Context, message Message) SendResult {
+		if message.Recipient != "0@example.com" {
+			return SendResult{Kind: OutcomeSubmitted}
+		}
+		return SendResult{Kind: OutcomeSubmitted, SaveCopy: func(context.Context, time.Time) error {
+			return ErrTitanSentCopy
+		}}
+	}))
+	eventually(t, func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return f.results == 2 && f.warnings == 1
+	})
+	f.mu.Lock()
+	warning := f.lastWarning
+	f.mu.Unlock()
+	if warning != SentCopyWarning {
+		t.Fatalf("warning = %q, want the fixed %q", warning, SentCopyWarning)
+	}
+}
+
+// TestWorkerOutcomeFailureSkipsCopy proves copy work never begins when the
+// accepted outcome could not be stored.
+func TestWorkerOutcomeFailureSkipsCopy(t *testing.T) {
+	f := newWorkerFixture(1)
+	f.mu.Lock()
+	f.resultError = true
+	f.mu.Unlock()
+	d := startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted, SaveCopy: func(context.Context, time.Time) error {
+			f.mu.Lock()
+			f.copyCalls++
+			f.mu.Unlock()
+			return nil
+		}}
+	}))
+	eventually(t, func() bool {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return d.fatalStorage
+	})
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.copyCalls != 0 {
+		t.Fatal("copy work started although the submission result could not be stored")
+	}
+}
+
+// TestWorkerCopyWarningStorageFailureKeepsSubmitted applies the existing
+// storage barrier when the warning itself cannot be saved.
+func TestWorkerCopyWarningStorageFailureKeepsSubmitted(t *testing.T) {
+	f := newWorkerFixture(1)
+	f.mu.Lock()
+	f.warningError = true
+	f.mu.Unlock()
+	d := startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted, SaveCopy: func(context.Context, time.Time) error {
+			return ErrTitanSentCopy
+		}}
+	}))
+	eventually(t, func() bool {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		return d.fatalStorage
+	})
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.results != 1 {
+		t.Fatalf("outcomes = %d, want the committed submission to survive", f.results)
+	}
+}
+
+// TestWorkerShutdownDrainsCopyWithinRequestDeadline proves stop waits for
+// launched copy work and that the copy is bounded by the request deadline
+// rather than an unlimited wait.
+func TestWorkerShutdownDrainsCopyWithinRequestDeadline(t *testing.T) {
+	f := newWorkerFixture(1)
+	entered := make(chan struct{})
+	d := NewDispatcher(f, fixedResolver(workerSender(func(context.Context, Message) SendResult {
+		return SendResult{Kind: OutcomeSubmitted, SaveCopy: func(ctx context.Context, _ time.Time) error {
+			close(entered)
+			<-ctx.Done()
+			return ctx.Err()
+		}}
+	})), WorkerOptions{DataDir: t.TempDir(), Now: f.clock, After: f.after, RequestTimeout: 20 * time.Millisecond})
+	if err := d.Start(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("copy work did not start")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := d.Shutdown(ctx); err != nil {
+		t.Fatalf("shutdown did not settle the copy: %v", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.results != 1 {
+		t.Fatalf("outcomes = %d, want the submission retained", f.results)
+	}
+}
+
+// TestWorkerCopyDoesNotBlockAnotherMailbox proves a slow Sent copy occupies only
+// its own mailbox slot: another operator's submission completes while the copy
+// is still open, and the copied mailbox still reports its drain obligation.
+func TestWorkerCopyDoesNotBlockAnotherMailbox(t *testing.T) {
+	f := newWorkerFixture(0)
+	f.mu.Lock()
+	f.queue = append(f.queue,
+		&Work{Kind: KindTest, OwnerID: fixtureOwner, ConnectionID: fixtureConnection, Recipient: "slow@example.com", Subject: "s", Body: "<p>b</p>"},
+		&Work{Kind: KindTest, OwnerID: fixtureOwnerTwo, ConnectionID: fixtureConnectionTwo, Recipient: "fast@example.com", Subject: "s", Body: "<p>b</p>"},
+	)
+	f.mu.Unlock()
+	release := make(chan struct{})
+	entered := make(chan struct{})
+	var unblockOnce sync.Once
+	unblock := func() { unblockOnce.Do(func() { close(release) }) }
+	t.Cleanup(unblock)
+	d := startFixture(t, f, workerSender(func(_ context.Context, message Message) SendResult {
+		if message.Recipient == "slow@example.com" {
+			return SendResult{Kind: OutcomeSubmitted, SaveCopy: func(context.Context, time.Time) error {
+				close(entered)
+				<-release
+				return nil
+			}}
+		}
+		return SendResult{Kind: OutcomeSubmitted}
+	}))
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("copy work did not start")
+	}
+	// Both submissions are recorded while the first mailbox's copy is still open.
+	eventually(t, func() bool { f.mu.Lock(); defer f.mu.Unlock(); return f.results == 2 })
+	if count, err := d.InFlightFor(context.Background(), fixtureOwner); err != nil || count != 1 {
+		t.Fatalf("copying mailbox in-flight = %d (%v), want its slot held until the copy settles", count, err)
+	}
+	if count, err := d.InFlightFor(context.Background(), fixtureOwnerTwo); err != nil || count != 0 {
+		t.Fatalf("other mailbox in-flight = %d (%v), want it free", count, err)
+	}
+	unblock()
+	eventually(t, func() bool {
+		count, err := d.InFlightFor(context.Background(), fixtureOwner)
+		return err == nil && count == 0
+	})
 }

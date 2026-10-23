@@ -14,8 +14,19 @@ The endpoint is fixed in the application:
 | Port | `465` |
 | TLS | Implicit TLS; the provider certificate and hostname are verified and the connection never downgrades to plaintext |
 
-`TITAN_SMTP_ADDRESS` overrides the endpoint for simulated servers in tests
-only. Leave it unset in production.
+Titan's sending endpoint does not save a Sent copy, so the application saves one
+itself over the mailbox endpoint:
+
+| Setting | Value |
+| --- | --- |
+| Host | `imap.secureserver.net` |
+| Port | `993` |
+| TLS | Implicit TLS; certificate and hostname are verified, never downgraded |
+| Credentials | The same mailbox address and encrypted password |
+
+`TITAN_SMTP_ADDRESS` and `TITAN_IMAP_ADDRESS` override these endpoints for
+simulated servers in tests only. Leave both unset in production. No operator
+form field configures a host, port, folder or copy switch.
 
 ## Server configuration
 
@@ -40,6 +51,30 @@ reconnection. Each operator has exactly one current mailbox. Connecting a
 different mailbox always goes through the explicit replacement flow documented
 in [mailbox-replacement.md](mailbox-replacement.md); unsupported providers are
 refused.
+
+## Sent copies
+
+After the application durably records a definite acceptance, it makes **one**
+bounded attempt to append the exact submitted message to the mailbox's existing
+Sent folder. The copy keeps the submitted recipient, subject, headers and HTML,
+is marked read, and uses the acceptance time as its mailbox timestamp. The
+advertised `\Sent` folder is preferred; when the provider advertises none, the
+existing folder named exactly `Sent` is used. The application never creates a
+folder and never writes to Inbox.
+
+Copy saving is best effort and never changes the sending outcome:
+
+- Titan accepting the message stays **SUBMITTED** even when the copy fails, and
+  the attempt details record that sending was accepted but the copy could not
+  be confirmed. Sending is not paused and the message is never resent.
+- An unconfirmed copy is not retried. A lost APPEND response is reported as
+  unconfirmed, never as a missing copy.
+- Connection validation sends no message and creates no copy.
+- Only future sends are covered. Earlier messages are not backfilled, and there
+  is no copy-retry button, toggle or new operator action.
+- If the server stops between recording the acceptance and confirming the copy,
+  restart keeps SUBMITTED and does not replay the copy. A copy missing after
+  such an interruption is not repaired automatically.
 
 ## Failure and lifecycle behavior
 

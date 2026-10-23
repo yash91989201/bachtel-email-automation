@@ -29,6 +29,15 @@ const (
 	OutcomeUncertain OutcomeKind = "uncertain"
 )
 
+// SaveCopy saves a provider's own copy of an already accepted message in the
+// mailbox that submitted it. It exists for providers whose sending operation
+// does not save a Sent copy, and it is called at most once per submission, only
+// after the acceptance is durably recorded. The context is bounded by the
+// submission deadline and the timestamp is the recorded acceptance time, so the
+// copy reflects the send rather than a later moment. A nil error means the copy
+// was confirmed; a cleanup failure after confirmation is not an error.
+type SaveCopy func(context.Context, time.Time) error
+
 // SendResult contains only application-owned reasons, never provider
 // diagnostics. Submitted means accepted for processing, not delivered.
 type SendResult struct {
@@ -37,10 +46,19 @@ type SendResult struct {
 	Error              string
 	PauseMailbox       bool
 	RequiresCorrection bool
+	// SaveCopy is set only by a provider whose submission does not save a Sent
+	// copy itself. It stays nil when the provider's native sending operation
+	// saves one: Microsoft 365 retains Graph's default Sent Items saving, so no
+	// second copy is requested. A provider added later must establish one of
+	// those two conventions; there is no mode that silently skips the copy. The
+	// hook is process-local and never persisted, replayed or retried.
+	SaveCopy SaveCopy
 }
 
 // Sender submits one message through one provider connection. Implementations
-// never retry: only the durable dispatcher schedules retries.
+// never retry: only the durable dispatcher schedules retries. A sender that
+// cannot save Sent copies natively returns them through SendResult.SaveCopy;
+// one that can leaves it nil.
 type Sender interface {
 	Send(context.Context, Message) SendResult
 }

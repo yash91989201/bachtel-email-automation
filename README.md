@@ -152,6 +152,7 @@ page displays it for registration.
 | `PANDOC_PATH` | Optional converter executable; defaults to the packaged `pandoc`. |
 | `APP_RESTORE_REVIEW` | Optional; `true` disables sending, scheduling, retries and resends until a restored instance is reconciled. |
 | `TITAN_SMTP_ADDRESS` | Advanced override of the Titan SMTP endpoint for simulated servers. Leave unset in production; the fixed provider endpoint is `smtpout.secureserver.net:465`. |
+| `TITAN_IMAP_ADDRESS` | Advanced override of the Titan mailbox endpoint used only for Sent copies, for simulated servers. Leave unset in production; the fixed endpoint is `imap.secureserver.net:993`. |
 | `INTAKE_MAX_UPLOAD_BYTES` | Upload limit for one task workbook, in bytes. Defaults to 10 MiB, which is also the supported ceiling. |
 | `INTAKE_UNZIP_SIZE_LIMIT`, `INTAKE_UNZIP_XML_SIZE_LIMIT` | Expanded workbook archive and single-part limits, in bytes. Default to 64 MiB and 16 MiB. |
 

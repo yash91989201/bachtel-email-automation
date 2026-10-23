@@ -92,7 +92,11 @@ func (g *Graph) send(ctx context.Context, message Message, token string) SendRes
 	}
 	ctx, cancel := context.WithTimeout(ctx, g.timeout)
 	defer cancel()
-	// Omitting saveToSentItems retains Graph's default Sent Items behavior.
+	// Omitting saveToSentItems retains Graph's default Sent Items behavior for
+	// the authenticated mailbox, so this provider needs no separate copy step
+	// and returns no SendResult.SaveCopy hook. Graph's 202 means accepted for
+	// processing: the Sent item and delivery can complete asynchronously, so the
+	// app never polls for the item or claims either has finished.
 	payload := struct {
 		Message struct {
 			Subject string `json:"subject"`

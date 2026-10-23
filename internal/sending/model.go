@@ -82,8 +82,13 @@ type Attempt struct {
 type Outcome struct {
 	RequiresCorrection bool
 	State, Reason      string
-	RetryAt            time.Time
-	PauseMailbox       bool
+	// AcceptedAt is the instant the provider definitely accepted the message.
+	// It becomes the attempt's completion time, so a later Sent-copy step can
+	// never be mistaken for the send time. Zero for every other outcome.
+	AcceptedAt time.Time
+	RetryAt    time.Time
+	// PauseMailbox pauses only the affected mailbox's work.
+	PauseMailbox bool
 }
 type Settings struct {
 	Rate                        int

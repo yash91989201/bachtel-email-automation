@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/pocketbase/dbx"
@@ -569,7 +570,13 @@ func (s *Store) CompleteAttempt(ctx context.Context, id string, outcome Outcome)
 		}
 		r.Set("state", state)
 		r.Set("reason", outcome.Reason)
-		nowField(r, "finished_at", s.options.Now())
+		// The completion time is the provider acceptance instant when the sender
+		// reported one, so a later Sent-copy step never becomes the send time.
+		finished := s.options.Now()
+		if !outcome.AcceptedAt.IsZero() {
+			finished = outcome.AcceptedAt
+		}
+		nowField(r, "finished_at", finished)
 		nowField(r, "retry_at", outcome.RetryAt)
 		retry := r.GetInt("retry_count") + 1
 		if state == AttemptRetryable {
@@ -642,6 +649,35 @@ func (s *Store) CompleteAttempt(ctx context.Context, id string, outcome Outcome)
 			return pauseOwner(app, r.GetString("owner"), outcome.Reason)
 		}
 		return nil
+	})
+}
+
+// RecordCopyWarning adds a fixed Sent-copy warning to the existing reason of
+// one already submitted attempt. It is scoped to the attempt's owner and
+// connection, refuses any other state, and never changes the sending outcome,
+// acceptance time, candidate eligibility or test approval. A repeated warning
+// is a no-op.
+func (s *Store) RecordCopyWarning(ctx context.Context, attemptID, ownerID, connectionID, warning string) error {
+	if warning == "" {
+		return errors.New("a copy warning is required")
+	}
+	return s.app.RunInTransaction(func(app core.App) error {
+		r, e := app.FindRecordById(AttemptsCollection, attemptID)
+		if e != nil {
+			return e
+		}
+		if r.GetString("owner") != ownerID || r.GetString("connection") != connectionID || r.GetString("state") != AttemptSubmitted {
+			return ErrNoWork
+		}
+		reason := strings.TrimSpace(r.GetString("reason"))
+		if strings.Contains(reason, warning) {
+			return nil
+		}
+		if reason != "" {
+			reason += " "
+		}
+		r.Set("reason", reason+warning)
+		return app.Save(r)
 	})
 }
 

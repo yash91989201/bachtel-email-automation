@@ -21,6 +21,7 @@ type DispatchStore interface {
 	BeginAttempt(context.Context, *Work, time.Time, time.Time) (*Attempt, error)
 	RecordActualStart(context.Context, *Work, string, time.Time, time.Time) error
 	CompleteAttempt(context.Context, string, Outcome) error
+	RecordCopyWarning(context.Context, string, string, string, string) error
 	SetCooldown(context.Context, string, string, time.Time, string) error
 	Recover(context.Context) error
 	PauseMailbox(context.Context, string, string) error
@@ -413,13 +414,25 @@ func (d *Dispatcher) launchPrepared(sender Sender, work *Work, prepared bool) (t
 	return -1, nil
 }
 
+// SentCopyWarning is the fixed, credential-free warning appended to an attempt
+// whose Sent copy could not be confirmed. It states an unconfirmed copy, never
+// an absent one, and never changes the sending outcome.
+const SentCopyWarning = "Titan accepted this email, but saving its Sent copy could not be confirmed."
+
 func (d *Dispatcher) send(sender Sender, attempt *Attempt, work *Work) {
+	// One server-owned deadline bounds the submission and any separate Sent
+	// copy, so copy work cannot extend or reset the request budget.
 	ctx, cancel := context.WithTimeout(context.Background(), d.options.RequestTimeout)
 	defer cancel()
 	result := sender.Send(ctx, Message{Recipient: work.Recipient, Subject: work.Subject, HTML: work.Body})
+	var acceptedAt time.Time
+	if result.Kind == OutcomeSubmitted {
+		// The acceptance instant belongs to the submission, never to the later
+		// copy operation.
+		acceptedAt = d.options.Now()
+	}
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	outcome := Outcome{Reason: result.Error, RetryAt: result.RetryAfter, PauseMailbox: result.PauseMailbox, RequiresCorrection: result.RequiresCorrection}
+	outcome := Outcome{AcceptedAt: acceptedAt, Reason: result.Error, RetryAt: result.RetryAfter, PauseMailbox: result.PauseMailbox, RequiresCorrection: result.RequiresCorrection}
 	switch result.Kind {
 	case OutcomeSubmitted:
 		outcome.State = AttemptSubmitted
@@ -442,7 +455,8 @@ func (d *Dispatcher) send(sender Sender, attempt *Attempt, work *Work) {
 	}
 	// A provider failure pauses only the affected mailbox. The durable pause is
 	// committed by CompleteAttempt below; other mailboxes keep launching.
-	if err := d.store.CompleteAttempt(context.Background(), attempt.ID, outcome); err != nil {
+	saved := d.store.CompleteAttempt(context.Background(), attempt.ID, outcome)
+	if saved != nil {
 		d.pause("Sending stopped because a submission outcome could not be saved. Review unfinished attempts after restarting.")
 	}
 	if outcome.PauseMailbox {
@@ -450,6 +464,38 @@ func (d *Dispatcher) send(sender Sender, attempt *Attempt, work *Work) {
 			d.pause("Sending stopped because the mailbox pause could not be saved. Restart after checking storage.")
 		}
 	}
+	d.mu.Unlock()
+
+	// The copy runs only after the submission is durable, outside the dispatcher
+	// locks and every database transaction. In-flight accounting stays held
+	// until it settles, so stop, disconnect and replacement still drain this
+	// mailbox before releasing its credentials.
+	if saved == nil && result.SaveCopy != nil {
+		if err := result.SaveCopy(ctx, acceptedAt); err != nil {
+			d.recordCopyWarning(attempt, work)
+		}
+	}
+
+	d.mu.Lock()
+	d.release(work)
+	d.mu.Unlock()
+	d.notify()
+}
+
+// recordCopyWarning adds the fixed copy warning to the already submitted
+// attempt. A storage failure here keeps the committed SUBMITTED result and
+// applies the existing storage barrier instead of failing the send.
+func (d *Dispatcher) recordCopyWarning(attempt *Attempt, work *Work) {
+	if err := d.store.RecordCopyWarning(context.Background(), attempt.ID, work.OwnerID, work.ConnectionID, SentCopyWarning); err != nil {
+		d.mu.Lock()
+		d.pause("Sending stopped because a Sent-copy warning could not be saved. Restart after checking storage.")
+		d.mu.Unlock()
+	}
+}
+
+// release removes one settled request from the global, mailbox and owner
+// in-flight counts. The caller holds d.mu.
+func (d *Dispatcher) release(work *Work) {
 	d.inflight--
 	d.inflightByConnection[work.ConnectionID]--
 	if d.inflightByConnection[work.ConnectionID] <= 0 {
@@ -459,7 +505,6 @@ func (d *Dispatcher) send(sender Sender, attempt *Attempt, work *Work) {
 	if d.inflightByOwner[work.OwnerID] <= 0 {
 		delete(d.inflightByOwner, work.OwnerID)
 	}
-	d.notify()
 }
 
 func retryDelay(retries int) time.Duration {

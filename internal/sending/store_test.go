@@ -763,3 +763,113 @@ func TestMultiOperatorPacingAndInFlightAreIndependent(t *testing.T) {
 		t.Fatalf("cooldown blocked the other mailbox's work: %+v", w)
 	}
 }
+
+// TestStoreCopyWarningKeepsSubmittedOutcome proves a copy warning is only added
+// to already submitted attempt details: state, acceptance timestamp and
+// eligibility stay exactly as recorded, and the warning is scoped to its owner
+// and connection.
+func TestStoreCopyWarningKeepsSubmittedOutcome(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	task := f.task(t, 1)
+	if _, e := f.store.QueueTest(storeCtx, f.ownerID, sending.TestRequest{ActionID: "copy-test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}}); e != nil {
+		t.Fatal(e)
+	}
+	a := storeBegin(t, f)
+	accepted := time.Date(2026, 10, 23, 5, 21, 18, 0, time.UTC)
+	if e := f.store.CompleteAttempt(storeCtx, a.ID, sending.Outcome{State: sending.AttemptSubmitted, AcceptedAt: accepted}); e != nil {
+		t.Fatal(e)
+	}
+	r := storeRecord(t, f, sending.AttemptsCollection, a.ID)
+	if got := r.GetDateTime("finished_at").Time().UTC(); !got.Equal(accepted) {
+		t.Fatalf("finished_at = %s, want the acceptance time %s", got, accepted)
+	}
+	connection := r.GetString("connection")
+	for range 2 { // a repeated warning is a no-op, not a second sentence
+		if e := f.store.RecordCopyWarning(storeCtx, a.ID, f.ownerID, connection, sending.SentCopyWarning); e != nil {
+			t.Fatal(e)
+		}
+	}
+	r = storeRecord(t, f, sending.AttemptsCollection, a.ID)
+	if got := r.GetString("state"); got != sending.AttemptSubmitted {
+		t.Fatalf("state = %q, want the accepted submission retained", got)
+	}
+	if got := r.GetDateTime("finished_at").Time().UTC(); !got.Equal(accepted) {
+		t.Fatalf("finished_at = %s after the warning, want %s", got, accepted)
+	}
+	if got := strings.Count(r.GetString("reason"), sending.SentCopyWarning); got != 1 {
+		t.Fatalf("reason = %q, want one copy warning", r.GetString("reason"))
+	}
+	progress := storePreview(t, f, task)
+	if progress.Approved || progress.LatestSuccessfulTestID != a.ID || progress.Submitted != 0 {
+		t.Fatalf("copy warning changed approval or test history: %+v", progress)
+	}
+	if len(progress.Recent) == 0 || progress.Recent[0].State != sending.AttemptSubmitted || !strings.Contains(progress.Recent[0].Reason, sending.SentCopyWarning) {
+		t.Fatalf("attempt details hide the warning: %+v", progress.Recent)
+	}
+	for _, scope := range []struct{ owner, connection string }{
+		{"another-operator", connection},
+		{f.ownerID, "another-connection"},
+	} {
+		if e := f.store.RecordCopyWarning(storeCtx, a.ID, scope.owner, scope.connection, sending.SentCopyWarning); !errors.Is(e, sending.ErrNoWork) {
+			t.Fatalf("cross-scope warning error = %v, want refusal", e)
+		}
+	}
+}
+
+// TestStoreCopyWarningRefusesUnfinishedAttempts proves copy warnings cannot
+// become a second outcome for an attempt that is still in flight.
+func TestStoreCopyWarningRefusesUnfinishedAttempts(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	task := f.task(t, 1)
+	if _, e := f.store.QueueTest(storeCtx, f.ownerID, sending.TestRequest{ActionID: "in-flight-test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}}); e != nil {
+		t.Fatal(e)
+	}
+	a := storeBegin(t, f)
+	r := storeRecord(t, f, sending.AttemptsCollection, a.ID)
+	if e := f.store.RecordCopyWarning(storeCtx, a.ID, f.ownerID, r.GetString("connection"), sending.SentCopyWarning); !errors.Is(e, sending.ErrNoWork) {
+		t.Fatalf("in-flight warning error = %v, want refusal", e)
+	}
+	r = storeRecord(t, f, sending.AttemptsCollection, a.ID)
+	if r.GetString("state") != sending.AttemptInFlight || strings.Contains(r.GetString("reason"), sending.SentCopyWarning) {
+		t.Fatalf("in-flight attempt was modified: state=%q reason=%q", r.GetString("state"), r.GetString("reason"))
+	}
+}
+
+// TestStoreRecoveryKeepsDurableSubmissionWithoutCopyReplay proves startup never
+// downgrades or replays a submission recorded by an earlier run, including one
+// whose copy work was interrupted.
+func TestStoreRecoveryKeepsDurableSubmissionWithoutCopyReplay(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	task := f.task(t, 1)
+	if _, e := f.store.QueueTest(storeCtx, f.ownerID, sending.TestRequest{ActionID: "restart-test", TaskID: task, Recipient: "operator@example.invalid", Values: map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"}}); e != nil {
+		t.Fatal(e)
+	}
+	a := storeBegin(t, f)
+	accepted := time.Date(2026, 10, 22, 4, 0, 0, 0, time.UTC)
+	if e := f.store.CompleteAttempt(storeCtx, a.ID, sending.Outcome{State: sending.AttemptSubmitted, AcceptedAt: accepted}); e != nil {
+		t.Fatal(e)
+	}
+	before := storeRecord(t, f, sending.AttemptsCollection, a.ID)
+	reason, state := before.GetString("reason"), before.GetString("state")
+	attemptsBefore, e := f.app.CountRecords(sending.AttemptsCollection)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = f.store.Recover(storeCtx); e != nil {
+		t.Fatal(e)
+	}
+	after := storeRecord(t, f, sending.AttemptsCollection, a.ID)
+	if after.GetString("state") != state || after.GetString("reason") != reason {
+		t.Fatalf("recovery changed the stored submission: state=%q reason=%q", after.GetString("state"), after.GetString("reason"))
+	}
+	if got := after.GetDateTime("finished_at").Time().UTC(); !got.Equal(accepted) {
+		t.Fatalf("recovery changed the acceptance time: %s", got)
+	}
+	attemptsAfter, e := f.app.CountRecords(sending.AttemptsCollection)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if attemptsAfter != attemptsBefore {
+		t.Fatalf("attempts = %d after recovery, want %d: no resend or copy replay", attemptsAfter, attemptsBefore)
+	}
+}

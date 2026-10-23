@@ -14,7 +14,7 @@ import (
 func clearEnvironment(t *testing.T) {
 	t.Helper()
 	for _, name := range []string{
-		EnvOrigin, EnvEncryptionKey, EnvTitanSMTPAddress, EnvAuthorityURL,
+		EnvOrigin, EnvEncryptionKey, EnvTitanSMTPAddress, EnvTitanIMAPAddress, EnvAuthorityURL,
 		EnvGraphBaseURL, EnvIntakeMaxUploadBytes, EnvIntakeUnzipSizeLimit,
 		EnvIntakeUnzipXMLSizeLimit, EnvRestoreReview,
 	} {
@@ -62,17 +62,24 @@ func TestLoadDefaults(t *testing.T) {
 	if got := cfg.Titan.Address; got != DefaultTitanSMTPAddress {
 		t.Fatalf("titan endpoint = %q, want %q", got, DefaultTitanSMTPAddress)
 	}
+	if got := cfg.Titan.IMAPAddress; got != DefaultTitanIMAPAddress {
+		t.Fatalf("titan mailbox endpoint = %q, want %q", got, DefaultTitanIMAPAddress)
+	}
 }
 
 func TestLoadTitanEndpointOverride(t *testing.T) {
 	clearEnvironment(t)
 	t.Setenv(EnvTitanSMTPAddress, "127.0.0.1:2525")
+	t.Setenv(EnvTitanIMAPAddress, "127.0.0.1:1143")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Titan.Address != "127.0.0.1:2525" {
 		t.Fatalf("titan endpoint = %q, want the simulated override", cfg.Titan.Address)
+	}
+	if cfg.Titan.IMAPAddress != "127.0.0.1:1143" {
+		t.Fatalf("titan mailbox endpoint = %q, want the simulated override", cfg.Titan.IMAPAddress)
 	}
 }
 

@@ -272,3 +272,49 @@ func TestGraph202RemainsSubmittedWhenResponseCloseFails(t *testing.T) {
 		t.Fatalf("202 acceptance changed after body close failure: %+v", got)
 	}
 }
+
+// TestGraphKeepsNativeSentItemsSavingWithoutCopyWork proves Microsoft 365 needs
+// no application-managed copy: the request keeps Graph's default Sent Items
+// saving, exactly one send POST happens, no copy hook is returned, and no
+// follow-up request polls the mailbox.
+func TestGraphKeepsNativeSentItemsSavingWithoutCopyWork(t *testing.T) {
+	var calls atomic.Int32
+	envelopes := make(chan map[string]json.RawMessage, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if r.Method != http.MethodPost || r.URL.Path != "/v1.0/me/sendMail" {
+			t.Errorf("request = %s %s, want one sendMail POST", r.Method, r.URL.Path)
+		}
+		var payload map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Error(err)
+		}
+		envelopes <- payload
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+
+	graph := NewGraph(graphTokenSource{token: "private-token"}, GraphOptions{BaseURL: server.URL + "/v1.0"})
+	for _, tc := range []struct {
+		name   string
+		sender Sender
+	}{
+		{name: "direct", sender: graph},
+		{name: "prepared", sender: graph.Prepare(context.Background())},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := calls.Load()
+			result := tc.sender.Send(context.Background(), graphMessage())
+			if result.Kind != OutcomeSubmitted || result.SaveCopy != nil {
+				t.Fatalf("result = %+v, want accepted with native saving and no copy hook", result)
+			}
+			if calls.Load() != before+1 {
+				t.Fatalf("requests = %d, want exactly one send", calls.Load()-before)
+			}
+			envelope := <-envelopes
+			if len(envelope) != 1 || envelope["message"] == nil {
+				t.Fatalf("envelope = %v; omitting saveToSentItems must keep saving enabled", envelope)
+			}
+		})
+	}
+}

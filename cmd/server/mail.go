@@ -37,7 +37,8 @@ func (r *connectionResolver) Sender(ctx context.Context, connectionID string) (s
 			return nil, err
 		}
 		return sending.NewTitan(r.cfg.Titan.Address, connection.Sender, credential.Password, sending.TitanOptions{
-			Timeout: 20 * time.Second,
+			Timeout:     20 * time.Second,
+			IMAPAddress: r.cfg.Titan.IMAPAddress,
 		}), nil
 	default:
 		return nil, mailbox.ErrUnsupportedProvider
