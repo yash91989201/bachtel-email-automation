@@ -316,9 +316,9 @@ The system SHALL put fresh action counts, sender, saved revision, approval and e
 | Finished task with resumable safe work from a previous authorized start | Resume safe remainder with its count | First-start and scheduling controls |
 | Live scheduled start was refused; task remains validated/unstarted | Review miss; Send now after fresh checks, or Clear schedule then choose a new schedule; resolve any content/mailbox/approval blocker first | Automatic catch-up and Resume |
 | Schedule missed during downtime; task is paused | Resume safe remainder with fresh confirmation; Clear schedule remains available but leaves the task paused | First-start, new scheduling and automatic catch-up |
-| Retry-eligible definite failures after active work has settled | Retry failed recipients; per-row Retry | Retry for uncertain, submitted, active or correction-required rows |
-| Uncertain outcomes after active work has settled | Per-row Review outcome and explicitly confirmed Send again | Bulk retry of uncertain rows |
-| Uncertain outcome with externally verified evidence, including while other work is active | Mark already submitted with verification basis, subject to existing non-dispatch prerequisites | Automatic resolution, invented acceptance timestamps and any implication that resolution submits email |
+| Retry-eligible definite failures after active work has settled | Retry failed recipients; per-row Retry; Retry selected for a confirmed row selection | Retry for uncertain, submitted, active or correction-required rows |
+| Uncertain outcomes after active work has settled | Per-row Review outcome and explicitly confirmed Send again; Send again selected for a confirmed row selection | Bulk retry of uncertain rows |
+| Uncertain outcome with externally verified evidence, including while other work is active | Mark already submitted with verification basis; Mark selected already submitted with one recorded basis, subject to existing non-dispatch prerequisites | Automatic resolution, invented acceptance timestamps and any implication that resolution submits email |
 | No currently eligible action scope | Specific reason and relevant report/history links | Zero-recipient send/schedule/resume/retry controls |
 
 #### Scenario: Choose the next action without hiding parallel problems
@@ -422,7 +422,7 @@ Schedule entry SHALL state the 30-minute minimum lead and one-shot behavior, and
 - **AND** clearing a live-fire miss may remove its obsolete schedule-refusal message without deleting its existing authorization/action records; this does not require a new schedule-audit UI
 
 ### Requirement: Recovery differentiates failure from uncertainty
-The system SHALL show recovery within Sending when applicable, with separate groups for retry-eligible definite failures, correction-required rows and uncertain outcomes. It SHALL preserve historical attempts, duplicate-risk confirmation, external-verification evidence and the distinction between manual resolution and provider acceptance.
+The system SHALL show recovery within Sending when applicable as one table whose state column distinguishes retry-eligible definite failures, correction-required rows and uncertain outcomes, and whose row actions differ by state. It SHALL preserve historical attempts, duplicate-risk confirmation, external-verification evidence and the distinction between manual resolution and provider acceptance.
 
 #### Scenario: Definite failure and uncertainty coexist
 - **WHEN** a settled task contains both a retryable definite failure and an uncertain submission
@@ -430,6 +430,22 @@ The system SHALL show recovery within Sending when applicable, with separate gro
 - **AND** the uncertain row shows prior attempt time/content/outcome and separate “Send again” and “Mark already submitted” operations
 - **AND** Send again requires the explicit possible-duplicate warning/confirmation; manual resolution requires the recorded basis of external verification
 - **AND** correction-required rows point to corrected upload rather than an unusable Retry action
+
+#### Scenario: Confirmed selection acts once
+- **WHEN** the operator selects several recovery rows and confirms that selection's action
+- **THEN** the selection submits one request whose confirmed count is the selected row count
+- **AND** a row that is no longer eligible refuses the whole request with the changed count instead of acting partially
+- **AND** uncertain rows still require the duplicate-risk warning for Send again and one recorded external-verification basis for manual resolution
+
+#### Scenario: A row's action is unavailable
+- **WHEN** a recovery row's action is withheld by active work, restore review or a changed count
+- **THEN** the row explains why the action is unavailable instead of rendering an empty action cell
+- **AND** the row keeps its state, reason and prior attempt visible
+
+#### Scenario: Recovery rows stay readable without the selection layer
+- **WHEN** the selection layer is unavailable
+- **THEN** each row's own dialog still performs Retry, Send again or Mark already submitted with its explicit confirmation
+- **AND** the table keeps the row's recipient, worksheet position, state, reason and prior attempt visible
 
 #### Scenario: No recovery is needed
 - **WHEN** a task has no recovery rows
@@ -515,8 +531,6 @@ An approved task SHALL show its approval summary and hide the formatting-test an
 - **AND** the expanded content links to the existing template revision flow and explains revalidation and new-configuration approval
 - **AND** a rejected test or approval submission keeps the disclosure open so the error and controls remain accessible
 - **AND** exact-configuration approval, explicit test submission and received-formatting confirmation checks remain in force
-
-
 
 ### Requirement: Connected mailbox setup is disclosed explicitly
 The Account settings Mailbox section SHALL hide provider selection and connection forms on normal connected-state navigation and offer Change provider beside Disconnect. Pending-task restrictions SHALL be visible at both controls. Disconnected or reconnect-required mailboxes SHALL retain same-mailbox repair access.
