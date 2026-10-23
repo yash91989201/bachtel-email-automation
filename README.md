@@ -350,10 +350,17 @@ make assets      # bundle component JS, copy Alpine/htmx, fonts and web/js; comp
 make fmt         # format Go and templ sources
 make lint-tailwind # check all tracked and non-ignored new .templ files for Tailwind diagnostics
 make fix-tailwind # apply Tailwind canonical-class code actions, then check remaining diagnostics
-make test        # regenerate, build assets, go test, go vet
+make test        # regenerate, build assets, go test (full vet runs in make lint)
+make test PACKAGES=./internal/intake TEST_FLAGS='-run TestUpload' # focused feedback
+make test-race PACKAGES=./internal/sending # focused race checks
+make check       # final formatting, generation, lint, build, full race suite
 make build       # build bin/bachtel with assets embedded
 ./bin/bachtel serve --http=127.0.0.1:8090 --dir=./pb_data
 ```
+
+During implementation, batch edits and run the affected tests. Run the full
+final checks once after integration, rather than after each OpenSpec task.
+See [testing and test inventory](docs/testing.md) for coverage and timing.
 
 Run `npm ci` first to install the pinned development tools. `npm run lint:tailwind`
 is equivalent to `make lint-tailwind` and needs no editor. It uses Tailwind's

@@ -56,6 +56,12 @@
 
 ## Required verification
 
+- During implementation, run focused tests for the changed behavior and affected
+  packages (for example `make test PACKAGES=./internal/intake TEST_FLAGS='-run TestUpload'`).
+  Batch related edits before running them. Run the full final checks below once
+  after the change is integrated, not after every task or checkbox. After a
+  failure, rerun the failed check; repeat passed checks only when subsequent
+  edits affect their results. Do not run overlapping full suites in subagents.
 - Run `npm ci` on a fresh checkout, then `make check` and `make vulncheck`.
   `make check` covers formatting, generation consistency, lint (including vet),
   race tests, and the production binary build. Stage intentional regenerated

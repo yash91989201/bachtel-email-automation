@@ -1,4 +1,9 @@
-.PHONY: setup generate assets dev build test fmt verify-converter
+.PHONY: setup generate assets dev build test test-race fmt verify-converter
+
+# Narrow these during implementation, e.g. make test PACKAGES=./internal/intake
+# TEST_FLAGS accepts normal go test flags such as -run and -count=1.
+PACKAGES ?= ./...
+TEST_FLAGS ?=
 
 setup:
 	npm ci
@@ -20,8 +25,10 @@ build: generate assets
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/bachtel ./cmd/server
 
 test: generate assets
-	go test ./...
-	go vet ./...
+	go test $(TEST_FLAGS) $(PACKAGES)
+
+test-race: generate assets
+	go test -race -timeout 20m $(TEST_FLAGS) $(PACKAGES)
 
 # Builds only the converter-test Docker stage: campaign + convert tests
 # against the same pinned Pandoc the runtime image packages. Needs a docker
@@ -54,14 +61,10 @@ lint: generate assets
 	bash scripts/golangci-lint.sh config verify
 	bash scripts/golangci-lint.sh run --config .golangci.yml ./...
 
-check:
-	$(MAKE) check-format
-	$(MAKE) check-generated lint
-	# The browser-facing web package is CPU-bound under the race detector and
-	# legitimately exceeds Go's 10m default package deadline; keep the same
-	# tests with a deadline that fits the full suite.
+# One dependency graph generates templates/assets once, including with make -j.
+# The final gate always checks every package, regardless of focused test flags.
+check: check-format check-generated lint build
 	go test -race -timeout 20m ./...
-	$(MAKE) build
 
 # Pin the analysis tool independently; do not change application dependencies.
 vulncheck: generate assets

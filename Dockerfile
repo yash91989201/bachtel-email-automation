@@ -21,9 +21,9 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
   CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/bachtel ./cmd/server
 
 # Proves the packaged converter works with no host dependency: the same pinned
-# Pandoc as the runtime image, the built frontend assets, and the full Go test
-# suite (including the campaign authoring flow, which is skipped without a
-# converter). Not in the production chain - the runtime stage below stays the
+# Pandoc as the runtime image, the built frontend assets, and converter/campaign
+# tests plus the HTTP campaign authoring flow. The full race suite runs in
+# make check. Not in the production chain - the runtime stage below stays the
 # final stage. Build it with `make verify-converter`.
 FROM golang:1.27.2-alpine AS converter-test
 RUN apk add --no-cache pandoc-cli=3.10-r0
@@ -34,8 +34,8 @@ COPY . .
 COPY --from=assets /src/internal/web/static/ internal/web/static/
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
   go tool shadcn-templ bundle && \
-  go vet ./... && \
-  go test ./...
+  go test ./internal/convert ./internal/campaign && \
+  go test ./internal/web -run '^TestAcceptanceCampaignAuthoringFlow$'
 
 FROM alpine:3.24 AS runtime
 # Pandoc is packaged because the app converts an operator-uploaded DOCX body
