@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yash91989201/bachtel-email-automation/internal/accountlock"
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	"github.com/yash91989201/bachtel-email-automation/internal/reset"
@@ -36,9 +37,13 @@ var connectionNotices = map[string]string{
 	"reset-blocked":     "The mailbox replacement did not finish. Retry it before using this workspace.",
 	"reset-started":     "The mailbox replacement is running. Sending and new uploads stay blocked until it completes.",
 	"no-mailbox":        "The signed-in Microsoft account has no usable mailbox address; sign in with the mailbox account itself.",
+	"locked":            accountlock.Message,
 }
 
 func connectionErrorCode(err error) string {
+	if len(accountlock.Blockers(err)) > 0 {
+		return "locked"
+	}
 	if _, ok := errors.AsType[*microsoft.ReplacementRequired](err); ok {
 		// The replacement confirmation page is reached from the callback.
 		return ""
@@ -170,11 +175,13 @@ func (s *server) replacementData(ctx context.Context, ownerID string, operation 
 }
 
 func (s *server) handleConnection(w http.ResponseWriter, r *http.Request) {
-	data := s.connectionData(r, connectionNotices[r.URL.Query().Get("notice")])
+	// The legacy path renders the same Account mailbox section: there is no
+	// second mailbox management surface.
+	data := s.accountMailboxData(r, accountNotices[r.URL.Query().Get("notice")])
 	if provider := r.URL.Query().Get("provider"); mailbox.Provider(provider).Valid() {
-		data.SelectedProvider = provider
+		data.Connection.SelectedProvider = provider
 	}
-	s.render(w, r, views.ConnectionPage(data))
+	s.render(w, r, views.AccountPage(data))
 }
 
 func (s *server) handleReplacement(w http.ResponseWriter, r *http.Request) {
@@ -333,6 +340,14 @@ func (s *server) handleTitanConnect(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
 	ownerID := recordFromContext(r).Id
+	if blockers, err := accountlock.Pending(r.Context(), s.app, ownerID); err == nil && len(blockers) > 0 {
+		// Checked here for the named warning; the mailbox store rechecks the
+		// lock inside its own transaction, which is what actually refuses it.
+		data := s.accountMailboxData(r, "")
+		data.Connection.LastError = accountlock.Message
+		s.renderWithStatus(w, r, http.StatusConflict, views.AccountPage(data))
+		return
+	}
 	connection, err := s.mailboxes.Current(r.Context(), ownerID)
 	if err != nil {
 		s.render(w, r, views.ConnectionPage(s.connectionData(r, s.connectionMessage(err))))

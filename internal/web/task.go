@@ -40,6 +40,7 @@ func (s *server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /campaigns/{id}/tasks/{task}/results.xlsx", s.requireOperator(s.handleTaskResultsDownload))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/results", s.requireOperator(s.handleTaskResultsGenerate))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/results/delete", s.requireOperator(s.handleTaskResultsDelete))
+	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/close", s.requireOperator(s.handleTaskClose))
 }
 
 // handleTaskList renders the campaign workspace on its Tasks section. The
@@ -402,6 +403,47 @@ func (s *server) writeDownload(w http.ResponseWriter, contentType, filename stri
 // taskLoadFailure answers a failed task load without leaking storage detail:
 // an unknown id is a plain 404, anything else is logged and answered
 // generically.
+// handleTaskClose performs the explicit terminal Close task action. The
+// confirmation is required here so a stale or scripted post cannot close work;
+// the sending service rechecks ownership, state and the action ID.
+func (s *server) handleTaskClose(w http.ResponseWriter, r *http.Request) {
+	task, ok := s.loadCampaignTask(w, r)
+	if !ok {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid Close task form", http.StatusBadRequest)
+		return
+	}
+	if r.FormValue("confirm_close") != "yes" {
+		http.Error(w, "Confirm that closing this task is terminal", http.StatusBadRequest)
+		return
+	}
+	id := strings.TrimSpace(r.FormValue("action_id"))
+	if len(id) < 16 || len(id) > 128 {
+		http.Error(w, "A valid action ID is required; reload this page", http.StatusBadRequest)
+		return
+	}
+	ownerID := recordFromContext(r).Id
+	closeTask := func() error {
+		_, err := s.sending.CloseTask(r.Context(), ownerID, task.ID, ownerID, id)
+		return err
+	}
+	var err error
+	if s.dispatcher != nil {
+		err = s.dispatcher.Synchronize(closeTask)
+	} else {
+		err = closeTask()
+	}
+	if err != nil {
+		s.app.Logger().Warn("close task rejected", "task", task.ID, "error", err)
+		s.renderTaskMessageWith(w, r, task, views.TaskSectionSending, s.sendingRefusalMessage(err), http.StatusBadRequest, nil)
+		return
+	}
+	http.Redirect(w, r, taskPath(task)+"#overview", http.StatusSeeOther)
+}
+
 func (s *server) taskLoadFailure(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, sql.ErrNoRows) || errors.Is(err, intake.ErrNotFound) {
 		http.NotFound(w, r)
@@ -427,6 +469,11 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 		Reference:       presentation.ShortRef(task.ID),
 		UploadedAt:      presentation.Timestamp(task.UploadedAt),
 		StoredStatus:    task.Status,
+		Closed:          task.Closed(),
+		Closing:         task.Closing(),
+		ClosedAt:        presentation.Timestamp(task.ClosedAt),
+		ClosedBy:        task.ClosedBy,
+		CanClose:        !task.Closed() && !task.Closing(),
 		ValidationError: task.ValidationError,
 		DefaultSheet:    task.Sheet,
 		HeaderRow:       task.HeaderRow,
@@ -511,12 +558,14 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 	}
 
 	facts := presentation.Facts{
-		Staging:         task.Status == intake.TaskStaging,
+		Staging:         task.Status == intake.TaskStaging && !task.Closed() && !task.Closing(),
 		ValidationError: task.ValidationError,
 		Status:          task.Status,
 		HasRevision:     data.HasCurrentRevision,
 		MailboxUsable:   mailboxUsable,
 		ScheduleState:   task.ScheduleState,
+		Closed:          data.Closed,
+		Closing:         data.Closing,
 	}
 	facts.Stale = task.Status == intake.TaskReady && (current == nil || task.ContentHash != current.ContentHash)
 	data.Stale = facts.Stale
@@ -762,7 +811,7 @@ func nextHref(task *intake.Task, next presentation.NextLink) string {
 	case presentation.DestCampaignTasks:
 		return "/campaigns/" + task.CampaignID + "#tasks"
 	case presentation.DestMailbox:
-		return "/connection"
+		return "/account"
 	}
 	if next.Section != "" {
 		return taskPath(task) + "#" + next.Section
@@ -773,7 +822,7 @@ func nextHref(task *intake.Task, next presentation.NextLink) string {
 // blockerHref resolves a blocker remedy to its destination.
 func blockerHref(task *intake.Task, blocker presentation.Blocker) string {
 	if blocker.Destination == presentation.DestMailbox {
-		return "/connection"
+		return "/account"
 	}
 	if blocker.Section != "" {
 		return taskPath(task) + "#" + blocker.Section

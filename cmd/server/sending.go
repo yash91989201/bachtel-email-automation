@@ -9,6 +9,7 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/hook"
+	"github.com/yash91989201/bachtel-email-automation/internal/ai"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
@@ -44,6 +45,7 @@ func bindSending(app core.App, cfg config.Config) {
 		// Application-settings rotation waits for the owner's in-flight
 		// submissions to settle before the credentials are swapped.
 		connections.SetDrainer(dispatcher)
+		aiStore := ai.NewStore(app, cfg.EncryptionKey)
 		exported := exports.NewService(app, cfg)
 		exported.BindTaskNotifications()
 		resets := reset.NewService(app, mailboxes)
@@ -80,6 +82,7 @@ func bindSending(app core.App, cfg config.Config) {
 			Dispatcher:  dispatcher,
 			Exports:     exported,
 			Resets:      resets,
+			AI:          aiStore,
 		})))
 		return event.Next()
 	})

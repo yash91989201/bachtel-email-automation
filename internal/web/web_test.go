@@ -16,6 +16,7 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/ui"
+	"github.com/yash91989201/bachtel-email-automation/internal/ai"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
@@ -40,6 +41,9 @@ func testKey() ([]byte, error) { return bytes.Repeat([]byte("k"), config.Encrypt
 func testServices(t *testing.T, app core.App, cfg config.Config, dispatcher Dispatcher) Services {
 	t.Helper()
 	mailboxes := mailbox.NewStore(app, testKey)
+	aiStore := ai.NewStore(app, testKey)
+	// Simulated endpoints run on loopback plaintext; only tests enable this.
+	aiStore.SetValidationOptions(ai.ValidationOptions{Timeout: 5 * time.Second, MaxResponseBytes: 512 << 10, AllowPrivate: true})
 	return Services{
 		Connections: microsoft.NewService(app, cfg, mailboxes),
 		Mailboxes:   mailboxes,
@@ -47,6 +51,7 @@ func testServices(t *testing.T, app core.App, cfg config.Config, dispatcher Disp
 		Dispatcher:  dispatcher,
 		Exports:     exports.NewService(app, cfg),
 		Resets:      reset.NewService(app, mailboxes),
+		AI:          aiStore,
 	}
 }
 

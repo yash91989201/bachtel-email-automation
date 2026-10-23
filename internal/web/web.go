@@ -5,12 +5,15 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"net/http"
 	"time"
 
 	"github.com/a-h/templ"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/yash91989201/bachtel-email-automation/internal/accountlock"
+	"github.com/yash91989201/bachtel-email-automation/internal/ai"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
@@ -38,6 +41,8 @@ type Services struct {
 	Dispatcher  Dispatcher
 	Exports     *exports.Service
 	Resets      *reset.Service
+	// AI is the operator-owned AI connection store.
+	AI *ai.Store
 }
 
 type server struct {
@@ -53,6 +58,7 @@ type server struct {
 	dispatcher  Dispatcher
 	exports     *exports.Service
 	retention   *retention.Service
+	ai          *ai.Store
 }
 
 // NewHandler serves the application UI. PocketBase owns the server lifecycle,
@@ -74,6 +80,20 @@ func NewHandler(app core.App, cfg config.Config, services Services) http.Handler
 		exports:     services.Exports,
 		retention:   retention.NewService(app),
 		logins:      newLoginLimiter(10, 5*time.Minute),
+		ai:          services.AI,
+	}
+	// Connection changes share one account-wide lock. The stores recheck it
+	// inside their own transactions; a stale page is never authority.
+	if services.AI != nil {
+		services.AI.SetLockCheck(accountlock.Check)
+	}
+	if services.Mailboxes != nil {
+		services.Mailboxes.SetChangeGuard(func(ctx context.Context, checkApp core.App, ownerID string) error {
+			return accountlock.Check(ctx, checkApp, ownerID)
+		})
+	}
+	if services.Resets != nil {
+		services.Resets.SetChangeGuard(accountlock.Guard(app))
 	}
 
 	mux := http.NewServeMux()
@@ -100,6 +120,10 @@ func NewHandler(app core.App, cfg config.Config, services Services) http.Handler
 	mux.HandleFunc("POST /logout", s.requireOperator(s.handleLogout))
 	mux.HandleFunc("GET /{$}", s.requireOperator(s.handleHome))
 	mux.HandleFunc("GET /status", s.requireOperator(s.handleStatus))
+	mux.HandleFunc("GET /account", s.requireOperator(s.handleAccount))
+	mux.HandleFunc("GET /account/ai", s.requireOperator(s.handleAccountAI))
+	mux.HandleFunc("POST /account/ai/validate", s.requireOperator(s.handleAIValidate))
+	mux.HandleFunc("POST /account/ai/confirm", s.requireOperator(s.handleAIConfirm))
 	mux.HandleFunc("GET /connection", s.requireOperator(s.handleConnection))
 	mux.HandleFunc("GET /connection/replace", s.requireOperator(s.handleReplacement))
 	mux.HandleFunc("POST /connection/microsoft/settings", s.requireOperator(s.handleMicrosoftSettings))

@@ -1,0 +1,353 @@
+package views
+
+import (
+	"strconv"
+
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/alert"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/badge"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/button"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/checkbox"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/input"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/label"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/nativeselect"
+)
+
+// AccountLock is the shared named-task warning rendered above both Account
+// sections. It never carries another operator's task metadata.
+type AccountLock struct {
+	Blocked bool
+	Message string
+	Tasks   []AccountBlocker
+}
+
+// AccountBlocker is one pending task preventing connection changes.
+type AccountBlocker struct {
+	CampaignName string
+	Filename     string
+	Reference    string
+	Status       string
+	Closing      bool
+	Href         string
+}
+
+// AccountPageData is the Account settings view model.
+type AccountPageData struct {
+	Section    string
+	Lock       AccountLock
+	Connection ConnectionData
+	AI         AccountAIData
+}
+
+// AIConnectionView is the confirmed non-secret AI configuration. The API key
+// is reported only as configured or missing.
+type AIConnectionView struct {
+	ProviderLabel           string
+	APIRoot                 string
+	APIFormatLabel          string
+	Model                   string
+	ConfigurationGeneration int
+	CredentialGeneration    int
+	ValidatedAt             string
+	APIKeyConfigured        bool
+}
+
+// AIDraftView is one validated proposal awaiting confirmation.
+type AIDraftView struct {
+	ID             string
+	ProviderLabel  string
+	APIRoot        string
+	APIFormatLabel string
+	Model          string
+	ValidatedAt    string
+	BaseGeneration int
+}
+
+// AIProviderOption is one provider-first setup choice.
+type AIProviderOption struct {
+	Value    string
+	Label    string
+	Selected bool
+	Href     string
+}
+
+// AIFormatOption is one supported API format of the selected provider.
+type AIFormatOption struct {
+	Value    string
+	Label    string
+	Selected bool
+}
+
+// AccountAIData is the AI connection section model.
+type AccountAIData struct {
+	Notice               string
+	Error                string
+	Connection           *AIConnectionView
+	Draft                *AIDraftView
+	Providers            []AIProviderOption
+	SelectedProvider     string
+	APIRoot              string
+	APIFormats           []AIFormatOption
+	APIFormat            string
+	Model                string
+	SuggestedModels      []string
+	Guidance             []string
+	CanSwitch            bool
+	ValidationDisclosure string
+}
+
+// AccountPage renders Account settings with its Mailbox and AI connection
+// sections. Each section is independently reachable and shows its own saved
+// state.
+templ AccountPage(data AccountPageData) {
+	@Layout("Account settings", true, "account") {
+		<header class="space-y-3 pt-1 pb-2.5">
+			<p class="text-sm font-medium uppercase tracking-widest text-primary">Your account</p>
+			<h1 class="text-4xl font-bold tracking-tight">Account settings</h1>
+			<p class="max-w-170 mt-3 text-muted-foreground text-[.9375rem]">Manage the one sending mailbox and the one private AI connection for this operator. Connection changes are separate from campaign settings.</p>
+		</header>
+		<nav class="flex flex-wrap items-center gap-2 border-b border-border" aria-label="Account sections">
+			<a
+				class={ accountTabClass(data.Section == "mailbox") }
+				href="/account"
+				if data.Section == "mailbox" {
+					aria-current="page"
+				}
+			>Mailbox</a>
+			<a
+				class={ accountTabClass(data.Section == "ai") }
+				href="/account/ai"
+				if data.Section == "ai" {
+					aria-current="page"
+				}
+			>AI connection</a>
+		</nav>
+		if data.Lock.Blocked {
+			@accountLockWarning(data.Lock)
+		}
+		if data.Section == "ai" {
+			@aiConnectionSection(data.AI)
+		} else {
+			@connectionSection(data.Connection)
+		}
+	}
+}
+
+templ accountLockWarning(lock AccountLock) {
+	@alert.Alert(alert.Props{Variant: alert.VariantDestructive, Class: "status-warning", Attributes: templ.Attributes{"role": "region", "aria-labelledby": "account-lock-heading"}}) {
+		@alert.Title(alert.TitleProps{}) {
+			<span id="account-lock-heading">Connection changes are locked</span>
+		}
+		@alert.Description(alert.DescriptionProps{}) {
+			<p>{ lock.Message }</p>
+			if len(lock.Tasks) > 0 {
+				<ul class="mt-2 grid gap-1 text-sm">
+					for _, task := range lock.Tasks {
+						<li>
+							<a class="app-link text-primary" href={ task.Href }>{ task.Filename }</a>
+							<span class="text-muted-foreground">· { task.CampaignName } · { task.Reference } · { task.Status }</span>
+							if task.Closing {
+								<span class="text-muted-foreground">· closing</span>
+							}
+						</li>
+					}
+				</ul>
+			}
+			<p class="mt-2">Finish or explicitly close this work to unlock switching. Same-mailbox reconnect and same-configuration credential repair stay available.</p>
+		}
+	}
+}
+
+templ aiConnectionSection(data AccountAIData) {
+	<div class="space-y-6">
+		if data.Notice != "" {
+			@alert.Alert(alert.Props{Class: "status-info"}) {
+				{ data.Notice }
+			}
+		}
+		if data.Error != "" {
+			@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+				{ data.Error }
+			}
+		}
+		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "ai-status-heading"}}) {
+			@card.Content(card.ContentProps{Class: "gap-4"}) {
+				<div class="flex flex-wrap items-center gap-3">
+					<h2 id="ai-status-heading" class="cn-card-title">AI connection</h2>
+					if data.Connection != nil {
+						@badge.Badge(badge.Props{Class: "status-success"}) {
+							Confirmed
+						}
+					} else {
+						@badge.Badge(badge.Props{Variant: badge.VariantGhost}) {
+							Not configured
+						}
+					}
+					if !data.CanSwitch {
+						@badge.Badge(badge.Props{Class: "status-warning"}) {
+							Switching locked
+						}
+					}
+				</div>
+				if data.Connection != nil {
+					<dl class="grid grid-cols-2 gap-5 p-5 bg-muted rounded-4xl [&>div]:block [&_dt]:mb-[.3rem] [&_dt]:text-[.72rem] [&_dd]:font-semibold [&_dd]:wrap-anywhere max-[760px]:grid-cols-1 text-sm">
+						<div><dt>Provider</dt><dd>{ data.Connection.ProviderLabel }</dd></div>
+						<div><dt>API root</dt><dd><code data-ai-root>{ data.Connection.APIRoot }</code></dd></div>
+						<div><dt>API format</dt><dd>{ data.Connection.APIFormatLabel }</dd></div>
+						<div><dt>Exact model</dt><dd><code data-ai-model>{ data.Connection.Model }</code></dd></div>
+						<div><dt>API key</dt><dd>{ apiKeyState(data.Connection.APIKeyConfigured) }</dd></div>
+						<div><dt>Validated</dt><dd>{ data.Connection.ValidatedAt }</dd></div>
+					</dl>
+					<p class="text-sm text-muted-foreground">Normalization sends only mapped workbook values and preparation metadata to this endpoint. The confirmed model is the only model called; there is no fallback. Changing this configuration locks until all pending tasks are completed or explicitly closed.</p>
+				} else {
+					<p class="text-sm text-muted-foreground">No AI connection is configured. AI preparation stays blocked until a connection is validated and confirmed; mailbox sending and final workbook downloads are unaffected.</p>
+				}
+				if data.Draft != nil {
+					<div class="rounded-2xl border border-border p-4 space-y-3" data-ai-draft>
+						<h3 class="font-semibold">Validated proposal</h3>
+						<dl class="grid grid-cols-2 gap-4 text-sm max-[760px]:grid-cols-1">
+							<div><dt class="text-muted-foreground">Provider</dt><dd>{ data.Draft.ProviderLabel }</dd></div>
+							<div><dt class="text-muted-foreground">API root</dt><dd class="wrap-anywhere"><code>{ data.Draft.APIRoot }</code></dd></div>
+							<div><dt class="text-muted-foreground">API format</dt><dd>{ data.Draft.APIFormatLabel }</dd></div>
+							<div><dt class="text-muted-foreground">Exact model</dt><dd><code>{ data.Draft.Model }</code></dd></div>
+							<div><dt class="text-muted-foreground">Validated</dt><dd>{ data.Draft.ValidatedAt }</dd></div>
+						</dl>
+						<form method="post" action="/account/ai/confirm" class="grid gap-3">
+							<input type="hidden" name="draft" value={ data.Draft.ID }/>
+							<input type="hidden" name="expected_configuration_generation" value={ strconv.Itoa(data.Draft.BaseGeneration) }/>
+							if aiDraftIsRepair(data) {
+								<input type="hidden" name="repair" value="yes"/>
+							}
+							<label class="flex items-start gap-2 text-sm">
+								@checkbox.Checkbox(checkbox.Props{ID: "ai-confirm", Name: "confirmed", Value: "yes", Required: true})
+								Confirm this exact provider, endpoint, API format and model. A configuration switch is refused while tasks are pending; a same-configuration key replacement is allowed.
+							</label>
+							<div>
+								@button.Button(button.Props{Type: button.TypeSubmit}) {
+									if aiDraftIsRepair(data) {
+										Replace API key
+									} else {
+										Activate AI connection
+									}
+								}
+							</div>
+						</form>
+						if len(data.Guidance) > 0 {
+							<ul class="grid list-inside list-disc gap-1 text-sm text-muted-foreground">
+								for _, line := range data.Guidance {
+									<li>{ line }</li>
+								}
+							</ul>
+						}
+					</div>
+				}
+			}
+		}
+		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "ai-setup-heading"}}) {
+			@card.Content(card.ContentProps{Class: "gap-4"}) {
+				<h2 id="ai-setup-heading" class="cn-card-title">
+					if data.Connection != nil {
+						Repair or change the AI connection
+					} else {
+						Set up the AI connection
+					}
+				</h2>
+				if data.Connection != nil && !data.CanSwitch {
+					<p class="text-sm text-muted-foreground">Provider, endpoint, API format and model changes are locked. You can still validate and activate a new API key for the same configuration.</p>
+				}
+				<div class="grid grid-cols-2 gap-4 max-[760px]:grid-cols-1" aria-label="Choose an AI provider">
+					for _, provider := range data.Providers {
+						<a class={ aiProviderClass(provider.Selected) } href={ provider.Href }>
+							<h3 class="font-semibold">{ provider.Label }</h3>
+							if provider.Selected {
+								<span class="mt-2 block text-sm text-primary font-semibold">Selected</span>
+							} else {
+								<span class="mt-2 block text-sm text-muted-foreground">Choose { provider.Label }</span>
+							}
+						</a>
+					}
+				</div>
+				<form method="post" action="/account/ai/validate" class="grid gap-4">
+					<input type="hidden" name="provider" value={ data.SelectedProvider }/>
+					<div class="grid gap-2">
+						@label.Label(label.Props{For: "ai-api-root"}) {
+							API root
+						}
+						if data.SelectedProvider == "opencode-go" {
+							@input.Input(input.Props{ID: "ai-api-root", Name: "api_root", Type: "text", Value: data.APIRoot, ReadOnly: true, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false"}})
+						} else {
+							@input.Input(input.Props{ID: "ai-api-root", Name: "api_root", Type: "url", Required: true, Value: data.APIRoot, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "placeholder": "https://example.com/v1"}})
+						}
+					</div>
+					<div class="grid gap-2">
+						@label.Label(label.Props{For: "ai-api-format"}) {
+							API format
+						}
+						@nativeselect.NativeSelect(nativeselect.Props{ID: "ai-api-format", Name: "api_format", Required: true, Class: "w-full"}) {
+							for _, format := range data.APIFormats {
+								@nativeselect.Option(nativeselect.OptionProps{Value: format.Value, Selected: format.Selected}) {
+									{ format.Label }
+								}
+							}
+						}
+					</div>
+					<div class="grid gap-2">
+						@label.Label(label.Props{For: "ai-model"}) {
+							Exact model identifier
+						}
+						@input.Input(input.Props{ID: "ai-model", Name: "model", Type: "text", Required: true, Value: data.Model, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "list": "ai-model-suggestions", "aria-describedby": "ai-model-help"}})
+						if len(data.SuggestedModels) > 0 {
+							<datalist id="ai-model-suggestions">
+								for _, model := range data.SuggestedModels {
+									<option value={ model }></option>
+								}
+							</datalist>
+						}
+						<p id="ai-model-help" class="text-xs text-muted-foreground">Enter the provider's exact model ID for the selected API format. Suggested IDs are not interchangeable between formats.</p>
+					</div>
+					<div class="grid gap-2">
+						@label.Label(label.Props{For: "ai-api-key"}) {
+							API key
+						}
+						@input.Input(input.Props{ID: "ai-api-key", Name: "api_key", Type: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "new-password"}})
+						<p class="text-xs text-muted-foreground">The key is encrypted at rest and never shown again. { data.ValidationDisclosure }</p>
+					</div>
+					@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeSubmit}) {
+						Validate exact configuration
+					}
+				</form>
+			}
+		}
+	</div>
+}
+
+func apiKeyState(configured bool) string {
+	if configured {
+		return "Configured (not shown)"
+	}
+	return "Not configured"
+}
+
+func aiDraftIsRepair(data AccountAIData) bool {
+	if data.Connection == nil || data.Draft == nil {
+		return false
+	}
+	return data.Connection.ProviderLabel == data.Draft.ProviderLabel &&
+		data.Connection.APIRoot == data.Draft.APIRoot &&
+		data.Connection.APIFormatLabel == data.Draft.APIFormatLabel &&
+		data.Connection.Model == data.Draft.Model
+}
+
+func accountTabClass(active bool) string {
+	if active {
+		return "px-4 py-2 border-b-2 border-primary font-semibold text-primary"
+	}
+	return "px-4 py-2 border-b-2 border-transparent text-muted-foreground hover:text-foreground"
+}
+
+func aiProviderClass(selected bool) string {
+	if selected {
+		return "block rounded-4xl border border-primary bg-accent/30 p-5 focus-visible:outline-2"
+	}
+	return "block rounded-4xl border bg-card p-5 hover:border-primary focus-visible:outline-2"
+}

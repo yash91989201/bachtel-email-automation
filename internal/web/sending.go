@@ -250,6 +250,7 @@ var knownSendingMessages = map[string]struct{}{
 	"result generation requires a terminal or recovered task":                             {},
 	"reconnect the mailbox before sending a test":                                         {},
 	"an action ID is required":                                                            {},
+	sending.ClosedTaskMessage:                                                             {},
 }
 
 // sendingRefusalMessage maps a refused action to a safe, specific reason and

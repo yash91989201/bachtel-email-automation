@@ -850,7 +850,7 @@ func TestConnectedMailboxProviderSetupIsExplicit(t *testing.T) {
 				t.Fatalf("provider setup present = %t, want %t", got, tc.wantSetup)
 			}
 			if tc.data.Status == "connected" && !tc.data.ResetBlocked {
-				if workspaceNode(doc, "id", "mailbox-disconnect-form") == nil || workspaceNode(doc, "href", "/connection?change_provider=1#provider-setup") == nil {
+				if workspaceNode(doc, "id", "mailbox-disconnect-form") == nil || workspaceNode(doc, "href", "/account?change_provider=1#provider-setup") == nil {
 					t.Fatal("connected mailbox needs Disconnect and Change provider actions")
 				}
 			}
@@ -925,5 +925,61 @@ func TestTaskHistoryUsesAccordion(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAccountSectionsAreIndependentlyReachable(t *testing.T) {
+	mailbox := renderWorkspace(t, AccountPage(AccountPageData{Section: "mailbox", Connection: ConnectionData{Status: "connected", SenderAddress: "hr@example.test"}}))
+	doc, err := html.Parse(strings.NewReader(mailbox))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workspaceNode(doc, "href", "/account") == nil || workspaceNode(doc, "href", "/account/ai") == nil {
+		t.Fatal("account navigation must expose both sections")
+	}
+	if workspaceNode(doc, "id", "mailbox-disconnect-form") == nil {
+		t.Fatal("mailbox section lacks its connection controls")
+	}
+
+	ai := renderWorkspace(t, AccountPage(AccountPageData{Section: "ai", AI: AccountAIData{SelectedProvider: "opencode-go", APIFormat: "responses", APIRoot: aiRoot, CanSwitch: true, APIFormats: []AIFormatOption{{Value: "responses", Label: "Responses API", Selected: true}}}}))
+	doc, err = html.Parse(strings.NewReader(ai))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, node := range []struct{ attr, value string }{
+		{"id", "ai-api-root"},
+		{"id", "ai-api-format"},
+		{"id", "ai-model"},
+		{"id", "ai-api-key"},
+	} {
+		if workspaceNode(doc, node.attr, node.value) == nil {
+			t.Fatalf("AI section missing labeled control %s=%s", node.attr, node.value)
+		}
+	}
+}
+
+const aiRoot = "https://opencode.ai/inference/openai/v1"
+
+func TestLockedMailboxKeepsOnlySameMailboxRepair(t *testing.T) {
+	page := renderWorkspace(t, ConnectionPage(ConnectionData{
+		Status:           "connected",
+		Provider:         "godaddy-titan",
+		SenderAddress:    "hr@example.test",
+		Locked:           true,
+		LockMessage:      "Mailbox and AI connection changes are locked until all pending tasks are completed or explicitly closed.",
+		SelectedProvider: "godaddy-titan",
+	}))
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workspaceNode(doc, "id", "mailbox-disconnect-form") != nil {
+		t.Fatal("locked mailbox still offered Disconnect")
+	}
+	if workspaceNode(doc, "href", "/account?change_provider=1#provider-setup") != nil {
+		t.Fatal("locked mailbox still offered an unrestricted provider switch")
+	}
+	if workspaceNode(doc, "href", "/account?provider=godaddy-titan") == nil {
+		t.Fatal("locked mailbox lost same-mailbox repair")
 	}
 }

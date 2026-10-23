@@ -160,6 +160,11 @@ type TaskPageData struct {
 
 	UploadedAt         string
 	StoredStatus       string
+	Closed             bool
+	Closing            bool
+	ClosedAt           string
+	ClosedBy           string
+	CanClose           bool
 	StatusLabel        string
 	StatusExplanation  string
 	StatusClass        string
@@ -363,6 +368,15 @@ templ TaskPage(data TaskPageData) {
 					{ data.Error }
 				}
 			}
+			if data.Closed {
+				@alert.Alert(alert.Props{Class: "status-success"}) {
+					Closed { data.ClosedAt } by the operator. This task is terminal: it cannot be prepared, finalized, scheduled, tested, resumed, retried or resent. Recorded attempts, outcomes and downloads remain available, and a new task keeps the existing recipient-history checks.
+				}
+			} else if data.Closing {
+				@alert.Alert(alert.Props{Class: "status-warning"}) {
+					Close confirmed. New launches stop and queued work is cancelled; closure becomes final once in-flight requests settle. Uncertain outcomes stay uncertain.
+				}
+			}
 			if data.RestoreReview {
 				@alert.Alert(alert.Props{Variant: alert.VariantDestructive, Class: "status-danger"}) {
 					Restore review is active. Sending, scheduling, retries and resends are disabled until submissions made after the restored backup are reconciled and the server is restarted without APP_RESTORE_REVIEW. Stop and manual outcome resolution stay available.
@@ -443,6 +457,9 @@ templ taskOverview(data TaskPageData) {
 					<div><dt>Sender</dt><dd><strong data-sender-status={ data.SenderStatus }>{ data.Sender }</strong> ({ data.SenderStatus })</dd></div>
 					if data.ScheduleAt != "" {
 						<div><dt>Scheduled start</dt><dd>{ data.ScheduleAt } ({ data.ScheduleState })</dd></div>
+					}
+					if data.ClosedAt != "" {
+						<div><dt>Closed</dt><dd>{ data.ClosedAt }</dd></div>
 					}
 				</dl>
 				<details class="text-xs text-muted-foreground">
@@ -963,6 +980,9 @@ templ TaskSendingLive(data TaskPageData) {
 }
 
 func taskSendingPollAttributes(data TaskPageData) templ.Attributes {
+	if data.Closed {
+		return nil
+	}
 	active := data.StoredStatus == "running" || data.StoredStatus == "waiting" || data.StoredStatus == "stopping"
 	if !active && data.ScheduleState != "scheduled" && data.InFlight == 0 {
 		return nil
@@ -1095,6 +1115,36 @@ templ taskSendingActions(data TaskPageData) {
 		<p>Current progress is shown above with its wait reason when known.</p>
 	} else {
 		<p class="text-sm text-muted-foreground">No candidate action is applicable in this state.</p>
+	}
+	if data.CanClose {
+		<form id={ "task-close-form-" + data.TaskID } method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/close" } class="pt-2">
+			<input type="hidden" name="action_id" value={ data.ActionID + "close" }/>
+			<input type="hidden" name="confirm_close" value="yes"/>
+			@alertdialog.AlertDialog(alertdialog.Props{ID: "task-close-dialog"}) {
+				@button.Button(button.Props{Variant: button.VariantDestructive, Attributes: alertdialog.Trigger(ctx)}) {
+					Close task
+				}
+				@alertdialog.Content(alertdialog.ContentProps{}) {
+					@alertdialog.Header(alertdialog.HeaderProps{}) {
+						@alertdialog.Title(alertdialog.TitleProps{}) {
+							Close this task permanently?
+						}
+						@alertdialog.Description(alertdialog.DescriptionProps{}) {
+							<p>Closing is terminal. A closed task cannot be prepared, finalized, scheduled, tested, resumed, retried or resent. Queued work and enabled schedules are cancelled; in-flight requests settle first, and uncertain submissions stay uncertain.</p>
+							<p class="mt-2">Attempts, approvals, resolutions, history and downloads stay available. Future processing requires a new task, and existing recipient-history checks still apply.</p>
+						}
+					}
+					@alertdialog.Footer(alertdialog.FooterProps{}) {
+						@alertdialog.Cancel(alertdialog.CancelProps{}) {
+							Cancel
+						}
+						@button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit, Attributes: templ.Attributes{"form": "task-close-form-" + data.TaskID}}) {
+							Yes, close task
+						}
+					}
+				}
+			}
+		</form>
 	}
 }
 

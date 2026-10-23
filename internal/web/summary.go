@@ -90,10 +90,12 @@ func (s *server) loadCampaignOverview(ctx context.Context, ownerID, campaignID s
 		summary := summaries[task.ID]
 		artifact, hasArtifact := artifacts[task.ID]
 		facts := presentation.Facts{
-			Staging:       task.Status == intake.TaskStaging,
+			Staging:       task.Status == intake.TaskStaging && !task.Closed() && !task.Closing(),
 			Status:        task.Status,
 			HasRevision:   overview.HasRevision,
 			MailboxUsable: mailboxUsable,
+			Closed:        task.Closed(),
+			Closing:       task.Closing(),
 		}
 		facts.ValidationError = task.ValidationError
 		facts.ScheduleState = task.ScheduleState

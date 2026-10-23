@@ -317,7 +317,7 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 	for _, want := range []string{
 		"Needs formatting approval",
 		"book.xlsx",
-		`href="/connection"`,
+		`href="/account"`,
 		`href="/campaigns/` + id + `/tasks/new"`,
 	} {
 		if !strings.Contains(list, want) {

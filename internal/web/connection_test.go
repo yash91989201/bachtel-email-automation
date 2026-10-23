@@ -25,7 +25,7 @@ func TestConnectionPageRequiresProviderSelection(t *testing.T) {
 
 	// The home page points at the private mailbox surface with the new copy.
 	home := do(t, handler, http.MethodGet, "/", nil, withCookie(cookie))
-	if home.Code != http.StatusOK || !strings.Contains(home.Body.String(), "Private mailbox") || !strings.Contains(home.Body.String(), `href="/connection"`) {
+	if home.Code != http.StatusOK || !strings.Contains(home.Body.String(), "Private mailbox") || !strings.Contains(home.Body.String(), `href="/account"`) {
 		t.Fatalf("home mailbox card: status=%d", home.Code)
 	}
 
@@ -37,7 +37,7 @@ func TestConnectionPageRequiresProviderSelection(t *testing.T) {
 	if !strings.Contains(body, "Mailbox connection") {
 		t.Fatalf("connection page missing heading copy: %.400s", body)
 	}
-	if !strings.Contains(body, `href="/connection?provider=microsoft365"`) || !strings.Contains(body, `href="/connection?provider=godaddy-titan"`) {
+	if !strings.Contains(body, `href="/account?provider=microsoft365"`) || !strings.Contains(body, `href="/account?provider=godaddy-titan"`) {
 		t.Fatalf("connection page must offer both providers: %.400s", body)
 	}
 	if strings.Contains(body, `action="/connection/microsoft/settings"`) || strings.Contains(body, `action="/connection/titan"`) {
