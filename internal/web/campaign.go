@@ -301,7 +301,7 @@ func (s *server) handleCampaignRevision(w http.ResponseWriter, r *http.Request) 
 		revisionError(err.Error())
 		return
 	}
-	if err := campaign.ValidateMappings(mappings); err != nil {
+	if err := campaign.ValidateMappingsForVersion(campaign.CurrentMappingVersion, mappings); err != nil {
 		revisionError(err.Error())
 		return
 	}
@@ -322,10 +322,11 @@ func (s *server) handleCampaignRevision(w http.ResponseWriter, r *http.Request) 
 	}
 
 	_, warnings, err := s.campaigns.CreateRevision(r.Context(), recordFromContext(r).Id, page.ID, campaign.RevisionInput{
-		Subject:      subject,
-		Document:     document,
-		DocumentName: header.Filename,
-		Mappings:     mappings,
+		Subject:        subject,
+		Document:       document,
+		DocumentName:   header.Filename,
+		Mappings:       mappings,
+		MappingVersion: campaign.CurrentMappingVersion,
 	})
 	if err != nil {
 		s.app.Logger().Error("create revision", "campaign", page.ID, "error", err)
@@ -616,14 +617,14 @@ func (s *server) renderWithStatus(w http.ResponseWriter, r *http.Request, status
 // parseMappings reads the revision form's mapping textarea. The contract is:
 // one mapping per line, fields split on "|", every field trimmed:
 //
-//	variable | source header | required|optional|recipient | format | fallback
+//	variable | source header | required|optional|recipient | fallback
 //
-// Column 3 defaults to "required". Column 4 must be one of text, name,
-// designation or email and defaults to "text", or "email" for a recipient.
-// Exactly one row must select the recipient. The fallback column is used
-// only for optional rows. Blank lines are ignored. Malformed lines name their
-// line number; campaign.ValidateMappings and campaign.Compile report the
-// remaining problems inline on the form.
+// Column 3 defaults to "required". Column 4 is the optional fallback; a
+// legacy-shaped line that still carries a format choice is refused with a
+// remedy instead of being reinterpreted as fallback text. Exactly one row must
+// select the recipient. Blank lines are ignored. Malformed lines name their
+// line number; campaign.ValidateMappingsForVersion and campaign.Compile report
+// the remaining problems inline on the form.
 func parseMappings(raw string) ([]campaign.Mapping, error) {
 	var mappings []campaign.Mapping
 	for i, line := range strings.Split(raw, "\n") {
@@ -635,8 +636,8 @@ func parseMappings(raw string) ([]campaign.Mapping, error) {
 		for j := range fields {
 			fields[j] = strings.TrimSpace(fields[j])
 		}
-		if len(fields) < 2 || len(fields) > 5 {
-			return nil, fmt.Errorf("mapping line %d: expected \"variable | source header | required|optional|recipient | format | fallback\"", i+1)
+		if len(fields) < 2 || len(fields) > 4 {
+			return nil, fmt.Errorf("mapping line %d: expected \"variable | source header | required|optional|recipient | fallback\"", i+1)
 		}
 		required := true
 		recipient := false
@@ -651,23 +652,18 @@ func parseMappings(raw string) ([]campaign.Mapping, error) {
 				return nil, fmt.Errorf("mapping line %d: column 3 must be \"required\", \"optional\" or \"recipient\"", i+1)
 			}
 		}
-		format := campaign.FormatText
-		if recipient {
-			format = campaign.FormatEmail
-		}
-		if len(fields) > 3 && fields[3] != "" {
-			format = campaign.Format(fields[3])
-		}
 		var fallback string
-		if len(fields) > 4 {
-			fallback = fields[4]
+		if len(fields) > 3 {
+			fallback = fields[3]
+			if campaign.Format(fallback).Valid() {
+				return nil, fmt.Errorf("mapping line %d: column 4 is the optional fallback; mapping formats are no longer supported, so remove the format column", i+1)
+			}
 		}
 		mappings = append(mappings, campaign.Mapping{
 			Variable:  fields[0],
 			Header:    fields[1],
 			Required:  required,
 			Recipient: recipient,
-			Format:    format,
 			Fallback:  fallback,
 		})
 	}
@@ -684,7 +680,6 @@ func mappingDraftText(mappings []campaign.Mapping) string {
 			mapping.Variable,
 			mapping.Header,
 			"required",
-			string(mapping.Format),
 		}, " | "))
 	}
 	return strings.Join(lines, "\n")

@@ -49,8 +49,8 @@ func TestAcceptanceCampaignAuthoringFlow(t *testing.T) {
 	// Upload the body document and the mapping table in one multipart form.
 	subject := "Application for {{candidate_name}}"
 	mappings := strings.Join([]string{
-		"candidate_name | Applicant Full Name | required | name |",
-		"location | Location | optional | text | Remote",
+		"candidate_name | Applicant Full Name | required |",
+		"location | Location | optional | Remote",
 		recipientMapping,
 		"",
 	}, "\n")
@@ -92,11 +92,9 @@ func TestAcceptanceCampaignAuthoringFlow(t *testing.T) {
 	}
 	previewBody := preview.Body.String()
 	for _, want := range []string{
-		"Application for Ada Lovelace", // normalized subject
-		"Ada Lovelace",                 // split-run placeholder replaced
-		"  ada   lovelace ",            // raw value preserved beside the normalized one
-		"Ada Lovelace",                 // normalized value
-		"Remote",                       // optional fallback
+		"Application for   ada   lovelace ", // direct sample subject
+		"  ada   lovelace ",                 // raw value preserved
+		"Remote",                            // optional fallback
 	} {
 		if !strings.Contains(previewBody, want) {
 			t.Fatalf("preview missing %q: %.800s", want, previewBody)
@@ -121,7 +119,7 @@ func TestAcceptanceCampaignAuthoringFlow(t *testing.T) {
 	// keeps the configuration unready and reports the variable by name.
 	badMapping := env.requestMultipart(http.MethodPost, detail+"/revisions", cookies, map[string]string{
 		"subject":  "Application for {{candidate_name}} and {{level}}",
-		"mappings": "candidate_name | Applicant Full Name | required | name |\n" + recipientMapping,
+		"mappings": "candidate_name | Applicant Full Name | required |\n" + recipientMapping,
 	}, "body.docx", fixtureDocument(t))
 	if badMapping.Code != http.StatusBadRequest || !strings.Contains(badMapping.Body.String(), "level") {
 		t.Fatalf("unmapped variable: status=%d body=%.600s", badMapping.Code, badMapping.Body.String())

@@ -98,23 +98,35 @@ type Rendered struct {
 type Template struct {
 	Variables []Variable
 	Mappings  []Mapping
+	// Version selects legacy normalization or direct final-value rendering.
+	Version int
 
 	subject *texttemplate.Template
 	body    *htmltemplate.Template
 	keys    map[string]string
 }
 
-// Compile validates the mapping table against the placeholders actually used,
-// then compiles the subject and the converted body into standard templates.
-// Every configured variable must appear in the subject or the body; a variable
-// used in either place must be mapped; a variable may appear only in the
-// subject. Placeholders split across adjacent Word runs inside one paragraph
-// are joined first, and formatting outside a placeholder is preserved.
+// Compile validates a legacy mapping table against the placeholders actually
+// used, then compiles the subject and the converted body into standard
+// templates.
 func Compile(subject, bodyHTML string, mappings []Mapping) (*Template, error) {
+	return CompileForVersion(MappingVersionLegacy, subject, bodyHTML, mappings)
+}
+
+// CompileForVersion compiles the subject and the converted body for one
+// mapping-table version. Every configured variable must appear in the subject
+// or the body; a variable used in either place must be mapped; a variable may
+// appear only in the subject. Placeholders split across adjacent Word runs
+// inside one paragraph are joined first, and formatting outside a placeholder
+// is preserved.
+func CompileForVersion(version int, subject, bodyHTML string, mappings []Mapping) (*Template, error) {
+	if version < MappingVersionRole {
+		version = MappingVersionLegacy
+	}
 	if err := ValidateSubject(subject); err != nil {
 		return nil, err
 	}
-	if err := ValidateMappings(mappings); err != nil {
+	if err := ValidateMappingsForVersion(version, mappings); err != nil {
 		return nil, err
 	}
 
@@ -203,6 +215,7 @@ func Compile(subject, bodyHTML string, mappings []Mapping) (*Template, error) {
 	return &Template{
 		Variables: variables,
 		Mappings:  mappings,
+		Version:   version,
 		subject:   compiledSubject,
 		body:      compiledBody,
 		keys:      keys,
@@ -216,27 +229,51 @@ func (t *Template) VarKeys() map[string]string {
 	return keys
 }
 
+// ResolveValues applies one mapping table's replacement policy to the raw
+// values of a single row. Legacy tables normalize by format. Current tables
+// preserve populated text verbatim, treat a whitespace-only value as empty,
+// apply the optional fallback literally and report missing required variables.
+func ResolveValues(version int, mappings []Mapping, raw map[string]string) (map[string]string, []string) {
+	resolved := make(map[string]string, len(mappings))
+	var missing []string
+	legacy := version < MappingVersionRole
+	for _, mapping := range mappings {
+		value := raw[mapping.Variable]
+		if legacy {
+			value = Normalize(mapping.Format, value)
+			if value == "" && !mapping.Required {
+				value = Normalize(mapping.Format, mapping.Fallback)
+			}
+		} else if strings.TrimSpace(value) == "" {
+			value = ""
+			if !mapping.Required {
+				value = mapping.Fallback
+			}
+		}
+		if value == "" && mapping.Required {
+			missing = append(missing, mapping.Variable)
+		}
+		resolved[mapping.Variable] = value
+	}
+	return resolved, missing
+}
+
 // Render prepares values from one row's raw cells and produces the subject and
-// body. Raw values are preserved alongside the normalized replacements. A
-// required value that is empty after normalization is reported as a
-// MissingRequiredError; an optional value falls back to its configured
-// fallback, then to an empty string. Values are inserted as inert data, so
-// markup or template expressions inside a value stay literal text.
+// body. A legacy template normalizes by mapping format; a current template
+// renders the supplied values directly, so operator-reviewed final values are
+// never rewritten. Raw values are preserved alongside the replacements. A
+// required value that is empty is reported as a MissingRequiredError; an
+// optional value falls back to its configured fallback, then to an empty
+// string. Values are inserted as inert data, so markup or template expressions
+// inside a value stay literal text.
 func (t *Template) Render(raw map[string]string) (Rendered, error) {
+	resolved, missing := ResolveValues(t.Version, t.Mappings, raw)
 	data := make(map[string]string, len(t.keys))
 	values := make([]Value, 0, len(t.Mappings))
 	var recipient string
-	var missing []string
 	for _, mapping := range t.Mappings {
 		rawValue := raw[mapping.Variable]
-		normalized := Normalize(mapping.Format, rawValue)
-		if normalized == "" {
-			if mapping.Required {
-				missing = append(missing, mapping.Variable)
-			} else {
-				normalized = Normalize(mapping.Format, mapping.Fallback)
-			}
-		}
+		normalized := resolved[mapping.Variable]
 		if mapping.Recipient && normalized != "" {
 			var err error
 			recipient, err = NormalizeRecipient(rawValue)

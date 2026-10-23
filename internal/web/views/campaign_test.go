@@ -17,7 +17,7 @@ func TestCampaignTemplateSectionOrderAndGuidance(t *testing.T) {
 		SourceHeaders:   "Candidate Name, Candidate Email",
 		ExampleVariable: "candidate_name",
 		ExampleHeader:   "Candidate Name",
-		MappingDraft:    "candidate_name | Candidate Name | required | text",
+		MappingDraft:    "candidate_name | Candidate Name | required",
 		HasRevision:     true,
 		Revision:        2,
 		Subject:         "Hello {{candidate_name}}",
@@ -59,7 +59,7 @@ func TestCampaignTemplateSectionOrderAndGuidance(t *testing.T) {
 	if !hasWorkspaceAttr(openForm, "data-open") {
 		t.Error("the first-revision form must open by default")
 	}
-	if got := textOf(workspaceNode(draft, "id", "revision-mappings")); !strings.Contains(got, "candidate_name | Candidate Name | required | text") {
+	if got := textOf(workspaceNode(draft, "id", "revision-mappings")); !strings.Contains(got, "candidate_name | Candidate Name | required") {
 		t.Errorf("first-revision draft = %q, want the derived mapping draft", got)
 	}
 	// A later revision starts empty: only an operator's rejected draft is kept.
@@ -75,9 +75,9 @@ func TestCampaignTemplateSectionOrderAndGuidance(t *testing.T) {
 	// Guidance stays outside placeholders and carries the worked example.
 	guidanceText := textOf(guidance)
 	for _, want := range []string{
-		"variable | source header | role | format | fallback",
+		"variable | source header | role | fallback",
 		"Mark exactly one row as recipient",
-		"candidate_name | Candidate Name | required | text",
+		"candidate_name | Candidate Name | required",
 		"{{candidate_name}}",
 		"Rendered value",
 	} {

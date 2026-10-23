@@ -112,6 +112,9 @@ type RevisionInput struct {
 	// DocumentName is the uploaded file name, used only for the stored file.
 	DocumentName string
 	Mappings     []Mapping
+	// MappingVersion selects how Mappings are read. Zero keeps the legacy
+	// format-bearing table for stored revisions and older tests.
+	MappingVersion int
 }
 
 // CreateRevision converts the document, validates the mapping table against the
@@ -133,7 +136,11 @@ func (s *Service) CreateRevision(ctx context.Context, ownerID, campaignID string
 	if err := ValidateSubject(subject); err != nil {
 		return nil, nil, err
 	}
-	if err := ValidateMappings(input.Mappings); err != nil {
+	version := input.MappingVersion
+	if version < MappingVersionRole {
+		version = MappingVersionLegacy
+	}
+	if err := ValidateMappingsForVersion(version, input.Mappings); err != nil {
 		return nil, nil, err
 	}
 
@@ -152,7 +159,7 @@ func (s *Service) CreateRevision(ctx context.Context, ownerID, campaignID string
 	}
 	bodyHTML := s.policy.Sanitize(converted)
 
-	template, err := Compile(subject, bodyHTML, input.Mappings)
+	template, err := CompileForVersion(version, subject, bodyHTML, input.Mappings)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -170,7 +177,7 @@ func (s *Service) CreateRevision(ctx context.Context, ownerID, campaignID string
 	if err != nil {
 		return nil, nil, err
 	}
-	contentHash := ContentHash(subject, input.Document, input.Mappings, converterVersion)
+	contentHash := ContentHashForVersion(version, subject, input.Document, input.Mappings, converterVersion)
 
 	record := core.NewRecord(collection)
 	record.Set("campaign", campaign.ID)
@@ -180,6 +187,7 @@ func (s *Service) CreateRevision(ctx context.Context, ownerID, campaignID string
 	record.Set("body_html", bodyHTML)
 	record.Set("variables", template.Variables)
 	record.Set("mappings", input.Mappings)
+	record.Set("mapping_version", version)
 	record.Set("content_hash", contentHash)
 	record.Set("converter", converterVersion)
 
@@ -270,7 +278,7 @@ func (s *Service) LoadConfiguration(ctx context.Context, ownerID, id string) (*C
 		return nil, err
 	}
 	configuration := s.configurationFromRecord(record)
-	template, err := Compile(configuration.Subject, configuration.BodyHTML, configuration.Mappings)
+	template, err := CompileForVersion(configuration.MappingVersion, configuration.Subject, configuration.BodyHTML, configuration.Mappings)
 	if err != nil {
 		return nil, fmt.Errorf("revision %d is not renderable: %w", configuration.Revision, err)
 	}
@@ -411,14 +419,15 @@ func (s *Service) campaignFromRecord(record *core.Record) *Campaign {
 
 func (s *Service) configurationFromRecord(record *core.Record) *Configuration {
 	configuration := &Configuration{
-		ID:           record.Id,
-		CampaignID:   record.GetString("campaign"),
-		Revision:     record.GetInt("revision"),
-		Subject:      record.GetString("subject"),
-		BodyHTML:     record.GetString("body_html"),
-		ContentHash:  record.GetString("content_hash"),
-		Converter:    record.GetString("converter"),
-		ApprovedHash: record.GetString("approved_hash"),
+		ID:             record.Id,
+		CampaignID:     record.GetString("campaign"),
+		Revision:       record.GetInt("revision"),
+		MappingVersion: record.GetInt("mapping_version"),
+		Subject:        record.GetString("subject"),
+		BodyHTML:       record.GetString("body_html"),
+		ContentHash:    record.GetString("content_hash"),
+		Converter:      record.GetString("converter"),
+		ApprovedHash:   record.GetString("approved_hash"),
 	}
 	if err := record.UnmarshalJSONField("mappings", &configuration.Mappings); err != nil {
 		configuration.Mappings = nil

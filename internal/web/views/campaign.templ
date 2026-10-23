@@ -573,7 +573,7 @@ templ campaignMappingGuidance(data CampaignPageData) {
 				<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Source headers for mapping draft</p>
 				<code class="wrap-break-words">{ data.SourceHeaders }</code>
 			</div>
-			<p>Write one mapping per line: <code>variable | source header | role | format | fallback</code>. Mark exactly one row as <code>recipient</code> to select the sending address. Every other variable name must match a placeholder in the subject or body.</p>
+			<p>Write one mapping per line: <code>variable | source header | role | fallback</code>. Mark exactly one row as <code>recipient</code> to select the sending address. Every other variable name must match a placeholder in the subject or body. New revisions use no format choice: AI preparation cleans values and the reviewed final text is sent unchanged.</p>
 			<div class="overflow-x-auto rounded-card border border-border">
 				@table.Table(table.Props{Class: "cn-table-compact"}) {
 					<caption class="p-3 text-left font-medium">Column order <span class="font-normal text-muted-foreground">— separate each column with <code>|</code></span></caption>
@@ -582,8 +582,7 @@ templ campaignMappingGuidance(data CampaignPageData) {
 						<tr><td>1 · Variable</td><td><code>{ data.ExampleVariable }</code></td></tr>
 						<tr><td>2 · Source header</td><td><code>{ data.ExampleHeader }</code></td></tr>
 						<tr><td>3 · Role</td><td><code>required</code>, <code>optional</code> or <code>recipient</code></td></tr>
-						<tr><td>4 · Format</td><td><code>text</code>, <code>name</code>, <code>designation</code> or <code>email</code></td></tr>
-						<tr><td>5 · Fallback</td><td>Optional rows only; leave blank otherwise.</td></tr>
+						<tr><td>4 · Fallback</td><td>Optional rows only; leave blank otherwise. A recipient row cannot have a fallback.</td></tr>
 					</tbody>
 				}
 			</div>
@@ -591,7 +590,7 @@ templ campaignMappingGuidance(data CampaignPageData) {
 				<p class="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">Worked example</p>
 				<ol class="list-inside list-decimal space-y-1">
 					<li>Placeholder in the subject or body: <code>{ "{{" + data.ExampleVariable + "}}" }</code></li>
-					<li>Mapping entry: <code>{ data.ExampleVariable + " | " + data.ExampleHeader + " | required | text" }</code></li>
+					<li>Mapping entry: <code>{ data.ExampleVariable + " | " + data.ExampleHeader + " | required" }</code></li>
 					<li>Rendered value: <code>{ "{{" + data.ExampleVariable + "}}" }</code> becomes the value from the <code>{ data.ExampleHeader }</code> column.</li>
 				</ol>
 			</div>
@@ -646,9 +645,9 @@ templ campaignRevisionForm(data CampaignPageData) {
 										Mapping table
 									}
 									@hintTrigger("revision-mappings-help", "Mapping table help") {
-										Enter your mappings one per line: <code>variable | source header | role | format | fallback</code>.
+										Enter your mappings one per line: <code>variable | source header | role | fallback</code>.
 										<br/>
-										Mark exactly one row as <code>recipient</code> to select the sending address, for example <code>candidate_email | Candidate Email | recipient | email</code>.
+										Mark exactly one row as <code>recipient</code> to select the sending address, for example <code>candidate_email | Candidate Email | recipient</code>.
 										<br/>
 										The recipient needs no placeholder. Every other row must match the placeholders in the subject or body.
 									}

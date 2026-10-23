@@ -19,9 +19,9 @@ import (
 )
 
 // validMappings is one complete mapping line in the delivered textarea
-// contract: variable | source header | required|optional | format | fallback.
-const recipientMapping = "candidate_email | Email | recipient | email"
-const validMappings = "candidate_name | Applicant Full Name | required | name\n" + recipientMapping
+// contract: variable | source header | required|optional|recipient | fallback.
+const recipientMapping = "candidate_email | Email | recipient"
+const validMappings = "candidate_name | Applicant Full Name | required\n" + recipientMapping
 
 // stubPandoc writes a deterministic converter stand-in: it reports a version
 // and emits one fixed body containing a placeholder, so revision tests never
@@ -257,7 +257,7 @@ func TestCampaignRevisionValidationInline(t *testing.T) {
 		// The documented direction check: a row whose variable never appears in
 		// the content is rejected with the remedy that names the row.
 		rec := postRevision(t, handler, cookie, id, "Hello {{candidate_name}}",
-			validMappings+"\nrole | Job Title | required | text", docxUpload(t))
+			validMappings+"\nrole | Job Title | required", docxUpload(t))
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%.400s", rec.Code, rec.Body.String())
 		}
@@ -369,8 +369,7 @@ func TestCampaignPreview(t *testing.T) {
 			"Raw value",
 			"Used value",
 			"yash   kumar",
-			"Yash Kumar",
-			"Dear Yash Kumar",
+			"Dear   yash   kumar",
 		} {
 			if !strings.Contains(body, want) {
 				t.Fatalf("preview missing %q: %.900s", want, body)
@@ -471,9 +470,9 @@ func TestCampaignMappingDraft(t *testing.T) {
 	}
 	id, _, _ := strings.Cut(strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/"), "#")
 
-	draft := "candidate_name | Candidate Name | required | text\n" +
-		"candidate_email | Candidate Email | required | text\n" +
-		"expected_department_division | Expected Department/Division | required | text"
+	draft := "candidate_name | Candidate Name | required\n" +
+		"candidate_email | Candidate Email | required\n" +
+		"expected_department_division | Expected Department/Division | required"
 
 	page := do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
 	if page.Code != http.StatusOK {
@@ -523,8 +522,8 @@ func TestCampaignMappingHelpExample(t *testing.T) {
 		header string
 		line   string
 	}{
-		{name: "campaign headers", header: "Candidate Name, Candidate Email", line: "candidate_name | Candidate Name | required | text"},
-		{name: "no usable header", header: "----, 2024 Region", line: "variable_name | Header | required | text"},
+		{name: "campaign headers", header: "Candidate Name, Candidate Email", line: "candidate_name | Candidate Name | required"},
+		{name: "no usable header", header: "----, 2024 Region", line: "variable_name | Header | required"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -557,16 +556,38 @@ func TestCampaignMappingHelpExample(t *testing.T) {
 	}
 }
 
+// New authoring rejects a legacy format-shaped line instead of reading the
+// former format column as fallback text.
+func TestCampaignMappingRejectsLegacyFormatShape(t *testing.T) {
+	_, handler, _ := newCampaignServer(t)
+	cookie := login(t, handler)
+	id := createCampaign(t, handler, cookie, "Legacy shape")
+	for label, raw := range map[string]string{
+		"five columns":   "candidate_name | Applicant Full Name | required | name | Remote",
+		"format in four": "candidate_name | Applicant Full Name | required | name",
+	} {
+		t.Run(label, func(t *testing.T) {
+			rec := postRevision(t, handler, cookie, id, "Hello {{candidate_name}}", raw, docxUpload(t))
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status=%d body=%.400s", rec.Code, rec.Body.String())
+			}
+			if body := rec.Body.String(); !strings.Contains(body, "format") {
+				t.Fatalf("remedy does not name the removed format column: %.600s", body)
+			}
+		})
+	}
+}
+
 func TestCampaignRecipientMapping(t *testing.T) {
 	app, handler, _ := newCampaignServer(t)
 	cookie := login(t, handler)
 	id := createCampaign(t, handler, cookie, "Recipient mapping")
-	name := "candidate_name | Applicant Full Name | required | name"
+	name := "candidate_name | Applicant Full Name | required"
 	for label, raw := range map[string]string{
 		"missing recipient":  name,
 		"two recipients":     name + "\n" + recipientMapping + "\nother_email | Other Email | recipient",
 		"conflicting format": name + "\ncandidate_email | Email | recipient | name",
-		"recipient fallback": name + "\ncandidate_email | Email | recipient | email | fallback@example.com",
+		"recipient fallback": name + "\ncandidate_email | Email | recipient | fallback@example.com",
 	} {
 		t.Run(label, func(t *testing.T) {
 			rec := postRevision(t, handler, cookie, id, "Hello {{candidate_name}}", raw, docxUpload(t))

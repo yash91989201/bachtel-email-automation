@@ -272,8 +272,8 @@ func TestDefaultMappings(t *testing.T) {
 			mappings := DefaultMappings(strings.Split(test.header, ","))
 			var got []string
 			for _, mapping := range mappings {
-				if mapping.Recipient || !mapping.Required || mapping.Format != FormatText || mapping.Fallback != "" {
-					t.Fatalf("draft row %+v is not a required text mapping", mapping)
+				if mapping.Recipient || !mapping.Required || mapping.Format != "" || mapping.Fallback != "" {
+					t.Fatalf("draft row %+v is not a required mapping without a format", mapping)
 				}
 				got = append(got, mapping.Variable+" | "+mapping.Header)
 			}

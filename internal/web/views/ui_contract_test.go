@@ -44,7 +44,7 @@ func TestLoginFormNativeContract(t *testing.T) {
 
 func TestCampaignRevisionFormNativeContract(t *testing.T) {
 	doc := parseView(t, CampaignPage(CampaignPageData{
-		ID: "campaign-1", Name: "Synthetic campaign", MappingDraft: "recipient | Contact Email | recipient | email",
+		ID: "campaign-1", Name: "Synthetic campaign", MappingDraft: "recipient | Contact Email | recipient",
 	}))
 	form := workspaceNode(doc, "action", "/campaigns/campaign-1/revisions#template")
 	if form == nil || form.Data != "form" || workspaceAttr(form, "method") != "post" || workspaceAttr(form, "enctype") != "multipart/form-data" {
@@ -77,7 +77,7 @@ func TestCampaignRevisionFormNativeContract(t *testing.T) {
 	if mappings == nil || mappings.Data != "textarea" || workspaceAttr(mappings, "name") != "mappings" {
 		t.Fatal("revision mappings must remain a named textarea")
 	}
-	if got, want := strings.TrimSpace(viewText(mappings)), "recipient | Contact Email | recipient | email"; got != want {
+	if got, want := strings.TrimSpace(viewText(mappings)), "recipient | Contact Email | recipient"; got != want {
 		t.Errorf("mapping draft = %q, want %q", got, want)
 	}
 	if workspaceAttr(mappings, "aria-describedby") != "revision-mappings-hint revision-mappings-help" {

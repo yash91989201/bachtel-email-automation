@@ -36,7 +36,19 @@ const (
 // invalidates content approval.
 var DefaultResultLabels = []string{"Email Status", "Submitted At", "Email Error"}
 
-// Format selects the replacement-value normalization for one mapping.
+// Mapping versions. Legacy revisions stored an explicit format choice; current
+// authoring stores no format, so a stored format string can never be misread as
+// a fallback.
+const (
+	// MappingVersionLegacy selects the format-bearing mapping table.
+	MappingVersionLegacy = 1
+	// MappingVersionRole selects the current role/fallback mapping table.
+	MappingVersionRole = 2
+	// CurrentMappingVersion is the version every new revision records.
+	CurrentMappingVersion = MappingVersionRole
+)
+
+// Format selects the replacement-value normalization for one legacy mapping.
 type Format string
 
 const (
@@ -65,7 +77,9 @@ type Mapping struct {
 	Required  bool   `json:"required"`
 	Recipient bool   `json:"recipient"`
 	Fallback  string `json:"fallback"`
-	Format    Format `json:"format"`
+	// Format is the legacy normalization choice. Current mapping tables leave
+	// it empty: values are prepared by AI and then preserved verbatim.
+	Format Format `json:"format,omitempty"`
 }
 
 // Variable describes one compiled placeholder and where it is used.
@@ -95,16 +109,19 @@ type Campaign struct {
 
 // Configuration is one immutable content revision.
 type Configuration struct {
-	ID           string
-	CampaignID   string
-	Revision     int
-	Subject      string
-	BodyHTML     string
-	Mappings     []Mapping
-	Variables    []Variable
-	ContentHash  string
-	Converter    string
-	ApprovedHash string
+	ID         string
+	CampaignID string
+	Revision   int
+	// MappingVersion records how Mappings must be read. Zero is a record
+	// written before versions existed and means the legacy format rules.
+	MappingVersion int
+	Subject        string
+	BodyHTML       string
+	Mappings       []Mapping
+	Variables      []Variable
+	ContentHash    string
+	Converter      string
+	ApprovedHash   string
 
 	// Compiled is the rendering template built from Subject, BodyHTML and
 	// Mappings. It is rebuilt whenever the revision is loaded.
@@ -159,15 +176,21 @@ func ValidateVariableName(name string) error {
 	return nil
 }
 
-// ValidateMappings checks the mapping table: one row per variable, unique
-// variables, exactly one recipient, exact header names and a supported format.
-// Recipient mappings imply required email values. A fallback is only
-// meaningful for an optional variable, so declaring one on a required variable
-// is rejected instead of being silently ignored.
+// ValidateMappings checks a legacy mapping table. It is kept for stored
+// revisions and tests that predate mapping versions.
 func ValidateMappings(mappings []Mapping) error {
+	return ValidateMappingsForVersion(MappingVersionLegacy, mappings)
+}
+
+// ValidateMappingsForVersion checks the mapping table for one version: one row
+// per variable, unique variables, exactly one required recipient, exact header
+// names and a valid fallback. Legacy tables also require a supported format;
+// current tables reject a format outright.
+func ValidateMappingsForVersion(version int, mappings []Mapping) error {
 	if len(mappings) == 0 {
 		return ErrNoMappings
 	}
+	legacy := version < MappingVersionRole
 	seen := make(map[string]struct{}, len(mappings))
 	recipients := 0
 	for i, mapping := range mappings {
@@ -185,18 +208,27 @@ func ValidateMappings(mappings []Mapping) error {
 		if mapping.Recipient {
 			recipients++
 			mapping.Required = true
-			if mapping.Format == "" {
-				mapping.Format = FormatEmail
-			}
-			if mapping.Format != FormatEmail {
-				return fmt.Errorf("recipient variable %q must use email formatting", variable)
+			if legacy {
+				if mapping.Format == "" {
+					mapping.Format = FormatEmail
+				}
+				if mapping.Format != FormatEmail {
+					return fmt.Errorf("recipient variable %q must use email formatting", variable)
+				}
 			}
 		}
-		if !mapping.Format.Valid() {
-			return fmt.Errorf("variable %q has unsupported formatting %q", variable, mapping.Format)
+		if legacy {
+			if !mapping.Format.Valid() {
+				return fmt.Errorf("variable %q has unsupported formatting %q", variable, mapping.Format)
+			}
+		} else if mapping.Format != "" {
+			return fmt.Errorf("variable %q selects formatting %q; mapping formats are no longer supported, so remove that column", variable, mapping.Format)
 		}
 		if mapping.Required && strings.TrimSpace(mapping.Fallback) != "" {
 			return fmt.Errorf("variable %q is required, so it cannot have a fallback", mapping.Variable)
+		}
+		if mapping.Recipient && strings.TrimSpace(mapping.Fallback) != "" {
+			return fmt.Errorf("recipient variable %q cannot have a fallback", variable)
 		}
 		mapping.Variable = variable
 		mapping.Header = strings.TrimSpace(mapping.Header)
@@ -209,10 +241,11 @@ func ValidateMappings(mappings []Mapping) error {
 }
 
 // DefaultMappings derives the draft mapping table for a campaign that has no
-// revision yet: one required text mapping per source header. The variable name is the header lowercased with every run
-// of non-alphanumeric characters replaced by one underscore. A header that
-// cannot form a variable name, and a name that repeats an earlier one, is
-// omitted. The operator must explicitly mark one row as recipient.
+// revision yet: one required mapping per source header. The variable name is
+// the header lowercased with every run of non-alphanumeric characters replaced
+// by one underscore. A header that cannot form a variable name, and a name that
+// repeats an earlier one, is omitted. The operator must explicitly mark one row
+// as recipient.
 func DefaultMappings(sourceHeaders []string) []Mapping {
 	seen := make(map[string]struct{})
 	var mappings []Mapping
@@ -233,7 +266,6 @@ func DefaultMappings(sourceHeaders []string) []Mapping {
 			Variable: variable,
 			Header:   header,
 			Required: true,
-			Format:   FormatText,
 		})
 	}
 	return mappings
@@ -301,27 +333,88 @@ func NormalizeResultLabels(labels []string) []string {
 	return normalized
 }
 
-// ContentHash identifies exactly the personalized content of a revision: the
-// subject, the body document bytes, the mapping table and the converter that
-// produced the body. Output labels, names and timestamps are deliberately
-// excluded, so a presentation-only change keeps the approval valid.
+// MappingLabels returns the deterministic sending-sheet column label of every
+// mapping, in mapping order. The source header is used when exactly one
+// mapping references it; a shared header is qualified with its variable name.
+// Remaining collisions, including a literal header that already has the same
+// qualified shape, receive the documented numbered suffix. Export and final
+// import use this one table, so no fuzzy matching or parenthesis parsing is
+// needed on either side.
+func MappingLabels(mappings []Mapping) []string {
+	counts := make(map[string]int, len(mappings))
+	for _, mapping := range mappings {
+		counts[strings.TrimSpace(mapping.Header)]++
+	}
+	occupied := make(map[string]struct{}, len(mappings))
+	labels := make([]string, 0, len(mappings))
+	for _, mapping := range mappings {
+		header := strings.TrimSpace(mapping.Header)
+		base := header
+		if counts[header] > 1 || header == "" {
+			base = header + " (" + mapping.Variable + ")"
+		}
+		candidate := base
+		for suffix := 2; ; suffix++ {
+			if _, taken := occupied[candidate]; !taken {
+				break
+			}
+			candidate = fmt.Sprintf("%s (%d)", base, suffix)
+		}
+		occupied[candidate] = struct{}{}
+		labels = append(labels, candidate)
+	}
+	return labels
+}
+
+// MappingIndex resolves a sending-sheet label to its mapping position. It
+// reports whether the label belongs to exactly one mapping; a missing or
+// ambiguous label is refused instead of guessing a column.
+func MappingIndex(label string, labels []string) (int, bool) {
+	found := -1
+	for index, candidate := range labels {
+		if candidate != label {
+			continue
+		}
+		if found >= 0 {
+			return -1, false
+		}
+		found = index
+	}
+	return found, found >= 0
+}
+
+// ContentHash identifies exactly the personalized content of one legacy
+// revision: the subject, the body document bytes, the mapping table and the
+// converter that produced the body. Output labels, names and timestamps are
+// deliberately excluded, so a presentation-only change keeps the approval
+// valid.
 func ContentHash(subject string, document []byte, mappings []Mapping, converter string) string {
+	return ContentHashForVersion(MappingVersionLegacy, subject, document, mappings, converter)
+}
+
+// ContentHashForVersion is ContentHash plus the mapping-table version. A
+// versioned table is a different interpretation of the same text, so it must
+// never share an identity with a legacy table. The legacy hash omits the
+// version field so existing stored hashes keep their historical form.
+func ContentHashForVersion(version int, subject string, document []byte, mappings []Mapping, converter string) string {
 	type canonical struct {
-		Subject     string    `json:"subject"`
-		Document    string    `json:"document_sha256"`
-		Mappings    []Mapping `json:"mappings"`
-		Converter   string    `json:"converter"`
-		HashVersion string    `json:"hash_version"`
+		Subject        string    `json:"subject"`
+		Document       string    `json:"document_sha256"`
+		Mappings       []Mapping `json:"mappings"`
+		Converter      string    `json:"converter"`
+		HashVersion    string    `json:"hash_version"`
+		MappingVersion int       `json:"mapping_version,omitempty"`
 	}
 	ordered := slices.Clone(mappings)
 	slices.SortFunc(ordered, func(a, b Mapping) int { return strings.Compare(a.Variable, b.Variable) })
 	documentSum := sha256.Sum256(document)
 	payload, err := json.Marshal(canonical{
-		Subject:     subject,
-		Document:    hex.EncodeToString(documentSum[:]),
-		Mappings:    ordered,
-		Converter:   converter,
-		HashVersion: "1",
+		Subject:        subject,
+		Document:       hex.EncodeToString(documentSum[:]),
+		Mappings:       ordered,
+		Converter:      converter,
+		HashVersion:    "1",
+		MappingVersion: version,
 	})
 	if err != nil {
 		// Mapping values are plain strings and structs; marshaling cannot fail.
