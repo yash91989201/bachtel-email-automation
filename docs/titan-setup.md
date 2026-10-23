@@ -1,5 +1,8 @@
 # Titan connection setup
 
+Connect and repair the mailbox from the Account **Mailbox** section (`/account`);
+legacy `/connection` links open the same section.
+
 Titan mailboxes need no provider registration. The operator connects their own
 mailbox from `/connection`; the deployment needs only `APP_ENCRYPTION_KEY` to
 store the password encrypted.

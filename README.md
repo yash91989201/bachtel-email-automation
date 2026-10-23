@@ -169,7 +169,9 @@ Microsoft setup, [docs/titan-setup.md](docs/titan-setup.md) for connecting a
 GoDaddy Titan mailbox, and
 [docs/mailbox-replacement.md](docs/mailbox-replacement.md) for reconnecting the
 same mailbox, rotating its application settings, or replacing it with a
-different one.
+different one. [docs/account-settings.md](docs/account-settings.md) covers the
+Account settings sections, the private AI connection, connection locking and
+terminal task closure.
 
 ## DOCX converter
 
@@ -307,6 +309,7 @@ docs/task-intake.md             Task workbook support, header matching, duplicat
 docs/microsoft-setup.md         Per-operator Microsoft app registration and connection setup
 docs/titan-setup.md             GoDaddy Titan mailbox connection setup
 docs/mailbox-replacement.md     Reconnecting the same mailbox, rotating its application settings, and replacing it with a different one
+docs/account-settings.md        Account mailbox/AI sections, private AI connection, connection lock and Close task
 web/css/app.css                 Tailwind entry and application layout styles
 web/css/theme.css               Resolved preset tokens and application status colors
 web/css/components.css          Bachtel styling for owned UI primitives

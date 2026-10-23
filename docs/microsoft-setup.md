@@ -3,7 +3,9 @@
 Each operator connects their own Microsoft 365 mailbox. The application
 registration belongs to the operator, not to the deployment: every operator
 creates — or is given — an Entra app registration in their own tenant, saves
-its Tenant ID, Client ID and Client Secret on `/connection`, and then signs in.
+its Tenant ID, Client ID and Client Secret in the Account **Mailbox** section
+(`/account`; legacy `/connection` links open the same section), and then signs
+in.
 The deployment supplies only the public origin and the credential-encryption
 key; it holds no Microsoft credentials.
 
