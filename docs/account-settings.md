@@ -1,16 +1,17 @@
 # Account settings: mailbox, AI connection, and task closure
 
-Account settings (`/account`) holds the one sending mailbox and the one private
-AI connection for the signed-in operator. Campaign settings stay on the
-campaign page. No connection change ever starts processing, prepares a
+Account settings hold the one sending mailbox and the one private AI connection
+for the signed-in operator. Mailbox lives at `/account/mailbox` and the AI
+connection at `/account/ai`; there is no separate Account landing page.
+Campaign settings stay on the campaign page. No connection change ever starts processing, prepares a
 workbook, or sends email.
 
 ## Sections and navigation
 
-- **Mailbox** (`/account`) keeps the existing provider-first setup, Microsoft
-  authorization callback, Titan validation, replacement confirmation, and
-  exclusive sender claim. The former `/connection` links render the same
-  Account mailbox section, so bookmarks keep working without a second mailbox
+- **Mailbox** (`/account/mailbox`) keeps the existing provider-first setup,
+  Microsoft authorization callback, Titan validation, replacement confirmation,
+  and exclusive sender claim. The former `/account` and `/connection` landing
+  URLs return 404; there is no compatibility redirect and no second mailbox
   surface.
 - **AI connection** (`/account/ai`) configures the operator's single confirmed
   AI provider, exact model, resolved API format and API key. Supported presets

@@ -174,26 +174,16 @@ func (s *server) replacementData(ctx context.Context, ownerID string, operation 
 	return data
 }
 
-func (s *server) handleConnection(w http.ResponseWriter, r *http.Request) {
-	// The legacy path renders the same Account mailbox section: there is no
-	// second mailbox management surface.
-	data := s.accountMailboxData(r, accountNotices[r.URL.Query().Get("notice")])
-	if provider := r.URL.Query().Get("provider"); mailbox.Provider(provider).Valid() {
-		data.Connection.SelectedProvider = provider
-	}
-	s.render(w, r, views.AccountPage(data))
-}
-
 func (s *server) handleReplacement(w http.ResponseWriter, r *http.Request) {
 	ownerID := recordFromContext(r).Id
 	operation, err := s.mailboxes.ActiveReset(r.Context(), ownerID)
 	if err != nil || operation.Status != mailbox.ResetStaging {
-		http.Redirect(w, r, "/connection", http.StatusSeeOther)
+		http.Redirect(w, r, "/account/mailbox", http.StatusSeeOther)
 		return
 	}
 	data := s.connectionData(r, "")
 	if data.Replacement == nil {
-		http.Redirect(w, r, "/connection", http.StatusSeeOther)
+		http.Redirect(w, r, "/account/mailbox", http.StatusSeeOther)
 		return
 	}
 	data.LastError = data.Notice
@@ -221,7 +211,7 @@ func (s *server) handleMicrosoftSettings(w http.ResponseWriter, r *http.Request)
 		s.render(w, r, views.ConnectionPage(data))
 		return
 	}
-	http.Redirect(w, r, "/connection?provider=microsoft365&notice=settings-saved", http.StatusSeeOther)
+	http.Redirect(w, r, "/account/mailbox?provider=microsoft365&notice=settings-saved", http.StatusSeeOther)
 }
 
 // settingsMessage maps a rejected settings save to operator text. Only field
@@ -259,7 +249,7 @@ func (s *server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	code := r.URL.Query().Get("code")
 	if state == "" || code == "" {
-		http.Redirect(w, r, "/connection?provider=microsoft365&notice=incomplete", http.StatusSeeOther)
+		http.Redirect(w, r, "/account/mailbox?provider=microsoft365&notice=incomplete", http.StatusSeeOther)
 		return
 	}
 	_, err := s.connections.CompleteAuth(r.Context(), record.Id, state, code)
@@ -273,10 +263,10 @@ func (s *server) handleCallback(w http.ResponseWriter, r *http.Request) {
 		s.app.Logger().Error("complete microsoft authorization", "error", err)
 		// Leave the single-use callback URL so refreshing the error page cannot
 		// replay it and obscure the original failure.
-		http.Redirect(w, r, "/connection?provider=microsoft365&notice="+connectionErrorCode(err), http.StatusSeeOther)
+		http.Redirect(w, r, "/account/mailbox?provider=microsoft365&notice="+connectionErrorCode(err), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/connection", http.StatusSeeOther)
+	http.Redirect(w, r, "/account/mailbox", http.StatusSeeOther)
 }
 
 func (s *server) handleTitanConnect(w http.ResponseWriter, r *http.Request) {
@@ -335,7 +325,7 @@ func (s *server) handleTitanConnect(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/connection/replace", http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/connection", http.StatusSeeOther)
+	http.Redirect(w, r, "/account/mailbox", http.StatusSeeOther)
 }
 
 func (s *server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
@@ -366,7 +356,7 @@ func (s *server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
 		s.render(w, r, views.ConnectionPage(s.connectionData(r, s.connectionMessage(err))))
 		return
 	}
-	http.Redirect(w, r, "/connection", http.StatusSeeOther)
+	http.Redirect(w, r, "/account/mailbox", http.StatusSeeOther)
 }
 
 func (s *server) handleReplaceConfirm(w http.ResponseWriter, r *http.Request) {
@@ -374,10 +364,10 @@ func (s *server) handleReplaceConfirm(w http.ResponseWriter, r *http.Request) {
 	ownerID := recordFromContext(r).Id
 	if err := s.resets.Confirm(r.Context(), ownerID, strings.TrimSpace(r.FormValue("reset"))); err != nil {
 		s.app.Logger().Error("confirm mailbox replacement", "error", err)
-		http.Redirect(w, r, "/connection?notice="+connectionErrorCode(err), http.StatusSeeOther)
+		http.Redirect(w, r, "/account/mailbox?notice="+connectionErrorCode(err), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/connection?notice=reset-started", http.StatusSeeOther)
+	http.Redirect(w, r, "/account/mailbox?notice=reset-started", http.StatusSeeOther)
 }
 
 func (s *server) handleReplaceCancel(w http.ResponseWriter, r *http.Request) {
@@ -386,5 +376,5 @@ func (s *server) handleReplaceCancel(w http.ResponseWriter, r *http.Request) {
 	if err := s.mailboxes.CancelReset(r.Context(), ownerID, strings.TrimSpace(r.FormValue("reset"))); err != nil {
 		s.app.Logger().Error("cancel mailbox replacement", "error", err)
 	}
-	http.Redirect(w, r, "/connection", http.StatusSeeOther)
+	http.Redirect(w, r, "/account/mailbox", http.StatusSeeOther)
 }

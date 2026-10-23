@@ -105,7 +105,7 @@ func TestTaskOverviewKeepsHeaderCompact(t *testing.T) {
 			{Name: "Sending", State: "Not started"},
 			{Name: "Results", State: "Not available yet"},
 		},
-		Blockers: []TaskBlocker{{Label: "Mailbox unavailable", Remedy: "Reconnect before sending", Href: "/connection"}},
+		Blockers: []TaskBlocker{{Label: "Mailbox unavailable", Remedy: "Reconnect before sending", Href: "/account/mailbox"}},
 	}
 	page := renderWorkspace(t, TaskPage(data))
 	doc, err := html.Parse(strings.NewReader(page))
@@ -236,9 +236,9 @@ func TestTaskLifecycleEvidenceAndSectionLinks(t *testing.T) {
 		t.Fatal("external #template action must place current status explanation in Recipients tooltip")
 	}
 
-	data.NextHref, data.NextLabel, data.StatusExplanation = "/connection", "Reconnect mailbox", "Connection must be restored before sending."
+	data.NextHref, data.NextLabel, data.StatusExplanation = "/account/mailbox", "Reconnect mailbox", "Connection must be restored before sending."
 	data.Blockers = []TaskBlocker{
-		{Label: "Mailbox unavailable", Remedy: "Reconnect before sending", Href: "/connection"},
+		{Label: "Mailbox unavailable", Remedy: "Reconnect before sending", Href: "/account/mailbox"},
 		{Label: "Restore review", Remedy: "Reconcile submissions before sending", Href: "/restore-review"},
 	}
 	doc, err = html.Parse(strings.NewReader(renderWorkspace(t, taskLifecycle(data))))
@@ -255,7 +255,7 @@ func TestTaskLifecycleEvidenceAndSectionLinks(t *testing.T) {
 			t.Errorf("sending blocker label %q is not visible", label)
 		}
 	}
-	for _, href := range []string{"/connection", "/restore-review"} {
+	for _, href := range []string{"/account/mailbox", "/restore-review"} {
 		if workspaceNode(sendingStep, "href", href) == nil {
 			t.Errorf("sending remedy/next-action link %q is not visible", href)
 		}
@@ -850,7 +850,7 @@ func TestConnectedMailboxProviderSetupIsExplicit(t *testing.T) {
 				t.Fatalf("provider setup present = %t, want %t", got, tc.wantSetup)
 			}
 			if tc.data.Status == "connected" && !tc.data.ResetBlocked {
-				if workspaceNode(doc, "id", "mailbox-disconnect-form") == nil || workspaceNode(doc, "href", "/account?change_provider=1#provider-setup") == nil {
+				if workspaceNode(doc, "id", "mailbox-disconnect-form") == nil || workspaceNode(doc, "href", "/account/mailbox?change_provider=1#provider-setup") == nil {
 					t.Fatal("connected mailbox needs Disconnect and Change provider actions")
 				}
 			}
@@ -934,7 +934,7 @@ func TestAccountSectionsAreIndependentlyReachable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if workspaceNode(doc, "href", "/account") == nil || workspaceNode(doc, "href", "/account/ai") == nil {
+	if workspaceNode(doc, "href", "/account/mailbox") == nil || workspaceNode(doc, "href", "/account/ai") == nil {
 		t.Fatal("account navigation must expose both sections")
 	}
 	if workspaceNode(doc, "id", "mailbox-disconnect-form") == nil {
@@ -976,10 +976,10 @@ func TestLockedMailboxKeepsOnlySameMailboxRepair(t *testing.T) {
 	if workspaceNode(doc, "id", "mailbox-disconnect-form") != nil {
 		t.Fatal("locked mailbox still offered Disconnect")
 	}
-	if workspaceNode(doc, "href", "/account?change_provider=1#provider-setup") != nil {
+	if workspaceNode(doc, "href", "/account/mailbox?change_provider=1#provider-setup") != nil {
 		t.Fatal("locked mailbox still offered an unrestricted provider switch")
 	}
-	if workspaceNode(doc, "href", "/account?provider=godaddy-titan") == nil {
+	if workspaceNode(doc, "href", "/account/mailbox?provider=godaddy-titan") == nil {
 		t.Fatal("locked mailbox lost same-mailbox repair")
 	}
 }

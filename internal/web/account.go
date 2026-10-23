@@ -311,10 +311,9 @@ func aiGuidance(provider ai.Provider) []string {
 	return preset.Guidance
 }
 
-// handleAccount renders the Account mailbox section. The legacy /connection
-// route renders the same page, so bookmarks keep working without a second
-// mailbox surface.
-func (s *server) handleAccount(w http.ResponseWriter, r *http.Request) {
+// handleAccountMailbox renders the canonical Mailbox section at
+// /account/mailbox. No parent Account landing page exists.
+func (s *server) handleAccountMailbox(w http.ResponseWriter, r *http.Request) {
 	data := s.accountMailboxData(r, accountNotices[r.URL.Query().Get("notice")])
 	if provider := r.URL.Query().Get("provider"); mailbox.Provider(provider).Valid() {
 		data.Connection.SelectedProvider = provider

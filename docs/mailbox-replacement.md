@@ -11,7 +11,7 @@ workspace.
 
 | Route | Purpose |
 | --- | --- |
-| `GET /connection` | Connection page: status, provider, mailbox address, connect forms, disconnect |
+| `GET /account/mailbox` | Connection page: status, provider, mailbox address, connect forms, disconnect |
 | `POST /connection/microsoft/connect` | Start a Microsoft 365 authorization |
 | `GET /connection/callback` | Microsoft redirect; must match an in-flight authorization attempt |
 | `POST /connection/titan` | Validate and connect a GoDaddy Titan mailbox |
@@ -37,12 +37,12 @@ dispatch stops launching new requests and settles the active ones first.
 
 Rotating the Microsoft client secret, or moving to a new client id, for the
 **same** verified mailbox is a settings change, not a replacement. The
-operator does it on `/connection`:
+operator does it on `/account/mailbox`:
 
-1. Save the new Tenant ID, Client ID and Client Secret on `/connection`. The
+1. Save the new Tenant ID, Client ID and Client Secret on `/account/mailbox`. The
    new registration is staged; the active registration and its credentials
    stay untouched.
-2. Sign in again from `/connection` under the staged registration.
+2. Sign in again from `/account/mailbox` under the staged registration.
 
 What that means:
 
@@ -65,7 +65,7 @@ before anything changes. Provider setup and rotation are documented in
 Connecting a different mailbox (either provider) always goes through an
 explicit staged replacement. Unsupported providers are refused.
 
-1. Submit the new mailbox on `/connection` (Microsoft sign-in or Titan
+1. Submit the new mailbox on `/account/mailbox` (Microsoft sign-in or Titan
    credentials). The application validates the mailbox and **claims its
    address** for the staged target; nothing existing is changed yet.
 2. `GET /connection/replace` shows the current and proposed mailbox and the

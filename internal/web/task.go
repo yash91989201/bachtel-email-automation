@@ -824,7 +824,7 @@ func nextHref(task *intake.Task, next presentation.NextLink) string {
 	case presentation.DestCampaignTasks:
 		return "/campaigns/" + task.CampaignID + "#tasks"
 	case presentation.DestMailbox:
-		return "/account"
+		return "/account/mailbox"
 	}
 	if next.Section != "" {
 		return taskPath(task) + "#" + next.Section
@@ -835,7 +835,7 @@ func nextHref(task *intake.Task, next presentation.NextLink) string {
 // blockerHref resolves a blocker remedy to its destination.
 func blockerHref(task *intake.Task, blocker presentation.Blocker) string {
 	if blocker.Destination == presentation.DestMailbox {
-		return "/account"
+		return "/account/mailbox"
 	}
 	if blocker.Section != "" {
 		return taskPath(task) + "#" + blocker.Section

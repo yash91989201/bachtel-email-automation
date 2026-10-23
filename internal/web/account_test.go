@@ -1,8 +1,9 @@
 package web
 
-// Account settings surface tests: the mailbox section keeps legacy paths,
-// AI setup validates the exact configuration with a simulated endpoint,
-// activation is explicit, and connection switches are locked by pending tasks.
+// Account settings surface tests: the sections live at /account/mailbox and
+// /account/ai with the old landing URLs retired to 404, AI setup validates
+// the exact configuration with a simulated endpoint, activation is explicit,
+// and connection switches are locked by pending tasks.
 
 import (
 	"encoding/json"
@@ -78,27 +79,18 @@ func TestAccountSettingsSections(t *testing.T) {
 	provisionOperator(t, app)
 	cookie := login(t, handler)
 
-	page := do(t, handler, http.MethodGet, "/account", nil, withCookie(cookie))
+	page := do(t, handler, http.MethodGet, "/account/mailbox", nil, withCookie(cookie))
 	if page.Code != http.StatusOK {
 		t.Fatalf("account page: %d", page.Code)
 	}
 	body := page.Body.String()
-	for _, want := range []string{"Account settings", `href="/account/ai"`, "Mailbox connection", `href="/account?provider=godaddy-titan"`} {
+	for _, want := range []string{"Account settings", `href="/account/ai"`, "Mailbox connection", `href="/account/mailbox?provider=godaddy-titan"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("account page missing %q: %.400s", want, body)
 		}
 	}
 	if strings.Contains(body, "Client Secret") {
 		t.Fatal("mailbox credentials rendered before provider selection")
-	}
-
-	// The legacy mailbox path renders the same section, not a second surface.
-	legacy := do(t, handler, http.MethodGet, "/connection", nil, withCookie(cookie))
-	if legacy.Code != http.StatusOK || !strings.Contains(legacy.Body.String(), "Mailbox connection") {
-		t.Fatalf("legacy mailbox page: %d", legacy.Code)
-	}
-	if strings.Count(legacy.Body.String(), `href="/account/ai"`) != 1 {
-		t.Fatal("legacy page is not the Account shell")
 	}
 
 	aiPage := do(t, handler, http.MethodGet, "/account/ai", nil, withCookie(cookie))
@@ -113,6 +105,133 @@ func TestAccountSettingsSections(t *testing.T) {
 	}
 	if strings.Contains(aiBody, "ai-secret-key") {
 		t.Fatal("AI page leaked a submitted key")
+	}
+}
+
+// accountSectionsNav extracts the Account sections tab nav so current-tab
+// assertions stay scoped to the tabs, not the layout's main navigation.
+func accountSectionsNav(body string) string {
+	before, _, ok := strings.Cut(body, `aria-label="Account sections"`)
+	if !ok {
+		return ""
+	}
+	start := strings.LastIndex(before, "<nav")
+	if start < 0 {
+		return ""
+	}
+	section, _, ok := strings.Cut(body[start:], "</nav>")
+	if !ok {
+		return ""
+	}
+	return section
+}
+
+// tabIsCurrent reports whether the anchor with the given href inside the
+// tab nav carries aria-current="page".
+func tabIsCurrent(nav, href string) bool {
+	start := strings.Index(nav, `href="`+href+`"`)
+	if start < 0 {
+		return false
+	}
+	end := strings.Index(nav[start:], ">")
+	if end < 0 {
+		return false
+	}
+	return strings.Contains(nav[start:start+end], `aria-current="page"`)
+}
+
+func assertCurrentAccountTab(t *testing.T, body, wantHref, otherHref string) {
+	t.Helper()
+	nav := accountSectionsNav(body)
+	if nav == "" {
+		t.Fatalf("account sections nav missing: %.400s", body)
+	}
+	if got := strings.Count(nav, `aria-current="page"`); got != 1 {
+		t.Fatalf("account tabs mark %d current, want exactly 1: %.400s", got, nav)
+	}
+	if !tabIsCurrent(nav, wantHref) {
+		t.Fatalf("tab %s is not current: %.400s", wantHref, nav)
+	}
+	if tabIsCurrent(nav, otherHref) {
+		t.Fatalf("tab %s must not be current: %.400s", otherHref, nav)
+	}
+}
+
+// TestUnusedAccountLandingURLsReturn404 pins the canonical section paths:
+// /account/mailbox and /account/ai are the only settings pages, and the old
+// landing URLs are gone without redirects.
+func TestUnusedAccountLandingURLsReturn404(t *testing.T) {
+	app, handler := newTestServer(t, testConfig("http://127.0.0.1:8090"))
+	provisionOperator(t, app)
+	cookie := login(t, handler)
+
+	for _, target := range []string{
+		"/account",
+		"/account/connections",
+		"/connection",
+		"/account?provider=microsoft365",
+		"/account?notice=validated",
+		"/account?change_provider=1",
+		"/connection?provider=godaddy-titan&notice=state",
+	} {
+		rec := do(t, handler, http.MethodGet, target, nil, withCookie(cookie))
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("GET %s: status=%d, want 404", target, rec.Code)
+		}
+		if location := rec.Header().Get("Location"); location != "" {
+			t.Fatalf("GET %s: Location=%q, want no redirect", target, location)
+		}
+		body := rec.Body.String()
+		if strings.Contains(body, "Mailbox connection") || strings.Contains(body, "Account settings") {
+			t.Fatalf("GET %s rendered a settings page: %.400s", target, body)
+		}
+	}
+
+	// The canonical mailbox page is stable across consecutive requests.
+	for range 2 {
+		page := do(t, handler, http.MethodGet, "/account/mailbox", nil, withCookie(cookie))
+		if page.Code != http.StatusOK {
+			t.Fatalf("mailbox page: %d", page.Code)
+		}
+		assertCurrentAccountTab(t, page.Body.String(), "/account/mailbox", "/account/ai")
+	}
+
+	aiPage := do(t, handler, http.MethodGet, "/account/ai", nil, withCookie(cookie))
+	if aiPage.Code != http.StatusOK {
+		t.Fatalf("AI page: %d", aiPage.Code)
+	}
+	assertCurrentAccountTab(t, aiPage.Body.String(), "/account/ai", "/account/mailbox")
+
+	anonymous := do(t, handler, http.MethodGet, "/account/mailbox", nil, nil)
+	if anonymous.Code != http.StatusSeeOther || anonymous.Header().Get("Location") != "/login" {
+		t.Fatalf("anonymous mailbox page: status=%d location=%q", anonymous.Code, anonymous.Header().Get("Location"))
+	}
+
+	// An unknown provider renders the chooser, never a credential form.
+	bogus := do(t, handler, http.MethodGet, "/account/mailbox?provider=bogus", nil, withCookie(cookie))
+	if bogus.Code != http.StatusOK {
+		t.Fatalf("bogus provider: status=%d", bogus.Code)
+	}
+	bogusBody := bogus.Body.String()
+	if strings.Contains(bogusBody, `action="/connection/titan"`) || strings.Contains(bogusBody, `action="/connection/microsoft/settings"`) {
+		t.Fatalf("bogus provider rendered a credential form: %.400s", bogusBody)
+	}
+	if !strings.Contains(bogusBody, `href="/account/mailbox?provider=godaddy-titan"`) {
+		t.Fatalf("bogus provider page lost the Titan chooser: %.400s", bogusBody)
+	}
+
+	// An unknown notice code is ignored, never echoed.
+	notices := do(t, handler, http.MethodGet, "/account/mailbox?notice=untrusted-text", nil, withCookie(cookie))
+	if notices.Code != http.StatusOK {
+		t.Fatalf("untrusted notice: status=%d", notices.Code)
+	}
+	if strings.Contains(notices.Body.String(), "untrusted-text") {
+		t.Fatalf("notice parameter echoed back: %.400s", notices.Body.String())
+	}
+
+	// None of these landing requests created a mailbox connection.
+	if count, err := app.CountRecords(mailbox.ConnectionsCollection); err != nil || count != 0 {
+		t.Fatalf("landing requests created %d connection records (err=%v)", count, err)
 	}
 }
 
@@ -177,7 +296,7 @@ func TestAISwitchIsLockedByPendingTaskButInitialSetupAndRepairWork(t *testing.T)
 		{"one@example.test"},
 	}))
 	taskID := taskIDFromRedirect(t, upload, campaignID)
-	locked := do(t, handler, http.MethodGet, "/account", nil, withCookie(cookie))
+	locked := do(t, handler, http.MethodGet, "/account/mailbox", nil, withCookie(cookie))
 	if !strings.Contains(locked.Body.String(), "book.xlsx") || !strings.Contains(locked.Body.String(), taskID) {
 		t.Fatalf("account page lacks the named blocking task: %.600s", locked.Body.String())
 	}

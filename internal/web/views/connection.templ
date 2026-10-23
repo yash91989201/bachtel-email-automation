@@ -138,7 +138,7 @@ templ connectionSection(data ConnectionData) {
 					if data.Locked {
 						<p class="text-sm status-warning">{ data.LockMessage }</p>
 						if data.Provider != "" && data.SenderAddress != "" {
-							<a class="app-link text-primary text-sm" href={ "/account?provider=" + data.Provider }>Repair this mailbox connection</a>
+							<a class="app-link text-primary text-sm" href={ "/account/mailbox?provider=" + data.Provider }>Repair this mailbox connection</a>
 						}
 					} else if data.Status != string(mailbox.StatusDisconnected) && data.SenderAddress != "" {
 						<form id="mailbox-disconnect-form" method="post" action="/connection/disconnect">
@@ -167,7 +167,7 @@ templ connectionSection(data ConnectionData) {
 							}
 						</form>
 						if !data.ResetBlocked {
-							@button.Button(button.Props{Variant: button.VariantOutline, Href: "/account?change_provider=1#provider-setup"}) {
+							@button.Button(button.Props{Variant: button.VariantOutline, Href: "/account/mailbox?change_provider=1#provider-setup"}) {
 								Change provider
 							}
 						}
@@ -199,12 +199,12 @@ templ connectionSection(data ConnectionData) {
 				}
 				if data.SelectedProvider == "" {
 					<div class="grid grid-cols-2 gap-4 max-[760px]:grid-cols-1" aria-label="Choose a mailbox provider">
-						<a class="block rounded-4xl border bg-card p-5 hover:border-primary focus-visible:outline-2" href="/account?provider=microsoft365"><h3 class="font-semibold">Microsoft 365</h3><p class="mt-2 text-muted-foreground text-sm">Connect with your own Microsoft application registration.</p><span class="mt-4 inline-block text-sm font-semibold">Choose Microsoft 365 →</span></a>
-						<a class="block rounded-4xl border bg-card p-5 hover:border-primary focus-visible:outline-2" href="/account?provider=godaddy-titan"><h3 class="font-semibold">Titan</h3><p class="mt-2 text-muted-foreground text-sm">Connect with your mailbox address and email password.</p><span class="mt-4 inline-block text-sm font-semibold">Choose Titan →</span></a>
+						<a class="block rounded-4xl border bg-card p-5 hover:border-primary focus-visible:outline-2" href="/account/mailbox?provider=microsoft365"><h3 class="font-semibold">Microsoft 365</h3><p class="mt-2 text-muted-foreground text-sm">Connect with your own Microsoft application registration.</p><span class="mt-4 inline-block text-sm font-semibold">Choose Microsoft 365 →</span></a>
+						<a class="block rounded-4xl border bg-card p-5 hover:border-primary focus-visible:outline-2" href="/account/mailbox?provider=godaddy-titan"><h3 class="font-semibold">Titan</h3><p class="mt-2 text-muted-foreground text-sm">Connect with your mailbox address and email password.</p><span class="mt-4 inline-block text-sm font-semibold">Choose Titan →</span></a>
 					</div>
 				} else if data.SelectedProvider == string(mailbox.ProviderTitan) {
 					if !data.Locked {
-						<p><a class="text-primary underline" href="/account?change_provider=1#provider-setup">← Change provider</a></p>
+						<p><a class="text-primary underline" href="/account/mailbox?change_provider=1#provider-setup">← Change provider</a></p>
 					}
 				}
 				<div class="grid gap-6 max-[760px]:grid-cols-1">
@@ -253,7 +253,7 @@ templ connectionSection(data ConnectionData) {
 											Continue with Microsoft 365
 										}
 									}
-									@button.Button(button.Props{Variant: button.VariantGhost, Href: "/account?change_provider=1#provider-setup"}) {
+									@button.Button(button.Props{Variant: button.VariantGhost, Href: "/account/mailbox?change_provider=1#provider-setup"}) {
 										Change provider
 									}
 								</form>
@@ -282,7 +282,7 @@ templ connectionSection(data ConnectionData) {
 											@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeSubmit}) {
 												Save provider settings
 											}
-											@button.Button(button.Props{Variant: button.VariantGhost, Href: "/account?change_provider=1#provider-setup"}) {
+											@button.Button(button.Props{Variant: button.VariantGhost, Href: "/account/mailbox?change_provider=1#provider-setup"}) {
 												Change provider
 											}
 										</div>
@@ -312,7 +312,7 @@ templ connectionSection(data ConnectionData) {
 										@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeSubmit}) {
 											Save provider settings
 										}
-										@button.Button(button.Props{Variant: button.VariantGhost, Href: "/account?change_provider=1#provider-setup"}) {
+										@button.Button(button.Props{Variant: button.VariantGhost, Href: "/account/mailbox?change_provider=1#provider-setup"}) {
 											Change provider
 										}
 									</div>

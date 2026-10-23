@@ -273,7 +273,7 @@ func TestAnonymousRequests(t *testing.T) {
 	provisionOperator(t, app)
 
 	// Safe methods redirect to the login page without leaking private content.
-	for _, path := range []string{"/", "/status", "/connection", "/connection/callback"} {
+	for _, path := range []string{"/", "/status", "/account/mailbox", "/connection/callback"} {
 		rec := do(t, handler, http.MethodGet, path, nil, nil)
 		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
 			t.Fatalf("GET %s: status=%d location=%q", path, rec.Code, rec.Header().Get("Location"))
@@ -283,6 +283,14 @@ func TestAnonymousRequests(t *testing.T) {
 			if strings.Contains(body, secret) {
 				t.Fatalf("GET %s leaks %q", path, secret)
 			}
+		}
+	}
+
+	// Removed settings paths return a plain 404 with no redirect and no page.
+	for _, path := range []string{"/account", "/account/connections", "/connection"} {
+		rec := do(t, handler, http.MethodGet, path, nil, nil)
+		if rec.Code != http.StatusNotFound || rec.Header().Get("Location") != "" {
+			t.Fatalf("GET %s: status=%d location=%q", path, rec.Code, rec.Header().Get("Location"))
 		}
 	}
 
@@ -548,7 +556,7 @@ func TestConnectionPage(t *testing.T) {
 		cookie := login(t, handler)
 		owner := operatorID(t, app)
 
-		rec := do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(cookie))
+		rec := do(t, handler, http.MethodGet, "/account/mailbox?provider=microsoft365", nil, withCookie(cookie))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -589,6 +597,7 @@ func TestConnectionPage(t *testing.T) {
 		if strings.Contains(rec.Body.String(), "super-secret-value") {
 			t.Fatal("rejected form echoed the submitted secret")
 		}
+		assertCurrentAccountTab(t, rec.Body.String(), "/account/mailbox", "/account/ai")
 		if _, err := mailbox.NewStore(app, testKey).Settings(context.Background(), owner); !errors.Is(err, mailbox.ErrSettingsMissing) {
 			t.Fatalf("rejected input saved a setup: %v", err)
 		}
@@ -597,10 +606,10 @@ func TestConnectionPage(t *testing.T) {
 		rec = do(t, handler, http.MethodPost, "/connection/microsoft/settings", url.Values{
 			"tenant_id": {"11111111-1111-1111-1111-111111111111"}, "client_id": {"22222222-2222-2222-2222-222222222222"}, "client_secret": {"super-secret-value"},
 		}, withCookie(cookie))
-		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection?provider=microsoft365&notice=settings-saved" {
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account/mailbox?provider=microsoft365&notice=settings-saved" {
 			t.Fatalf("save settings: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 		}
-		rec = do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(cookie))
+		rec = do(t, handler, http.MethodGet, "/account/mailbox?provider=microsoft365", nil, withCookie(cookie))
 		body = rec.Body.String()
 		for _, want := range []string{
 			"11111111-1111-1111-1111-111111111111",
@@ -648,7 +657,7 @@ func TestConnectionPage(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		rec := do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(cookie))
+		rec := do(t, handler, http.MethodGet, "/account/mailbox?provider=microsoft365", nil, withCookie(cookie))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d", rec.Code)
 		}
@@ -681,7 +690,7 @@ func TestConnectionPage(t *testing.T) {
 			t.Fatalf("save first: status=%d body=%.300s", rec.Code, rec.Body.String())
 		}
 
-		rec = do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(second))
+		rec = do(t, handler, http.MethodGet, "/account/mailbox?provider=microsoft365", nil, withCookie(second))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("second page: status=%d", rec.Code)
 		}

@@ -4,7 +4,7 @@ Each operator connects their own Microsoft 365 mailbox. The application
 registration belongs to the operator, not to the deployment: every operator
 creates — or is given — an Entra app registration in their own tenant, saves
 its Tenant ID, Client ID and Client Secret in the Account **Mailbox** section
-(`/account`; legacy `/connection` links open the same section), and then signs
+(`/account/mailbox`), and then signs
 in.
 The deployment supplies only the public origin and the credential-encryption
 key; it holds no Microsoft credentials.
@@ -24,7 +24,7 @@ operator's own tenant:
 2. Name it (for example `bachtel-email-automation`).
 3. Supported account types: **Accounts in this organizational directory only**
    (single tenant) in the operator's own tenant. Note the **Directory (tenant)
-   ID** — the operator saves this as **Tenant ID** on `/connection`.
+   ID** — the operator saves this as **Tenant ID** on `/account/mailbox`.
 4. Platform: **Web**. Do not use the mobile/SPA platforms: the flow is a
    confidential server-side web client.
 5. Redirect URI: exactly `<APP_ORIGIN>/connection/callback`, for example
@@ -34,7 +34,7 @@ operator's own tenant:
    `APP_ORIGIN` is `https`.
 
 Record the **Application (client) ID** — the operator saves this as **Client
-ID** on `/connection`.
+ID** on `/account/mailbox`.
 
 Each operator may use a separate single-tenant registration in their own
 tenant. There is no deployment-wide tenant restriction: one operator's tenant
@@ -65,9 +65,9 @@ Do **not** add:
 
 1. **Certificates & secrets > New client secret**. Record the secret
    **Value** immediately — it is shown once. The operator saves it as
-   **Client Secret** on `/connection`.
+   **Client Secret** on `/account/mailbox`.
 2. Set an expiry your operations team can rotate before it lapses. When
-   rotation happens, save the new secret on `/connection` and sign in again;
+   rotation happens, save the new secret on `/account/mailbox` and sign in again;
    see [Rotate the application settings](#8-rotate-the-application-settings-for-the-same-mailbox).
    A stale secret surfaces as `reconnect_required` once refresh is rejected.
 3. Never commit the secret. It is stored encrypted under the deployment's
@@ -90,7 +90,7 @@ operator's sign-in.
 ## 5. Save the settings on the connection page
 
 1. Sign in at `<APP_ORIGIN>/login` with the operator account.
-2. Open **`/connection`**, choose **Microsoft 365**, then use its setup form.
+2. Open **`/account/mailbox`**, choose **Microsoft 365**, then use its setup form.
 3. Enter the **Tenant ID** — the directory UUID of the operator's tenant.
    Shared aliases such as `common` or `organizations` are rejected: the tenant
    must be explicit, so the verified identity stays tenant-qualified.
@@ -148,7 +148,7 @@ limiting and cookie protection.
 
 1. Start the server and open `<APP_ORIGIN>/login`.
 2. Sign in with the operator credentials.
-3. Open **`/connection`**, choose **Microsoft 365**, save your registration
+3. Open **`/account/mailbox`**, choose **Microsoft 365**, save your registration
    settings if needed, then choose **Continue with Microsoft 365**. You are
    redirected to Microsoft; sign in with **that operator's own mailbox address** in their
    own tenant.
@@ -169,9 +169,9 @@ verified mailbox:
 1. Create the new client secret in Entra ID, or record the new application
    id.
 2. Save the new **Tenant ID**, **Client ID** and **Client Secret** on
-   `/connection`. The staged registration waits; the active registration and
+   `/account/mailbox`. The staged registration waits; the active registration and
    its credentials are untouched.
-3. Sign in again from `/connection` under the staged registration.
+3. Sign in again from `/account/mailbox` under the staged registration.
 
 The result:
 
@@ -191,13 +191,13 @@ The result:
 
 | Operator-visible state | Cause | Fix |
 |---|---|---|
-| **no saved Microsoft settings** | The operator has not saved a Tenant ID, Client ID and Client Secret on `/connection`. | Enter the three values on `/connection`, save, then sign in. |
-| **invalid settings** | The Tenant ID or Client ID is not a UUID (shared aliases such as `common` or `organizations` are rejected), or the Client Secret is empty. | Correct the field on `/connection` and save again. |
-| **settings changed / stale** | The registration changed after the sign-in attempt started, so the callback cannot install tokens under it. | Start a fresh sign-in from `/connection`. Nothing was changed. |
-| **disconnected** | Never connected, or the operator disconnected the mailbox. | Connect from `/connection`. |
+| **no saved Microsoft settings** | The operator has not saved a Tenant ID, Client ID and Client Secret on `/account/mailbox`. | Enter the three values on `/account/mailbox`, save, then sign in. |
+| **invalid settings** | The Tenant ID or Client ID is not a UUID (shared aliases such as `common` or `organizations` are rejected), or the Client Secret is empty. | Correct the field on `/account/mailbox` and save again. |
+| **settings changed / stale** | The registration changed after the sign-in attempt started, so the callback cannot install tokens under it. | Start a fresh sign-in from `/account/mailbox`. Nothing was changed. |
+| **disconnected** | Never connected, or the operator disconnected the mailbox. | Connect from `/account/mailbox`. |
 | **connected** | Working. | None. |
-| **reconnect_required** | Microsoft rejected refresh (revoked consent, rotated or expired client secret, Conditional Access change), or authorization definitively failed. | Save fresh settings if the secret expired, then sign in again from `/connection`. |
-| **sign-in attempt expired, already used, or cleared by a restart** | Sign-in attempts last 10 minutes, are single-use even after a failed token exchange, and are held in server memory. Restarting the server clears pending attempts. | Open `/connection` and click **Connect** or **Reconnect** for a fresh sign-in. Do not refresh or reuse an old `/connection/callback?...` URL. Keep the server running until sign-in finishes. |
+| **reconnect_required** | Microsoft rejected refresh (revoked consent, rotated or expired client secret, Conditional Access change), or authorization definitively failed. | Save fresh settings if the secret expired, then sign in again from `/account/mailbox`. |
+| **sign-in attempt expired, already used, or cleared by a restart** | Sign-in attempts last 10 minutes, are single-use even after a failed token exchange, and are held in server memory. Restarting the server clears pending attempts. | Open `/account/mailbox` and click **Connect** or **Reconnect** for a fresh sign-in. Do not refresh or reuse an old `/connection/callback?...` URL. Keep the server running until sign-in finishes. |
 | **unreadable credentials / encryption key error** | `APP_ENCRYPTION_KEY` missing or not base64 for 32 bytes; or the key changed. Ciphertext is preserved. | Restore the original key (`APP_ENCRYPTION_KEY`), or reconnect the mailbox under the new key. |
 | **disconnect refused while submissions are in flight** | Submissions are in progress; disconnect is blocked so active work can settle. | Wait for the in-flight submissions to settle, then disconnect again. |
 

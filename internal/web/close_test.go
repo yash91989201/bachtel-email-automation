@@ -97,7 +97,7 @@ func TestAccountShowsNamedBlockingTasks(t *testing.T) {
 	}))
 	taskID := taskIDFromRedirect(t, upload, campaignID)
 
-	page := do(t, handler, http.MethodGet, "/account", nil, withCookie(cookie))
+	page := do(t, handler, http.MethodGet, "/account/mailbox", nil, withCookie(cookie))
 	body := page.Body.String()
 	if !strings.Contains(body, "Connection changes are locked") || !strings.Contains(body, "book.xlsx") {
 		t.Fatalf("account page lacks named lock warning: %.600s", body)
@@ -105,5 +105,15 @@ func TestAccountShowsNamedBlockingTasks(t *testing.T) {
 	if !strings.Contains(body, "/campaigns/"+campaignID+"/tasks/"+taskID) {
 		t.Fatalf("lock warning lacks task link: %.600s", body)
 	}
+	assertCurrentAccountTab(t, body, "/account/mailbox", "/account/ai")
+
+	// A locked account refuses to switch or disconnect the mailbox and keeps
+	// Mailbox selected. Editing the registration is same-mailbox repair, which
+	// the lock deliberately allows.
+	lockedDisconnect := do(t, handler, http.MethodPost, "/connection/disconnect", url.Values{}, withCookie(cookie))
+	if lockedDisconnect.Code != http.StatusConflict || !strings.Contains(lockedDisconnect.Body.String(), "Connection changes are locked") {
+		t.Fatalf("locked disconnect: status=%d body=%.400s", lockedDisconnect.Code, lockedDisconnect.Body.String())
+	}
+	assertCurrentAccountTab(t, lockedDisconnect.Body.String(), "/account/mailbox", "/account/ai")
 	_ = app
 }

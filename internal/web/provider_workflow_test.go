@@ -123,11 +123,11 @@ func TestProviderWorkflowAcrossIndependentRegistrations(t *testing.T) {
 	sessionB := env.signInAs(secondOperatorEmail, secondOperatorPassword)
 
 	env.saveMicrosoftSettings(sessionA, testTenantID, testClientID, testSecret)
-	if rec := env.connectMicrosoft(sessionA, "code-a"); rec.Header().Get("Location") != "/connection" {
+	if rec := env.connectMicrosoft(sessionA, "code-a"); rec.Header().Get("Location") != "/account/mailbox" {
 		t.Fatalf("operator A connect: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 	env.saveMicrosoftSettings(sessionB, secondTenantID, secondClientID, secondSecret)
-	if rec := env.connectMicrosoft(sessionB, "code-b-alias"); rec.Header().Get("Location") != "/connection" {
+	if rec := env.connectMicrosoft(sessionB, "code-b-alias"); rec.Header().Get("Location") != "/account/mailbox" {
 		t.Fatalf("operator B connect: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 
@@ -162,7 +162,7 @@ func TestProviderWorkflowAcrossIndependentRegistrations(t *testing.T) {
 	// A different registration never widens the mailbox claim: B signing in
 	// with A's mailbox is refused without disclosing A.
 	env.saveMicrosoftSettings(sessionB, secondTenantID, secondClientID, secondSecret)
-	if rec := env.connectMicrosoft(sessionB, "code-shared"); rec.Header().Get("Location") != "/connection?provider=microsoft365&notice=claimed" {
+	if rec := env.connectMicrosoft(sessionB, "code-shared"); rec.Header().Get("Location") != "/account/mailbox?provider=microsoft365&notice=claimed" {
 		t.Fatalf("cross-operator claim: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 	if current := env.connection(t, ownerB); current.ID != connectionB.ID || current.Status != mailbox.StatusConnected {
@@ -177,7 +177,7 @@ func TestProviderWorkflowAcrossIndependentRegistrations(t *testing.T) {
 	sessionA = env.signIn()
 	sessionB = env.signInAs(secondOperatorEmail, secondOperatorPassword)
 	for _, session := range []*http.Cookie{sessionA, sessionB} {
-		page := env.request(http.MethodGet, "/connection", []*http.Cookie{session}, nil)
+		page := env.request(http.MethodGet, "/account/mailbox", []*http.Cookie{session}, nil)
 		if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `data-status="connected"`) {
 			t.Fatalf("connection page after restart: status=%d body=%.400s", page.Code, page.Body.String())
 		}
@@ -198,7 +198,7 @@ func TestProviderWorkflowAcrossIndependentRegistrations(t *testing.T) {
 	// mailbox generation and replaces the registration only with the tokens
 	// the new sign-in produced.
 	env.saveMicrosoftSettings(sessionA, testTenantID, rotatedClientID, rotatedSecret)
-	if rec := env.connectMicrosoft(sessionA, "code-a"); rec.Header().Get("Location") != "/connection" {
+	if rec := env.connectMicrosoft(sessionA, "code-a"); rec.Header().Get("Location") != "/account/mailbox" {
 		t.Fatalf("rotated connect: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 	rotated := env.connection(t, ownerA)
@@ -241,7 +241,7 @@ func TestProviderWorkflowAcrossIndependentRegistrations(t *testing.T) {
 	if after := env.connection(t, ownerA); after.SettingsGeneration != 2 {
 		t.Fatalf("operator A's registration changed from B's failure: %+v", after)
 	}
-	if rec := env.request(http.MethodGet, "/connection?provider=microsoft365", []*http.Cookie{sessionA}, nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), rotatedClientID) {
+	if rec := env.request(http.MethodGet, "/account/mailbox?provider=microsoft365", []*http.Cookie{sessionA}, nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), rotatedClientID) {
 		t.Fatalf("operator A's saved registration is not shown: status=%d", rec.Code)
 	}
 
@@ -279,7 +279,7 @@ func TestProviderWorkflowRefreshRefusesSupersededRegistration(t *testing.T) {
 	env := newAcceptanceEnv(t)
 	session := env.signIn()
 	env.saveMicrosoftSettings(session, testTenantID, testClientID, testSecret)
-	if rec := env.connectMicrosoft(session, "code-a"); rec.Header().Get("Location") != "/connection" {
+	if rec := env.connectMicrosoft(session, "code-a"); rec.Header().Get("Location") != "/account/mailbox" {
 		t.Fatalf("connect: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 	owner := operatorIDFor(t, env.app, testEmail)

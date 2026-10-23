@@ -132,7 +132,7 @@ templ AccountPage(data AccountPageData) {
 		<nav class="flex flex-wrap items-center gap-2 border-b border-border" aria-label="Account sections">
 			<a
 				class={ accountTabClass(data.Section == "mailbox") }
-				href="/account"
+				href="/account/mailbox"
 				if data.Section == "mailbox" {
 					aria-current="page"
 				}

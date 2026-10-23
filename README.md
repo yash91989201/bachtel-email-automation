@@ -140,10 +140,10 @@ path, the intake bounds and the Titan test endpoint.
 
 There are no Microsoft environment credentials. Each operator saves their own
 Microsoft **Tenant ID**, **Client ID** and **Client Secret** on the protected
-`/connection` page before signing in; the Client Secret is write-only and is
-never shown or pre-filled again. The callback URI is fixed and derived from
+`/account/mailbox` page before signing in; the Client Secret is write-only and
+is never shown or pre-filled again. The callback URI is fixed and derived from
 `APP_ORIGIN`: exactly `APP_ORIGIN` + `/connection/callback`. The connection
-page displays it for registration.
+Mailbox page displays it for registration.
 
 | Variable | Purpose |
 |---|---|
@@ -303,10 +303,10 @@ internal/
     1792900000_task_data_preparation.go Preparation runs/jobs, instruction drafts and run selection
   web/
     web.go                      Route table, handler assembly, render helper
-                                (/health, /robots.txt, /static, GET /{$}, GET /status)
+                                (/health, /robots.txt, /static, GET /{$}, GET /status, GET /account/mailbox)
     session.go                  Operator session cookie creation/validation and authorization middleware
     login.go                    GET /login, POST /login, POST /logout
-    connection.go               GET /connection, Microsoft connect/callback, Titan connect, disconnect, replacement handlers
+    connection.go               Mailbox handlers: Microsoft connect/callback, Titan connect, disconnect, replacement
     campaign.go                 /campaigns pages: create, revision upload, labels, sample preview
     task.go                     Task intake pages: upload, worksheet selection, review, downloads
     preparation.go              Preparation actions: prepare, retry, rerun, select and instruction drafts

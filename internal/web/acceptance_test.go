@@ -262,7 +262,7 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 	env := newAcceptanceEnv(t)
 
 	// Anonymous access to private surfaces is refused.
-	for _, target := range []string{"/", "/status", "/connection"} {
+	for _, target := range []string{"/", "/status", "/account/mailbox"} {
 		if rec := env.request(http.MethodGet, target, nil, nil); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
 			t.Fatalf("anonymous %s: status=%d location=%q", target, rec.Code, rec.Header().Get("Location"))
 		}
@@ -274,7 +274,7 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 	}
 
 	session := env.signIn()
-	if rec := env.request(http.MethodGet, "/connection", []*http.Cookie{session}, nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "1. Choose your provider") {
+	if rec := env.request(http.MethodGet, "/account/mailbox", []*http.Cookie{session}, nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "1. Choose your provider") {
 		t.Fatalf("connection page before connect: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
 
@@ -301,8 +301,11 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 	}
 
 	rec = env.request(http.MethodGet, "/connection/callback?state="+url.QueryEscape(state)+"&code=authorization-code", []*http.Cookie{session}, nil)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account/mailbox" {
 		t.Fatalf("callback: status=%d location=%q body=%.300s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+	if loc := rec.Header().Get("Location"); strings.Contains(loc, "code=") || strings.Contains(loc, "state=") {
+		t.Fatalf("callback redirect must not echo provider parameters: %q", loc)
 	}
 
 	env.mu.Lock()
@@ -316,7 +319,7 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 		t.Fatalf("expected one PKCE token exchange with a verifier, got %d exchanges (verifier set: %v)", exchanges, verifier != "")
 	}
 
-	page := env.request(http.MethodGet, "/connection", []*http.Cookie{session}, nil)
+	page := env.request(http.MethodGet, "/account/mailbox", []*http.Cookie{session}, nil)
 	if page.Code != http.StatusOK {
 		t.Fatalf("connection page after connect: status=%d", page.Code)
 	}
@@ -331,7 +334,7 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 	}
 
 	// A replayed callback must not install credentials again.
-	if rec := env.request(http.MethodGet, "/connection/callback?state="+url.QueryEscape(state)+"&code=authorization-code", []*http.Cookie{session}, nil); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection?provider=microsoft365&notice=state" {
+	if rec := env.request(http.MethodGet, "/connection/callback?state="+url.QueryEscape(state)+"&code=authorization-code", []*http.Cookie{session}, nil); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account/mailbox?provider=microsoft365&notice=state" {
 		t.Fatalf("replayed callback: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 	env.mu.Lock()
@@ -355,7 +358,7 @@ func TestAcceptanceFullMicrosoftConnection(t *testing.T) {
 	if !cleared {
 		t.Fatal("logout did not clear the session cookie")
 	}
-	if rec := env.request(http.MethodGet, "/connection", nil, nil); rec.Code != http.StatusSeeOther {
+	if rec := env.request(http.MethodGet, "/account/mailbox", nil, nil); rec.Code != http.StatusSeeOther {
 		t.Fatalf("private view without a session: status=%d", rec.Code)
 	}
 }
@@ -378,7 +381,7 @@ func TestAcceptanceRestartDuringMicrosoftSignIn(t *testing.T) {
 
 	callback := "/connection/callback?state=" + url.QueryEscape(oldURL.Query().Get("state")) + "&code=old-code"
 	stale := env.request(http.MethodGet, callback, cookies, nil)
-	if stale.Code != http.StatusSeeOther || stale.Header().Get("Location") != "/connection?provider=microsoft365&notice=state" {
+	if stale.Code != http.StatusSeeOther || stale.Header().Get("Location") != "/account/mailbox?provider=microsoft365&notice=state" {
 		t.Fatalf("stale callback: status=%d location=%q", stale.Code, stale.Header().Get("Location"))
 	}
 	if stale.Header().Get("Cache-Control") != "no-store" || stale.Header().Get("Referrer-Policy") != "no-referrer" {
@@ -409,10 +412,10 @@ func TestAcceptanceRestartDuringMicrosoftSignIn(t *testing.T) {
 	}
 	callback = "/connection/callback?state=" + url.QueryEscape(newURL.Query().Get("state")) + "&code=new-code"
 	done := env.request(http.MethodGet, callback, cookies, nil)
-	if done.Code != http.StatusSeeOther || done.Header().Get("Location") != "/connection" {
+	if done.Code != http.StatusSeeOther || done.Header().Get("Location") != "/account/mailbox" {
 		t.Fatalf("retry callback: status=%d location=%q", done.Code, done.Header().Get("Location"))
 	}
-	page := env.request(http.MethodGet, "/connection", cookies, nil)
+	page := env.request(http.MethodGet, "/account/mailbox", cookies, nil)
 	if !strings.Contains(page.Body.String(), `data-status="connected"`) {
 		t.Fatal("fresh attempt did not connect the mailbox")
 	}
@@ -429,7 +432,7 @@ func TestAcceptanceCallbackFailureRedirects(t *testing.T) {
 		{"?state=unknown&code=private-code", "state"},
 	} {
 		rec := env.request(http.MethodGet, "/connection/callback"+tc.query, []*http.Cookie{session}, nil)
-		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection?provider=microsoft365&notice="+tc.notice {
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account/mailbox?provider=microsoft365&notice="+tc.notice {
 			t.Fatalf("callback failure: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 		}
 		for _, secret := range []string{"provider-secret", "private-code", "unknown"} {
@@ -438,7 +441,7 @@ func TestAcceptanceCallbackFailureRedirects(t *testing.T) {
 			}
 		}
 	}
-	page := env.request(http.MethodGet, "/connection?notice=untrusted-text", []*http.Cookie{session}, nil)
+	page := env.request(http.MethodGet, "/account/mailbox?notice=untrusted-text", []*http.Cookie{session}, nil)
 	if strings.Contains(page.Body.String(), "untrusted-text") {
 		t.Fatal("arbitrary notice text was rendered")
 	}
@@ -480,7 +483,7 @@ func TestAcceptanceRestartKeepsConnection(t *testing.T) {
 	}
 
 	session = env.signIn()
-	page := env.request(http.MethodGet, "/connection", []*http.Cookie{session}, nil)
+	page := env.request(http.MethodGet, "/account/mailbox", []*http.Cookie{session}, nil)
 	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), testSender) || !strings.Contains(page.Body.String(), `data-status="connected"`) {
 		t.Fatalf("connection page after restart: status=%d body=%.400s", page.Code, page.Body.String())
 	}

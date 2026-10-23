@@ -32,7 +32,7 @@ templ Layout(title string, signedIn bool, active string) {
 						@button.Button(button.Props{Variant: button.VariantLink, Href: "/campaigns", Attributes: ariaCurrent(active == "campaigns")}) {
 							Campaigns
 						}
-						@button.Button(button.Props{Variant: button.VariantLink, Href: "/account", Attributes: ariaCurrent(active == "account")}) {
+						@button.Button(button.Props{Variant: button.VariantLink, Href: "/account/mailbox", Attributes: ariaCurrent(active == "account")}) {
 							Account
 						}
 					</nav>

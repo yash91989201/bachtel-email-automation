@@ -25,11 +25,11 @@ func TestConnectionPageRequiresProviderSelection(t *testing.T) {
 
 	// The home page points at the private mailbox surface with the new copy.
 	home := do(t, handler, http.MethodGet, "/", nil, withCookie(cookie))
-	if home.Code != http.StatusOK || !strings.Contains(home.Body.String(), "Private mailbox") || !strings.Contains(home.Body.String(), `href="/account"`) {
+	if home.Code != http.StatusOK || !strings.Contains(home.Body.String(), "Private mailbox") || !strings.Contains(home.Body.String(), `href="/account/mailbox"`) {
 		t.Fatalf("home mailbox card: status=%d", home.Code)
 	}
 
-	page := do(t, handler, http.MethodGet, "/connection", nil, withCookie(cookie))
+	page := do(t, handler, http.MethodGet, "/account/mailbox", nil, withCookie(cookie))
 	if page.Code != http.StatusOK {
 		t.Fatalf("connection page: status=%d", page.Code)
 	}
@@ -37,7 +37,7 @@ func TestConnectionPageRequiresProviderSelection(t *testing.T) {
 	if !strings.Contains(body, "Mailbox connection") {
 		t.Fatalf("connection page missing heading copy: %.400s", body)
 	}
-	if !strings.Contains(body, `href="/account?provider=microsoft365"`) || !strings.Contains(body, `href="/account?provider=godaddy-titan"`) {
+	if !strings.Contains(body, `href="/account/mailbox?provider=microsoft365"`) || !strings.Contains(body, `href="/account/mailbox?provider=godaddy-titan"`) {
 		t.Fatalf("connection page must offer both providers: %.400s", body)
 	}
 	if strings.Contains(body, `action="/connection/microsoft/settings"`) || strings.Contains(body, `action="/connection/titan"`) {
@@ -47,7 +47,7 @@ func TestConnectionPageRequiresProviderSelection(t *testing.T) {
 		t.Fatalf("mailbox UI must call this provider Titan: %.400s", body)
 	}
 
-	microsoft := do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(cookie))
+	microsoft := do(t, handler, http.MethodGet, "/account/mailbox?provider=microsoft365", nil, withCookie(cookie))
 	if microsoft.Code != http.StatusOK {
 		t.Fatalf("Microsoft selection status=%d", microsoft.Code)
 	}
@@ -63,7 +63,7 @@ func TestConnectionPageRequiresProviderSelection(t *testing.T) {
 	if strings.Contains(body, ">Continue with Microsoft 365<") {
 		t.Fatal("Microsoft sign-in is offered before any registration is saved")
 	}
-	titan := do(t, handler, http.MethodGet, "/connection?provider=godaddy-titan", nil, withCookie(cookie))
+	titan := do(t, handler, http.MethodGet, "/account/mailbox?provider=godaddy-titan", nil, withCookie(cookie))
 	if titan.Code != http.StatusOK {
 		t.Fatalf("Titan selection status=%d", titan.Code)
 	}
@@ -110,7 +110,7 @@ func TestSavedMicrosoftSettingsPrioritizeSignIn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	page := do(t, handler, http.MethodGet, "/connection?provider=microsoft365", nil, withCookie(cookie))
+	page := do(t, handler, http.MethodGet, "/account/mailbox?provider=microsoft365", nil, withCookie(cookie))
 	if page.Code != http.StatusOK {
 		t.Fatalf("saved Microsoft page status=%d", page.Code)
 	}
@@ -126,6 +126,46 @@ func TestSavedMicrosoftSettingsPrioritizeSignIn(t *testing.T) {
 	}
 	if strings.Contains(body, "saved-secret") {
 		t.Fatal("saved client secret was rendered")
+	}
+}
+
+// TestMailboxChooserStateIsViewOnly pins the canonical view-only chooser
+// state: a connected mailbox hides setup until the operator opens it through
+// ?change_provider=1, and navigation alone never changes the connection.
+func TestMailboxChooserStateIsViewOnly(t *testing.T) {
+	app, handler := newTestServer(t, testConfig("http://127.0.0.1:8090"))
+	provisionOperator(t, app)
+	cookie := login(t, handler)
+	owner := operatorID(t, app)
+	installMailbox(t, app, owner, "hr@example.test")
+
+	page := do(t, handler, http.MethodGet, "/account/mailbox", nil, withCookie(cookie))
+	if page.Code != http.StatusOK {
+		t.Fatalf("mailbox page: status=%d", page.Code)
+	}
+	if strings.Contains(page.Body.String(), `id="provider-setup"`) {
+		t.Fatal("connected mailbox opened provider setup unrequested")
+	}
+
+	// Fragments stay client-side; the test server never receives one.
+	chooser := do(t, handler, http.MethodGet, "/account/mailbox?change_provider=1", nil, withCookie(cookie))
+	if chooser.Code != http.StatusOK {
+		t.Fatalf("chooser page: status=%d", chooser.Code)
+	}
+	body := chooser.Body.String()
+	if !strings.Contains(body, `id="provider-setup"`) || !strings.Contains(body, "1. Choose your provider") {
+		t.Fatalf("chooser state missing: %.600s", body)
+	}
+	for _, href := range []string{`href="/account/mailbox?provider=microsoft365"`, `href="/account/mailbox?provider=godaddy-titan"`} {
+		if !strings.Contains(body, href) {
+			t.Fatalf("chooser lost canonical provider link %q: %.600s", href, body)
+		}
+	}
+
+	// The chooser is view-only: opening it disconnects nothing.
+	connection, err := mailbox.NewStore(app, testKey).Current(context.Background(), owner)
+	if err != nil || connection.Status != mailbox.StatusConnected || connection.Sender != "hr@example.test" {
+		t.Fatalf("chooser navigation changed the connection: %+v err=%v", connection, err)
 	}
 }
 
@@ -200,7 +240,7 @@ func TestDisconnectKeepsClaimAndLeavesOthersUntouched(t *testing.T) {
 	otherConnection := installMailbox(t, app, otherID, "theirs@example.test")
 
 	rec := do(t, handler, http.MethodPost, "/connection/disconnect", url.Values{}, withCookie(cookie))
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account/mailbox" {
 		t.Fatalf("disconnect: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 
@@ -233,7 +273,7 @@ func TestDisconnectKeepsClaimAndLeavesOthersUntouched(t *testing.T) {
 		t.Fatalf("other operator connection: %+v err=%v", theirs, err)
 	}
 	// The page reflects the disconnected state and hides the sender row.
-	page := do(t, handler, http.MethodGet, "/connection", nil, withCookie(cookie))
+	page := do(t, handler, http.MethodGet, "/account/mailbox", nil, withCookie(cookie))
 	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `data-status="disconnected"`) {
 		t.Fatalf("connection page after disconnect: status=%d", page.Code)
 	}
@@ -249,9 +289,9 @@ func TestConnectionReplaceRequiresStagedReset(t *testing.T) {
 	cookie := login(t, handler)
 	owner := operatorID(t, app)
 
-	// Without a staged reset the page redirects back to the connection page.
+	// Without a staged reset the page redirects back to the mailbox page.
 	rec := do(t, handler, http.MethodGet, "/connection/replace", nil, withCookie(cookie))
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/connection" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account/mailbox" {
 		t.Fatalf("replace without staged reset: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 
@@ -291,12 +331,12 @@ func TestConnectionReplaceRequiresStagedReset(t *testing.T) {
 	}
 	// Cancelling the staged reset clears it and redirects home.
 	cancel := do(t, handler, http.MethodPost, "/connection/replace/cancel", url.Values{"reset": {operation.ID}}, withCookie(cookie))
-	if cancel.Code != http.StatusSeeOther || cancel.Header().Get("Location") != "/connection" {
+	if cancel.Code != http.StatusSeeOther || cancel.Header().Get("Location") != "/account/mailbox" {
 		t.Fatalf("cancel: status=%d location=%q", cancel.Code, cancel.Header().Get("Location"))
 	}
 	afterCancel := do(t, handler, http.MethodGet, "/connection/replace", nil, withCookie(cookie))
-	if afterCancel.Code != http.StatusSeeOther {
-		t.Fatalf("replace after cancel: status=%d", afterCancel.Code)
+	if afterCancel.Code != http.StatusSeeOther || afterCancel.Header().Get("Location") != "/account/mailbox" {
+		t.Fatalf("replace after cancel: status=%d location=%q", afterCancel.Code, afterCancel.Header().Get("Location"))
 	}
 }
 
@@ -317,11 +357,11 @@ func TestOperatorsSeeOnlyTheirOwnMailbox(t *testing.T) {
 	installMailbox(t, app, otherID, "second@example.test")
 
 	// Each connection page shows only its own sender and status.
-	mine := do(t, handler, http.MethodGet, "/connection", nil, withCookie(cookie))
+	mine := do(t, handler, http.MethodGet, "/account/mailbox", nil, withCookie(cookie))
 	if mine.Code != http.StatusOK || !strings.Contains(mine.Body.String(), "first@example.test") || strings.Contains(mine.Body.String(), "second@example.test") {
 		t.Fatalf("first operator connection page: status=%d", mine.Code)
 	}
-	theirs := do(t, handler, http.MethodGet, "/connection", nil, withCookie(otherCookie))
+	theirs := do(t, handler, http.MethodGet, "/account/mailbox", nil, withCookie(otherCookie))
 	if theirs.Code != http.StatusOK || !strings.Contains(theirs.Body.String(), "second@example.test") || strings.Contains(theirs.Body.String(), "first@example.test") {
 		t.Fatalf("second operator connection page: status=%d", theirs.Code)
 	}

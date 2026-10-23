@@ -1,10 +1,10 @@
 # Titan connection setup
 
-Connect and repair the mailbox from the Account **Mailbox** section (`/account`);
-legacy `/connection` links open the same section.
+Connect and repair the mailbox from the Account **Mailbox** section at
+`/account/mailbox`.
 
 Titan mailboxes need no provider registration. The operator connects their own
-mailbox from `/connection`; the deployment needs only `APP_ENCRYPTION_KEY` to
+mailbox from `/account/mailbox`; the deployment needs only `APP_ENCRYPTION_KEY` to
 store the password encrypted.
 
 ## Provider endpoint
@@ -39,7 +39,7 @@ in the configuration table in `README.md`.
 
 ## Connect the mailbox
 
-1. Sign in and open `/connection`.
+1. Sign in and open `/account/mailbox`.
 2. Choose **Titan**, then enter the **full mailbox address** and the
    mailbox's **email password**.
 3. Submit. The application connects to the provider endpoint over implicit
@@ -85,7 +85,7 @@ Copy saving is best effort and never changes the sending outcome:
 | --- | --- | --- |
 | **Authentication rejected** | Wrong address or password. | Correct the credentials and submit again. |
 | **Configuration failure** (TLS/hostname) | Certificate or hostname verification failed. | Investigate network interception or endpoint override (`TITAN_SMTP_ADDRESS` must be unset in production). The mailbox's tasks are paused, not retried. |
-| **Reconnect required** | The stored password was rejected or the credential is unreadable (missing or changed `APP_ENCRYPTION_KEY`). | Re-enter the mailbox credentials from `/connection`. |
+| **Reconnect required** | The stored password was rejected or the credential is unreadable (missing or changed `APP_ENCRYPTION_KEY`). | Re-enter the mailbox credentials from `/account/mailbox`. |
 | **Unreadable credentials / encryption key error** | `APP_ENCRYPTION_KEY` missing, not base64 for 32 bytes, or changed. Ciphertext is preserved. | Restore the original key, or reconnect the mailbox under the new key. |
 | **Disconnect refused while submissions are in flight** | Submissions are in progress; dispatch stops launching new requests and settles first. | Wait for the in-flight submissions to settle, then disconnect again. |
 

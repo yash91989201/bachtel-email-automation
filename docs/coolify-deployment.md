@@ -89,7 +89,7 @@ runtime container.
 
 These are the deployment settings. There are no Microsoft tenant, client id,
 client secret or redirect environment variables: each operator saves their own
-Tenant ID, Client ID and Client Secret on the protected `/connection` page, and
+Tenant ID, Client ID and Client Secret on the protected `/account/mailbox` page, and
 the callback URI is derived from `APP_ORIGIN`. Missing operator
 settings affect only that operator: the connection page reports them without
 showing values, other operators' connections stay usable, and GoDaddy Titan
