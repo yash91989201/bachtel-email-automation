@@ -250,7 +250,13 @@ func TestSendingStartAndRecoveryConfirmations(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			form := workspaceNode(doc, "action", base+tc.action)
+			form := findViewNode(doc, func(n *html.Node) bool {
+				if n.Data != "form" || workspaceAttr(n, "action") != base+tc.action {
+					return false
+				}
+				count := workspaceNode(n, "name", "expected_count")
+				return count != nil && workspaceAttr(count, "value") == "1"
+			})
 			if form == nil || !hasViewAttr(form, "hx-preserve") {
 				t.Fatal("recovery form must preserve state across progress updates")
 			}
@@ -274,6 +280,64 @@ func TestSendingStartAndRecoveryConfirmations(t *testing.T) {
 				t.Error("recovery action must not auto-submit")
 			}
 		})
+	}
+}
+
+// The recovery table selects rows client-side but submits one native request
+// per bulk action, so a stale selection can only be refused, never partially
+// applied.
+func TestRecoveryTableBulkSelectionContract(t *testing.T) {
+	base := "/campaigns/campaign-1/tasks/task-1/sending"
+	page := renderWorkspace(t, taskRecovery(TaskPageData{
+		CampaignID: "campaign-1", TaskID: "task-1", StoredStatus: "stopped", ActionID: "row-key-",
+		Approved: true, Held: 1, Controls: TaskControls{RetryRow: true, ResendRow: true, ResolveRow: true},
+		Rows: []TaskAdmittedRow{
+			{ID: "candidate-1", Row: 2, State: "definite_failure", Reason: "Titan rejected the message"},
+			{ID: "candidate-2", Row: 3, State: "review_required", Reason: "lost response"},
+		},
+	}))
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := workspaceNode(doc, "aria-label", "Recovery rows")
+	if rows == nil || rows.Data != "table" {
+		t.Fatal("recovery rows must render in a labelled table")
+	}
+	for _, model := range []string{"retry", "review"} {
+		selectable := findViewNode(rows, func(n *html.Node) bool {
+			return n.Data == "input" && workspaceAttr(n, "type") == "checkbox" && workspaceAttr(n, "x-model") == model && workspaceAttr(n, "value") != ""
+		})
+		if selectable == nil {
+			t.Errorf("recovery row for %q must expose a named selection checkbox", model)
+		}
+	}
+	for _, tc := range []struct{ action, submit string }{
+		{action: "/retry#sending", submit: "Retry selected"},
+		{action: "/resend#sending", submit: "Send again selected"},
+		{action: "/resolve#sending", submit: "Mark selected already submitted"},
+	} {
+		form := workspaceNode(doc, "action", base+tc.action)
+		if form == nil || !hasViewAttr(form, "hx-preserve") {
+			t.Fatalf("bulk %s form must preserve state across progress updates", tc.action)
+		}
+		if workspaceAttr(workspaceNode(form, "name", "expected_count"), "x-bind:value") == "" {
+			t.Errorf("bulk %s form must confirm the live selected count", tc.action)
+		}
+		if findViewNode(form, func(n *html.Node) bool {
+			return n.Data == "template" && workspaceAttr(n, "x-for") != ""
+		}) == nil {
+			t.Errorf("bulk %s form must submit the selected member ids", tc.action)
+		}
+		if confirm := workspaceNode(form, "name", "confirmed"); confirm == nil || !hasViewAttr(confirm, "required") {
+			t.Errorf("bulk %s form must require an explicit confirmation", tc.action)
+		}
+		button := findViewNode(form, func(n *html.Node) bool {
+			return n.Data == "button" && strings.TrimSpace(viewText(n)) == tc.submit
+		})
+		if button == nil || workspaceAttr(button, "type") != "submit" {
+			t.Errorf("bulk action %q must use an explicit submit button", tc.submit)
+		}
 	}
 }
 

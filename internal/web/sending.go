@@ -185,7 +185,7 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 				return
 			}
 			act := func() error {
-				_, err = s.sending.Act(r.Context(), actor, sending.ActionRequest{ActionID: id, TaskID: task.ID, Kind: kind, MemberID: r.FormValue("member_id"), Actor: actor, Basis: r.FormValue("basis"), Confirmed: r.FormValue("confirmed") == "yes", DuplicateRisk: r.FormValue("duplicate_risk") == "yes", ExpectedCount: count})
+				_, err = s.sending.Act(r.Context(), actor, sending.ActionRequest{ActionID: id, TaskID: task.ID, Kind: kind, MemberID: r.FormValue("member_id"), MemberIDs: r.Form["member_id"], Actor: actor, Basis: r.FormValue("basis"), Confirmed: r.FormValue("confirmed") == "yes", DuplicateRisk: r.FormValue("duplicate_risk") == "yes", ExpectedCount: count})
 				return err
 			}
 			if kind == "stop" && s.dispatcher != nil {

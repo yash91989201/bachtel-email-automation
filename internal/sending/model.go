@@ -118,8 +118,12 @@ type Progress struct {
 }
 type ActionRequest struct {
 	ActionID, TaskID, Kind, MemberID, Actor, Basis string
-	Confirmed, DuplicateRisk                       bool
-	ExpectedCount                                  int
+	// MemberIDs selects several candidates for one bulk recovery action. It
+	// narrows the same atomic recheck the single MemberID uses, so a bulk
+	// request is all-or-nothing against the confirmed count.
+	MemberIDs                []string
+	Confirmed, DuplicateRisk bool
+	ExpectedCount            int
 }
 type ActionResult struct {
 	ActionID, TaskID, Status string

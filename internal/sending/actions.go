@@ -416,7 +416,7 @@ func (s *Store) Act(ctx context.Context, ownerID string, in ActionRequest) (*Act
 		default:
 			return errors.New("unknown sending action")
 		}
-		if (in.Kind == "resend" || in.Kind == "resolve" || in.Kind == "retry") && in.MemberID == "" {
+		if (in.Kind == "resend" || in.Kind == "resolve" || in.Kind == "retry") && in.MemberID == "" && len(in.MemberIDs) == 0 {
 			return errors.New("select one candidate")
 		}
 		if in.Kind == "resend" && !in.DuplicateRisk {
@@ -429,8 +429,17 @@ func (s *Store) Act(ctx context.Context, ownerID string, in ActionRequest) (*Act
 		if e != nil {
 			return e
 		}
+		selected := make(map[string]bool, len(in.MemberIDs)+1)
+		for _, id := range in.MemberIDs {
+			if id != "" {
+				selected[id] = true
+			}
+		}
+		if in.MemberID != "" {
+			selected[in.MemberID] = true
+		}
 		for _, m := range rows {
-			if in.MemberID != "" && m.Id != in.MemberID {
+			if len(selected) > 0 && !selected[m.Id] {
 				continue
 			}
 			if m.GetString("state") != intake.RowEligible {

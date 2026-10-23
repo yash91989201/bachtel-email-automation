@@ -13,6 +13,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/card"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/checkbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/collapsible"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/dialog"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/field"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/icon"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/input"
@@ -1314,88 +1315,304 @@ templ taskClearSchedule(data TaskPageData) {
 
 templ taskRecovery(data TaskPageData) {
 	if sendingHasRecovery(data.Rows) || data.Held > 0 {
-		<section class="space-y-4" id="task-recovery" aria-labelledby="recovery-heading">
+		<section class="space-y-4" id="task-recovery" aria-labelledby="recovery-heading" x-data="{ retry: [], review: [] }">
 			<h3 id="recovery-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Recovery</h3>
 			@card.Card(card.Props{}) {
 				@card.Content(card.ContentProps{Class: "gap-4"}) {
 					<p class="text-sm text-muted-foreground">Definite failures can be retried; uncertain outcomes need review. Manual resolution records external verification and never submits email.</p>
-					for _, row := range data.Rows {
-						if taskRowNeedsRecovery(row) {
-							@taskRecoveryRow(data, row)
+					@taskRecoveryBulk(data)
+					<div class="table-scroll">
+						@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Recovery rows"}}) {
+							@table.Header(table.HeaderProps{}) {
+								@table.Row(table.RowProps{}) {
+									@table.Head(table.HeadProps{Class: "w-8"}) {
+										<span class="sr-only">Select</span>
+									}
+									@table.Head(table.HeadProps{}) {
+										{ "Recipient" }
+									}
+									@table.Head(table.HeadProps{}) {
+										{ "State" }
+									}
+									@table.Head(table.HeadProps{}) {
+										{ "Reason" }
+									}
+									@table.Head(table.HeadProps{}) {
+										{ "Prior attempt" }
+									}
+									@table.Head(table.HeadProps{Class: "text-right"}) {
+										{ "Action" }
+									}
+								}
+							}
+							@table.Body(table.BodyProps{}) {
+								for _, row := range data.Rows {
+									if taskRowNeedsRecovery(row) {
+										@taskRecoveryRow(data, row)
+									}
+								}
+							}
 						}
-					}
+					</div>
 				}
 			}
 		</section>
 	}
 }
 
-templ taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) {
-	<div class="p-[1.1rem] border border-border rounded-4xl bg-muted space-y-2">
-		<h4 class="font-semibold">Recovery · worksheet row { row.Row } · recipient { row.Position }</h4>
-		<p>{ row.State } · { row.Reason }</p>
-		if row.Recipient != "" {
-			<p class="text-sm text-muted-foreground">Recipient: { row.Recipient }</p>
+// taskRecoveryBulk renders the selection-scoped actions. Alpine keeps the
+// selected member ids; the forms stay native posts so a submission is one
+// atomic request against the confirmed count.
+templ taskRecoveryBulk(data TaskPageData) {
+	<div hidden x-bind:hidden="retry.length === 0 && review.length === 0" class="space-y-4 rounded-card border border-border bg-muted/50 p-4">
+		<div class="flex flex-wrap items-baseline gap-2">
+			<p class="font-semibold">Bulk actions</p>
+			<p class="text-sm text-muted-foreground"><span x-text="retry.length + review.length">0</span> selected. Counts refresh before each action; a changed selection is refused.</p>
+		</div>
+		if data.Controls.RetryRow {
+			<form id={ "sending-retry-selected-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/retry#sending" } x-bind:hidden="retry.length === 0" class="space-y-3 border-t border-border pt-3">
+				<input type="hidden" name="action_id" value={ data.ActionID + "retryselected" }/>
+				<input type="hidden" name="expected_count" x-bind:value="retry.length"/>
+				<template x-for="id in retry" x-bind:key="id">
+					<input type="hidden" name="member_id" x-bind:value="id"/>
+				</template>
+				<p class="text-sm">Retry <span class="font-semibold" x-text="retry.length">0</span> definite failures using their unchanged snapshots.</p>
+				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-retry-selected-confirm", Name: "confirmed", Value: "yes", Required: true})
+					Retry every selected definite failure.
+				}
+				@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Approved, Size: button.SizeSm}) {
+					{ "Retry selected" }
+				}
+			</form>
 		}
-		if row.AttemptID != "" {
-			<p class="text-sm text-muted-foreground">Prior attempt { row.AttemptID }: { row.AttemptRecipient } · { row.AttemptState } · { row.AttemptTime } · { row.AttemptReason }</p>
+		if data.Controls.ResendRow {
+			<form id={ "sending-resend-selected-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resend#sending" } x-bind:hidden="review.length === 0" class="space-y-3 border-t border-border pt-3">
+				<input type="hidden" name="action_id" value={ data.ActionID + "resendselected" }/>
+				<input type="hidden" name="expected_count" x-bind:value="review.length"/>
+				<template x-for="id in review" x-bind:key="id">
+					<input type="hidden" name="member_id" x-bind:value="id"/>
+				</template>
+				<p class="text-sm">Send <span class="font-semibold" x-text="review.length">0</span> selected uncertain recipients again. Each earlier request may have been accepted, so this can create duplicates.</p>
+				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-selected-duplicate", Name: "duplicate_risk", Value: "yes", Required: true})
+					The earlier requests may have been accepted. Sending again can create duplicates.
+				}
+				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-selected-confirm", Name: "confirmed", Value: "yes", Required: true})
+					Confirm sending these recipients again.
+				}
+				@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Approved, Size: button.SizeSm, Class: "status-warning"}) {
+					{ "Send again selected" }
+				}
+			</form>
 		}
-		switch row.State {
-			case "manually_submitted":
-				<p>Marked already submitted. This operator resolution does not establish a Microsoft acceptance timestamp.</p>
-			case "correction_required":
-				<p>Correct the recipient or required values in the source workbook and upload a corrected task. This unchanged snapshot cannot be retried.</p>
-			case "review_required":
-				if data.Controls.ResendRow {
-					<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resend#sending" } class="space-y-2">
-						@sendingRowFields(data, row)
-						@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-							@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-duplicate-" + row.ID, Name: "duplicate_risk", Value: "yes", Required: true})
-							The earlier request may have been accepted. Sending again can create a duplicate.
-						}
-						@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-							@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
-							Confirm sending this 1 recipient again.
-						}
-						@button.Button(button.Props{Type: button.TypeSubmit, Disabled: !data.Approved, Class: "status-warning"}) {
-							{ "Send again — duplicate risk" }
-						}
-					</form>
+		if data.Controls.ResolveRow {
+			<form id={ "sending-resolve-selected-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resolve#sending" } x-bind:hidden="review.length === 0" class="space-y-3 border-t border-border pt-3">
+				<input type="hidden" name="action_id" value={ data.ActionID + "resolvesselected" }/>
+				<input type="hidden" name="expected_count" x-bind:value="review.length"/>
+				<template x-for="id in review" x-bind:key="id">
+					<input type="hidden" name="member_id" x-bind:value="id"/>
+				</template>
+				<p class="text-sm">Mark <span class="font-semibold" x-text="review.length">0</span> selected uncertain recipients as already submitted after external verification. This records no provider acceptance timestamp and never submits email.</p>
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-resolution-basis-selected"}) {
+						Basis for resolution
+					}
+					@input.Input(input.Props{ID: "sending-resolution-basis-selected", Name: "basis", Required: true, Attributes: templ.Attributes{"maxlength": "500"}})
 				}
-				if data.Controls.ResolveRow {
-					<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resolve#sending" } class="space-y-2">
-						@sendingRowFields(data, row)
-						@field.Field(field.Props{}) {
-							@field.Label(field.LabelProps{For: "sending-resolution-basis-" + row.ID}) {
-								Basis for resolution
-							}
-							@input.Input(input.Props{ID: "sending-resolution-basis-" + row.ID, Name: "basis", Required: true, Attributes: templ.Attributes{"maxlength": "2000"}})
-						}
-						@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-							@checkbox.Checkbox(checkbox.Props{ID: "sending-resolve-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
-							I verified this recipient was already submitted.
-						}
-						@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit}) {
-							{ "Mark already submitted" }
-						}
-						<p class="text-xs text-muted-foreground">Records the operator, basis and resolution time. Does not invent a Microsoft acceptance timestamp.</p>
-					</form>
+				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-resolve-selected-confirm", Name: "confirmed", Value: "yes", Required: true})
+					I verified these recipients were already submitted.
 				}
-			default:
-				if data.Controls.RetryRow {
-					<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/retry#sending" }>
-						@sendingRowFields(data, row)
-						@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-							@checkbox.Checkbox(checkbox.Props{ID: "sending-retry-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
-							Retry this 1 definite failure using its unchanged snapshot.
-						}
-						@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Approved}) {
-							{ "Retry" }
-						}
-					</form>
+				@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Size: button.SizeSm}) {
+					{ "Mark selected already submitted" }
 				}
+			</form>
 		}
 	</div>
+}
+
+templ taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) {
+	@table.Row(table.RowProps{}) {
+		@table.Cell(table.CellProps{}) {
+			if recoveryCanRetry(row, data.Controls) {
+				@checkbox.Checkbox(checkbox.Props{ID: "recovery-select-" + row.ID, Value: row.ID, Class: "align-middle", Attributes: templ.Attributes{"aria-label": recoverySelectLabel(row)}, InputAttributes: templ.Attributes{"x-model": "retry"}})
+			} else if recoveryCanReview(row, data.Controls) {
+				@checkbox.Checkbox(checkbox.Props{ID: "recovery-select-" + row.ID, Value: row.ID, Class: "align-middle", Attributes: templ.Attributes{"aria-label": recoverySelectLabel(row)}, InputAttributes: templ.Attributes{"x-model": "review"}})
+			}
+		}
+		@table.Cell(table.CellProps{Class: "w-[18rem] max-w-[18rem] whitespace-normal!"}) {
+			<div class="space-y-0.5">
+				if row.Recipient != "" {
+					<p class="font-medium wrap-anywhere">{ row.Recipient }</p>
+				}
+				<p class="text-xs text-muted-foreground">Worksheet row { row.Row } · recipient { row.Position }</p>
+			</div>
+		}
+		@table.Cell(table.CellProps{Class: "whitespace-nowrap!"}) {
+			@badge.Badge(recoveryStateBadge(row.State)) {
+				{ recoveryStateLabel(row.State) }
+			}
+		}
+		@table.Cell(table.CellProps{Class: "max-w-[18rem] whitespace-normal!"}) {
+			<p class="text-sm wrap-anywhere">{ row.Reason }</p>
+		}
+		@table.Cell(table.CellProps{Class: "max-w-[16rem] whitespace-normal!"}) {
+			if row.AttemptID != "" {
+				<div class="space-y-0.5 text-xs text-muted-foreground">
+					<p class="wrap-anywhere"><code>{ row.AttemptID }</code></p>
+					<p>{ row.AttemptState } · { row.AttemptTime }</p>
+					if row.AttemptReason != "" {
+						<p class="wrap-anywhere">{ row.AttemptReason }</p>
+					}
+				</div>
+			} else {
+				<p class="text-xs text-muted-foreground">No recorded attempt</p>
+			}
+		}
+		@table.Cell(table.CellProps{Class: "text-right align-top!"}) {
+			@taskRecoveryRowActions(data, row)
+		}
+	}
+}
+
+templ taskRecoveryRowActions(data TaskPageData, row TaskAdmittedRow) {
+	<div class="flex flex-col items-end gap-2">
+		if recoveryCanRetry(row, data.Controls) {
+			@recoveryRetryDialog(data, row)
+		}
+		if recoveryCanReview(row, data.Controls) {
+			if data.Controls.ResendRow {
+				@recoveryResendDialog(data, row)
+			}
+			if data.Controls.ResolveRow {
+				@recoveryResolveDialog(data, row)
+			}
+		}
+		if row.State == "correction_required" {
+			<p class="text-xs text-muted-foreground">Upload a corrected task to send this row.</p>
+		}
+		if row.State == "manually_submitted" {
+			<p class="text-xs text-muted-foreground">Marked already submitted after external verification.</p>
+		}
+	</div>
+}
+
+templ recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) {
+	@dialog.Dialog(dialog.Props{ID: "recovery-retry-" + row.ID}) {
+		@button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Attributes: dialog.Trigger(ctx)}) {
+			{ "Retry" }
+		}
+		@dialog.Content(dialog.ContentProps{}) {
+			@dialog.Header(dialog.HeaderProps{}) {
+				@dialog.Title(dialog.TitleProps{}) {
+					{ "Retry worksheet row " + strconv.Itoa(row.Row) }
+				}
+				@dialog.Description(dialog.DescriptionProps{}) {
+					{ "A new attempt uses the unchanged snapshot and this mailbox's pacing. The earlier attempt stays in history." }
+				}
+			}
+			@recoveryPriorAttempt(row)
+			<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/retry#sending" } class="space-y-3">
+				@sendingRowFields(data, row)
+				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-retry-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+					Retry this 1 definite failure using its unchanged snapshot.
+				}
+				@dialog.Footer(dialog.FooterProps{}) {
+					@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Approved}) {
+						{ "Retry" }
+					}
+				}
+			</form>
+		}
+	}
+}
+
+templ recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) {
+	@dialog.Dialog(dialog.Props{ID: "recovery-resend-" + row.ID}) {
+		@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "status-warning", Attributes: dialog.Trigger(ctx)}) {
+			{ "Send again" }
+		}
+		@dialog.Content(dialog.ContentProps{}) {
+			@dialog.Header(dialog.HeaderProps{}) {
+				@dialog.Title(dialog.TitleProps{}) {
+					{ "Send worksheet row " + strconv.Itoa(row.Row) + " again" }
+				}
+				@dialog.Description(dialog.DescriptionProps{}) {
+					{ "The earlier request may have been accepted. Sending again can create a duplicate; the uncertain attempt is kept." }
+				}
+			}
+			@recoveryPriorAttempt(row)
+			<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resend#sending" } class="space-y-3">
+				@sendingRowFields(data, row)
+				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-duplicate-" + row.ID, Name: "duplicate_risk", Value: "yes", Required: true})
+					The earlier request may have been accepted. Sending again can create a duplicate.
+				}
+				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+					Confirm sending this 1 recipient again.
+				}
+				@dialog.Footer(dialog.FooterProps{}) {
+					@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Approved, Class: "status-warning"}) {
+						{ "Send again — duplicate risk" }
+					}
+				}
+			</form>
+		}
+	}
+}
+
+templ recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) {
+	@dialog.Dialog(dialog.Props{ID: "recovery-resolve-" + row.ID}) {
+		@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: dialog.Trigger(ctx)}) {
+			{ "Mark already submitted" }
+		}
+		@dialog.Content(dialog.ContentProps{}) {
+			@dialog.Header(dialog.HeaderProps{}) {
+				@dialog.Title(dialog.TitleProps{}) {
+					{ "Resolve worksheet row " + strconv.Itoa(row.Row) }
+				}
+				@dialog.Description(dialog.DescriptionProps{}) {
+					{ "Records the operator, basis and resolution time after external verification. It does not invent a Microsoft acceptance timestamp." }
+				}
+			}
+			@recoveryPriorAttempt(row)
+			<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resolve#sending" } class="space-y-3">
+				@sendingRowFields(data, row)
+				@field.Field(field.Props{}) {
+					@field.Label(field.LabelProps{For: "sending-resolution-basis-" + row.ID}) {
+						Basis for resolution
+					}
+					@input.Input(input.Props{ID: "sending-resolution-basis-" + row.ID, Name: "basis", Required: true, Attributes: templ.Attributes{"maxlength": "500"}})
+				}
+				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+					@checkbox.Checkbox(checkbox.Props{ID: "sending-resolve-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
+					I verified this recipient was already submitted.
+				}
+				@dialog.Footer(dialog.FooterProps{}) {
+					@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit}) {
+						{ "Mark already submitted" }
+					}
+				}
+			</form>
+		}
+	}
+}
+
+templ recoveryPriorAttempt(row TaskAdmittedRow) {
+	if row.AttemptID != "" {
+		<div class="space-y-1 rounded-2xl bg-muted p-3 text-xs text-muted-foreground">
+			<p class="font-medium text-foreground">Prior attempt</p>
+			<p class="wrap-anywhere"><code>{ row.AttemptID }</code></p>
+			<p class="wrap-anywhere">{ row.AttemptRecipient } · { row.AttemptState } · { row.AttemptTime }</p>
+			if row.AttemptReason != "" {
+				<p class="wrap-anywhere">{ row.AttemptReason }</p>
+			}
+		</div>
+	}
 }
 
 templ sendingRowFields(data TaskPageData, row TaskAdmittedRow) {
@@ -1761,6 +1978,47 @@ func taskRowNeedsRecovery(row TaskAdmittedRow) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// recoveryCanRetry mirrors the store's retry eligibility: definite failures
+// only, and only when the task offers the per-row retry control.
+func recoveryCanRetry(row TaskAdmittedRow, controls TaskControls) bool {
+	switch row.State {
+	case "manually_submitted", "correction_required", "review_required":
+		return false
+	}
+	return controls.RetryRow
+}
+
+// recoveryCanReview reports whether a row offers the uncertain-outcome
+// controls. Both bulk actions share the same selection because one uncertain
+// row is resolved or resent, never both.
+func recoveryCanReview(row TaskAdmittedRow, controls TaskControls) bool {
+	return row.State == "review_required" && (controls.ResendRow || controls.ResolveRow)
+}
+
+// recoverySelectLabel names one selection checkbox for assistive technology.
+func recoverySelectLabel(row TaskAdmittedRow) string {
+	return "Select worksheet row " + strconv.Itoa(row.Row) + " recipient " + strconv.Itoa(row.Position)
+}
+
+// recoveryStateLabel renders a stored state code as operator words.
+func recoveryStateLabel(state string) string {
+	return strings.ReplaceAll(state, "_", " ")
+}
+
+// recoveryStateBadge maps one recovery state to its badge variant.
+func recoveryStateBadge(state string) badge.Props {
+	switch state {
+	case "definite_failure", "failed", "auth_failure":
+		return badge.Props{Variant: badge.VariantDestructive, Class: "whitespace-nowrap!"}
+	case "review_required":
+		return badge.Props{Variant: badge.VariantDefault, Class: "status-warning whitespace-nowrap!"}
+	case "manually_submitted":
+		return badge.Props{Variant: badge.VariantOutline, Class: "whitespace-nowrap!"}
+	default:
+		return badge.Props{Variant: badge.VariantSecondary, Class: "whitespace-nowrap!"}
 	}
 }
 

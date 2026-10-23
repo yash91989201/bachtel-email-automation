@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pocketbase/dbx"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
@@ -182,5 +183,75 @@ func TestSendingPacingAndTaskOwnership(t *testing.T) {
 	settings, err = sending.NewStore(app, sending.StoreOptions{}).DispatcherState(context.Background(), connection.ID, operatorID(t, app))
 	if err != nil || settings.Rate != 17 {
 		t.Fatalf("cross-operator rate changed state: %+v %v", settings, err)
+	}
+}
+
+// A bulk recovery post carries one member_id per selected row; the handler
+// must pass the whole selection to the atomic action, not just the first.
+func TestBulkRecoveryPostsEverySelectedMember(t *testing.T) {
+	app, handler := newTaskServer(t)
+	cookie := login(t, handler)
+	campaignID := createCampaign(t, handler, cookie, "Engineers")
+	if rec := postRevision(t, handler, cookie, campaignID, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
+		t.Fatalf("revision: %d", rec.Code)
+	}
+	taskID := stageTask(t, handler, cookie, campaignID, taskWorkbook(t, "Sheet1", [][]string{
+		{"Email", "Applicant Full Name", "Location"},
+		{"alice@example.com", "Ada Lovelace", "Remote"},
+		{"carol@example.com", "Carol Danvers", "Lisbon"},
+	}))
+	owner := operatorID(t, app)
+	installMailbox(t, app, owner, "sender@example.test")
+	store := sending.NewStore(app, sending.StoreOptions{})
+	ctx := context.Background()
+	attempt, err := store.QueueTest(ctx, owner, sending.TestRequest{
+		ActionID: "bulk-recovery-test-123456", TaskID: taskID, Actor: "operator",
+		Recipient: "sample@example.invalid",
+		Values:    map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"},
+	})
+	if err != nil {
+		t.Fatalf("queue test: %v", err)
+	}
+	if _, err = app.DB().NewQuery("UPDATE submission_attempts SET state='submitted' WHERE id={:id}").Bind(dbx.Params{"id": attempt.ID}).Execute(); err != nil {
+		t.Fatalf("mark test submitted: %v", err)
+	}
+	if err = store.Approve(ctx, owner, taskID, attempt.ID, "operator", "approve-"+taskID); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	base := "/campaigns/" + campaignID + "/tasks/" + taskID + "/sending"
+	if rec := do(t, handler, http.MethodPost, base+"/start", url.Values{"action_id": {"bulk-recovery-start-123456"}, "expected_count": {"2"}, "confirmed": {"yes"}}, withCookie(cookie)); rec.Code != http.StatusSeeOther {
+		t.Fatalf("start: %d %.400s", rec.Code, rec.Body.String())
+	}
+	if rec := do(t, handler, http.MethodPost, base+"/stop", url.Values{"action_id": {"bulk-recovery-stop-123456"}, "expected_count": {"0"}}, withCookie(cookie)); rec.Code != http.StatusSeeOther {
+		t.Fatalf("stop: %d %.400s", rec.Code, rec.Body.String())
+	}
+	if err = store.SettleTasks(ctx); err != nil {
+		t.Fatalf("settle: %v", err)
+	}
+	members, err := app.FindRecordsByFilter(intake.TaskCandidatesCollection, "task={:t}", "source_row", 0, 0, dbx.Params{"t": taskID})
+	if err != nil || len(members) != 2 {
+		t.Fatalf("members = %d, %v", len(members), err)
+	}
+	for _, member := range members {
+		member.Set("dispatch_state", sending.AttemptFailed)
+		if err = app.Save(member); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bulk := url.Values{
+		"action_id":      {"bulk-recovery-retry-123456"},
+		"expected_count": {"2"},
+		"confirmed":      {"yes"},
+		"member_id":      {members[0].Id, members[1].Id},
+	}
+	if rec := do(t, handler, http.MethodPost, base+"/retry", bulk, withCookie(cookie)); rec.Code != http.StatusSeeOther {
+		t.Fatalf("bulk retry: %d %.400s", rec.Code, rec.Body.String())
+	}
+	progress, err := store.Preview(ctx, owner, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if progress.Reserved != 2 || progress.RetryableFailed != 0 {
+		t.Fatalf("bulk retry claimed %d reserved, %d retryable; want 2 and 0", progress.Reserved, progress.RetryableFailed)
 	}
 }

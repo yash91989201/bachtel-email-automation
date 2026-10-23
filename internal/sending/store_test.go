@@ -463,6 +463,74 @@ func TestStoreLongBodyAndImmutableIntakeExclusion(t *testing.T) {
 	}
 }
 
+func TestStoreBulkRecoveryAppliesOnlyTheSelectedMembers(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	task := f.task(t, 2)
+	storeApprove(t, f, task)
+	storeAct(t, f, task, "start", "start", 2)
+	first := storeBegin(t, f)
+	if e := f.store.CompleteAttempt(storeCtx, first.ID, sending.Outcome{State: sending.AttemptFailed, Reason: "temporary configuration failure"}); e != nil {
+		t.Fatal(e)
+	}
+	second := storeBegin(t, f)
+	if e := f.store.CompleteAttempt(storeCtx, second.ID, sending.Outcome{State: sending.AttemptFailed, Reason: "temporary configuration failure"}); e != nil {
+		t.Fatal(e)
+	}
+	storeAct(t, f, task, "stop", "stop", 0)
+	if e := f.store.SettleTasks(storeCtx); e != nil {
+		t.Fatal(e)
+	}
+	if p := storePreview(t, f, task); p.RetryableFailed != 2 {
+		t.Fatalf("expected two retryable failures: %+v", p)
+	}
+	// A selection narrowed to one member retries exactly that member.
+	if _, e := f.store.Act(storeCtx, f.ownerID, sending.ActionRequest{ActionID: "bulk-retry-one", TaskID: task, Kind: "retry", MemberIDs: []string{first.MemberID}, Confirmed: true, ExpectedCount: 1}); e != nil {
+		t.Fatal(e)
+	}
+	if p := storePreview(t, f, task); p.Reserved != 1 || p.RetryableFailed != 1 {
+		t.Fatalf("bulk retry claimed the wrong members: %+v", p)
+	}
+	// A stale selected count is refused without claiming anything.
+	if _, e := f.store.Act(storeCtx, f.ownerID, sending.ActionRequest{ActionID: "bulk-retry-stale", TaskID: task, Kind: "retry", MemberIDs: []string{first.MemberID, second.MemberID}, Confirmed: true, ExpectedCount: 1}); e == nil {
+		t.Fatal("bulk retry accepted a stale selected count")
+	}
+	if p := storePreview(t, f, task); p.Reserved != 1 || p.RetryableFailed != 1 {
+		t.Fatalf("refused bulk retry changed claims: %+v", p)
+	}
+}
+
+func TestStoreBulkResolveRecordsEverySelectedMember(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	task := f.task(t, 2)
+	storeApprove(t, f, task)
+	storeAct(t, f, task, "start", "start", 2)
+	first := storeBegin(t, f)
+	second := storeBegin(t, f)
+	for _, a := range []*sending.Attempt{first, second} {
+		if e := f.store.CompleteAttempt(storeCtx, a.ID, sending.Outcome{State: sending.AttemptReview, Reason: "lost response"}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if p := storePreview(t, f, task); p.Held != 2 {
+		t.Fatalf("expected two uncertain rows: %+v", p)
+	}
+	if _, e := f.store.Act(storeCtx, f.ownerID, sending.ActionRequest{ActionID: "bulk-resolve", TaskID: task, Kind: "resolve", MemberIDs: []string{first.MemberID, second.MemberID}, Actor: "operator", Basis: "verified in provider sent items", Confirmed: true, ExpectedCount: 2}); e != nil {
+		t.Fatal(e)
+	}
+	if p := storePreview(t, f, task); p.Submitted != 2 || p.Held != 0 {
+		t.Fatalf("bulk resolution not reflected: %+v", p)
+	}
+	audits, e := f.app.FindRecordsByFilter(sending.ResolutionsCollection, "action_id='bulk-resolve'", "", 0, 0)
+	if e != nil || len(audits) != 2 {
+		t.Fatalf("bulk resolution audits = %d, %v", len(audits), e)
+	}
+	for _, audit := range audits {
+		if audit.GetString("basis") != "verified in provider sent items" {
+			t.Fatalf("bulk resolution lost its basis: %q", audit.GetString("basis"))
+		}
+	}
+}
+
 func TestStoreResumeSafeRemainderAfterRetryBatchCompleted(t *testing.T) {
 	f := newAcceptanceFixture(t)
 	task := f.task(t, 3)
