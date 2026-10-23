@@ -14,6 +14,7 @@ import (
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
+	"github.com/yash91989201/bachtel-email-automation/internal/testutil"
 )
 
 func resolverFixture(t *testing.T) (core.App, *connectionResolver, string) {
@@ -30,6 +31,7 @@ func resolverFixture(t *testing.T) (core.App, *connectionResolver, string) {
 	if err := app.RunAppMigrations(); err != nil {
 		t.Fatal(err)
 	}
+	testutil.FastPasswords(t, app)
 	if err := operator.Provision(app, "operator@example.test", "correct-horse-battery"); err != nil {
 		t.Fatal(err)
 	}

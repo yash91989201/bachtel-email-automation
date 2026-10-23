@@ -15,12 +15,12 @@ import (
 	"time"
 
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/xuri/excelize/v2"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
+	"github.com/yash91989201/bachtel-email-automation/internal/testutil"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
@@ -53,18 +53,7 @@ func newExportFixture(t *testing.T) *exportFixture {
 
 func newExportFixtureWithLabels(t *testing.T, labels []string) *exportFixture {
 	t.Helper()
-	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
-	if err := app.Bootstrap(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := app.ClearBootstrap(); err != nil {
-			t.Error(err)
-		}
-	})
-	if err := app.RunAppMigrations(); err != nil {
-		t.Fatal(err)
-	}
+	app := testutil.NewApp(t)
 	stub := filepath.Join(t.TempDir(), "pandoc")
 	if err := os.WriteFile(stub, []byte("#!/bin/sh\nfor arg in \"$@\"; do\nif [ \"$arg\" = \"--version\" ]; then echo 'pandoc export'; exit 0; fi\ndone\nprintf '%s' '<p>Hello {{candidate_name}}</p>'\n"), 0o755); err != nil {
 		t.Fatal(err)

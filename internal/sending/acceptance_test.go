@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/xuri/excelize/v2"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
@@ -24,6 +23,7 @@ import (
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
+	"github.com/yash91989201/bachtel-email-automation/internal/testutil"
 )
 
 // testKey is a fixed deployment key that seals fixture mailbox credentials.
@@ -106,18 +106,7 @@ func (c *acceptanceClock) After(d time.Duration) <-chan time.Time {
 
 func newAcceptanceFixture(t *testing.T) *acceptanceFixture {
 	t.Helper()
-	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
-	if err := app.Bootstrap(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := app.ClearBootstrap(); err != nil {
-			t.Error(err)
-		}
-	})
-	if err := app.RunAppMigrations(); err != nil {
-		t.Fatal(err)
-	}
+	app := testutil.NewApp(t)
 	stub := filepath.Join(t.TempDir(), "pandoc")
 	if err := os.WriteFile(stub, []byte("#!/bin/sh\nfor arg in \"$@\"; do\nif [ \"$arg\" = \"--version\" ]; then echo 'pandoc acceptance'; exit 0; fi\ndone\nprintf '%s' '<p>Hello {{candidate_name}}</p>'\n"), 0755); err != nil {
 		t.Fatal(err)

@@ -20,6 +20,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
+	"github.com/yash91989201/bachtel-email-automation/internal/testutil"
 	"golang.org/x/sys/unix"
 )
 
@@ -36,6 +37,7 @@ func TestServerOwnsDispatcherUntilDrainBeforeDatabaseClose(t *testing.T) {
 	if err := app.RunAppMigrations(); err != nil {
 		t.Fatal(err)
 	}
+	testutil.FastPasswords(t, app)
 	cfg := config.Config{Origin: "http://127.0.0.1:8090"}
 	mailboxes := mailbox.NewStore(app, cfg.EncryptionKey)
 	connections := microsoft.NewService(app, cfg, mailboxes)
@@ -127,6 +129,7 @@ func TestExportsWaitForSendingRecoveryBeforeTakingSnapshots(t *testing.T) {
 	if err := app.RunAppMigrations(); err != nil {
 		t.Fatal(err)
 	}
+	testutil.FastPasswords(t, app)
 	if err := operator.Provision(app, "recovery@example.test", "correct-horse-battery"); err != nil {
 		t.Fatal(err)
 	}

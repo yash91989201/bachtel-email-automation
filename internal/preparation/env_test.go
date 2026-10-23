@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/xuri/excelize/v2"
 
@@ -28,6 +27,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 	"github.com/yash91989201/bachtel-email-automation/internal/preparation"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
+	"github.com/yash91989201/bachtel-email-automation/internal/testutil"
 )
 
 var testKey = []byte("0123456789abcdef0123456789abcdef")
@@ -51,18 +51,7 @@ type env struct {
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
-	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
-	if err := app.Bootstrap(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := app.ClearBootstrap(); err != nil {
-			t.Error(err)
-		}
-	})
-	if err := app.RunAppMigrations(); err != nil {
-		t.Fatal(err)
-	}
+	app := testutil.NewApp(t)
 	campaigns := campaign.NewServiceWithConverter(app, convert.Converter{Path: stubPandoc(t)})
 	tasks := intake.NewService(app, campaigns, intake.Limits{})
 	ctx := context.Background()

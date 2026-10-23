@@ -11,24 +11,14 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
+	"github.com/yash91989201/bachtel-email-automation/internal/testutil"
 )
 
 var testKey = []byte("0123456789abcdef0123456789abcdef")
 
 func newApp(t *testing.T) *pocketbase.PocketBase {
 	t.Helper()
-	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
-	if err := app.Bootstrap(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := app.ClearBootstrap(); err != nil {
-			t.Error(err)
-		}
-	})
-	if err := app.RunAppMigrations(); err != nil {
-		t.Fatal(err)
-	}
+	app := testutil.NewApp(t)
 	return app
 }
 

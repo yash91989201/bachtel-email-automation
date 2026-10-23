@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/xuri/excelize/v2"
@@ -21,6 +20,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 	"github.com/yash91989201/bachtel-email-automation/internal/preparation"
+	"github.com/yash91989201/bachtel-email-automation/internal/testutil"
 )
 
 type fixture struct {
@@ -35,18 +35,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
-	if err := app.Bootstrap(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := app.ClearBootstrap(); err != nil {
-			t.Error(err)
-		}
-	})
-	if err := app.RunAppMigrations(); err != nil {
-		t.Fatal(err)
-	}
+	app := testutil.NewApp(t)
 	f := &fixture{app: app}
 	f.owner = f.createOperator(t, "snapshot@example.test")
 	f.campaign, f.config = f.createCampaign(t)

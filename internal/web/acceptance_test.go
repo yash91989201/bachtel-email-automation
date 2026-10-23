@@ -24,6 +24,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
 	"github.com/yash91989201/bachtel-email-automation/internal/reset"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
+	"github.com/yash91989201/bachtel-email-automation/internal/testutil"
 )
 
 // Acceptance checks for change add-operator-and-microsoft-auth: they drive the
@@ -160,17 +161,23 @@ func graphMailbox(token string) string {
 // start bootstraps the app (and optionally the operator) on the current data dir.
 func (env *acceptanceEnv) start(t *testing.T, provision bool) {
 	t.Helper()
-	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: env.dataDir})
-	if err := app.Bootstrap(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := app.ClearBootstrap(); err != nil {
-			t.Error(err)
+	var app *pocketbase.PocketBase
+	if provision {
+		app = testutil.NewApp(t)
+		env.dataDir = app.DataDir()
+	} else {
+		app = pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: env.dataDir})
+		if err := app.Bootstrap(); err != nil {
+			t.Fatal(err)
 		}
-	})
-	if err := app.RunAppMigrations(); err != nil {
-		t.Fatal(err)
+		t.Cleanup(func() {
+			if err := app.ClearBootstrap(); err != nil {
+				t.Error(err)
+			}
+		})
+		if err := app.RunAppMigrations(); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if provision {
 		if err := operator.Provision(app, testEmail, testPassword); err != nil {

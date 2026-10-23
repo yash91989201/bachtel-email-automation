@@ -29,6 +29,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/preparation"
 	"github.com/yash91989201/bachtel-email-automation/internal/reset"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
+	"github.com/yash91989201/bachtel-email-automation/internal/testutil"
 )
 
 const (
@@ -82,18 +83,7 @@ func newTestServer(t *testing.T, cfg config.Config) (*pocketbase.PocketBase, htt
 // services so a test can drive a worker exactly as the application does.
 func newTestServerWithServices(t *testing.T, cfg config.Config) (*pocketbase.PocketBase, http.Handler, Services) {
 	t.Helper()
-	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
-	if err := app.Bootstrap(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if err := app.ClearBootstrap(); err != nil {
-			t.Error(err)
-		}
-	})
-	if err := app.RunAppMigrations(); err != nil {
-		t.Fatal(err)
-	}
+	app := testutil.NewApp(t)
 	services := testServices(t, app, cfg, nil)
 	return app, wrapWithPocketBase(t, app, NewHandler(app, cfg, services)), services
 }
