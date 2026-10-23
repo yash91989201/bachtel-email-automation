@@ -1,6 +1,6 @@
 # Design
 
-Status: proposed implementation only. No implementation from this change is retained; the main specs reflect the operator's requested behavior, not evidence that it is implemented.
+Status: implemented. Verification evidence is recorded in `verification.md`.
 
 ## Context
 
@@ -29,7 +29,7 @@ Use those existing boundaries and dependencies to hide supported-provider protoc
 
 ## Migration Plan
 
-The existing provider fields are unconstrained text, so Xiaomi requires no database migration. Implementation must leave confirmed configurations and credentials unchanged. Do not rewrite existing OpenCode endpoints; defaults affect new forms only. Older application versions do not recognize new Xiaomi selections; switch those accounts deliberately before rolling the application back. The ai-connections and account-settings main specs are synchronized as the requested behavior; leave all implementation tasks pending and the change active for review.
+The existing provider fields are unconstrained text, so Xiaomi requires no database migration. The implementation leaves confirmed configurations and credentials unchanged and does not rewrite existing OpenCode endpoints; defaults affect new forms only. Older application versions do not recognize new Xiaomi selections; switch those accounts deliberately before rolling the application back. The ai-connections and account-settings main specs are synchronized with the implemented behavior.
 
 ## Sources
 

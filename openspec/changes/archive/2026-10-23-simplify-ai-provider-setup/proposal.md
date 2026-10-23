@@ -1,6 +1,6 @@
 # Proposal
 
-Status: specification-only at the operator's request. Implementation edits were reverted; the change records the requested behavior for a future apply.
+Status: implemented. Verification evidence is recorded in `verification.md`.
 
 ## Why
 
