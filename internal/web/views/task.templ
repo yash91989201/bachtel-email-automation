@@ -1267,26 +1267,28 @@ templ taskSchedule(data TaskPageData) {
 			<p class="text-sm status-warning">This scheduled start was missed. Clear it before choosing a new schedule or switching to Direct sending.</p>
 		}
 		if data.Controls.Schedule || data.Controls.EditSchedule {
-			<form id={ "sending-schedule-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/schedule#sending" } x-data={ "{ confirmed: false, eligible: " + strconv.FormatBool(data.Approved && data.Remaining > 0) + " }" } x-on:change="if ($event.target.matches('input[name=confirmed]')) confirmed = $event.target.checked" class="grid grid-cols-2 gap-4 *:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1">
+			<form id={ "sending-schedule-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/schedule#sending" } x-data={ "{ confirmed: false, eligible: " + strconv.FormatBool(data.Approved && data.Remaining > 0) + " }" } x-on:change="if ($event.target.matches('input[name=confirmed]')) confirmed = $event.target.checked" class="space-y-4">
 				<input type="hidden" name="action_id" value={ data.ActionID + "schedule" }/>
 				<input type="hidden" name="expected_count" value={ strconv.Itoa(data.Remaining) }/>
-				@field.Field(field.Props{}) {
-					@field.Label(field.LabelProps{For: "sending-schedule-time"}) {
-						Start time (India time)
+				<div class="flex flex-wrap items-start gap-4">
+					@field.Field(field.Props{Class: "w-full max-w-56"}) {
+						@field.Label(field.LabelProps{For: "sending-schedule-time"}) {
+							Start time (India time)
+						}
+						@input.Input(input.Props{ID: "sending-schedule-time", Type: "time", Name: "schedule_time", Required: true, Value: data.ScheduleDraftTime, Attributes: templ.Attributes{"step": "60"}})
 					}
-					@input.Input(input.Props{ID: "sending-schedule-time", Type: "time", Name: "schedule_time", Required: true, Value: data.ScheduleDraftTime, Attributes: templ.Attributes{"step": "60"}})
-				}
-				@field.Field(field.Props{}) {
-					@input.Input(input.Props{ID: "sending-schedule-date", Type: "date", Name: "schedule_date", Required: true, Value: data.ScheduleDraftDate, Attributes: templ.Attributes{"min": data.ScheduleMinDate}})
-					@field.Label(field.LabelProps{For: "sending-schedule-date"}) {
-						Start date
+					@field.Field(field.Props{Class: "w-full max-w-56"}) {
+						@field.Label(field.LabelProps{For: "sending-schedule-date"}) {
+							Start date
+						}
+						@input.Input(input.Props{ID: "sending-schedule-date", Type: "date", Name: "schedule_date", Required: true, Value: data.ScheduleDraftDate, Attributes: templ.Attributes{"min": data.ScheduleMinDate}})
 					}
-				}
-				@uilabel.Label(uilabel.Props{Class: "cn-label col-span-full"}) {
+				</div>
+				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
 					@checkbox.Checkbox(checkbox.Props{ID: "sending-schedule-confirm", Name: "confirmed", Value: "yes", Required: true})
 					I confirm the fresh counts for this scheduled start.
 				}
-				<div class="action-bar col-span-full">
+				<div class="action-bar">
 					@button.Button(button.Props{Type: button.TypeSubmit, Disabled: true, Attributes: templ.Attributes{"name": "schedule_action", "value": "enable", "x-bind:disabled": "!confirmed || !eligible"}}) {
 						{ "Schedule start" }
 					}
