@@ -147,17 +147,14 @@ func (s *simulatedIMAP) serve(conn net.Conn) {
 				return
 			}
 		case "APPEND":
-			if s.appendCode != 0 {
-				if !reply(tag + " NO append refused") {
-					return
-				}
-				continue
-			}
 			length, ok := literalSize(line)
 			if !ok {
 				_ = reply(tag + " BAD append")
 				return
 			}
+			// A tagged NO that arrives while the client is still waiting for a
+			// literal continuation can be lost by the client library. Read the
+			// literal first, then refuse, so the refusal is deterministic.
 			if !reply("+ Ready for literal data") {
 				return
 			}
@@ -168,6 +165,12 @@ func (s *simulatedIMAP) serve(conn net.Conn) {
 			// The client terminates the literal with CRLF.
 			if _, err := reader.ReadString('\n'); err != nil {
 				return
+			}
+			if s.appendCode != 0 {
+				if !reply(tag + " NO append refused") {
+					return
+				}
+				continue
 			}
 			s.mu.Lock()
 			s.appends++

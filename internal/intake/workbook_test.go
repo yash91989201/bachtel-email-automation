@@ -443,8 +443,8 @@ func TestExclusionReportLayout(t *testing.T) {
 	t.Parallel()
 	headers := []string{"Email", "", "City"}
 	reportRows := []intake.ReportRow{
-		{Row: 12, Position: 1, Recipient: "a@example.com", Reasons: []string{intake.ReasonDuplicate, intake.ReasonInvalidAddress}, Values: []string{"a@example.com", "x", "Paris"}},
-		{Row: 15, Position: 2, Recipient: "b@example.com", Reasons: []string{intake.ReasonInvalidAddress}, Values: []string{"a@example.com, b@example.com"}},
+		{Row: 12, Position: 1, Recipient: "a@example.com", Reasons: []string{intake.ReasonDuplicate, intake.ReasonInvalidAddress}, Values: []string{"a@example.com", "x", "Paris"}, Original: map[string]string{"email": "a@example.com"}, Proposed: map[string]string{"email": "a@example.com"}, Fields: []string{"email"}, Sources: []string{"intake"}},
+		{Row: 15, Position: 2, Recipient: "b@example.com", Reasons: []string{intake.ReasonInvalidAddress}, Values: []string{"a@example.com, b@example.com"}, Original: map[string]string{"email": "a@example.com, b@example.com"}, Fields: []string{"email"}, Sources: []string{"intake"}},
 	}
 	data, err := intake.ExclusionReport(headers, reportRows)
 	if err != nil {
@@ -468,9 +468,9 @@ func TestExclusionReportLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := [][]string{
-		{"Email", "Column 2", "City", "Source worksheet row", "Recipient position", "Recipient", "Reason"},
-		{"a@example.com", "x", "Paris", "12", "1", "a@example.com", "duplicate; invalid_address"},
-		{"a@example.com, b@example.com", "", "", "15", "2", "b@example.com", "invalid_address"},
+		{"Email", "Column 2", "City", "Source worksheet row", "Recipient position", "Recipient", "Reason", "Affected fields", "Reason source", "Original mapped values", "Proposed mapped values"},
+		{"a@example.com", "x", "Paris", "12", "1", "a@example.com", "duplicate; invalid_address", "email", "intake", "email=a@example.com", "email=a@example.com"},
+		{"a@example.com, b@example.com", "", "", "15", "2", "b@example.com", "invalid_address", "email", "intake", "email=a@example.com, b@example.com", ""},
 	}
 	if len(grid) != len(want) {
 		t.Fatalf("report rows = %d (%v), want %d", len(grid), grid, len(want))
@@ -499,7 +499,7 @@ func TestExclusionReportLayout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantEmpty := []string{"Source worksheet row", "Recipient position", "Recipient", "Reason"}
+	wantEmpty := []string{"Source worksheet row", "Recipient position", "Recipient", "Reason", "Affected fields", "Reason source", "Original mapped values", "Proposed mapped values"}
 	if len(emptyGrid) != 1 || !rowsEqual(emptyGrid[0], wantEmpty) {
 		t.Fatalf("empty report = %v, want the header row only", emptyGrid)
 	}

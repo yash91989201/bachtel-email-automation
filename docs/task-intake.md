@@ -289,3 +289,10 @@ starting, resuming and retry actions share:
   recipient who was submitted in the meantime is not sent to again.
 
 Source documentation: [Excelize cell and row APIs](https://xuri.me/excelize/en/cell.html).
+
+## Final sending data
+
+A validated task is not yet a final sending dataset. Prepared values or an
+operator-edited final sheet become one immutable snapshot; preview, test and
+candidate work read that snapshot directly. See
+[final-sending-snapshots.md](final-sending-snapshots.md).

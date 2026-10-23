@@ -71,7 +71,7 @@ func taskWorkbook(t *testing.T, sheet string, rows [][]string) []byte {
 
 // mixedWorkbook is the fixture for the full flow: a duplicate pair, an
 // unusable address, one missing required value, and one clean row. The clean
-// row's name is padded and lowercased so the normalized value is observable.
+// row's name is clean; new-revision rendering preserves supplied values.
 func mixedWorkbook(t *testing.T) []byte {
 	t.Helper()
 	return taskWorkbook(t, "Sheet1", [][]string{
@@ -80,7 +80,7 @@ func mixedWorkbook(t *testing.T) []byte {
 		{" ALICE@example.com ", "Grace Hopper", "Paris"},
 		{"not-an-address", "Zoe Quinn", "London"},
 		{"bob@example.com", "", "Berlin"},
-		{"carol@example.com", "  carol   danvers  ", "Lisbon"},
+		{"carol@example.com", "Carol Danvers", "Lisbon"},
 	})
 }
 
@@ -142,7 +142,7 @@ func fetchTaskPage(t *testing.T, handler http.Handler, cookie *http.Cookie, path
 // page's preview select, in worksheet-row order.
 func previewOptions(t *testing.T, body string) [][3]string {
 	t.Helper()
-	re := regexp.MustCompile(`value="([^"]+)">Worksheet row ([0-9]+)(?: · [^<(]*)?(?: \(([a-z_]+)\))?</option>`)
+	re := regexp.MustCompile(`value="([^"]+)"[^>]*>Worksheet row ([0-9]+)(?: · [^<(]*)?(?: \(([a-z_]+)\))?</option>`)
 	matches := re.FindAllStringSubmatch(body, -1)
 	if len(matches) == 0 {
 		t.Fatalf("no preview options in page: %.600s", body)
@@ -296,7 +296,7 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 		"duplicate recipient address in this upload",
 		"not a single usable email address",
 		"missing required value(s): candidate_name",
-		"Formatting is not approved for this saved configuration and current mailbox.",
+		"Finalize the sending data before sending a test for approval.",
 		`hx-post="/campaigns/` + id + `/tasks/` + taskID + `/preview"`,
 		`hx-target="#task-preview-result"`,
 	} {

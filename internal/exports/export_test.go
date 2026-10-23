@@ -505,7 +505,7 @@ func TestTaskResultsWorkbookPreservesSourceAndReportsOutcomes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(results[0], "|"); got != "Email|Name|Source worksheet|Source worksheet row|Recipient position|Recipient|Email Status|Submitted At|Email Error" {
+	if got := strings.Join(results[0], "|"); got != "Email|Name|Source worksheet|Source worksheet row|Recipient position|Recipient|Final snapshot|Final worksheet row|Email Status|Submitted At|Email Error|Email (2)|Name (2)" {
 		t.Fatalf("recipient results header = %q", got)
 	}
 	if len(results) != 8 {
@@ -523,7 +523,7 @@ func TestTaskResultsWorkbookPreservesSourceAndReportsOutcomes(t *testing.T) {
 			t.Fatalf("entry %d position = %q, want 1", i+1, results[i+1][4])
 		}
 	}
-	status := func(row int) string { return results[row][6] }
+	status := func(row int) string { return results[row][8] }
 	// Alice appears twice in the upload, so both of her entries are file-only
 	// duplicates; bob, carol, dave and erin are the admitted recipients.
 	if status(1) != "Excluded - duplicate" || status(6) != "Excluded - duplicate" {
@@ -538,10 +538,10 @@ func TestTaskResultsWorkbookPreservesSourceAndReportsOutcomes(t *testing.T) {
 	if status(7) != "Excluded - invalid address" {
 		t.Fatalf("invalid entry wrong: %q", status(7))
 	}
-	if !strings.HasSuffix(results[2][7], "+05:30") {
+	if !strings.HasSuffix(results[2][9], "+05:30") {
 		t.Fatalf("timestamp missing India offset: %q", results[2][7])
 	}
-	if !strings.Contains(results[4][8], "provider sent folder") {
+	if !strings.Contains(results[4][10], "provider sent folder") {
 		t.Fatalf("manual resolution basis missing: %q", results[4][8])
 	}
 }
@@ -583,7 +583,7 @@ func TestTaskResultsKeepSourceColumnsAndCollisionFreeLabels(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := results[0]
-	want := []string{"Email", "Name", "Source worksheet", "Source worksheet row", "Recipient position", "Recipient", "Email (2)", "Name (2)", "Status"}
+	want := []string{"Email", "Name", "Source worksheet", "Source worksheet row", "Recipient position", "Recipient", "Final snapshot", "Final worksheet row", "Email (2)", "Name (2)", "Status", "Email (3)", "Name (3)"}
 	if len(got) != len(want) {
 		t.Fatalf("header row = %v, want %v", got, want)
 	}
@@ -592,10 +592,10 @@ func TestTaskResultsKeepSourceColumnsAndCollisionFreeLabels(t *testing.T) {
 			t.Fatalf("header row = %v, want %v", got, want)
 		}
 	}
-	if len(results[1]) < 7 || results[1][6] != "Eligible - not sent" {
+	if len(results[1]) < 9 || results[1][8] != "Eligible - not sent" {
 		t.Fatalf("singleton result row = %v", results[1])
 	}
-	if reason, err := book.GetCellValue("Recipient results", "I2"); err != nil || reason != "" {
+	if reason, err := book.GetCellValue("Recipient results", "K2"); err != nil || reason != "" {
 		t.Fatalf("extra result label should stay empty: %q %v", reason, err)
 	}
 }
@@ -655,7 +655,7 @@ func TestTaskResultsSheetSeparatesSiblingEntries(t *testing.T) {
 	}
 	entries := make([]entry, 0, len(results)-1)
 	for _, row := range results[1:] {
-		entries = append(entries, entry{row: at(row, 3), position: at(row, 4), recipient: at(row, 5), status: at(row, 6), reason: at(row, 8)})
+		entries = append(entries, entry{row: at(row, 3), position: at(row, 4), recipient: at(row, 5), status: at(row, 8), reason: at(row, 10)})
 	}
 	want := []entry{
 		{row: "2", position: "1", recipient: "alice@example.invalid", status: "Submitted"},
@@ -791,7 +791,7 @@ func TestTaskResultsRegeneratesLegacyManifest(t *testing.T) {
 		t.Fatalf("recipient results rows = %d, want header plus one entry", len(results))
 	}
 	row := results[1]
-	if row[3] != "2" || row[4] != "1" || row[5] != "legacy@example.invalid" || row[6] != "Eligible - not sent" {
+	if row[3] != "2" || row[4] != "1" || row[5] != "legacy@example.invalid" || row[8] != "Eligible - not sent" {
 		t.Fatalf("legacy entry = %v", row)
 	}
 	if after := f.attemptsFingerprint(t); after != before {

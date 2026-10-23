@@ -17,6 +17,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/finalization"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
@@ -46,23 +47,26 @@ type Services struct {
 	AI *ai.Store
 	// Preparation owns AI data-preparation runs and their durable worker.
 	Preparation *preparation.Service
+	// Finalization owns immutable final sending snapshots.
+	Finalization *finalization.Service
 }
 
 type server struct {
-	app         core.App
-	cfg         config.Config
-	connections *microsoft.Service
-	mailboxes   *mailbox.Store
-	resets      *reset.Service
-	campaigns   *campaign.Service
-	tasks       *intake.Service
-	logins      *loginLimiter
-	sending     *sending.Store
-	dispatcher  Dispatcher
-	exports     *exports.Service
-	retention   *retention.Service
-	ai          *ai.Store
-	preparation *preparation.Service
+	app          core.App
+	cfg          config.Config
+	connections  *microsoft.Service
+	mailboxes    *mailbox.Store
+	resets       *reset.Service
+	campaigns    *campaign.Service
+	tasks        *intake.Service
+	logins       *loginLimiter
+	sending      *sending.Store
+	dispatcher   Dispatcher
+	exports      *exports.Service
+	retention    *retention.Service
+	ai           *ai.Store
+	preparation  *preparation.Service
+	finalization *finalization.Service
 }
 
 // NewHandler serves the application UI. PocketBase owns the server lifecycle,
@@ -72,20 +76,21 @@ func NewHandler(app core.App, cfg config.Config, services Services) http.Handler
 	tasks := intake.NewService(app, campaigns, cfg.Intake)
 	tasks.SetWriteGuard(reset.Guard(app))
 	s := &server{
-		app:         app,
-		sending:     services.Sending,
-		dispatcher:  services.Dispatcher,
-		cfg:         cfg,
-		connections: services.Connections,
-		mailboxes:   services.Mailboxes,
-		resets:      services.Resets,
-		campaigns:   campaigns,
-		tasks:       tasks,
-		exports:     services.Exports,
-		retention:   retention.NewService(app),
-		logins:      newLoginLimiter(10, 5*time.Minute),
-		ai:          services.AI,
-		preparation: services.Preparation,
+		app:          app,
+		sending:      services.Sending,
+		dispatcher:   services.Dispatcher,
+		cfg:          cfg,
+		connections:  services.Connections,
+		mailboxes:    services.Mailboxes,
+		resets:       services.Resets,
+		campaigns:    campaigns,
+		tasks:        tasks,
+		exports:      services.Exports,
+		retention:    retention.NewService(app),
+		logins:       newLoginLimiter(10, 5*time.Minute),
+		ai:           services.AI,
+		preparation:  services.Preparation,
+		finalization: services.Finalization,
 	}
 	// Connection changes share one account-wide lock. The stores recheck it
 	// inside their own transactions; a stale page is never authority.
@@ -142,6 +147,7 @@ func NewHandler(app core.App, cfg config.Config, services Services) http.Handler
 	s.registerCampaignRoutes(mux)
 	s.registerTaskRoutes(mux)
 	s.registerPreparationRoutes(mux)
+	s.registerFinalizationRoutes(mux)
 	s.registerSendingRoutes(mux)
 
 	// Cross-origin writes (forms) are rejected before any handler mutates

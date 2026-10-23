@@ -29,20 +29,27 @@ func restoreBlocked(kind string) bool {
 // operator. Both cases produce the same refusal.
 var ErrNotFound = errors.New("task not found")
 
-// approved reports whether this exact content was approved through the given
-// mailbox connection generation. A replacement bumps the generation, so every
-// earlier approval stops authorizing candidate sending.
+// approved reports whether this exact task final snapshot and configuration
+// were approved through the given mailbox connection generation. A snapshot
+// replacement has a new identity, so an earlier approval can never authorize
+// it even when the values match. Legacy records without a selected snapshot
+// keep the historical configuration-scoped lookup as pinned evidence.
 func approved(app core.App, t *core.Record, connectionID string, generation int) (bool, error) {
-	r, e := app.FindFirstRecordByFilter(
-		ApprovalsCollection,
-		"configuration={:c} && content_hash={:h} && connection={:conn} && connection_generation={:g}",
-		dbx.Params{
-			"c":    t.GetString("configuration"),
-			"h":    t.GetString("content_hash"),
-			"conn": connectionID,
-			"g":    generation,
-		},
-	)
+	snapshotID := t.GetString("selected_final_snapshot")
+	params := dbx.Params{
+		"c":    t.GetString("configuration"),
+		"h":    t.GetString("content_hash"),
+		"conn": connectionID,
+		"g":    generation,
+	}
+	filter := "configuration={:c} && content_hash={:h} && connection={:conn} && connection_generation={:g}"
+	if snapshotID != "" {
+		filter = "task={:task} && snapshot={:snapshot} && snapshot_digest={:digest} && " + filter
+		params["task"] = t.Id
+		params["snapshot"] = snapshotID
+		params["digest"] = t.GetString("final_snapshot_digest")
+	}
+	r, e := app.FindFirstRecordByFilter(ApprovalsCollection, filter, params)
 	if errors.Is(e, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -72,6 +79,23 @@ func (s *Store) authorizeTask(app core.App, ownerID, taskID string) (*core.Recor
 	return t, nil
 }
 
+// requiresFinalSnapshot reports whether this task's pinned revision belongs to
+// the snapshot workflow. Legacy revisions keep their pinned historical
+// authorization scope.
+func requiresFinalSnapshot(app core.App, t *core.Record) bool {
+	if t.GetString("selected_final_snapshot") != "" {
+		return true
+	}
+	if t.GetString("configuration") == "" {
+		return false
+	}
+	cfg, err := app.FindRecordById(campaign.ConfigurationsCollection, t.GetString("configuration"))
+	if err != nil {
+		return false
+	}
+	return cfg.GetInt("mapping_version") >= campaign.MappingVersionRole
+}
+
 // approvalFor answers the approval question for the operator's current
 // connection generation.
 func (s *Store) approvalFor(app core.App, t *core.Record, ownerID string) (bool, error) {
@@ -93,7 +117,18 @@ func (s *Store) Preview(ctx context.Context, ownerID, id string) (*Progress, err
 	if e != nil {
 		return nil, e
 	}
-	p := &Progress{TaskID: id, Status: t.GetString("status"), Reason: t.GetString("pause_reason"), ContentHash: t.GetString("content_hash"), Approved: isApproved, ArtifactNeeded: t.GetBool("result_generation_needed"), RestoreReview: s.options.RestoreReview}
+	p := &Progress{
+		TaskID:         id,
+		Status:         t.GetString("status"),
+		Reason:         t.GetString("pause_reason"),
+		ContentHash:    t.GetString("content_hash"),
+		SnapshotID:     t.GetString("selected_final_snapshot"),
+		SnapshotDigest: t.GetString("final_snapshot_digest"),
+		Finalized:      t.GetString("selected_final_snapshot") != "",
+		Approved:       isApproved,
+		ArtifactNeeded: t.GetBool("result_generation_needed"),
+		RestoreReview:  s.options.RestoreReview,
+	}
 	var counts intake.Counts
 	if e = t.UnmarshalJSONField("counts", &counts); e != nil {
 		return nil, fmt.Errorf("decode task counts: %w", e)
@@ -226,7 +261,9 @@ func (s *Store) Preview(ctx context.Context, ownerID, id string) (*Progress, err
 			continue
 		}
 		if p.LatestSuccessfulTestID == "" && a.GetString("kind") == KindTest && a.GetString("state") == AttemptSubmitted && a.GetString("content_hash") == p.ContentHash {
-			p.LatestSuccessfulTestID = a.Id
+			if p.SnapshotID == "" || (a.GetString("snapshot") == p.SnapshotID && a.GetString("snapshot_digest") == p.SnapshotDigest) {
+				p.LatestSuccessfulTestID = a.Id
+			}
 		}
 		if len(p.Recent) < 20 {
 			p.Recent = append(p.Recent, *attemptFrom(a))
@@ -370,6 +407,24 @@ func (s *Store) Act(ctx context.Context, ownerID string, in ActionRequest) (*Act
 		}
 		if t.GetString("configuration") == "" || t.GetString("status") == intake.TaskStaging {
 			return errors.New("validate the task before sending")
+		}
+		if in.Kind != "resolve" {
+			finalized := t.GetString("selected_final_snapshot") != ""
+			if requiresFinalSnapshot(app, t) && !finalized {
+				return errors.New("approve the prepared data as-is or upload an edited final sheet before testing, scheduling or sending")
+			}
+			if finalized {
+				// A snapshot's pinned revision must still be the campaign's
+				// current revision. Revalidation is the explicit remedy; no
+				// action silently starts revised content under old approval.
+				campaignRecord, e := app.FindRecordById(campaign.CampaignsCollection, t.GetString("campaign"))
+				if e != nil {
+					return e
+				}
+				if campaignRecord.GetString("current_configuration") != t.GetString("configuration") {
+					return errors.New("the campaign content changed after this dataset was finalized; revalidate this task and finalize again")
+				}
+			}
 		}
 		if _, e := s.usableConnection(ownerID); e != nil {
 			return errors.New("connect a usable sending mailbox before starting, retrying or resending")
@@ -571,7 +626,8 @@ func (s *Store) QueueTest(ctx context.Context, ownerID string, in TestRequest) (
 			return e
 		}
 		raw := in.Values
-		if in.MemberID != "" {
+		fromMember := in.MemberID != ""
+		if fromMember {
 			m, e := app.FindRecordById(intake.TaskCandidatesCollection, in.MemberID)
 			if e != nil {
 				return e
@@ -588,7 +644,7 @@ func (s *Store) QueueTest(ctx context.Context, ownerID string, in TestRequest) (
 		if e = cfg.UnmarshalJSONField("mappings", &mappings); e != nil {
 			return fmt.Errorf("decode campaign mappings: %w", e)
 		}
-		compiled, e := campaign.Compile(cfg.GetString("subject"), cfg.GetString("body_html"), mappings)
+		compiled, e := campaign.CompileForVersion(cfg.GetInt("mapping_version"), cfg.GetString("subject"), cfg.GetString("body_html"), mappings)
 		if e != nil {
 			return e
 		}
@@ -601,7 +657,7 @@ func (s *Store) QueueTest(ctx context.Context, ownerID string, in TestRequest) (
 			return e
 		}
 		r := core.NewRecord(col)
-		putWork(r, &Work{
+		work := &Work{
 			Kind:            KindTest,
 			OwnerID:         ownerID,
 			ConnectionID:    connection.Id,
@@ -613,7 +669,14 @@ func (s *Store) QueueTest(ctx context.Context, ownerID string, in TestRequest) (
 			Sender:          connection.GetString("sender"),
 			Subject:         rendered.Subject,
 			Body:            rendered.Body,
-		})
+		}
+		if fromMember {
+			// Only a selected final-snapshot row supplies approvable test
+			// content. An arbitrary sample remains a diagnostic.
+			work.SnapshotID = t.GetString("selected_final_snapshot")
+			work.SnapshotDigest = t.GetString("final_snapshot_digest")
+		}
+		putWork(r, work)
 		r.Set("state", AttemptQueued)
 		if e = app.Save(r); e != nil {
 			return e
@@ -650,6 +713,19 @@ func (s *Store) Approve(ctx context.Context, ownerID, taskID, attemptID, actor, 
 		if a.GetString("kind") != KindTest || a.GetString("state") != AttemptSubmitted || a.GetString("configuration") != t.GetString("configuration") || a.GetString("content_hash") != t.GetString("content_hash") {
 			return errors.New("choose a submitted test for this exact configuration")
 		}
+		finalized := requiresFinalSnapshot(app, t)
+		snapshotID := t.GetString("selected_final_snapshot")
+		if finalized {
+			if a.GetString("task") != taskID {
+				return errors.New("choose a submitted test for this exact task")
+			}
+			if snapshotID == "" {
+				return errors.New("approve the prepared data as-is or upload an edited final sheet before approving received formatting")
+			}
+			if a.GetString("snapshot") != snapshotID || a.GetString("snapshot_digest") != t.GetString("final_snapshot_digest") {
+				return errors.New("choose a submitted test for this exact final snapshot; a test of earlier or replaced data cannot approve it")
+			}
+		}
 		isApproved, e := s.approvalFor(app, t, ownerID)
 		if e != nil {
 			return e
@@ -661,6 +737,11 @@ func (s *Store) Approve(ctx context.Context, ownerID, taskID, attemptID, actor, 
 			}
 			r := core.NewRecord(col)
 			r.Set("owner", ownerID)
+			if finalized {
+				r.Set("task", taskID)
+				r.Set("snapshot", snapshotID)
+				r.Set("snapshot_digest", t.GetString("final_snapshot_digest"))
+			}
 			r.Set("connection", connection.Id)
 			r.Set("connection_generation", connection.GetInt("generation"))
 			r.Set("configuration", t.GetString("configuration"))

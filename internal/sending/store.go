@@ -189,6 +189,8 @@ func attemptFrom(r *core.Record) *Attempt {
 			CandidateID:     r.GetString("candidate"),
 			ConfigurationID: r.GetString("configuration"),
 			ContentHash:     r.GetString("content_hash"),
+			SnapshotID:      r.GetString("snapshot"),
+			SnapshotDigest:  r.GetString("snapshot_digest"),
 			Recipient:       r.GetString("recipient"),
 			Sender:          r.GetString("sender"),
 			Subject:         r.GetString("subject"),
@@ -215,7 +217,7 @@ func workFrom(app core.App, task, member, connection *core.Record) (*Work, error
 	if e = cfg.UnmarshalJSONField("mappings", &mappings); e != nil {
 		return nil, fmt.Errorf("decode campaign mappings: %w", e)
 	}
-	compiled, e := campaign.Compile(cfg.GetString("subject"), cfg.GetString("body_html"), mappings)
+	compiled, e := campaign.CompileForVersion(cfg.GetInt("mapping_version"), cfg.GetString("subject"), cfg.GetString("body_html"), mappings)
 	if e != nil {
 		return nil, e
 	}
@@ -242,6 +244,8 @@ func workFrom(app core.App, task, member, connection *core.Record) (*Work, error
 		CandidateID:     c.Id,
 		ConfigurationID: cfg.Id,
 		ContentHash:     cfg.GetString("content_hash"),
+		SnapshotID:      task.GetString("selected_final_snapshot"),
+		SnapshotDigest:  task.GetString("final_snapshot_digest"),
 		Recipient:       c.GetString("email_key"),
 		Sender:          connection.GetString("sender"),
 		Subject:         rendered.Subject,
@@ -514,6 +518,10 @@ func putWork(r *core.Record, w *Work) {
 	r.Set("candidate", w.CandidateID)
 	r.Set("configuration", w.ConfigurationID)
 	r.Set("content_hash", w.ContentHash)
+	if w.SnapshotID != "" {
+		r.Set("snapshot", w.SnapshotID)
+		r.Set("snapshot_digest", w.SnapshotDigest)
+	}
 	r.Set("kind", w.Kind)
 	r.Set("recipient", w.Recipient)
 	r.Set("sender", w.Sender)

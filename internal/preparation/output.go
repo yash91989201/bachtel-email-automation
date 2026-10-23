@@ -42,6 +42,9 @@ func Derive(input Input, results []RowResult) Output {
 	return output
 }
 
+// FindingReason is the fixed operator-facing explanation of one finding.
+func FindingReason(finding Finding) string { return findingReason(finding) }
+
 // findingsByScope splits one row's findings into row-wide reasons and
 // per-address reasons, both already rendered for operators.
 func findingsByScope(findings []Finding) ([]string, map[int][]string) {

@@ -240,7 +240,13 @@ type TaskPageData struct {
 	ResultsReady   bool
 	ResultEligible bool
 
-	Preparation TaskPreparationView
+	Preparation  TaskPreparationView
+	Finalization TaskFinalizationView
+	// DatasetFinalized reports a selected immutable final sending snapshot.
+	DatasetFinalized bool
+	// FinalizationRequired reports the snapshot workflow for this revision.
+	FinalizationRequired bool
+	FinalSnapshotRef     string
 }
 
 // TaskControls is the rendered subset of the action matrix.
@@ -426,6 +432,42 @@ type TaskPreparationNote struct {
 	Field    string
 	Scope    string
 	Note     string
+}
+
+// TaskFinalizationView is the final-sending-dataset state of one task. Dataset
+// approval is deliberately separate from test formatting approval and dispatch
+// authorization.
+type TaskFinalizationView struct {
+	Available bool
+	// CanFinalize covers the lifecycle: open, validated, unstarted, no
+	// enabled schedule.
+	CanFinalize      bool
+	BlockedReason    string
+	Error            string
+	Required         bool
+	PreparedReady    bool
+	PreparedAccepted int
+	PreparedHref     string
+	Selected         TaskFinalSnapshot
+	HasSelected      bool
+	CanApprove       bool
+	CanUpload        bool
+	History          []TaskFinalSnapshot
+}
+
+// TaskFinalSnapshot is one immutable accepted dataset row.
+type TaskFinalSnapshot struct {
+	ID         string
+	Reference  string
+	Kind       string
+	CreatedAt  string
+	Actor      string
+	Accepted   int
+	Excluded   int
+	Digest     string
+	Selected   bool
+	SheetHref  string
+	ReportHref string
 }
 
 // TaskPreparationHeld is one prepared entry held by an unresolved finding.
@@ -792,8 +834,109 @@ templ taskRecipients(data TaskPageData) {
 				}
 			}
 			@taskPreparation(data)
+			@taskFinalization(data)
 			@taskPreview(data)
 			@taskRowReasons(data)
+		}
+	</section>
+}
+
+templ taskFinalization(data TaskPageData) {
+	<section class="space-y-4" id="task-finalization" aria-labelledby="finalization-heading">
+		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "finalization-heading"}}) {
+			@card.Content(card.ContentProps{Class: "gap-4"}) {
+				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 2 · Final sending data</p>
+				<h3 id="finalization-heading" class="cn-card-title">Approve the exact data used for sending</h3>
+				<p class="text-sm text-muted-foreground max-w-[75ch]">Dataset approval freezes the accepted recipient values. It does not send a test, approve received formatting, or authorize candidate sending or scheduling. A new final upload always replaces the selection and needs a fresh test and received-format approval, even when its values look identical.</p>
+				if data.Finalization.BlockedReason != "" {
+					@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
+						<p>{ data.Finalization.BlockedReason }</p>
+					}
+				}
+				if data.Finalization.Error != "" {
+					@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+						<p>{ data.Finalization.Error }</p>
+					}
+				}
+				if data.Finalization.HasSelected {
+					<div class="space-y-2 rounded-md border border-border p-3">
+						<p class="text-sm"><strong>Selected final snapshot</strong> <code>{ data.Finalization.Selected.Reference }</code> · { data.Finalization.Selected.Kind } · { data.Finalization.Selected.CreatedAt }</p>
+						<p class="text-sm">{ data.Finalization.Selected.Accepted } accepted · { data.Finalization.Selected.Excluded } excluded</p>
+						<p class="text-xs text-muted-foreground wrap-anywhere">Digest <code>{ data.Finalization.Selected.Digest }</code> · finalized by { data.Finalization.Selected.Actor }</p>
+						<div class="app-card-actions">
+							<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ data.Finalization.Selected.SheetHref }>Download accepted final sheet</a>
+							if data.Finalization.Selected.Excluded > 0 {
+								<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ data.Finalization.Selected.ReportHref }>Download final exclusions</a>
+							}
+						</div>
+						if data.Finalization.Selected.Accepted == 0 {
+							@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
+								<p>This final snapshot has no accepted recipients, so no test, start or schedule can use it. Correct the data and upload it again.</p>
+							}
+						}
+					</div>
+				} else if data.Finalization.Required {
+					<p class="text-sm text-muted-foreground">No final snapshot is selected yet. Sending controls stay unavailable until one is accepted.</p>
+				}
+				if data.Finalization.PreparedHref != "" {
+					<div class="app-card-actions">
+						<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ data.Finalization.PreparedHref }>Download prepared sending sheet</a>
+						<span class="text-sm text-muted-foreground">Edit it in Excel, then upload it below for a deterministic final check.</span>
+					</div>
+				}
+				if !data.Finalization.CanApprove && data.Finalization.Required {
+					<p class="text-sm text-muted-foreground">Approve as-is becomes available after a completed preparation run is selected. You can still upload an edited final sheet.</p>
+				}
+				if data.Finalization.CanApprove {
+					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/finalization/approve#recipients" } class="space-y-2">
+						<input type="hidden" name="action_id" value={ data.ActionID + "finalize" }/>
+						@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+							@checkbox.Checkbox(checkbox.Props{ID: "finalize-approve", Name: "confirm_approve", Value: "yes", Required: true})
+							I reviewed the selected prepared values and accept them as this task's final sending data.
+						}
+						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault}) {
+							Approve prepared data as-is
+						}
+					</form>
+				}
+				if data.Finalization.CanUpload {
+					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/finalization/upload#recipients" } enctype="multipart/form-data" class="space-y-3">
+						<input type="hidden" name="action_id" value={ data.ActionID + "finalupload" }/>
+						@field.Field(field.Props{}) {
+							@field.Label(field.LabelProps{For: "final-workbook"}) {
+								Edited final sheet (XLSX)
+							}
+							@input.Input(input.Props{ID: "final-workbook", Name: "workbook", Type: "file", Accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Required: true, Attributes: templ.Attributes{"aria-describedby": "final-workbook-hint"}})
+							<p id="final-workbook-hint" class="text-xs text-muted-foreground">Validation is deterministic: no AI runs and populated values are preserved apart from recipient trim/lowercase and optional fallbacks. Commas are the only email-list separator. Added, removed, reordered and restored entries are allowed.</p>
+						}
+						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline}) {
+							Upload and validate final sheet
+						}
+					</form>
+				}
+				if len(data.Finalization.History) > 1 {
+					<details class="text-sm">
+						<summary class="cursor-pointer text-muted-foreground">Final snapshot history</summary>
+						<div class="table-scroll mt-2">
+							@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Final snapshot history"}}) {
+								<thead><tr><th>Snapshot</th><th>Source</th><th>Created</th><th>Accepted</th><th>Excluded</th><th>Actions</th></tr></thead>
+								<tbody>
+									for _, snapshot := range data.Finalization.History {
+										<tr>
+											<td><code>{ snapshot.Reference }</code></td>
+											<td>{ snapshot.Kind }</td>
+											<td>{ snapshot.CreatedAt }</td>
+											<td>{ snapshot.Accepted }</td>
+											<td>{ snapshot.Excluded }</td>
+											<td><a class="app-link text-primary" href={ snapshot.SheetHref }>Sheet</a></td>
+										</tr>
+									}
+								</tbody>
+							}
+						</div>
+					</details>
+				}
+			}
 		}
 	</section>
 }
@@ -915,6 +1058,11 @@ templ taskTest(data TaskPageData) {
 		<h2 id="test-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Test & approve</h2>
 		if data.StoredStatus == "staging" {
 			<p class="text-muted-foreground">Validate the workbook in <a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "#recipients" }>Recipients</a> first. Candidate tests and approval are unavailable until the workbook has a validation snapshot.</p>
+		} else if !data.DatasetFinalized && data.FinalizationRequired {
+			@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
+				<p>Finalize the sending data before sending a test for approval. A pre-finalization diagnostic cannot approve a final snapshot or authorize sending.</p>
+				<a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "#recipients" }>Review and finalize data</a>
+			}
 		} else {
 			@taskApprovalSummary(data)
 			if len(data.Rows) > 0 {
@@ -941,17 +1089,20 @@ templ taskApprovalSummary(data TaskPageData) {
 		@card.Content(card.ContentProps{Class: "gap-3"}) {
 			<h3 id="approval-summary-heading" class="cn-card-title">Approval summary</h3>
 			<p>Sending mailbox: <strong>{ data.Sender }</strong> ({ data.SenderStatus }) · Saved revision: { data.SavedRevision }</p>
-			if data.Approved {
-				<p class="text-success">Formatting approved for this saved configuration and current mailbox generation.</p>
-				if data.LatestTest != "" {
-					<p class="text-sm text-muted-foreground">Recorded evidence: submitted test { data.LatestTest }. The approval may come from another task with the same saved configuration and mailbox.</p>
-				} else {
-					<p class="text-sm text-muted-foreground">A qualifying test recorded on another task established this reusable approval.</p>
-				}
-			} else {
-				<p class="status-warning">Formatting is not approved for this saved configuration and current mailbox. A test is required before candidate sending.</p>
-				<p class="text-sm text-muted-foreground">Changing personalized content or replacing the mailbox invalidates approval; rotating settings on the same verified mailbox does not.</p>
+			if data.DatasetFinalized {
+				<p class="text-sm">Final snapshot <strong>{ data.FinalSnapshotRef }</strong> is accepted. Dataset approval does not approve formatting or authorize sending.</p>
 			}
+			if !data.DatasetFinalized {
+				<p class="text-sm">Final snapshot: <strong>Not finalized</strong>.</p>
+			}
+			if data.Approved {
+				<p class="text-success">Formatting approved for this exact final snapshot, saved revision and current mailbox generation.</p>
+			}
+			if !data.Approved {
+				<p class="status-warning">Formatting is not approved for this exact final snapshot and current mailbox. A snapshot-specific test is required before candidate sending.</p>
+				<p class="text-sm text-muted-foreground">A replacement final upload, a new campaign revision or a mailbox replacement invalidates approval; rotating settings on the same verified mailbox does not.</p>
+			}
+			<p>Recorded evidence: submitted test { data.LatestTest }. This task and snapshot only.</p>
 			<details class="text-sm">
 				<summary class="cursor-pointer text-muted-foreground">Content hash</summary>
 				<p class="mt-2"><code class="break-all">{ data.Hash }</code></p>
@@ -1830,7 +1981,10 @@ type TaskPreviewData struct {
 	OriginalRecipient string
 	ContentHash       string
 	Approved          bool
-	Loading           bool
+	// DatasetFinalized distinguishes an accepted final snapshot preview from
+	// prepared values that cannot approve or authorize sending.
+	DatasetFinalized bool
+	Loading          bool
 }
 
 templ TaskPreviewResult(data TaskPreviewData) {
@@ -1843,6 +1997,11 @@ templ TaskPreviewResult(data TaskPreviewData) {
 		} else if data.SourceRow == 0 {
 			<p class="text-muted-foreground">No previewable row is selected.</p>
 		} else {
+			if data.DatasetFinalized {
+				<p class="text-sm text-success">Accepted final snapshot · this is the email content used for a selected-row test and candidate sending.</p>
+			} else {
+				<p class="text-sm status-warning">Prepared values · not a final email preview. Finalize the dataset before using these values for a test or sending.</p>
+			}
 			<div class="space-y-1">
 				<p class="text-sm font-semibold uppercase tracking-widest text-muted-foreground">To</p>
 				<p class="font-semibold">{ data.Recipient }</p>
@@ -1864,12 +2023,14 @@ templ TaskPreviewResult(data TaskPreviewData) {
 					<div class="flex gap-2"><dt class="font-semibold">Position in recipient cell:</dt><dd>{ data.RecipientPosition }</dd></div>
 					<div class="flex gap-2"><dt class="font-semibold">Original recipient cell:</dt><dd><code class="break-all">{ data.OriginalRecipient }</code></dd></div>
 					<div class="flex gap-2"><dt class="font-semibold">Content hash:</dt><dd><code class="break-all">{ data.ContentHash }</code></dd></div>
-					<div class="flex gap-2">
-						<dt class="font-semibold">Approval:</dt>
-						<dd>
-							@revisionState(true, data.Approved)
-						</dd>
-					</div>
+					if data.DatasetFinalized {
+						<div class="flex gap-2">
+							<dt class="font-semibold">Formatting approval:</dt>
+							<dd>
+								@revisionState(true, data.Approved)
+							</dd>
+						</div>
+					}
 				</dl>
 				<div class="table-scroll mt-2">
 					@table.Table(table.Props{Class: "cn-table-compact"}) {

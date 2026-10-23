@@ -13,6 +13,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/finalization"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
@@ -60,6 +61,7 @@ func bindSending(app core.App, cfg config.Config) {
 				app.Logger().Error("settle closure after preparation", "task", taskID, "error", err)
 			}
 		})
+		finalized := finalization.NewService(app, intakeService, campaigns, prepared)
 		exported := exports.NewService(app, cfg)
 		exported.BindTaskNotifications()
 		resets := reset.NewService(app, mailboxes)
@@ -107,14 +109,15 @@ func bindSending(app core.App, cfg config.Config) {
 			}
 		}
 		event.Router.Any("/{path...}", apis.WrapStdHandler(web.NewHandler(app, cfg, web.Services{
-			Connections: connections,
-			Mailboxes:   mailboxes,
-			Sending:     store,
-			Dispatcher:  dispatcher,
-			Exports:     exported,
-			Resets:      resets,
-			AI:          aiStore,
-			Preparation: prepared,
+			Connections:  connections,
+			Mailboxes:    mailboxes,
+			Sending:      store,
+			Dispatcher:   dispatcher,
+			Exports:      exported,
+			Resets:       resets,
+			AI:           aiStore,
+			Preparation:  prepared,
+			Finalization: finalized,
 		})))
 		return event.Next()
 	})

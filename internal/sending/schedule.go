@@ -96,6 +96,9 @@ func (s *Store) Schedule(ctx context.Context, ownerID string, in ScheduleRequest
 		if t.GetString("status") != intake.TaskReady || t.GetString("configuration") == "" {
 			return &ScheduleRefusal{Reason: "validate the task before scheduling a start"}
 		}
+		if requiresFinalSnapshot(app, t) && t.GetString("selected_final_snapshot") == "" {
+			return &ScheduleRefusal{Reason: "approve the prepared data as-is or upload an edited final sheet before scheduling"}
+		}
 		if _, e := s.usableConnection(ownerID); e != nil {
 			return &ScheduleRefusal{Reason: "connect a usable sending mailbox before scheduling a start"}
 		}
@@ -224,6 +227,9 @@ func (s *Store) fire(_ context.Context, taskID string) (bool, error) {
 		}
 		if target.GetString("current_configuration") != t.GetString("configuration") {
 			return miss("the campaign configuration changed after this task was scheduled; revalidate and schedule again")
+		}
+		if requiresFinalSnapshot(app, t) && t.GetString("selected_final_snapshot") == "" {
+			return miss("this scheduled task has no finalized sending dataset; finalize it again before sending")
 		}
 		connection, connectionErr := s.usableConnection(owner)
 		if connectionErr != nil {

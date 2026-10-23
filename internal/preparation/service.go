@@ -283,6 +283,14 @@ func (s *Service) SelectRun(ctx context.Context, ownerID, taskID, runID string) 
 		if selected.GetString("state") != RunCompleted {
 			return ErrNotCompleted
 		}
+		// Changing selected prepared evidence invalidates any finalized dataset
+		// and its approvals. The snapshot record stays as history; the task no
+		// longer points at it, so no approval can authorize the old values.
+		if currentRecord.GetString("selected_preparation_run") != selected.Id {
+			currentRecord.Set("selected_final_snapshot", "")
+			currentRecord.Set("final_snapshot_digest", "")
+			currentRecord.Set("finalization_error", "")
+		}
 		currentRecord.Set("selected_preparation_run", selected.Id)
 		return txApp.Save(currentRecord)
 	})

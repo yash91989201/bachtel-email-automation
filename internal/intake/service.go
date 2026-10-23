@@ -606,7 +606,7 @@ func (s *Service) validate(ctx context.Context, ownerID string, task *Task, shee
 		return s.fail(task, err)
 	}
 
-	admissions, err := planRows(workbook, configuration.Mappings)
+	admissions, err := planRows(workbook, configuration.Mappings, configuration.MappingVersion)
 	if err != nil {
 		return s.fail(task, &ValidationError{Message: err.Error(), Err: err})
 	}
@@ -652,7 +652,7 @@ type admission struct {
 // runs over raw trimmed/lowercase recipient keys across the whole expanded
 // input, so an entry that is both duplicated and otherwise invalid is still held
 // as a duplicate instead of letting its group member through.
-func planRows(workbook *Workbook, mappings []campaign.Mapping) ([]admission, error) {
+func planRows(workbook *Workbook, mappings []campaign.Mapping, mappingVersion int) ([]admission, error) {
 	recipientOffset := -1
 	recipientVariable := ""
 	offsets := make(map[string]int, len(mappings))
@@ -739,7 +739,7 @@ func planRows(workbook *Workbook, mappings []campaign.Mapping) ([]admission, err
 			entry.state = rowInvalid
 			continue
 		}
-		entry.normalized, entry.missing = normalizeValues(mappings, entry.raw)
+		entry.normalized, entry.missing = normalizeValues(mappings, mappingVersion, entry.raw)
 		entry.state = RowEligible
 		if len(entry.missing) > 0 {
 			entry.state = RowIneligible
@@ -750,20 +750,8 @@ func planRows(workbook *Workbook, mappings []campaign.Mapping) ([]admission, err
 
 // normalizeValues prepares one row's replacement values exactly the way the
 // renderer does, and reports the required variables it is missing.
-func normalizeValues(mappings []campaign.Mapping, raw map[string]string) (map[string]string, []string) {
-	normalized := make(map[string]string, len(mappings))
-	var missing []string
-	for _, mapping := range mappings {
-		value := campaign.Normalize(mapping.Format, raw[mapping.Variable])
-		if value == "" && !mapping.Required {
-			value = campaign.Normalize(mapping.Format, mapping.Fallback)
-		}
-		if value == "" && mapping.Required {
-			missing = append(missing, mapping.Variable)
-		}
-		normalized[mapping.Variable] = value
-	}
-	return normalized, missing
+func normalizeValues(mappings []campaign.Mapping, mappingVersion int, raw map[string]string) (map[string]string, []string) {
+	return campaign.ResolveValues(mappingVersion, mappings, raw)
 }
 
 // publishInput carries everything one transaction needs to publish a snapshot.
@@ -913,12 +901,24 @@ func (s *Service) publish(ctx context.Context, input publishInput) error {
 			for offset := range headers {
 				values = append(values, row.Column(offset))
 			}
+			affected := append([]string(nil), entry.missing...)
+			if len(affected) == 0 {
+				for _, mapping := range input.configuration.Mappings {
+					if mapping.Recipient {
+						affected = append(affected, mapping.Variable)
+					}
+				}
+			}
 			report = append(report, ReportRow{
 				Row:       entry.sourceRow,
 				Position:  entry.recipientIndex,
 				Recipient: strings.TrimSpace(entry.recipient),
 				Reasons:   []string{reasons[occurrence]},
 				Values:    values,
+				Original:  entry.raw,
+				Proposed:  entry.normalized,
+				Fields:    affected,
+				Sources:   []string{"intake"},
 			})
 		}
 
@@ -1172,6 +1172,9 @@ func taskFromRecord(record *core.Record, campaignName string) *Task {
 
 		PreparationInstructions:  record.GetString("preparation_instructions"),
 		SelectedPreparationRunID: record.GetString("selected_preparation_run"),
+		SelectedFinalSnapshotID:  record.GetString("selected_final_snapshot"),
+		FinalSnapshotDigest:      record.GetString("final_snapshot_digest"),
+		FinalizationError:        record.GetString("finalization_error"),
 	}
 	if task.ScheduleState == "" {
 		task.ScheduleState = ScheduleNone

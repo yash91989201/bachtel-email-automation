@@ -389,6 +389,16 @@ type Task struct {
 	// SelectedPreparationRunID is the completed run explicitly selected for
 	// review. Selection is preparation evidence only.
 	SelectedPreparationRunID string
+	// SelectedFinalSnapshotID is the sealed final dataset that authorizes
+	// preview, test and sending. Changing preparation selection clears it.
+	SelectedFinalSnapshotID string
+	// FinalSnapshotDigest identifies the exact accepted values of the selected
+	// final snapshot. Approvals bind to it, so identical replacement bytes
+	// still require a fresh approval.
+	FinalSnapshotDigest string
+	// FinalizationError is the fixed message of the last refused final upload.
+	// A structural failure never replaces the selected snapshot.
+	FinalizationError string
 }
 
 // Closed reports a finalized terminal closure.
@@ -514,6 +524,14 @@ type ReportRow struct {
 	Recipient string
 	Reasons   []string
 	Values    []string
+	// Original and Proposed are the mapped values before and after the
+	// deterministic intake resolution, shown beside the copied source columns.
+	Original map[string]string
+	Proposed map[string]string
+	// Fields names the mapped variables affected by the reasons.
+	Fields []string
+	// Sources names where each reason came from (intake, ai or backend).
+	Sources []string
 }
 
 // ManifestVersion is the current manifest layout version.

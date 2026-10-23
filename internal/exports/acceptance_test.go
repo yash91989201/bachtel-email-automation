@@ -70,7 +70,7 @@ func TestExportThousandRowWorkflow(t *testing.T) {
 	if len(results) != 1001 {
 		t.Fatalf("results rows %d, want 1001", len(results))
 	}
-	status, err := book.GetCellValue("Recipient results", "G1001")
+	status, err := book.GetCellValue("Recipient results", "I1001")
 	if err != nil {
 		t.Fatal(err)
 	}

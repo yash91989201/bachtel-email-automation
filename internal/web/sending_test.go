@@ -201,6 +201,7 @@ func TestBulkRecoveryPostsEverySelectedMember(t *testing.T) {
 		{"alice@example.com", "Ada Lovelace", "Remote"},
 		{"carol@example.com", "Carol Danvers", "Lisbon"},
 	}))
+	finalizeTask(t, app, handler, cookie, campaignID, taskID)
 	owner := operatorID(t, app)
 	installMailbox(t, app, owner, "sender@example.test")
 	store := sending.NewStore(app, sending.StoreOptions{})
@@ -208,7 +209,7 @@ func TestBulkRecoveryPostsEverySelectedMember(t *testing.T) {
 	attempt, err := store.QueueTest(ctx, owner, sending.TestRequest{
 		ActionID: "bulk-recovery-test-123456", TaskID: taskID, Actor: "operator",
 		Recipient: "sample@example.invalid",
-		Values:    map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"},
+		MemberID:  firstEligibleMember(t, app, taskID),
 	})
 	if err != nil {
 		t.Fatalf("queue test: %v", err)
@@ -271,6 +272,7 @@ func TestRecoveryActionsRenderAfterProviderPause(t *testing.T) {
 		{"alice@example.com", "Ada Lovelace", "Remote"},
 		{"carol@example.com", "Carol Danvers", "Lisbon"},
 	}))
+	finalizeTask(t, app, handler, cookie, campaignID, taskID)
 	owner := operatorID(t, app)
 	installMailbox(t, app, owner, "sender@example.test")
 	store := sending.NewStore(app, sending.StoreOptions{})
@@ -278,7 +280,7 @@ func TestRecoveryActionsRenderAfterProviderPause(t *testing.T) {
 	attempt, err := store.QueueTest(ctx, owner, sending.TestRequest{
 		ActionID: "pause-recovery-test-123456", TaskID: taskID, Actor: "operator",
 		Recipient: "sample@example.invalid",
-		Values:    map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"},
+		MemberID:  firstEligibleMember(t, app, taskID),
 	})
 	if err != nil {
 		t.Fatalf("queue test: %v", err)

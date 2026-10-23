@@ -15,6 +15,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/xuri/excelize/v2"
 
+	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 )
@@ -53,6 +54,27 @@ type taskSnapshot struct {
 	Attempts    map[string][]*core.Record
 	Resolutions map[string]*core.Record
 	AsOf        time.Time
+	// Final is the selected immutable sending snapshot, when one exists. The
+	// results sheet then represents its accepted entries instead of the
+	// pre-finalization validation manifest.
+	Final *finalSnapshotView
+	// Mappings is the pinned revision's mapping table, used for the final
+	// value columns.
+	Mappings []campaign.Mapping
+}
+
+// finalSnapshotView is the stored accepted dataset finalization sealed.
+type finalSnapshotView struct {
+	ID      string
+	Entries []finalEntryView
+}
+
+type finalEntryView struct {
+	FinalRow  int               `json:"final_row"`
+	Position  int               `json:"position"`
+	SourceRow int               `json:"source_row"`
+	Recipient string            `json:"recipient"`
+	Values    map[string]string `json:"values"`
 }
 
 type taskMember struct {
@@ -115,16 +137,37 @@ func (s *Service) taskSnapshot(ctx context.Context, task *core.Record, artifact 
 		return nil, err
 	}
 
-	manifestData, err := s.readField(ctx, task, "manifest")
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(manifestData, &snapshot.Manifest); err != nil {
-		return nil, fmt.Errorf("read the validation manifest: %w", err)
-	}
 	snapshot.Source, err = s.readField(ctx, task, "source")
 	if err != nil {
 		return nil, err
+	}
+	manifestData, manifestErr := s.readField(ctx, task, "manifest")
+	if manifestErr == nil {
+		if err := json.Unmarshal(manifestData, &snapshot.Manifest); err != nil {
+			return nil, fmt.Errorf("read the validation manifest: %w", err)
+		}
+	} else if task.GetString("selected_final_snapshot") == "" {
+		return nil, manifestErr
+	}
+	if configurationID := task.GetString("configuration"); configurationID != "" {
+		cfg, cfgErr := s.app.FindRecordById(campaign.ConfigurationsCollection, configurationID)
+		if cfgErr == nil {
+			if decodeErr := cfg.UnmarshalJSONField("mappings", &snapshot.Mappings); decodeErr != nil {
+				return nil, fmt.Errorf("decode the pinned mappings: %w", decodeErr)
+			}
+		}
+	}
+	if snapshotID := task.GetString("selected_final_snapshot"); snapshotID != "" {
+		record, findErr := s.app.FindRecordById("final_snapshots", snapshotID)
+		if findErr == nil {
+			entries, readErr := s.readField(ctx, record, "entries")
+			if readErr == nil {
+				final := &finalSnapshotView{ID: record.Id}
+				if json.Unmarshal(entries, &final.Entries) == nil {
+					snapshot.Final = final
+				}
+			}
+		}
 	}
 	return snapshot, nil
 }
@@ -189,64 +232,122 @@ func TaskWorkbook(snapshot *taskSnapshot) (data []byte, err error) {
 		labels = []string{"Email Status"}
 	}
 	metadata := intake.ResolveResultLabels(intake.ResultSheetLabels, sourceLabels)
-	occupied := make([]string, 0, len(sourceLabels)+len(metadata))
+	finalMetadata := intake.ResolveResultLabels([]string{"Final snapshot", "Final worksheet row"}, append(slices.Clone(sourceLabels), metadata...))
+	occupied := make([]string, 0, len(sourceLabels)+len(metadata)+len(finalMetadata))
 	occupied = append(occupied, sourceLabels...)
 	occupied = append(occupied, metadata...)
+	occupied = append(occupied, finalMetadata...)
 	labels = intake.ResolveResultLabels(labels, occupied)
+	occupied = append(occupied, labels...)
+	mappingLabels := intake.ResolveResultLabels(campaign.MappingLabels(snapshot.Mappings), occupied)
 
 	name := resultsSheetName(book.GetSheetList())
 	if _, err := book.NewSheet(name); err != nil {
 		return nil, fmt.Errorf("add the recipient results worksheet: %w", err)
 	}
-	header := make([]string, 0, len(sourceLabels)+len(metadata)+len(labels))
+	header := make([]string, 0, len(sourceLabels)+len(metadata)+len(finalMetadata)+len(labels)+len(mappingLabels))
 	header = append(header, sourceLabels...)
 	header = append(header, metadata...)
+	header = append(header, finalMetadata...)
 	header = append(header, labels...)
+	header = append(header, mappingLabels...)
 	if err := writeResultRow(book, name, 1, header); err != nil {
 		return nil, err
 	}
 
-	rows := make([]intake.ManifestRow, len(snapshot.Manifest.Rows))
-	copy(rows, snapshot.Manifest.Rows)
-	slices.SortFunc(rows, func(a, b intake.ManifestRow) int {
-		if a.Row != b.Row {
-			return a.Row - b.Row
+	if snapshot.Final != nil {
+		entries := slices.Clone(snapshot.Final.Entries)
+		slices.SortFunc(entries, func(a, b finalEntryView) int {
+			if a.FinalRow != b.FinalRow {
+				return a.FinalRow - b.FinalRow
+			}
+			return a.Position - b.Position
+		})
+		for i, entry := range entries {
+			position := max(entry.Position, 1)
+			occurrence := intake.Occurrence{Row: entry.FinalRow, Position: position}
+			var source []string
+			if entry.SourceRow >= 1 && entry.SourceRow-1 < len(grid) {
+				source = grid[entry.SourceRow-1]
+			}
+			cells := make([]string, 0, len(header))
+			for col := range sourceLabels {
+				value := ""
+				if col < len(source) {
+					value = source[col]
+				}
+				cells = append(cells, value)
+			}
+			recipient := entry.Recipient
+			if member, ok := snapshot.Members[occurrence]; ok && member.Candidate != nil {
+				recipient = member.Candidate.GetString("email_key")
+			}
+			memberRow := intake.ManifestRow{Row: entry.FinalRow, Position: position}
+			status, at, reason := snapshot.rowResult(memberRow)
+			values := []string{status, sending.DisplayTime(at), reason}
+			cells = append(cells, sheet, strconv.Itoa(entry.SourceRow), strconv.Itoa(position), recipient)
+			cells = append(cells, snapshot.Final.ID, strconv.Itoa(entry.FinalRow))
+			for offset := range labels {
+				value := ""
+				if offset < len(values) {
+					value = values[offset]
+				}
+				cells = append(cells, value)
+			}
+			for _, mapping := range snapshot.Mappings {
+				cells = append(cells, entry.Values[mapping.Variable])
+			}
+			if err := writeResultRow(book, name, i+2, cells); err != nil {
+				return nil, err
+			}
 		}
-		return a.Position - b.Position
-	})
+	} else {
+		rows := make([]intake.ManifestRow, len(snapshot.Manifest.Rows))
+		copy(rows, snapshot.Manifest.Rows)
+		slices.SortFunc(rows, func(a, b intake.ManifestRow) int {
+			if a.Row != b.Row {
+				return a.Row - b.Row
+			}
+			return a.Position - b.Position
+		})
 
-	for i, row := range rows {
-		var source []string
-		if row.Row >= 1 && row.Row-1 < len(grid) {
-			source = grid[row.Row-1]
-		}
-		cells := make([]string, 0, len(header))
-		for col := range sourceLabels {
-			value := ""
-			if col < len(source) {
-				value = source[col]
+		for i, row := range rows {
+			var source []string
+			if row.Row >= 1 && row.Row-1 < len(grid) {
+				source = grid[row.Row-1]
 			}
-			cells = append(cells, value)
-		}
-		position := max(row.Position, 1)
-		// The individual recipient is the admitted candidate's identity
-		// address, or the trimmed raw token of a file-only entry.
-		recipient := strings.TrimSpace(row.Recipient)
-		if member, ok := snapshot.Members[row.Occurrence()]; ok && member.Candidate != nil {
-			recipient = member.Candidate.GetString("email_key")
-		}
-		status, at, reason := snapshot.rowResult(row)
-		values := []string{status, sending.DisplayTime(at), reason}
-		cells = append(cells, sheet, strconv.Itoa(row.Row), strconv.Itoa(position), recipient)
-		for offset := range labels {
-			value := ""
-			if offset < len(values) {
-				value = values[offset]
+			cells := make([]string, 0, len(header))
+			for col := range sourceLabels {
+				value := ""
+				if col < len(source) {
+					value = source[col]
+				}
+				cells = append(cells, value)
 			}
-			cells = append(cells, value)
-		}
-		if err := writeResultRow(book, name, i+2, cells); err != nil {
-			return nil, err
+			position := max(row.Position, 1)
+			// The individual recipient is the admitted candidate's identity
+			// address, or the trimmed raw token of a file-only entry.
+			recipient := strings.TrimSpace(row.Recipient)
+			if member, ok := snapshot.Members[row.Occurrence()]; ok && member.Candidate != nil {
+				recipient = member.Candidate.GetString("email_key")
+			}
+			status, at, reason := snapshot.rowResult(row)
+			values := []string{status, sending.DisplayTime(at), reason}
+			cells = append(cells, sheet, strconv.Itoa(row.Row), strconv.Itoa(position), recipient)
+			cells = append(cells, "", "")
+			for offset := range labels {
+				value := ""
+				if offset < len(values) {
+					value = values[offset]
+				}
+				cells = append(cells, value)
+			}
+			for range snapshot.Mappings {
+				cells = append(cells, "")
+			}
+			if err := writeResultRow(book, name, i+2, cells); err != nil {
+				return nil, err
+			}
 		}
 	}
 

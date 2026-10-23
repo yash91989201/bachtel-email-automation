@@ -65,8 +65,13 @@ type Facts struct {
 	// Stale reports that an unstarted snapshot differs from the current
 	// revision.
 	Stale bool
+	// Finalized reports a selected immutable final sending snapshot.
+	Finalized bool
+	// FinalizationRequired reports that this task's pinned revision uses the
+	// snapshot workflow, so it cannot be tested or sent before finalization.
+	FinalizationRequired bool
 	// Approved reports applicable mailbox-scoped approval for the saved
-	// content.
+	// content and, when finalized, its exact final snapshot.
 	Approved bool
 	// MailboxUsable reports a connected sending mailbox.
 	MailboxUsable bool
@@ -226,6 +231,12 @@ func MainStatus(f Facts) TaskStatus {
 	if f.Status == StatusReady && f.Stale {
 		return TaskStatus{Label: "Needs revalidation", Explanation: "The campaign content changed after this workbook was validated.", Warning: true}
 	}
+	if f.Status == StatusReady && f.FinalizationRequired && !f.Finalized {
+		if f.Eligible == 0 && f.Remaining == 0 {
+			return TaskStatus{Label: "No eligible recipients", Explanation: "Every input row was excluded or already handled; the row reasons and exclusion report explain why. An edited final upload can still add corrected entries.", Warning: true}
+		}
+		return TaskStatus{Label: "Needs dataset finalization", Explanation: "Review the prepared values, then approve them as-is or upload an edited final sheet. Dataset approval does not approve formatting or send email.", Warning: true}
+	}
 	if f.ScheduleState == intake.ScheduleScheduled {
 		return TaskStatus{Label: "Scheduled", Explanation: "A future start is authorized; any current blocker is listed beside this status."}
 	}
@@ -277,6 +288,13 @@ func Blockers(f Facts) []Blocker {
 			Section: SectionRecipients,
 		})
 	}
+	if f.Status == StatusReady && f.FinalizationRequired && !f.Finalized {
+		blockers = append(blockers, Blocker{
+			Label:   "Sending data is not finalized",
+			Remedy:  "Review the selected prepared values and approve them as-is, or upload an edited final sheet. Finalization alone does not approve formatting or authorize sending.",
+			Section: SectionRecipients,
+		})
+	}
 	if f.HasRevision && !f.Approved && f.candidateWorkRemains() {
 		blockers = append(blockers, Blocker{
 			Label:   "Formatting is not approved for this mailbox",
@@ -310,6 +328,8 @@ func NextAction(f Facts) NextLink {
 		return NextLink{Label: "Review schedule", Section: SectionSending}
 	case f.Status == StatusReady && f.Stale:
 		return NextLink{Label: "Revalidate with current template", Section: SectionRecipients}
+	case f.Status == StatusReady && f.FinalizationRequired && !f.Finalized:
+		return NextLink{Label: "Review and finalize data", Section: SectionRecipients}
 	case f.RestoreReview && f.candidateWorkRemains():
 		return NextLink{Label: "Review sending restriction", Section: SectionSending}
 	case !f.MailboxUsable && f.candidateWorkRemains():
@@ -405,7 +425,7 @@ func AvailableControls(f Facts) Controls {
 			controls.Start = f.Eligible > 0 || f.Remaining > 0
 			controls.ClearSchedule = true
 		default:
-			controls.Start = f.Eligible > 0 || f.Remaining > 0
+			controls.Start = (f.Eligible > 0 || f.Remaining > 0) && (!f.FinalizationRequired || f.Finalized)
 			controls.Schedule = controls.Start
 			controls.EditSchedule = false
 		}
@@ -442,9 +462,12 @@ func Lifecycle(f Facts) []Step {
 		}
 	}
 	test := Step{Name: "Test & approve", State: "Approved", Complete: true}
-	if !f.HasRevision {
+	switch {
+	case !f.HasRevision:
 		test = Step{Name: "Test & approve", State: "No template"}
-	} else if !f.Approved {
+	case f.FinalizationRequired && !f.Finalized:
+		test = Step{Name: "Test & approve", State: "Needs dataset finalization"}
+	case !f.Approved:
 		test = Step{Name: "Test & approve", State: "Not approved"}
 	}
 	sending := Step{Name: "Sending", State: "Not started"}

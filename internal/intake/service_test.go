@@ -473,7 +473,7 @@ func TestExclusionReportDownloadsEveryHeldRow(t *testing.T) {
 	if len(rows) != 8 {
 		t.Fatalf("report rows = %d, want header plus 7 held entries", len(rows))
 	}
-	if got := strings.Join(rows[0], "|"); got != "Email|Applicant Full Name|Location|Status|Source worksheet row|Recipient position|Recipient|Reason" {
+	if got := strings.Join(rows[0], "|"); got != "Email|Applicant Full Name|Location|Status|Source worksheet row|Recipient position|Recipient|Reason|Affected fields|Reason source|Original mapped values|Proposed mapped values" {
 		t.Fatalf("report header = %q", got)
 	}
 	held := map[string][]string{}

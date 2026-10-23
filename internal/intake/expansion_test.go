@@ -318,7 +318,7 @@ func TestOccurrenceAwarePublicationAndReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := strings.Join(grid[0], "|"), "Email|Applicant Full Name|Reason|Source worksheet row|Recipient position|Recipient|Reason (2)"; got != want {
+	if got, want := strings.Join(grid[0], "|"), "Email|Applicant Full Name|Reason|Source worksheet row|Recipient position|Recipient|Reason (2)|Affected fields|Reason source|Original mapped values|Proposed mapped values"; got != want {
 		t.Fatalf("report header = %q, want %q", got, want)
 	}
 	if len(grid) != 5 {

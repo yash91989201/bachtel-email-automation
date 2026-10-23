@@ -71,8 +71,11 @@ type Work struct {
 	ID, Kind, OwnerID, ConnectionID                                                       string
 	Generation                                                                            int
 	TaskID, MemberID, CandidateID, ConfigurationID, ContentHash, Recipient, Subject, Body string
-	RetryCount                                                                            int
-	Sender                                                                                string
+	// SnapshotID and SnapshotDigest identify the exact final dataset this
+	// work renders. They are empty only for legacy pinned content.
+	SnapshotID, SnapshotDigest string
+	RetryCount                 int
+	Sender                     string
 }
 type Attempt struct {
 	Work
@@ -112,6 +115,8 @@ type Progress struct {
 	RetryableFailed                                                                                  int
 	Members                                                                                          []MemberProgress
 	TaskID, Status, Reason, ContentHash, LatestSuccessfulTestID                                      string
+	SnapshotID, SnapshotDigest                                                                       string
+	Finalized                                                                                        bool
 	Approved, ArtifactNeeded, RestoreReview                                                          bool
 	Eligible, Remaining, Submitted, Failed, Held, InFlight, Reserved, Invalid, Duplicate, Ineligible int
 	Recent                                                                                           []Attempt

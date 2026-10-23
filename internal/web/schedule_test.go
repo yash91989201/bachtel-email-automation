@@ -41,6 +41,7 @@ func newScheduleFixture(t *testing.T) *scheduleFixture {
 		t.Fatalf("revision: %d", rec.Code)
 	}
 	taskID := stageTask(t, handler, cookie, id, mixedWorkbook(t))
+	finalizeTask(t, app, handler, cookie, id, taskID)
 	owner := operatorID(t, app)
 	installMailbox(t, app, owner, "sender@example.test")
 	store := sending.NewStore(app, sending.StoreOptions{})
@@ -50,7 +51,7 @@ func newScheduleFixture(t *testing.T) *scheduleFixture {
 		TaskID:    taskID,
 		Actor:     "operator",
 		Recipient: "sample@example.invalid",
-		Values:    map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"},
+		MemberID:  firstEligibleMember(t, app, taskID),
 	})
 	if err != nil {
 		t.Fatalf("queue test: %v", err)

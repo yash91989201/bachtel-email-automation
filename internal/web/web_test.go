@@ -20,6 +20,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/finalization"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
@@ -57,14 +58,15 @@ func testServices(t *testing.T, app core.App, cfg config.Config, dispatcher Disp
 		}
 	})
 	return Services{
-		Connections: microsoft.NewService(app, cfg, mailboxes),
-		Mailboxes:   mailboxes,
-		Sending:     sending.NewStore(app, sending.StoreOptions{}),
-		Dispatcher:  dispatcher,
-		Exports:     exports.NewService(app, cfg),
-		Resets:      reset.NewService(app, mailboxes),
-		AI:          aiStore,
-		Preparation: prepared,
+		Connections:  microsoft.NewService(app, cfg, mailboxes),
+		Mailboxes:    mailboxes,
+		Sending:      sending.NewStore(app, sending.StoreOptions{}),
+		Dispatcher:   dispatcher,
+		Exports:      exports.NewService(app, cfg),
+		Resets:       reset.NewService(app, mailboxes),
+		AI:           aiStore,
+		Preparation:  prepared,
+		Finalization: finalization.NewService(app, tasks, campaigns, prepared),
 	}
 }
 

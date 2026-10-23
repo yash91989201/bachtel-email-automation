@@ -266,6 +266,10 @@ func (s *server) handleTaskPreview(w http.ResponseWriter, r *http.Request) {
 		s.renderWithStatus(w, r, http.StatusOK, views.TaskPreviewResult(data))
 		return
 	}
+	data.DatasetFinalized = task.SelectedFinalSnapshotID != ""
+	if progress, err := s.sending.Preview(ctx, ownerID, task.ID); err == nil {
+		data.Approved = progress.Approved
+	}
 	data.SourceRow = preview.SourceRow
 	data.RecipientPosition = preview.RecipientIndex
 	data.OriginalRecipient = preview.OriginalRecipient
@@ -487,6 +491,10 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 	}
 	data.SendingType = task.SendingType
 	data.Preparation = s.preparationData(ctx, ownerID, task)
+	data.Finalization = s.finalizationData(ctx, ownerID, task, data.Preparation)
+	data.FinalizationRequired = data.Finalization.Required
+	data.DatasetFinalized = task.SelectedFinalSnapshotID != ""
+	data.FinalSnapshotRef = data.Finalization.Selected.Reference
 	if task.ScheduleState == intake.ScheduleScheduled || task.ScheduleState == intake.ScheduleMissed {
 		data.SendingType = views.TaskSendingTypeScheduled
 	}
@@ -559,14 +567,16 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 	}
 
 	facts := presentation.Facts{
-		Staging:         task.Status == intake.TaskStaging && !task.Closed() && !task.Closing(),
-		ValidationError: task.ValidationError,
-		Status:          task.Status,
-		HasRevision:     data.HasCurrentRevision,
-		MailboxUsable:   mailboxUsable,
-		ScheduleState:   task.ScheduleState,
-		Closed:          data.Closed,
-		Closing:         data.Closing,
+		Staging:              task.Status == intake.TaskStaging && !task.Closed() && !task.Closing(),
+		ValidationError:      task.ValidationError,
+		Status:               task.Status,
+		HasRevision:          data.HasCurrentRevision,
+		MailboxUsable:        mailboxUsable,
+		ScheduleState:        task.ScheduleState,
+		Closed:               data.Closed,
+		Closing:              data.Closing,
+		Finalized:            data.DatasetFinalized,
+		FinalizationRequired: data.FinalizationRequired,
 	}
 	facts.Stale = task.Status == intake.TaskReady && (current == nil || task.ContentHash != current.ContentHash)
 	data.Stale = facts.Stale
@@ -707,6 +717,8 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 					data.Preview = views.TaskPreviewData{Error: s.taskPreviewMessage(err), SourceRow: row.Row}
 				} else {
 					data.Preview = taskPreviewData(preview)
+					data.Preview.Approved = data.Approved
+					data.Preview.DatasetFinalized = data.DatasetFinalized
 				}
 				break
 			}

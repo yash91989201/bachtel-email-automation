@@ -57,7 +57,10 @@ lint: generate assets
 check:
 	$(MAKE) check-format
 	$(MAKE) check-generated lint
-	go test -race ./...
+	# The browser-facing web package is CPU-bound under the race detector and
+	# legitimately exceeds Go's 10m default package deadline; keep the same
+	# tests with a deadline that fits the full suite.
+	go test -race -timeout 20m ./...
 	$(MAKE) build
 
 # Pin the analysis tool independently; do not change application dependencies.

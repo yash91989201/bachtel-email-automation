@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -277,8 +278,10 @@ func (w *Workbook) Close() error {
 }
 
 // ReportLabels are the metadata columns appended after the copied source
-// columns of the exclusion report.
-var ReportLabels = []string{"Source worksheet row", "Recipient position", "Recipient", "Reason"}
+// columns of the exclusion report. The last four preserve correction evidence:
+// affected mapped fields, the origin of every reason, and the original and
+// proposed mapped values.
+var ReportLabels = []string{"Source worksheet row", "Recipient position", "Recipient", "Reason", "Affected fields", "Reason source", "Original mapped values", "Proposed mapped values"}
 
 // SourceColumnLabels returns one stable label per selected source column, in
 // column order: the trimmed header, or a numbered fallback for an unnamed
@@ -294,6 +297,23 @@ func SourceColumnLabels(headers []string) []string {
 		labels = append(labels, label)
 	}
 	return labels
+}
+
+// mappedValues renders one mapped-value map deterministically for the report.
+func mappedValues(values map[string]string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, key+"="+values[key])
+	}
+	return strings.Join(parts, "; ")
 }
 
 // ExclusionReport builds the XLSX exclusion report: one worksheet named
@@ -332,6 +352,10 @@ func ExclusionReport(headers []string, rows []ReportRow) (data []byte, err error
 			strconv.Itoa(row.Position),
 			row.Recipient,
 			strings.Join(row.Reasons, "; "),
+			strings.Join(row.Fields, ", "),
+			strings.Join(row.Sources, ", "),
+			mappedValues(row.Original),
+			mappedValues(row.Proposed),
 		)
 		if err := writeTextRow(file, sheet, i+2, cells); err != nil {
 			return nil, err
