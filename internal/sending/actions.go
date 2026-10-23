@@ -329,6 +329,9 @@ func (s *Store) Act(ctx context.Context, ownerID string, in ActionRequest) (*Act
 			return e
 		}
 		out = &ActionResult{ActionID: in.ActionID, TaskID: t.Id}
+		if (t.GetString("closed_at") != "" || t.GetString("closure_requested_at") != "") && in.Kind != "resolve" && in.Kind != "artifacts" {
+			return errors.New(ClosedTaskMessage)
+		}
 		if in.Kind == "artifacts" {
 			switch t.GetString("status") {
 			case "completed", "stopped", "interrupted":
@@ -546,6 +549,9 @@ func (s *Store) QueueTest(ctx context.Context, ownerID string, in TestRequest) (
 		t, e := s.authorizeTask(app, ownerID, in.TaskID)
 		if e != nil {
 			return e
+		}
+		if t.GetString("closed_at") != "" || t.GetString("closure_requested_at") != "" {
+			return errors.New(ClosedTaskMessage)
 		}
 		connection, e := s.usableConnection(ownerID)
 		if e != nil {

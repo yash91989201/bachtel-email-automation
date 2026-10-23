@@ -135,6 +135,27 @@ type Candidate struct {
 type Store struct {
 	app core.App
 	key func() ([]byte, error)
+	// change refuses a provider/sender switch while the owning account has
+	// pending work. It is injected so this package stays independent of the
+	// task lifecycle; same-mailbox reconnect and credential rotation never
+	// consult it.
+	change ChangeCheck
+}
+
+// ChangeCheck refuses a connection switch. It receives the transaction app so
+// the check is serialized with the change it guards.
+type ChangeCheck func(ctx context.Context, app core.App, ownerID string) error
+
+// SetChangeGuard binds the account-wide pending-task check used for mailbox
+// switching, replacement and disconnect.
+func (s *Store) SetChangeGuard(fn ChangeCheck) { s.change = fn }
+
+// guardChanges runs the bound change check, if any.
+func (s *Store) guardChanges(ctx context.Context, app core.App, ownerID string) error {
+	if s.change == nil {
+		return nil
+	}
+	return s.change(ctx, app, ownerID)
 }
 
 // NewStore builds the store. key resolves the deployment encryption key on
@@ -353,6 +374,9 @@ func (s *Store) SetStatus(ctx context.Context, connection *Connection, status St
 // explicitly released.
 func (s *Store) Disconnect(ctx context.Context, connection *Connection) error {
 	return s.app.RunInTransaction(func(app core.App) error {
+		if err := s.guardChanges(ctx, app, connection.OwnerID); err != nil {
+			return err
+		}
 		record, err := app.FindRecordById(ConnectionsCollection, connection.ID)
 		if err != nil {
 			return fmt.Errorf("read the mailbox connection: %w", err)

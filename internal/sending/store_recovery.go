@@ -100,6 +100,17 @@ func (s *Store) Recover(ctx context.Context) error {
 				}
 			}
 		}
+		// A closure requested before a restart stays pending until the
+		// recovered attempts above have settled; finalize it if they now have.
+		closing, e := records(app, intake.TasksCollection, "closure_requested_at != '' && closed_at = ''", "", nil)
+		if e != nil {
+			return e
+		}
+		for _, t := range closing {
+			if e = s.finalizeClosure(app, t); e != nil {
+				return e
+			}
+		}
 		return nil
 	})
 }
@@ -136,6 +147,9 @@ func (s *Store) SettleTasks(ctx context.Context) error {
 			}
 			t.Set("result_generation_needed", true)
 			if e = app.Save(t); e != nil {
+				return e
+			}
+			if e = s.finalizeClosure(app, t); e != nil {
 				return e
 			}
 		}

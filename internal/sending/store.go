@@ -646,9 +646,12 @@ func (s *Store) CompleteAttempt(ctx context.Context, id string, outcome Outcome)
 		if outcome.PauseMailbox || state == AttemptAuth {
 			// A provider failure pauses only the affected operator's work; other
 			// mailboxes keep their paced opportunities.
+			if e = s.finalizeClosureForTask(app, r.GetString("task")); e != nil {
+				return e
+			}
 			return pauseOwner(app, r.GetString("owner"), outcome.Reason)
 		}
-		return nil
+		return s.finalizeClosureForTask(app, r.GetString("task"))
 	})
 }
 

@@ -85,6 +85,10 @@ type Facts struct {
 	// ResultState is the task artifact state; empty means no artifact.
 	ResultState string
 	ResultReady bool
+	// Closed reports a finalized terminal closure; Closing a confirmed close
+	// that still waits for in-flight work to settle.
+	Closed  bool
+	Closing bool
 }
 
 // TaskStatus is the main status label and its required explanation. The raw
@@ -196,6 +200,12 @@ func (f Facts) candidateWorkRemains() bool {
 // MainStatus returns the task's main status using the spec's precedence. The
 // schedule, approval, execution and artifact facts stay separately visible.
 func MainStatus(f Facts) TaskStatus {
+	if f.Closed {
+		return TaskStatus{Label: "Closed", Explanation: "Closed by the operator. No further preparation, tests or sends are possible; recorded history and downloads remain available."}
+	}
+	if f.Closing {
+		return TaskStatus{Label: "Closing", Explanation: "Close confirmed. Queued work is cancelled; closure becomes final once in-flight requests settle.", Warning: true}
+	}
 	if f.Staging {
 		if f.ValidationError != "" {
 			return TaskStatus{Label: "Validation failed", Explanation: f.ValidationError, Warning: true}
@@ -242,6 +252,9 @@ func MainStatus(f Facts) TaskStatus {
 // the spec's severity order: restore review, mailbox authorization, then
 // content/approval problems.
 func Blockers(f Facts) []Blocker {
+	if f.Closed || f.Closing {
+		return nil
+	}
 	var blockers []Blocker
 	if f.RestoreReview && f.candidateWorkRemains() {
 		blockers = append(blockers, Blocker{
@@ -285,6 +298,8 @@ func Blockers(f Facts) []Blocker {
 // full action matrix still governs the section-local controls.
 func NextAction(f Facts) NextLink {
 	switch {
+	case f.Closed || f.Closing:
+		return NextLink{Label: "View results", Section: SectionResults}
 	case f.Status == StatusRunning || f.Status == StatusWaiting || f.Status == StatusStopping:
 		return NextLink{Label: "View progress", Section: SectionSending}
 	case f.Staging && !f.HasRevision:
@@ -340,6 +355,17 @@ func (f Facts) ResultEligible() bool {
 // service's own approval, mailbox, restore-review and fresh-count checks.
 func AvailableControls(f Facts) Controls {
 	var controls Controls
+	if f.Closed || f.Closing {
+		// Closure is terminal: no preparation, finalize, schedule, test,
+		// resume, retry or resend. Manual outcome classification and the
+		// historical result export stay available.
+		controls.ResolveRow = f.Uncertain > 0
+		if f.ResultEligible() && !f.ResultReady {
+			controls.GenerateResult = f.ResultState != ArtifactFailed
+			controls.RetryResult = f.ResultState == ArtifactFailed
+		}
+		return controls
+	}
 	if f.Staging || (f.Status == StatusReady && f.Stale && f.ScheduleState != intake.ScheduleScheduled) {
 		controls.Validate = f.Staging
 		controls.Revalidate = !f.Staging
@@ -443,6 +469,14 @@ func Lifecycle(f Facts) []Step {
 		sending.State = "Finished"
 		sending.Complete = true
 	}
+	if f.Closing {
+		sending.State = "Closing"
+		sending.Complete = false
+	}
+	if f.Closed {
+		sending.State = "Closed"
+		sending.Complete = true
+	}
 	results := Step{Name: "Results", State: "Not available yet"}
 	if f.ResultReady {
 		results = Step{Name: "Results", State: "Available", Complete: true}
@@ -490,6 +524,9 @@ func Summarize(counts intake.Counts) Summary {
 // counts at most once; ordinary worksheet selection and a future unblocked
 // schedule alone do not count.
 func NeedsAttention(f Facts) bool {
+	if f.Closed || f.Closing {
+		return false
+	}
 	switch {
 	case f.ValidationError != "":
 		return true

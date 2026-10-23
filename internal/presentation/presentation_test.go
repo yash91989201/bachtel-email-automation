@@ -333,3 +333,55 @@ func TestTimestampUsesExplicitOffset(t *testing.T) {
 		t.Fatalf("timestamp = %q, want %q", got, want)
 	}
 }
+
+func TestClosureIsTerminalAndKeepsEvidenceAccess(t *testing.T) {
+	closed := readyFacts()
+	closed.Status = presentation.StatusCompleted
+	closed.Closed = true
+	closed.ResultReady = false
+	status := presentation.MainStatus(closed)
+	if status.Label != "Closed" || status.Warning {
+		t.Fatalf("closed status = %+v", status)
+	}
+	if next := presentation.NextAction(closed); next.Label != "View results" {
+		t.Fatalf("closed next action = %+v", next)
+	}
+	controls := presentation.AvailableControls(closed)
+	if controls.Start || controls.Resume || controls.Schedule || controls.RetryAll || controls.Revalidate {
+		t.Fatalf("closed task kept processing controls: %+v", controls)
+	}
+	if !controls.GenerateResult {
+		t.Fatal("closed task lost its historical result export")
+	}
+	if presentation.NeedsAttention(closed) {
+		t.Fatal("closed task still demands attention")
+	}
+	if blockers := presentation.Blockers(closed); len(blockers) != 0 {
+		t.Fatalf("closed task still reports blockers: %+v", blockers)
+	}
+	closed.Uncertain = 1
+	if controls := presentation.AvailableControls(closed); !controls.ResolveRow {
+		t.Fatal("manual outcome classification must stay available after closure")
+	}
+
+	closing := readyFacts()
+	closing.Closing = true
+	closing.Remaining = 2
+	if status := presentation.MainStatus(closing); status.Label != "Closing" || !status.Warning {
+		t.Fatalf("closing status = %+v", status)
+	}
+	if controls := presentation.AvailableControls(closing); controls.Start || controls.Stop {
+		t.Fatalf("closing task accepted new work controls: %+v", controls)
+	}
+	lifecycle := presentation.Lifecycle(closed)
+	if lifecycle[3].State != "Closed" {
+		t.Fatalf("lifecycle sending state = %q", lifecycle[3].State)
+	}
+}
+
+func TestClosedNeedsAttentionFalse(t *testing.T) {
+	facts := presentation.Facts{Status: statusRunning, Closed: true, RetryableFailed: 2}
+	if presentation.NeedsAttention(facts) {
+		t.Fatal("closed task counted as needing attention")
+	}
+}

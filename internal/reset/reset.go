@@ -39,6 +39,10 @@ type Service struct {
 	drain  Drainer
 	poll   func(time.Duration) <-chan time.Time
 	settle time.Duration
+	// change refuses a replacement confirmation while the owning account has
+	// pending tasks. The mailbox claim and reset records already exist; the
+	// reset must not erase blockers to install a new mailbox.
+	change func(ctx context.Context, ownerID string) error
 }
 
 // NewService builds the reset service.
@@ -53,6 +57,10 @@ func NewService(app core.App, connections *mailbox.Store) *Service {
 
 // SetDrainer binds the dispatcher's per-owner in-flight query.
 func (s *Service) SetDrainer(drainer Drainer) { s.drain = drainer }
+
+// SetChangeGuard binds the account-wide pending-task check. A confirmed
+// replacement must never run while any task remains pending.
+func (s *Service) SetChangeGuard(fn func(ctx context.Context, ownerID string) error) { s.change = fn }
 
 // ErrDraining reports submissions that did not settle within the bounded drain.
 var ErrDraining = errors.New("active submissions are still settling; retry the replacement once they finish")
@@ -88,6 +96,11 @@ func Guard(app core.App) func(ctx context.Context, ownerID string) error {
 
 // Confirm runs a staged replacement to completion.
 func (s *Service) Confirm(ctx context.Context, ownerID, resetID string) error {
+	if s.change != nil {
+		if err := s.change(ctx, ownerID); err != nil {
+			return err
+		}
+	}
 	operation, err := s.conns.ConfirmReset(ctx, ownerID, resetID)
 	if err != nil {
 		return err

@@ -190,6 +190,9 @@ func (s *Service) SetSendingType(ctx context.Context, ownerID, taskID, sendingTy
 			return err
 		}
 		status := record.GetString("status")
+		if record.GetString("closed_at") != "" || record.GetString("closure_requested_at") != "" {
+			return &ValidationError{Message: "this task is closed; upload a new task for future work"}
+		}
 		if (status != TaskStaging && status != TaskReady) || record.GetString("schedule_state") == ScheduleFired {
 			return &ValidationError{Message: "sending type cannot be changed after this task has started"}
 		}
@@ -376,6 +379,9 @@ func (s *Service) Validate(ctx context.Context, ownerID, taskID, sheet string, h
 	if err != nil {
 		return err
 	}
+	if task.Closed() || task.Closing() {
+		return &ValidationError{Message: "this task is closed; upload a new task for future work"}
+	}
 	if task.Status != TaskStaging {
 		return &ValidationError{Message: "this task already has a validation snapshot; revalidate it instead of choosing a worksheet again"}
 	}
@@ -392,6 +398,9 @@ func (s *Service) Revalidate(ctx context.Context, ownerID, taskID string) error 
 	task, err := s.LoadTask(ctx, ownerID, taskID)
 	if err != nil {
 		return err
+	}
+	if task.Closed() || task.Closing() {
+		return &ValidationError{Message: "this task is closed; upload a new task for future work"}
 	}
 	if task.Status != TaskReady {
 		return &ValidationError{Message: "only a validated task that has not started can be revalidated"}
@@ -1142,21 +1151,24 @@ func (s *Service) readArtifact(ctx context.Context, record *core.Record, field s
 // taskFromRecord maps one send_tasks record to the operator-facing task.
 func taskFromRecord(record *core.Record, campaignName string) *Task {
 	task := &Task{
-		ID:              record.Id,
-		CampaignID:      record.GetString("campaign"),
-		CampaignName:    campaignName,
-		Status:          record.GetString("status"),
-		Sheet:           record.GetString("sheet"),
-		HeaderRow:       record.GetInt("header_row"),
-		ConfigurationID: record.GetString("configuration"),
-		ContentHash:     record.GetString("content_hash"),
-		ValidationError: record.GetString("validation_error"),
-		SourceName:      record.GetString("source_name"),
-		SourceDigest:    record.GetString("source_digest"),
-		UploadedAt:      record.GetDateTime("created").Time().UTC().Truncate(time.Millisecond),
-		ScheduleAt:      record.GetDateTime("schedule_at").Time().UTC(),
-		ScheduleState:   record.GetString("schedule_state"),
-		SendingType:     record.GetString("sending_type"),
+		ID:                 record.Id,
+		CampaignID:         record.GetString("campaign"),
+		CampaignName:       campaignName,
+		Status:             record.GetString("status"),
+		Sheet:              record.GetString("sheet"),
+		HeaderRow:          record.GetInt("header_row"),
+		ConfigurationID:    record.GetString("configuration"),
+		ContentHash:        record.GetString("content_hash"),
+		ValidationError:    record.GetString("validation_error"),
+		SourceName:         record.GetString("source_name"),
+		SourceDigest:       record.GetString("source_digest"),
+		UploadedAt:         record.GetDateTime("created").Time().UTC().Truncate(time.Millisecond),
+		ScheduleAt:         record.GetDateTime("schedule_at").Time().UTC(),
+		ScheduleState:      record.GetString("schedule_state"),
+		SendingType:        record.GetString("sending_type"),
+		ClosureRequestedAt: record.GetDateTime("closure_requested_at").Time().UTC(),
+		ClosedBy:           record.GetString("closure_actor"),
+		ClosedAt:           record.GetDateTime("closed_at").Time().UTC(),
 	}
 	if task.ScheduleState == "" {
 		task.ScheduleState = ScheduleNone

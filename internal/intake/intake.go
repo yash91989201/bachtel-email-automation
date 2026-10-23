@@ -50,6 +50,10 @@ const (
 	ScheduleFired = "fired"
 	// ScheduleMissed records a schedule that could not start sending.
 	ScheduleMissed = "missed"
+	// ScheduleCancelled records a schedule that explicit closure cancelled.
+	// The stored start time stays as the recorded authorization; a cancelled
+	// schedule never fires.
+	ScheduleCancelled = "cancelled"
 	// TaskSendingTypeDirect and TaskSendingTypeScheduled are the saved first-start
 	// preferences. They select a view only and never authorize dispatch.
 	TaskSendingTypeDirect    = "direct"
@@ -372,7 +376,20 @@ type Task struct {
 	// SendingType is the shared first-start choice saved at upload or changed
 	// before execution. Empty means the operator has not chosen a type.
 	SendingType string
+	// ClosureRequestedAt is when the owner confirmed Close. A non-zero value
+	// keeps the task pending until outstanding work settles.
+	ClosureRequestedAt time.Time
+	// ClosedBy is the operator who confirmed closure.
+	ClosedBy string
+	// ClosedAt is the terminal closure marker. A closed task never reopens.
+	ClosedAt time.Time
 }
+
+// Closed reports a finalized terminal closure.
+func (t *Task) Closed() bool { return !t.ClosedAt.IsZero() }
+
+// Closing reports a confirmed closure still waiting for work to settle.
+func (t *Task) Closing() bool { return !t.ClosureRequestedAt.IsZero() && t.ClosedAt.IsZero() }
 
 // Admitted reports whether the task holds a published validation snapshot.
 func (t *Task) Admitted() bool { return t.Status == TaskReady }

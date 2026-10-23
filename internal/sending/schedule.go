@@ -60,6 +60,9 @@ func (s *Store) Schedule(ctx context.Context, ownerID string, in ScheduleRequest
 			return e
 		}
 		out = &ActionResult{ActionID: in.ActionID, TaskID: t.Id}
+		if t.GetString("closed_at") != "" || t.GetString("closure_requested_at") != "" {
+			return &ScheduleRefusal{Reason: ClosedTaskMessage}
+		}
 		if in.At.IsZero() {
 			switch t.GetString("schedule_state") {
 			case intake.ScheduleScheduled, intake.ScheduleMissed:

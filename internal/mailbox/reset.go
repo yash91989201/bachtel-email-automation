@@ -73,6 +73,9 @@ func (s *Store) StageReplacement(ctx context.Context, candidate Candidate) (*Res
 	}
 	var out *Reset
 	err := s.app.RunInTransaction(func(app core.App) error {
+		if err := s.guardChanges(ctx, app, candidate.OwnerID); err != nil {
+			return err
+		}
 		if _, err := app.FindFirstRecordByFilter(
 			ResetsCollection,
 			"owner = {:owner} && status != {:done}",
@@ -217,6 +220,12 @@ func (s *Store) CancelReset(ctx context.Context, ownerID, resetID string) error 
 func (s *Store) ConfirmReset(ctx context.Context, ownerID, resetID string) (*Reset, error) {
 	var out *Reset
 	err := s.app.RunInTransaction(func(app core.App) error {
+		// The lock is rechecked in the confirmation transaction itself, so a
+		// task created after the page was rendered cannot be erased by this
+		// reset; intake writes are blocked once the resetting status commits.
+		if err := s.guardChanges(ctx, app, ownerID); err != nil {
+			return err
+		}
 		record, err := app.FindRecordById(ResetsCollection, resetID)
 		if err != nil {
 			return fmt.Errorf("read the mailbox replacement: %w", err)
