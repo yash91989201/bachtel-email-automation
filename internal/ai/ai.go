@@ -1,0 +1,239 @@
+// Package ai owns each operator's private AI connection: at most one
+// confirmed provider, endpoint, API format and exact model per operator,
+// staged proposals that only become active after a synthetic validation and
+// an explicit confirmation, and separately versioned credentials sealed under
+// the deployment key.
+//
+// Nothing here prepares a workbook or sends email. The package exposes a small
+// validation boundary over existing net/http and encoding/json; provider
+// presets are data, protocol handling is one adapter per API format.
+package ai
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"time"
+
+	"github.com/pocketbase/pocketbase/core"
+)
+
+// Collection names owned by this package.
+const (
+	// ConnectionsCollection holds the single confirmed connection per owner.
+	ConnectionsCollection = "ai_connections"
+	// DraftsCollection holds one staged proposal per owner. A proposal never
+	// affects a run until it is confirmed.
+	DraftsCollection = "ai_connection_drafts"
+)
+
+// Provider identifies a supported AI provider preset.
+type Provider string
+
+const (
+	// ProviderOpenCodeGo is the initial preset.
+	ProviderOpenCodeGo Provider = "opencode-go"
+	// ProviderCustom is any endpoint speaking a supported API format.
+	ProviderCustom Provider = "custom"
+)
+
+// Valid reports whether the provider preset is supported.
+func (p Provider) Valid() bool { return p == ProviderOpenCodeGo || p == ProviderCustom }
+
+// Label is the operator-facing provider name.
+func (p Provider) Label() string {
+	switch p {
+	case ProviderOpenCodeGo:
+		return "OpenCode Go"
+	case ProviderCustom:
+		return "Custom compatible endpoint"
+	default:
+		return "Unknown provider"
+	}
+}
+
+// APIFormat identifies the request/response contract of a connection.
+type APIFormat string
+
+const (
+	// FormatResponses is the OpenAI Responses API.
+	FormatResponses APIFormat = "responses"
+	// FormatChatCompletions is the OpenAI Chat Completions API.
+	FormatChatCompletions APIFormat = "chat-completions"
+)
+
+// Valid reports whether the protocol is supported.
+func (f APIFormat) Valid() bool {
+	return f == FormatResponses || f == FormatChatCompletions
+}
+
+// Label is the operator-facing protocol name.
+func (f APIFormat) Label() string {
+	switch f {
+	case FormatResponses:
+		return "Responses API"
+	case FormatChatCompletions:
+		return "Chat Completions API"
+	default:
+		return "Unknown API format"
+	}
+}
+
+// Path is the request path appended to the configured API root.
+func (f APIFormat) Path() string {
+	switch f {
+	case FormatResponses:
+		return "/responses"
+	default:
+		return "/chat/completions"
+	}
+}
+
+// Preset is provider reference data: labels, default endpoint, supported API
+// formats, suggested exact model IDs and setup guidance. It carries no
+// protocol behavior.
+type Preset struct {
+	Provider        Provider
+	Label           string
+	DefaultRoot     string
+	Formats         []APIFormat
+	SuggestedModels []string
+	Guidance        []string
+}
+
+// OpenCodeRoot is the documented OpenCode inference root verified on
+// 2026-10-23; the Go plan uses the same OpenAI-compatible inference roots.
+const OpenCodeRoot = "https://opencode.ai/inference/openai/v1"
+
+// Presets lists every supported provider in display order.
+func Presets() []Preset {
+	return []Preset{
+		{
+			Provider:        ProviderOpenCodeGo,
+			Label:           ProviderOpenCodeGo.Label(),
+			DefaultRoot:     OpenCodeRoot,
+			Formats:         []APIFormat{FormatResponses, FormatChatCompletions},
+			SuggestedModels: []string{"muse-spark-1.3", "deepseek-v4.1-flash"},
+			Guidance: []string{
+				"Use the API key from your OpenCode Console workspace. The Go plan covers time-limited usage for a single-member workspace.",
+				"Each model is served by one API format. Muse Spark 1.3 uses the Responses API; DeepSeek V4.1 Flash uses Chat Completions. They are not interchangeable.",
+				"Only the mapped workbook values and preparation metadata are sent to this endpoint. OpenCode documents traffic monitoring for abuse; the Muse Contributor option may allow training on prompts and completions.",
+			},
+		},
+		{
+			Provider:        ProviderCustom,
+			Label:           ProviderCustom.Label(),
+			DefaultRoot:     "",
+			Formats:         []APIFormat{FormatResponses, FormatChatCompletions},
+			SuggestedModels: nil,
+			Guidance: []string{
+				"Enter the HTTPS API root that comes before /responses or /chat/completions.",
+				"A successful validation proves only that this endpoint, format and exact model return the normalization contract. It does not claim every model there supports it.",
+			},
+		},
+	}
+}
+
+// PresetFor returns the preset for a provider.
+func PresetFor(provider Provider) (Preset, bool) {
+	for _, preset := range Presets() {
+		if preset.Provider == provider {
+			return preset, true
+		}
+	}
+	return Preset{}, false
+}
+
+// Config is the immutable non-secret configuration of a connection. Every run
+// records and uses exactly this selection; no fallback model exists.
+type Config struct {
+	Provider  Provider
+	APIRoot   string
+	APIFormat APIFormat
+	Model     string
+}
+
+// Fingerprint is the normalized configuration identity used to distinguish a
+// switch from a same-configuration credential repair.
+func (c Config) Fingerprint() string {
+	return strings.Join([]string{
+		string(c.Provider),
+		strings.TrimRight(strings.TrimSpace(c.APIRoot), "/"),
+		string(c.APIFormat),
+		strings.TrimSpace(c.Model),
+	}, "|")
+}
+
+// Equal reports whether two configurations select the same endpoint, format
+// and model.
+func (c Config) Equal(other Config) bool { return c.Fingerprint() == other.Fingerprint() }
+
+// Connection is the operator-visible confirmed connection. It never carries
+// the API key.
+type Connection struct {
+	ID                      string
+	Config                  Config
+	ConfigurationGeneration int
+	CredentialGeneration    int
+	APIKeyConfigured        bool
+	ValidatedAt             time.Time
+	UpdatedAt               time.Time
+}
+
+// Draft is the operator-visible staged proposal. It never carries the API key.
+type Draft struct {
+	ID                          string
+	Config                      Config
+	BaseConfigurationGeneration int
+	BaseCredentialGeneration    int
+	ValidatedAt                 time.Time
+}
+
+// Repair reports whether the draft keeps the exact confirmed configuration and
+// only replaces the API credential.
+func (d *Draft) Repair(active *Connection) bool {
+	return active != nil && d.Config.Equal(active.Config)
+}
+
+// Proposal is one submitted, not yet validated connection setup.
+type Proposal struct {
+	Config Config
+	APIKey string
+}
+
+// Errors reported by this package. Every message is fixed text safe to show
+// to an operator: no request, response, header or secret value is included.
+var (
+	ErrNotConfigured        = errors.New("no AI connection is configured")
+	ErrCredentialUnreadable = errors.New("the saved AI credential could not be read; check that APP_ENCRYPTION_KEY matches the key used to save it")
+	ErrInvalidSetup         = errors.New("the AI connection setup is not valid")
+	ErrDraftStale           = errors.New("the validated proposal is no longer current; validate the settings again")
+	ErrEndpointUnsafe       = errors.New("the AI endpoint must be a publicly reachable HTTPS address")
+	ErrAuthentication       = errors.New("the AI endpoint rejected the API key")
+	ErrModelUnavailable     = errors.New("the selected model is not available at this endpoint")
+	ErrThrottled            = errors.New("the AI endpoint is throttling requests; try again later")
+	ErrEndpointTimeout      = errors.New("the AI endpoint did not answer within the allowed time")
+	ErrResponseTooLarge     = errors.New("the AI response exceeded the allowed size")
+	ErrOutputContract       = errors.New("the selected model did not return the required normalization output")
+	ErrProviderFailure      = errors.New("the AI endpoint returned an error")
+)
+
+// LockCheck refuses a connection switch while the owning account still has
+// pending task work. It is injected so this package does not depend on the
+// task lifecycle implementation.
+type LockCheck func(ctx context.Context, app core.App, ownerID string) error
+
+// ValidationOptions bound the synthetic validation request and its response.
+type ValidationOptions struct {
+	Timeout          time.Duration
+	MaxResponseBytes int64
+	// AllowPrivate permits loopback/private destinations and plaintext HTTP.
+	// It exists only for simulated endpoints in tests and is never enabled by
+	// the running application.
+	AllowPrivate bool
+}
+
+// DefaultValidationOptions are the production bounds.
+func DefaultValidationOptions() ValidationOptions {
+	return ValidationOptions{Timeout: 30 * time.Second, MaxResponseBytes: 512 << 10}
+}
