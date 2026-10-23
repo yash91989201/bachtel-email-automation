@@ -621,6 +621,38 @@ func TestPreservedSendingFormsHaveSelectorSafeIDs(t *testing.T) {
 	}
 }
 
+// Settled rows stay out of the attention table: already submitted candidates
+// and eligible rows without a reason need no operator action.
+func TestTaskRowReasonsExcludesSettledRows(t *testing.T) {
+	data := TaskPageData{
+		CampaignID: "camp1",
+		TaskID:     "task1",
+		Rows: []TaskAdmittedRow{
+			{ID: "sent", Row: 2, State: "submitted"},
+			{ID: "clean", Row: 3, State: "eligible"},
+			{ID: "review", Row: 4, State: "review_required", Reason: "outcome unknown"},
+			{ID: "short", Row: 5, State: "ineligible", Reason: "missing required value"},
+		},
+	}
+	doc, err := html.Parse(strings.NewReader(renderWorkspace(t, taskRowReasons(data))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	states := map[string]bool{}
+	for node := range doc.Descendants() {
+		if node.Type != html.ElementNode || node.Data != "code" {
+			continue
+		}
+		states[strings.TrimSpace(node.FirstChild.Data)] = true
+	}
+	if states["submitted"] || states["eligible"] {
+		t.Fatalf("settled states rendered in attention table: %v", states)
+	}
+	if !states["review_required"] || !states["ineligible"] {
+		t.Fatalf("attention states missing from table: %v", states)
+	}
+}
+
 func renderWorkspace(t *testing.T, component templ.Component) string {
 	t.Helper()
 	var page strings.Builder

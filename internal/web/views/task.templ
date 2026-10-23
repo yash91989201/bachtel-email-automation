@@ -753,12 +753,26 @@ func previewRowLabel(row TaskAdmittedRow) string {
 	return label
 }
 
+// attentionRows keeps admitted rows that carry a blocker worth acting on.
+// Eligible rows without a reason and already submitted rows are settled.
+func attentionRows(rows []TaskAdmittedRow) []TaskAdmittedRow {
+	kept := make([]TaskAdmittedRow, 0, len(rows))
+	for _, row := range rows {
+		if row.State == "submitted" || (row.State == "eligible" && row.Reason == "") {
+			continue
+		}
+		kept = append(kept, row)
+	}
+	return kept
+}
+
 templ taskRowReasons(data TaskPageData) {
 	<section class="space-y-6" id="task-row-reasons">
 		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "held-heading"}}) {
 			@card.Content(card.ContentProps{}) {
 				<h3 id="held-heading" class="cn-card-title">Rows needing attention</h3>
-				if len(data.HeldRows) == 0 && len(data.Rows) == 0 {
+				{{ rows := attentionRows(data.Rows) }}
+				if len(data.HeldRows) == 0 && len(rows) == 0 {
 					<p class="text-muted-foreground">No candidate rows in this snapshot.</p>
 				} else {
 					<div class="table-scroll">
@@ -776,10 +790,7 @@ templ taskRowReasons(data TaskPageData) {
 										<td>{ held.Reason }</td>
 									</tr>
 								}
-								for _, row := range data.Rows {
-									if row.State == "eligible" && row.Reason == "" {
-										{{ continue }}
-									}
+								for _, row := range rows {
 									<tr>
 										<td>{ row.Row }</td>
 										<td>{ row.Position }</td>
