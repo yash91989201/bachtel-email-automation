@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,7 +49,7 @@ type taskSnapshot struct {
 	Task        *core.Record
 	Manifest    intake.Manifest
 	Source      []byte
-	Members     map[int]taskMember
+	Members     map[intake.Occurrence]taskMember
 	Attempts    map[string][]*core.Record
 	Resolutions map[string]*core.Record
 	AsOf        time.Time
@@ -62,13 +63,13 @@ type taskMember struct {
 func (s *Service) taskSnapshot(ctx context.Context, task *core.Record, artifact *core.Record) (*taskSnapshot, error) {
 	snapshot := &taskSnapshot{
 		Task:        task,
-		Members:     map[int]taskMember{},
+		Members:     map[intake.Occurrence]taskMember{},
 		Attempts:    map[string][]*core.Record{},
 		Resolutions: map[string]*core.Record{},
 		AsOf:        artifact.GetDateTime("as_of").Time().UTC(),
 	}
 	err := s.app.RunInTransaction(func(txApp core.App) error {
-		members, err := records(txApp, intake.TaskCandidatesCollection, "task={:t}", "source_row", dbx.Params{"t": task.Id})
+		members, err := records(txApp, intake.TaskCandidatesCollection, "task={:t}", "source_row,recipient_index", dbx.Params{"t": task.Id})
 		if err != nil {
 			return err
 		}
@@ -81,7 +82,8 @@ func (s *Service) taskSnapshot(ctx context.Context, task *core.Record, artifact 
 			candidateByID[candidate.Id] = candidate
 		}
 		for _, member := range members {
-			snapshot.Members[member.GetInt("source_row")] = taskMember{
+			position := max(member.GetInt("recipient_index"), 1)
+			snapshot.Members[intake.Occurrence{Row: member.GetInt("source_row"), Position: position}] = taskMember{
 				Member:    member,
 				Candidate: candidateByID[member.GetString("candidate")],
 			}
@@ -131,10 +133,12 @@ func records(app core.App, collection, filter, sort string, params dbx.Params) (
 	return app.FindRecordsByFilter(collection, filter, sort, 0, 0, params)
 }
 
-// TaskWorkbook appends the task's configured result columns to the retained
-// original workbook. Existing cells, sheets and ordering are never rewritten;
-// new values are written with the string API so formula-like candidate text
-// stays text.
+// TaskWorkbook writes the recipient-results worksheet beside the retained
+// original workbook. Every original sheet, cell, formula and row order is left
+// untouched; the added sheet copies the selected source columns and appends
+// source coordinates, the individual recipient and the task's configured result
+// columns, one row per expanded entry. New values are written with the string
+// API so formula-like candidate text stays text.
 func TaskWorkbook(snapshot *taskSnapshot) (data []byte, err error) {
 	limits := intake.DefaultLimits()
 	book, err := excelize.OpenReader(bytes.NewReader(snapshot.Source), excelize.Options{
@@ -165,6 +169,18 @@ func TaskWorkbook(snapshot *taskSnapshot) (data []byte, err error) {
 		return nil, fmt.Errorf("the selected worksheet is empty")
 	}
 
+	var headerCells []string
+	if headerRow-1 < len(grid) {
+		headerCells = grid[headerRow-1]
+	}
+	sourceLabels := make([]string, maxColumns)
+	for index := range sourceLabels {
+		if index < len(headerCells) {
+			sourceLabels[index] = headerCells[index]
+		}
+	}
+	sourceLabels = intake.SourceColumnLabels(sourceLabels)
+
 	var labels []string
 	if err := snapshot.Task.UnmarshalJSONField("result_labels", &labels); err != nil {
 		labels = nil
@@ -172,34 +188,65 @@ func TaskWorkbook(snapshot *taskSnapshot) (data []byte, err error) {
 	if len(labels) == 0 {
 		labels = []string{"Email Status"}
 	}
-	for offset, label := range labels {
-		cell, err := excelize.CoordinatesToCellName(maxColumns+offset+1, headerRow)
-		if err != nil {
-			return nil, err
-		}
-		if err := book.SetCellStr(sheet, cell, label); err != nil {
-			return nil, err
-		}
+	metadata := intake.ResolveResultLabels(intake.ResultSheetLabels, sourceLabels)
+	occupied := make([]string, 0, len(sourceLabels)+len(metadata))
+	occupied = append(occupied, sourceLabels...)
+	occupied = append(occupied, metadata...)
+	labels = intake.ResolveResultLabels(labels, occupied)
+
+	name := resultsSheetName(book.GetSheetList())
+	if _, err := book.NewSheet(name); err != nil {
+		return nil, fmt.Errorf("add the recipient results worksheet: %w", err)
+	}
+	header := make([]string, 0, len(sourceLabels)+len(metadata)+len(labels))
+	header = append(header, sourceLabels...)
+	header = append(header, metadata...)
+	header = append(header, labels...)
+	if err := writeResultRow(book, name, 1, header); err != nil {
+		return nil, err
 	}
 
-	for _, row := range snapshot.Manifest.Rows {
-		if row.Row <= headerRow {
-			continue
+	rows := make([]intake.ManifestRow, len(snapshot.Manifest.Rows))
+	copy(rows, snapshot.Manifest.Rows)
+	slices.SortFunc(rows, func(a, b intake.ManifestRow) int {
+		if a.Row != b.Row {
+			return a.Row - b.Row
+		}
+		return a.Position - b.Position
+	})
+
+	for i, row := range rows {
+		var source []string
+		if row.Row >= 1 && row.Row-1 < len(grid) {
+			source = grid[row.Row-1]
+		}
+		cells := make([]string, 0, len(header))
+		for col := range sourceLabels {
+			value := ""
+			if col < len(source) {
+				value = source[col]
+			}
+			cells = append(cells, value)
+		}
+		position := max(row.Position, 1)
+		// The individual recipient is the admitted candidate's identity
+		// address, or the trimmed raw token of a file-only entry.
+		recipient := strings.TrimSpace(row.Recipient)
+		if member, ok := snapshot.Members[row.Occurrence()]; ok && member.Candidate != nil {
+			recipient = member.Candidate.GetString("email_key")
 		}
 		status, at, reason := snapshot.rowResult(row)
 		values := []string{status, sending.DisplayTime(at), reason}
+		cells = append(cells, sheet, strconv.Itoa(row.Row), strconv.Itoa(position), recipient)
 		for offset := range labels {
 			value := ""
 			if offset < len(values) {
 				value = values[offset]
 			}
-			cell, err := excelize.CoordinatesToCellName(maxColumns+offset+1, row.Row)
-			if err != nil {
-				return nil, err
-			}
-			if err := book.SetCellStr(sheet, cell, value); err != nil {
-				return nil, err
-			}
+			cells = append(cells, value)
+		}
+		if err := writeResultRow(book, name, i+2, cells); err != nil {
+			return nil, err
 		}
 	}
 
@@ -208,6 +255,40 @@ func TaskWorkbook(snapshot *taskSnapshot) (data []byte, err error) {
 		return nil, fmt.Errorf("write the results workbook: %w", err)
 	}
 	return out.Bytes(), nil
+}
+
+// writeResultRow writes one results row with the string cell API, so copied
+// source or candidate text that looks like a formula stays inert.
+func writeResultRow(book *excelize.File, sheet string, row int, values []string) error {
+	for index, value := range values {
+		cell, err := excelize.CoordinatesToCellName(index+1, row)
+		if err != nil {
+			return err
+		}
+		if err := book.SetCellStr(sheet, cell, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// resultsSheetName picks the first unoccupied name for the added worksheet,
+// comparing case-insensitively because worksheet names are.
+func resultsSheetName(existing []string) string {
+	const base = "Recipient results"
+	taken := make(map[string]struct{}, len(existing))
+	for _, name := range existing {
+		taken[strings.ToLower(name)] = struct{}{}
+	}
+	if _, used := taken[strings.ToLower(base)]; !used {
+		return base
+	}
+	for suffix := 2; ; suffix++ {
+		candidate := fmt.Sprintf("%s (%d)", base, suffix)
+		if _, used := taken[strings.ToLower(candidate)]; !used {
+			return candidate
+		}
+	}
 }
 
 // rowResult maps one manifest row to its status, timestamp and reason. The
@@ -229,7 +310,7 @@ func (s *taskSnapshot) rowResult(row intake.ManifestRow) (string, time.Time, str
 		}
 	}
 
-	entry, ok := s.Members[row.Row]
+	entry, ok := s.Members[row.Occurrence()]
 	if !ok {
 		return statusUnknown, time.Time{}, "the task snapshot has no row record"
 	}

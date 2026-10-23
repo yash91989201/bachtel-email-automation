@@ -101,7 +101,7 @@ func (s *Store) Preview(ctx context.Context, ownerID, id string) (*Progress, err
 	p.Invalid = counts.Invalid
 	p.Duplicate = counts.Duplicate
 	p.Ineligible = counts.Ineligible
-	rows, e := records(s.app, intake.TaskCandidatesCollection, "task={:t}", "source_row", dbx.Params{"t": id})
+	rows, e := records(s.app, intake.TaskCandidatesCollection, "task={:t}", "source_row,recipient_index", dbx.Params{"t": id})
 	if e != nil {
 		return nil, e
 	}
@@ -153,7 +153,19 @@ func (s *Store) Preview(ctx context.Context, ownerID, id string) (*Progress, err
 		if a := latest[m.Id]; a != nil {
 			latestAttempt = attemptFrom(a)
 		}
-		member := MemberProgress{SampleEligible: m.GetString("state") == intake.RowEligible, LatestAttempt: latestAttempt, ID: m.Id, State: memberState, Reason: reason, SourceRow: m.GetInt("source_row")}
+		member := MemberProgress{
+			SampleEligible: m.GetString("state") == intake.RowEligible,
+			LatestAttempt:  latestAttempt,
+			ID:             m.Id,
+			State:          memberState,
+			Reason:         reason,
+			SourceRow:      m.GetInt("source_row"),
+			RecipientIndex: m.GetInt("recipient_index"),
+			Recipient:      candidateEmail(candidateByID[m.GetString("candidate")]),
+		}
+		if member.RecipientIndex < 1 {
+			member.RecipientIndex = 1
+		}
 		if r := resolved[m.Id]; r != nil {
 			member.ResolutionActor = r.GetString("actor")
 			member.ResolutionBasis = r.GetString("basis")
@@ -253,6 +265,14 @@ func saveAction(app core.App, ownerID string, in ActionRequest, out *ActionResul
 	r.Set("actor", in.Actor)
 	r.Set("result", out)
 	return app.Save(r)
+}
+
+// candidateEmail returns the stored identity address of a candidate record.
+func candidateEmail(candidate *core.Record) string {
+	if candidate == nil {
+		return ""
+	}
+	return candidate.GetString("email_key")
 }
 
 // startable reports whether one membership row can be reserved by a start-like
@@ -402,7 +422,7 @@ func (s *Store) Act(ctx context.Context, ownerID string, in ActionRequest) (*Act
 		if in.Kind == "resolve" && (strings.TrimSpace(in.Basis) == "" || strings.TrimSpace(in.Actor) == "") {
 			return errors.New("record the actor and external verification basis")
 		}
-		rows, e := records(app, intake.TaskCandidatesCollection, "task={:t}", "source_row", dbx.Params{"t": t.Id})
+		rows, e := records(app, intake.TaskCandidatesCollection, "task={:t}", "source_row,recipient_index", dbx.Params{"t": t.Id})
 		if e != nil {
 			return e
 		}

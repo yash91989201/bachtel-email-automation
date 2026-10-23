@@ -22,16 +22,17 @@ pass does not establish that the current revision is clear.
 | Dependency vulnerabilities | `make vulncheck` | 2026-10-19: passed, no reachable vulnerabilities |
 | Packaged Pandoc and converter coverage | `make verify-converter` | 2026-10-19: passed; full test suite ran in the image with pinned pandoc 3.10 |
 | OpenSpec artifacts | `openspec validate --all --strict --json --no-interactive` | 2026-10-19: 8 specs and 1 change passed |
-| 1,000-row simulated workflow and every download | `go test ./internal/exports -run TestExportThousandRowWorkflow` | 2026-10-19: passed, 1,000 rows and every generated download verified |
+| 1,000-recipient simulated workflow and every download | `go test ./internal/exports -run TestExportThousandRowWorkflow` | 2026-10-19: passed, 1,000 recipients and every generated download verified |
 | Export failure, interrupted generation, deletion and regeneration | `go test ./internal/exports` | 2026-10-19: passed (preservation, failure, interruption, deletion, stopped-volume restore) |
 | Restore review and sender history | `go test ./internal/sending -run 'TestRestoreReview|TestAttemptStoresSender'` | 2026-10-19: passed |
 | Campaign deletion scope and active-work refusal | `go test ./internal/retention` | 2026-10-19: passed (scoped records and files, active-work refusal, idempotent retry) |
 | Export and deletion web routes | `go test ./internal/web -run 'TestExport|TestAttemptHTML|TestCampaignDelete'` | _record date/result_ |
 
-The 1,000-row check must show original rows and values preserved, duplicate
-rows excluded without candidate records, distinct retry and manual-resolution
-attempts, test attempts outside candidate totals, a report/package that map to
-attempts, and every route behind operator authorization. A failing export must
+The 1,000-recipient check must show original worksheets and values preserved, a
+recipient-results sheet with one row per entry, duplicate entries excluded
+without candidate records, distinct retry and manual-resolution attempts, test
+attempts outside candidate totals, a report/package that map to attempts, and
+every route behind operator authorization. A failing export must
 leave attempt history byte-identical.
 
 ## 2. Fresh image startup

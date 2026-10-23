@@ -105,7 +105,7 @@ func OpenWorkbook(data []byte, limits Limits) (*Workbook, error) {
 // rather than a broken workbook. The same problem is reported again when the
 // choice is made explicitly, which is where an operator can act on it.
 func selectionFailure(err error) bool {
-	for _, sentinel := range []error{ErrUnknownSheet, ErrInvalidHeaderRow, ErrTooManyRows, ErrWorksheetTooLarge} {
+	for _, sentinel := range []error{ErrUnknownSheet, ErrInvalidHeaderRow, ErrWorksheetTooLarge} {
 		if errors.Is(err, sentinel) {
 			return true
 		}
@@ -196,11 +196,10 @@ func (w *Workbook) Select(sheet string, headerRow int) error {
 			// stray value outside the table does not make a row part of it.
 			continue
 		}
-		if len(rows) >= MaxCandidateRows {
-			return ErrTooManyRows
-		}
 		// Values keep the original cell text verbatim: downstream validation
-		// normalizes them, and duplicate detection trims for its own key.
+		// splits the recipient cell, normalizes the values, and trims its own
+		// duplicate keys. Rows holding only unmapped values are skipped there,
+		// so they never consume the expanded-entry limit.
 		rows = append(rows, Row{Number: i + 1, Values: grid[i]})
 	}
 	w.Sheet, w.HeaderRow, w.Headers, w.Rows = sheet, headerRow, headers, rows
@@ -277,12 +276,31 @@ func (w *Workbook) Close() error {
 	return w.file.Close()
 }
 
+// ReportLabels are the metadata columns appended after the copied source
+// columns of the exclusion report.
+var ReportLabels = []string{"Source worksheet row", "Recipient position", "Recipient", "Reason"}
+
+// SourceColumnLabels returns one stable label per selected source column, in
+// column order: the trimmed header, or a numbered fallback for an unnamed
+// column. The labels are what every generated worksheet copies verbatim.
+func SourceColumnLabels(headers []string) []string {
+	labels := make([]string, 0, len(headers))
+	for i, label := range headers {
+		label = strings.TrimSpace(label)
+		if label == "" {
+			// An unnamed column still needs a stable, unambiguous name.
+			label = "Column " + strconv.Itoa(i+1)
+		}
+		labels = append(labels, label)
+	}
+	return labels
+}
+
 // ExclusionReport builds the XLSX exclusion report: one worksheet named
-// Excluded with a fixed two-column prefix (the original worksheet row and the
-// joined reasons) followed by one column per selected header, so the report
-// lines up with the workbook the operator uploaded. Rows with no recorded
-// values are padded, and a report without excluded rows still carries its
-// header.
+// Excluded with every original source column in its original order, followed by
+// collision-safe source-coordinate, individual-recipient and reason columns.
+// Multiple excluded entries of one source row therefore produce multiple report
+// rows. Values are written as text, so formula-like input stays inert.
 func ExclusionReport(headers []string, rows []ReportRow) (data []byte, err error) {
 	const sheet = "Excluded"
 	file := excelize.NewFile()
@@ -291,36 +309,32 @@ func ExclusionReport(headers []string, rows []ReportRow) (data []byte, err error
 		return nil, fmt.Errorf("build exclusion report: %w", err)
 	}
 
-	header := make([]string, 0, len(headers)+2)
-	header = append(header, "Row Number", "Reason")
-	for i, label := range headers {
-		label = strings.TrimSpace(label)
-		if label == "" {
-			// An unnamed column still needs a stable, unambiguous name.
-			label = "Column " + strconv.Itoa(i+1)
-		}
-		header = append(header, label)
-	}
-	if err := file.SetSheetRow(sheet, "A1", &header); err != nil {
-		return nil, fmt.Errorf("build exclusion report: %w", err)
+	source := SourceColumnLabels(headers)
+	metadata := ResolveResultLabels(ReportLabels, source)
+	header := make([]string, 0, len(source)+len(metadata))
+	header = append(header, source...)
+	header = append(header, metadata...)
+	if err := writeTextRow(file, sheet, 1, header); err != nil {
+		return nil, err
 	}
 
 	for i, row := range rows {
-		cells := make([]string, 0, len(headers)+2)
-		cells = append(cells, strconv.Itoa(row.Number), strings.Join(row.Reasons, "; "))
-		for col := range headers {
+		cells := make([]string, 0, len(header))
+		for col := range source {
 			value := ""
 			if col < len(row.Values) {
 				value = row.Values[col]
 			}
 			cells = append(cells, value)
 		}
-		cell, err := excelize.CoordinatesToCellName(1, i+2)
-		if err != nil {
-			return nil, fmt.Errorf("build exclusion report: %w", err)
-		}
-		if err := file.SetSheetRow(sheet, cell, &cells); err != nil {
-			return nil, fmt.Errorf("build exclusion report: %w", err)
+		cells = append(cells,
+			strconv.Itoa(row.Row),
+			strconv.Itoa(row.Position),
+			row.Recipient,
+			strings.Join(row.Reasons, "; "),
+		)
+		if err := writeTextRow(file, sheet, i+2, cells); err != nil {
+			return nil, err
 		}
 	}
 
@@ -329,4 +343,19 @@ func ExclusionReport(headers []string, rows []ReportRow) (data []byte, err error
 		return nil, fmt.Errorf("build exclusion report: %w", err)
 	}
 	return buffer.Bytes(), nil
+}
+
+// writeTextRow writes one row with the string cell API, so source or candidate
+// text that looks like a formula stays inert text in the generated file.
+func writeTextRow(file *excelize.File, sheet string, row int, values []string) error {
+	for index, value := range values {
+		cell, err := excelize.CoordinatesToCellName(index+1, row)
+		if err != nil {
+			return fmt.Errorf("build exclusion report: %w", err)
+		}
+		if err := file.SetCellStr(sheet, cell, value); err != nil {
+			return fmt.Errorf("build exclusion report: %w", err)
+		}
+	}
+	return nil
 }

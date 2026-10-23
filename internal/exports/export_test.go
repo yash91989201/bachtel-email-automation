@@ -480,8 +480,8 @@ func TestTaskResultsWorkbookPreservesSourceAndReportsOutcomes(t *testing.T) {
 	}()
 
 	sheets := book.GetSheetList()
-	if len(sheets) != 2 || sheets[0] != "Candidates" || sheets[1] != "Notes" {
-		t.Fatalf("original worksheets changed: %v", sheets)
+	if len(sheets) != 3 || sheets[0] != "Candidates" || sheets[1] != "Notes" || sheets[2] != "Recipient results" {
+		t.Fatalf("unexpected worksheets: %v", sheets)
 	}
 	note, err := book.GetCellValue("Notes", "A1")
 	if err != nil || note != "Original note" {
@@ -494,47 +494,55 @@ func TestTaskResultsWorkbookPreservesSourceAndReportsOutcomes(t *testing.T) {
 	if len(headers) < 8 {
 		t.Fatalf("expected every original row, got %d", len(headers))
 	}
-	if headers[0][0] != "Email" || headers[0][1] != "Name" {
-		t.Fatalf("original header columns changed: %v", headers[0])
-	}
-	if headers[0][2] != "Email Status" || headers[0][3] != "Submitted At" || headers[0][4] != "Email Error" {
-		t.Fatalf("result labels missing: %v", headers[0])
+	if got := strings.Join(headers[0], "|"); got != "Email|Name" {
+		t.Fatalf("original worksheet changed: %v", headers[0])
 	}
 	if headers[1][1] != "Alice" {
 		t.Fatalf("original row value changed: %v", headers[1])
 	}
-	status := func(row int) string {
-		value, err := book.GetCellValue("Candidates", fmt.Sprintf("C%d", row))
-		if err != nil {
-			t.Fatal(err)
+
+	results, err := book.GetRows("Recipient results")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(results[0], "|"); got != "Email|Name|Source worksheet|Source worksheet row|Recipient position|Recipient|Email Status|Submitted At|Email Error" {
+		t.Fatalf("recipient results header = %q", got)
+	}
+	if len(results) != 8 {
+		t.Fatalf("recipient results rows = %d, want header plus 7 entries", len(results))
+	}
+	// One entry per manifest occurrence, in source-row and position order:
+	// rows 2..6 carry the admitted entries, then the duplicate and invalid
+	// file-only entries keep their own coordinates.
+	wantRows := []string{"2", "3", "4", "5", "6", "7", "8"}
+	for i, want := range wantRows {
+		if results[i+1][3] != want {
+			t.Fatalf("entry %d source row = %q, want %q", i+1, results[i+1][3], want)
 		}
-		return value
+		if results[i+1][4] != "1" {
+			t.Fatalf("entry %d position = %q, want 1", i+1, results[i+1][4])
+		}
 	}
-	if status(3) != "Submitted" || status(4) != "Submitted" {
-		t.Fatalf("submitted rows wrong: %q %q", status(3), status(4))
+	status := func(row int) string { return results[row][6] }
+	// Alice appears twice in the upload, so both of her entries are file-only
+	// duplicates; bob, carol, dave and erin are the admitted recipients.
+	if status(1) != "Excluded - duplicate" || status(6) != "Excluded - duplicate" {
+		t.Fatalf("duplicate entries wrong: %q %q", status(1), status(6))
 	}
-	if status(5) != "Submitted (manual resolution)" {
-		t.Fatalf("manual resolution not distinct: %q", status(5))
+	if status(2) != "Submitted" || status(3) != "Submitted" || status(5) != "Submitted" {
+		t.Fatalf("submitted rows wrong: %q %q %q", status(2), status(3), status(5))
 	}
-	if status(6) != "Submitted" {
-		t.Fatalf("fourth eligible row wrong: %q", status(6))
+	if status(4) != "Submitted (manual resolution)" {
+		t.Fatalf("manual resolution not distinct: %q", status(4))
 	}
-	if status(2) != "Excluded - duplicate" || status(7) != "Excluded - duplicate" || status(8) != "Excluded - invalid address" {
-		t.Fatalf("excluded rows wrong: %q %q %q", status(2), status(7), status(8))
+	if status(7) != "Excluded - invalid address" {
+		t.Fatalf("invalid entry wrong: %q", status(7))
 	}
-	at, err := book.GetCellValue("Candidates", "D3")
-	if err != nil {
-		t.Fatal(err)
+	if !strings.HasSuffix(results[2][7], "+05:30") {
+		t.Fatalf("timestamp missing India offset: %q", results[2][7])
 	}
-	if !strings.HasSuffix(at, "+05:30") {
-		t.Fatalf("timestamp missing India offset: %q", at)
-	}
-	manual, err := book.GetCellValue("Candidates", "E5")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(manual, "provider sent folder") {
-		t.Fatalf("manual resolution basis missing: %q", manual)
+	if !strings.Contains(results[4][8], "provider sent folder") {
+		t.Fatalf("manual resolution basis missing: %q", results[4][8])
 	}
 }
 
@@ -564,9 +572,19 @@ func TestTaskResultsKeepSourceColumnsAndCollisionFreeLabels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := rows[0]
-	want := []string{"Email", "Name", "Email (2)", "Name (2)", "Status"}
-	if len(got) < len(want) {
+	if got := strings.Join(rows[0], "|"); got != "Email|Name" {
+		t.Fatalf("original worksheet changed: %v", rows[0])
+	}
+	if email, err := book.GetCellValue("Candidates", "A2"); err != nil || email != "collision@example.invalid" {
+		t.Fatalf("original column overwritten: %q %v", email, err)
+	}
+	results, err := book.GetRows("Recipient results")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := results[0]
+	want := []string{"Email", "Name", "Source worksheet", "Source worksheet row", "Recipient position", "Recipient", "Email (2)", "Name (2)", "Status"}
+	if len(got) != len(want) {
 		t.Fatalf("header row = %v, want %v", got, want)
 	}
 	for i := range want {
@@ -574,8 +592,218 @@ func TestTaskResultsKeepSourceColumnsAndCollisionFreeLabels(t *testing.T) {
 			t.Fatalf("header row = %v, want %v", got, want)
 		}
 	}
-	if email, err := book.GetCellValue("Candidates", "A2"); err != nil || email != "collision@example.invalid" {
-		t.Fatalf("original column overwritten: %q %v", email, err)
+	if len(results[1]) < 7 || results[1][6] != "Eligible - not sent" {
+		t.Fatalf("singleton result row = %v", results[1])
+	}
+	if reason, err := book.GetCellValue("Recipient results", "I2"); err != nil || reason != "" {
+		t.Fatalf("extra result label should stay empty: %q %v", reason, err)
+	}
+}
+
+// TestTaskResultsSheetSeparatesSiblingEntries covers one source row expanding
+// into two recipients with different outcomes, file-only invalid and duplicate
+// occurrences beside them, stable source/position ordering and inert copied
+// formula-like text.
+func TestTaskResultsSheetSeparatesSiblingEntries(t *testing.T) {
+	f := newExportFixture(t)
+	task := f.stage(t, [][]string{
+		{"alice@example.invalid, bob@example.invalid", "=SUM(A1:A2)"},
+		{"carol@example.invalid, not-an-address", "Carol"},
+		{"dup@example.invalid", "Duplicate One"},
+		{"dup@example.invalid", "Duplicate Two"},
+	})
+	f.approve(t, task)
+	if act := f.act(t, f.ownerID, task, "start", "sibling-start", 3); act.Claimed != 3 {
+		t.Fatalf("claimed %d, want 3", act.Claimed)
+	}
+	f.drain(t, map[string]sending.Outcome{
+		"bob@example.invalid": {State: sending.AttemptFailed, Reason: "mailbox unavailable"},
+	})
+	f.act(t, f.ownerID, task, "stop", "sibling-stop", 0)
+	if err := f.store.SettleTasks(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, task, false); err != nil {
+		t.Fatal(err)
+	}
+	data, _, err := f.service.DownloadTask(context.Background(), f.ownerID, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	book, err := excelize.OpenReader(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := book.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	results, err := book.GetRows("Recipient results")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 7 {
+		t.Fatalf("recipient results rows = %d, want header plus 6 entries: %v", len(results), results)
+	}
+	type entry struct{ row, position, recipient, status, reason string }
+	at := func(row []string, index int) string {
+		if index >= len(row) {
+			return ""
+		}
+		return row[index]
+	}
+	entries := make([]entry, 0, len(results)-1)
+	for _, row := range results[1:] {
+		entries = append(entries, entry{row: at(row, 3), position: at(row, 4), recipient: at(row, 5), status: at(row, 6), reason: at(row, 8)})
+	}
+	want := []entry{
+		{row: "2", position: "1", recipient: "alice@example.invalid", status: "Submitted"},
+		{row: "2", position: "2", recipient: "bob@example.invalid", status: "Failed - definite failure", reason: "mailbox unavailable"},
+		{row: "3", position: "1", recipient: "carol@example.invalid", status: "Submitted"},
+		{row: "3", position: "2", recipient: "not-an-address", status: "Excluded - invalid address", reason: "the recipient cell is empty or is not a single usable email address"},
+		{row: "4", position: "1", recipient: "dup@example.invalid", status: "Excluded - duplicate", reason: "duplicate recipient address in this upload; every row of the group is held"},
+		{row: "5", position: "1", recipient: "dup@example.invalid", status: "Excluded - duplicate", reason: "duplicate recipient address in this upload; every row of the group is held"},
+	}
+	if len(entries) != len(want) {
+		t.Fatalf("entries = %+v, want %+v", entries, want)
+	}
+	for i := range want {
+		if entries[i] != want[i] {
+			t.Fatalf("entry %d = %+v, want %+v", i, entries[i], want[i])
+		}
+	}
+	// The copied source value keeps the formula text inert beside the two
+	// siblings; the original worksheet still holds it as text too.
+	if results[1][1] != "=SUM(A1:A2)" || results[2][1] != "=SUM(A1:A2)" {
+		t.Fatalf("copied source value changed: %v / %v", results[1], results[2])
+	}
+	original, err := book.GetRows("Candidates")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(original[0], "|"); got != "Email|Name" || original[1][0] != "alice@example.invalid, bob@example.invalid" {
+		t.Fatalf("original worksheet changed: %v", original[:2])
+	}
+}
+
+// TestTaskResultsSheetNameCollision keeps an input worksheet named like the
+// added sheet, whatever its case, and derives a deterministic free name.
+func TestTaskResultsSheetNameCollision(t *testing.T) {
+	f := newExportFixture(t)
+	book := excelize.NewFile()
+	if err := book.SetSheetName("Sheet1", "recipient results"); err != nil {
+		t.Fatal(err)
+	}
+	if err := book.SetSheetRow("recipient results", "A1", &[]string{"Email", "Name"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := book.SetSheetRow("recipient results", "A2", &[]string{"collision@example.invalid", "Collision"}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := book.WriteToBuffer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := book.Close(); err != nil {
+		t.Fatal(err)
+	}
+	task, err := f.intake.Stage(context.Background(), f.ownerID, f.campaignID, "collision.xlsx", data.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.intake.Validate(context.Background(), f.ownerID, task.ID, "recipient results", 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.app.DB().NewQuery("UPDATE send_tasks SET status='completed' WHERE id={:id}").Bind(map[string]any{"id": task.ID}).Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, task.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	results, _, err := f.service.DownloadTask(context.Background(), f.ownerID, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated, err := excelize.OpenReader(bytes.NewReader(results))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := generated.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	sheets := generated.GetSheetList()
+	if len(sheets) != 2 || sheets[0] != "recipient results" || sheets[1] != "Recipient results (2)" {
+		t.Fatalf("worksheets = %v, want the input sheet preserved and a free name", sheets)
+	}
+	if value, err := generated.GetCellValue("recipient results", "A2"); err != nil || value != "collision@example.invalid" {
+		t.Fatalf("input worksheet changed: %q %v", value, err)
+	}
+}
+
+// TestTaskResultsRegeneratesLegacyManifest verifies a saved version 1 manifest
+// reads as singleton occurrences and still produces accurate recipient results
+// without rewriting the stored artifacts or attempts.
+func TestTaskResultsRegeneratesLegacyManifest(t *testing.T) {
+	f := newExportFixture(t)
+	task := f.stage(t, [][]string{{"legacy@example.invalid", "Legacy"}})
+	before := f.attemptsFingerprint(t)
+
+	legacy := []byte(`{"version":1,"sheet":"Candidates","header_row":1,"headers":["Email","Name"],"rows":[{"row":2,"email_key":"legacy@example.invalid","state":"eligible"}],"duplicate_groups":[]}`)
+	record, err := f.app.FindRecordById(intake.TasksCollection, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := filesystem.NewFileFromBytes(legacy, "validation-manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Set("manifest", file)
+	if err := f.app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.app.DB().NewQuery("UPDATE send_tasks SET status='completed' WHERE id={:id}").Bind(map[string]any{"id": task}).Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.service.GenerateTask(context.Background(), f.ownerID, task, false); err != nil {
+		t.Fatal(err)
+	}
+	data, _, err := f.service.DownloadTask(context.Background(), f.ownerID, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	book, err := excelize.OpenReader(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := book.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	results, err := book.GetRows("Recipient results")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("recipient results rows = %d, want header plus one entry", len(results))
+	}
+	row := results[1]
+	if row[3] != "2" || row[4] != "1" || row[5] != "legacy@example.invalid" || row[6] != "Eligible - not sent" {
+		t.Fatalf("legacy entry = %v", row)
+	}
+	if after := f.attemptsFingerprint(t); after != before {
+		t.Fatal("regenerating a legacy manifest changed attempts")
+	}
+	stored, err := f.app.FindRecordById(intake.TasksCollection, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifestData := f.readStoredFile(t, stored, stored.GetString("manifest"))
+	if !bytes.Equal(manifestData, legacy) {
+		t.Fatal("regeneration rewrote the stored legacy manifest")
 	}
 }
 

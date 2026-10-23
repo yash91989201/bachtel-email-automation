@@ -263,7 +263,7 @@ func TestFormulaCellUsesCachedValueWithoutEvaluation(t *testing.T) {
 	}
 }
 
-func TestCandidateRowLimit(t *testing.T) {
+func TestCandidateRowParsing(t *testing.T) {
 	t.Parallel()
 	addressRows := func(count int) [][]string {
 		rows := make([][]string, 0, count+1)
@@ -274,29 +274,21 @@ func TestCandidateRowLimit(t *testing.T) {
 		return rows
 	}
 
-	atLimit := makeXLSX(t, func(f *excelize.File) {
-		writeRows(t, f, "Sheet1", 1, addressRows(intake.MaxCandidateRows))
-	})
-	book := mustOpen(t, atLimit, intake.DefaultLimits())
-	if len(book.Rows) != intake.MaxCandidateRows {
-		t.Fatalf("rows = %d, want exactly %d", len(book.Rows), intake.MaxCandidateRows)
-	}
-	if book.Rows[0].Number != 2 || book.Rows[len(book.Rows)-1].Number != intake.MaxCandidateRows+1 {
-		t.Fatalf("row numbers span %d..%d, want 2..%d",
-			book.Rows[0].Number, book.Rows[len(book.Rows)-1].Number, intake.MaxCandidateRows+1)
-	}
-
-	overLimit := makeXLSX(t, func(f *excelize.File) {
-		writeRows(t, f, "Sheet1", 1, addressRows(intake.MaxCandidateRows+1))
-	})
-	// The upload itself is usable: staging inventories the workbook, and the
-	// row bound applies to the selection the operator confirms.
-	opened := openInventory(t, overLimit)
-	if len(opened.Rows) != 0 {
-		t.Fatalf("default rows = %d, want an unusable default selection", len(opened.Rows))
-	}
-	if err := opened.Select("Sheet1", intake.HeaderRowDefault); !errors.Is(err, intake.ErrTooManyRows) {
-		t.Fatalf("Select error = %v, want ErrTooManyRows", err)
+	// The expanded-entry bound is enforced after splitting, not by the
+	// worksheet reader: both sizes parse here so rows holding only unmapped
+	// values can never trip a physical row gate.
+	for _, count := range []int{intake.MaxRecipientEntries, intake.MaxRecipientEntries + 1} {
+		data := makeXLSX(t, func(f *excelize.File) {
+			writeRows(t, f, "Sheet1", 1, addressRows(count))
+		})
+		book := mustOpen(t, data, intake.DefaultLimits())
+		if len(book.Rows) != count {
+			t.Fatalf("rows = %d, want %d", len(book.Rows), count)
+		}
+		if book.Rows[0].Number != 2 || book.Rows[len(book.Rows)-1].Number != count+1 {
+			t.Fatalf("row numbers span %d..%d, want 2..%d",
+				book.Rows[0].Number, book.Rows[len(book.Rows)-1].Number, count+1)
+		}
 	}
 }
 
@@ -451,8 +443,8 @@ func TestExclusionReportLayout(t *testing.T) {
 	t.Parallel()
 	headers := []string{"Email", "", "City"}
 	reportRows := []intake.ReportRow{
-		{Number: 12, Reasons: []string{intake.ReasonDuplicate, intake.ReasonInvalidAddress}, Values: []string{"a@example.com", "x", "Paris"}},
-		{Number: 15, Reasons: []string{intake.ReasonInvalidAddress}, Values: []string{"b@example.com"}},
+		{Row: 12, Position: 1, Recipient: "a@example.com", Reasons: []string{intake.ReasonDuplicate, intake.ReasonInvalidAddress}, Values: []string{"a@example.com", "x", "Paris"}},
+		{Row: 15, Position: 2, Recipient: "b@example.com", Reasons: []string{intake.ReasonInvalidAddress}, Values: []string{"a@example.com, b@example.com"}},
 	}
 	data, err := intake.ExclusionReport(headers, reportRows)
 	if err != nil {
@@ -476,9 +468,9 @@ func TestExclusionReportLayout(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := [][]string{
-		{"Row Number", "Reason", "Email", "Column 2", "City"},
-		{"12", "duplicate; invalid_address", "a@example.com", "x", "Paris"},
-		{"15", "invalid_address", "b@example.com", "", ""},
+		{"Email", "Column 2", "City", "Source worksheet row", "Recipient position", "Recipient", "Reason"},
+		{"a@example.com", "x", "Paris", "12", "1", "a@example.com", "duplicate; invalid_address"},
+		{"a@example.com, b@example.com", "", "", "15", "2", "b@example.com", "invalid_address"},
 	}
 	if len(grid) != len(want) {
 		t.Fatalf("report rows = %d (%v), want %d", len(grid), grid, len(want))
@@ -507,7 +499,8 @@ func TestExclusionReportLayout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(emptyGrid) != 1 || !rowsEqual(emptyGrid[0], []string{"Row Number", "Reason"}) {
+	wantEmpty := []string{"Source worksheet row", "Recipient position", "Recipient", "Reason"}
+	if len(emptyGrid) != 1 || !rowsEqual(emptyGrid[0], wantEmpty) {
 		t.Fatalf("empty report = %v, want the header row only", emptyGrid)
 	}
 }

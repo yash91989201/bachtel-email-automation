@@ -266,6 +266,8 @@ func (s *server) handleTaskPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.SourceRow = preview.SourceRow
+	data.RecipientPosition = preview.RecipientIndex
+	data.OriginalRecipient = preview.OriginalRecipient
 	data.ContentHash = preview.ContentHash
 	data.Approved = preview.Approved
 	data.Recipient = preview.Rendered.Recipient
@@ -499,6 +501,7 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 	}
 	summary := presentation.Summarize(task.Counts)
 	data.Summary = views.TaskSummaryView{
+		SourceRows:           summary.SourceRows,
 		Total:                summary.Total,
 		Eligible:             summary.Eligible,
 		ExcludedAtValidation: summary.ExcludedAtValidation,
@@ -598,9 +601,7 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 		if err != nil {
 			return data, err
 		}
-		emailByRow := make(map[int]string, len(manifest.Rows))
 		for _, row := range manifest.Rows {
-			emailByRow[row.Row] = row.EmailKey
 			if !row.Excluded() {
 				continue
 			}
@@ -610,7 +611,8 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 			}
 			data.HeldRows = append(data.HeldRows, views.TaskHeldRow{
 				Row:       row.Row,
-				Recipient: row.EmailKey,
+				Position:  row.Position,
+				Recipient: row.Recipient,
 				Reason:    strings.Join(reasons, "; "),
 			})
 		}
@@ -619,7 +621,8 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 				row := views.TaskAdmittedRow{
 					ID:        member.ID,
 					Row:       member.SourceRow,
-					Recipient: emailByRow[member.SourceRow],
+					Position:  member.RecipientIndex,
+					Recipient: member.Recipient,
 					State:     member.State,
 					Reason:    member.Reason,
 				}
@@ -716,12 +719,14 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 // taskPreviewData maps one rendered preview to its partial view model.
 func taskPreviewData(preview *intake.Preview) views.TaskPreviewData {
 	data := views.TaskPreviewData{
-		SourceRow:   preview.SourceRow,
-		ContentHash: preview.ContentHash,
-		Approved:    preview.Approved,
-		Recipient:   preview.Rendered.Recipient,
-		Subject:     preview.Rendered.Subject,
-		Body:        preview.Rendered.Body,
+		SourceRow:         preview.SourceRow,
+		RecipientPosition: preview.RecipientIndex,
+		OriginalRecipient: preview.OriginalRecipient,
+		ContentHash:       preview.ContentHash,
+		Approved:          preview.Approved,
+		Recipient:         preview.Rendered.Recipient,
+		Subject:           preview.Rendered.Subject,
+		Body:              preview.Rendered.Body,
 	}
 	for _, value := range preview.Rendered.Values {
 		data.Values = append(data.Values, views.PreviewValue{

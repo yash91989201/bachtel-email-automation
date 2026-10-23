@@ -147,9 +147,12 @@ type Step struct {
 // categories sum to Total, plus Excluded at validation taken as Total minus
 // Eligible.
 type Summary struct {
-	Total    int
-	Eligible int
-	Excluded int
+	Total int
+	// SourceRows is the number of distinct worksheet rows that contributed
+	// entries. It is not part of the category sum.
+	SourceRows int
+	Eligible   int
+	Excluded   int
 	// ExcludedAtValidation equals Total-Eligible: every non-eligible row,
 	// not only the file-only duplicate/invalid rows.
 	ExcludedAtValidation int
@@ -460,8 +463,14 @@ func Lifecycle(f Facts) []Step {
 // includes every non-eligible category rather than only invalid/duplicate
 // rows.
 func Summarize(counts intake.Counts) Summary {
+	sourceRows := counts.SourceRows
+	if sourceRows == 0 && counts.Total > 0 {
+		// A pre-expansion snapshot had one entry per source row.
+		sourceRows = counts.Total
+	}
 	return Summary{
 		Total:                counts.Total,
+		SourceRows:           sourceRows,
 		Eligible:             counts.Eligible,
 		Excluded:             counts.Total - counts.Eligible,
 		ExcludedAtValidation: counts.Total - counts.Eligible,
@@ -553,20 +562,27 @@ func ShortRefs(ids []string) map[string]string {
 type RecipientSummary struct {
 	Validated     bool
 	Total         int
+	SourceRows    int
 	Eligible      int
 	Submitted     int
 	NeedAttention int
 }
 
 // SummarizeRecipients builds the list-row recipient summary. NeedAttention
-// counts distinct affected rows from the exclusive validation categories, so
-// overlapping row reasons are never added together.
+// counts distinct affected recipient entries from the exclusive validation
+// categories, so overlapping entry reasons are never added together.
 func SummarizeRecipients(counts intake.Counts, submitted, uncertain, retryable int) RecipientSummary {
+	sourceRows := counts.SourceRows
+	if sourceRows == 0 && counts.Total > 0 {
+		// A pre-expansion snapshot had one entry per source row.
+		sourceRows = counts.Total
+	}
 	return RecipientSummary{
-		Validated: counts.Total > 0,
-		Total:     counts.Total,
-		Eligible:  counts.Eligible,
-		Submitted: submitted,
+		Validated:  counts.Total > 0,
+		Total:      counts.Total,
+		SourceRows: sourceRows,
+		Eligible:   counts.Eligible,
+		Submitted:  submitted,
 		NeedAttention: counts.Ineligible + counts.Duplicate + counts.Invalid +
 			counts.AlreadySubmitted + counts.AlreadyScheduled + counts.ReviewRequired +
 			uncertain + retryable,
@@ -589,7 +605,8 @@ func (s RecipientSummary) Details() []string {
 		return nil
 	}
 	return []string{
-		fmt.Sprintf("Input rows: %d", s.Total),
+		fmt.Sprintf("Source rows: %d", s.SourceRows),
+		fmt.Sprintf("Recipient entries: %d", s.Total),
 		fmt.Sprintf("Submitted: %d", s.Submitted),
 		fmt.Sprintf("Need attention: %d", s.NeedAttention),
 	}

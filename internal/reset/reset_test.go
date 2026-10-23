@@ -91,7 +91,8 @@ func ownedWorkspace(t *testing.T, app core.App, ownerID, name string) (campaignI
 		"campaign": target.Id, "email_key": name + "@example.test", "submission_state": intake.SubmissionNone,
 	})
 	member := create(t, app, intake.TaskCandidatesCollection, map[string]any{
-		"task": task.Id, "candidate": candidate.Id, "source_row": 2, "state": intake.RowEligible,
+		"task": task.Id, "candidate": candidate.Id, "source_row": 2, "recipient_index": 1,
+		"original_recipient": name + "@example.test", "state": intake.RowEligible,
 	})
 	connection := create(t, app, mailbox.ConnectionsCollection, map[string]any{
 		"owner": ownerID, "provider": string(mailbox.ProviderTitan), "sender": name + "@example.test",

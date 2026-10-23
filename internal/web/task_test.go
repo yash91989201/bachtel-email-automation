@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/xuri/excelize/v2"
 
@@ -244,7 +245,7 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 		"10.0 MiB",
 		"64.0 MiB",
 		"16.0 MiB",
-		"1,000 data rows",
+		"1,000 recipient entries",
 		"case sensitive",
 		"cached value",
 		"Password-protected",
@@ -303,7 +304,7 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 			t.Errorf("ready page missing %q: %.600s", want, ready)
 		}
 	}
-	if !strings.Contains(ready, "5 input rows · 1 eligible at validation · 4 excluded at validation") {
+	if !strings.Contains(ready, "5 source rows · 5 recipient entries · 1 eligible at validation · 4 excluded at validation") {
 		t.Errorf("validation summary missing from ready page: %.600s", ready)
 	}
 	assertCategory(t, ready, "Eligible", 1)
@@ -435,7 +436,7 @@ func TestTaskUploadRejection(t *testing.T) {
 
 	t.Run("row support bound", func(t *testing.T) {
 		rows := [][]string{{"Email", "Applicant Full Name"}}
-		for i := 0; i <= intake.MaxCandidateRows; i++ {
+		for i := 0; i <= intake.MaxRecipientEntries; i++ {
 			rows = append(rows, []string{"person" + strconv.Itoa(i) + "@example.com", "Person " + strconv.Itoa(i)})
 		}
 		rec := uploadWorkbook(t, handler, cookie, id, taskWorkbook(t, "Sheet1", rows))
@@ -448,7 +449,7 @@ func TestTaskUploadRejection(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("row bound: status=%d body=%.400s", rec.Code, rec.Body.String())
 		}
-		if !strings.Contains(rec.Body.String(), "more than 1000 rows with data") {
+		if !strings.Contains(rec.Body.String(), "more than 1000 recipient entries") {
 			t.Fatalf("row bound message missing: %.600s", rec.Body.String())
 		}
 	})
@@ -578,12 +579,17 @@ func TestExclusionReportDownload(t *testing.T) {
 	if len(grid) != 5 {
 		t.Fatalf("report rows = %d, want header + 4 held rows", len(grid))
 	}
+	// Source columns come first; the appended metadata holds the original
+	// worksheet row and the individual recipient.
 	want := map[string]bool{"2": true, "3": true, "4": true, "5": true}
 	for _, row := range grid[1:] {
-		if !want[row[0]] {
-			t.Errorf("report holds unexpected worksheet row %q", row[0])
+		if len(row) < 6 {
+			t.Fatalf("report entry lacks metadata columns: %v", row)
 		}
-		delete(want, row[0])
+		if !want[row[3]] {
+			t.Errorf("report holds unexpected worksheet row %q", row[3])
+		}
+		delete(want, row[3])
 	}
 	if len(want) != 0 {
 		t.Errorf("report missing worksheet rows %v", want)
@@ -761,7 +767,7 @@ func TestStagedWorkbookValidatesAfterTemplateCreation(t *testing.T) {
 		t.Fatalf("select after template: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
 	ready := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
-	if !strings.Contains(ready, "5 input rows · 1 eligible at validation · 4 excluded at validation") {
+	if !strings.Contains(ready, "5 source rows · 5 recipient entries · 1 eligible at validation · 4 excluded at validation") {
 		t.Fatalf("staged workbook did not validate after template creation: %.600s", ready)
 	}
 }
@@ -797,5 +803,111 @@ func TestTaskPreviewCreatesNoAttempt(t *testing.T) {
 	}
 	if taskRecord.GetString("status") != intake.TaskReady {
 		t.Fatalf("preview changed task status to %q", taskRecord.GetString("status"))
+	}
+}
+
+// TestExpandedRecipientReview covers one source row with two eligible entries
+// and one invalid entry, same-row duplicates, independent preview selection and
+// the protected report download.
+func TestExpandedRecipientReview(t *testing.T) {
+	app, handler := newTaskServer(t)
+	cookie := login(t, handler)
+	id := createCampaign(t, handler, cookie, "Expanded review")
+	if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
+		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
+	}
+	rec := uploadWorkbook(t, handler, cookie, id, taskWorkbook(t, "Sheet1", [][]string{
+		{"Email", "Applicant Full Name", "Location"},
+		{"a@example.com, b@example.com, invalid", "Shared Person", "Remote"},
+		{"c@example.com, c@example.com", "Duplicate Pair", "Paris"},
+	}))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("upload: status=%d body=%.400s", rec.Code, rec.Body.String())
+	}
+	taskID := taskIDFromRedirect(t, rec, id)
+	rec = do(t, handler, http.MethodPost, "/campaigns/"+id+"/tasks/"+taskID+"/select",
+		url.Values{"sheet": {"Sheet1"}, "header_row": {"1"}}, withCookie(cookie))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("select: status=%d body=%.400s", rec.Code, rec.Body.String())
+	}
+
+	page := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
+	if !strings.Contains(page, "2 source rows · 5 recipient entries · 2 eligible at validation · 3 excluded at validation") {
+		t.Fatalf("summary does not distinguish source rows from entries: %.1200s", page)
+	}
+	// Each eligible sibling is independently selectable with its own address
+	// and entry position.
+	for _, want := range []string{"recipient 1 · a@example.com", "recipient 2 · b@example.com"} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("preview selector missing %q", want)
+		}
+	}
+	// The invalid entry stays visible with its position and does not disable
+	// the eligible siblings; both same-row duplicates are reported separately.
+	for _, want := range []string{"invalid", "<td>3</td>", "c@example.com", "Duplicate"} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("task page missing %q: %.1200s", want, page)
+		}
+	}
+
+	members, err := app.FindRecordsByFilter(intake.TaskCandidatesCollection, "task={:t}", "source_row,recipient_index", 0, 0, dbx.Params{"t": taskID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 2 {
+		t.Fatalf("membership rows = %d, want the two eligible siblings", len(members))
+	}
+	for _, want := range []string{"a@example.com", "b@example.com"} {
+		var memberID string
+		for _, member := range members {
+			candidate, err := app.FindRecordById(intake.CandidatesCollection, member.GetString("candidate"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if candidate.GetString("email_key") == want {
+				memberID = member.Id
+			}
+		}
+		if memberID == "" {
+			t.Fatalf("no membership for %s", want)
+		}
+		rec := do(t, handler, http.MethodPost, "/campaigns/"+id+"/tasks/"+taskID+"/preview",
+			url.Values{"row": {memberID}}, withCookie(cookie))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("preview %s: status=%d", want, rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "<p class=\"font-semibold\">"+want+"</p>") {
+			t.Fatalf("preview %s did not show its own To address: %.800s", want, body)
+		}
+		if !strings.Contains(body, "a@example.com, b@example.com, invalid") {
+			t.Fatalf("preview %s did not show the original cell: %.800s", want, body)
+		}
+	}
+
+	// The exclusion report stays behind the operator session.
+	reportPath := "/campaigns/" + id + "/tasks/" + taskID + "/excluded.xlsx"
+	if rec := do(t, handler, http.MethodGet, reportPath, nil, func(*http.Request) {}); rec.Code == http.StatusOK {
+		t.Fatal("anonymous report download succeeded")
+	}
+	rec = do(t, handler, http.MethodGet, reportPath, nil, withCookie(cookie))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("operator report download: status=%d", rec.Code)
+	}
+	report, err := excelize.OpenReader(bytes.NewReader(rec.Body.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := report.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	grid, err := report.GetRows("Excluded")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(grid) != 4 {
+		t.Fatalf("report rows = %d, want header plus three excluded entries: %v", len(grid), grid)
 	}
 }

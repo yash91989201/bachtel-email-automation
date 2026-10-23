@@ -30,18 +30,24 @@ that were never requested. A recovered report/package pair uses one new
 consistent snapshot; a completed sibling stays unchanged. Late result markers
 committed while the dispatcher drains are discovered at the next startup.
 
-The workbook is the retained original upload with result columns appended to
-the selected worksheet only. Every original worksheet, row, cell value and
-column order is preserved. The appended labels are the task-snapshotted result
-labels already resolved against the source headers (for example
-`Email Status (2)`), so an existing column is never overwritten. New values use
-the string cell API, so candidate text that looks like a formula stays text.
+The workbook is the retained original upload plus one added `Recipient results`
+worksheet (or the first free `Recipient results (N)` when an input worksheet
+already uses that name, compared case-insensitively). Every original worksheet,
+row, cell value, formula and column order is preserved and untouched. The added
+sheet copies the selected source columns and appends source worksheet, original
+row, position in the recipient cell, individual recipient and the
+task-snapshotted result labels, one row per expanded entry in source-row and
+position order. Two recipients from one workbook cell therefore get two rows
+with their own outcome; neither overwrites the other. Result and metadata labels
+are resolved against both the source headers and each other, so a column is
+never duplicated or overwritten. New values use the string cell API, so
+candidate text that looks like a formula stays text.
 
-With the default labels the appended columns are:
+With the default labels the columns after `Recipient` are:
 
 | Column | Content |
 | --- | --- |
-| First result label | Recorded row outcome |
+| First result label | Recorded entry outcome |
 | Second result label | Timestamp in `Asia/Kolkata` (`+05:30`) when one is recorded |
 | Third and later labels | Error/exclusion reason; extra configured labels stay empty |
 
@@ -50,9 +56,12 @@ The first column can read `Submitted`, `Submitted (manual resolution)`,
 `Retry scheduled`, `Scheduled`, `In flight`, `Queued`, `Eligible - not sent`,
 `Already submitted in this campaign`, `Already scheduled in another task`,
 `Excluded - duplicate`, `Excluded - invalid address` or `Ineligible`. A manual
-resolution shows the operator's recorded basis. Excluded rows come from the
-private manifest, so duplicate and invalid rows appear without candidate
-records being created for them.
+resolution shows the operator's recorded basis. Excluded entries come from the
+private manifest, so duplicate and invalid entries appear with their source row,
+position and raw recipient token without candidate records being created for
+them. A saved version 1 manifest is read as singleton entries at position 1
+without re-splitting its stored cells, so regenerating an older task keeps the
+same outcomes.
 
 ## Campaign report
 

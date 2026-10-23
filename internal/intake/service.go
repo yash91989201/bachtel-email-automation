@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -100,7 +101,11 @@ type Preview struct {
 	ContentHash     string
 	Approved        bool
 	SourceRow       int
-	Rendered        campaign.Rendered
+	// RecipientIndex is the entry's position inside its source recipient cell.
+	RecipientIndex int
+	// OriginalRecipient is the full original cell, shown for comparison only.
+	OriginalRecipient string
+	Rendered          campaign.Rendered
 }
 
 // Stage stores one uploaded workbook as a staging task. The workbook is opened
@@ -243,7 +248,7 @@ func (s *Service) Rows(ctx context.Context, ownerID, taskID string) ([]RowSnapsh
 	records, err := s.app.FindRecordsByFilter(
 		TaskCandidatesCollection,
 		"task = {:task}",
-		"source_row",
+		"source_row,recipient_index",
 		0,
 		0,
 		dbx.Params{"task": taskID},
@@ -254,11 +259,13 @@ func (s *Service) Rows(ctx context.Context, ownerID, taskID string) ([]RowSnapsh
 	rows := make([]RowSnapshot, 0, len(records))
 	for _, record := range records {
 		row := RowSnapshot{
-			ID:          record.Id,
-			CandidateID: record.GetString("candidate"),
-			SourceRow:   record.GetInt("source_row"),
-			State:       record.GetString("state"),
-			Reason:      record.GetString("reason"),
+			ID:                record.Id,
+			CandidateID:       record.GetString("candidate"),
+			SourceRow:         record.GetInt("source_row"),
+			RecipientIndex:    storedPosition(record.GetInt("recipient_index")),
+			OriginalRecipient: record.GetString("original_recipient"),
+			State:             record.GetString("state"),
+			Reason:            record.GetString("reason"),
 		}
 		if err := record.UnmarshalJSONField("raw", &row.Raw); err != nil {
 			row.Raw = nil
@@ -339,12 +346,23 @@ func (s *Service) Preview(ctx context.Context, ownerID, taskID, rowID string) (*
 		return nil, err
 	}
 	return &Preview{
-		ConfigurationID: configuration.ID,
-		ContentHash:     configuration.ContentHash,
-		Approved:        configuration.ApprovalCurrent(),
-		SourceRow:       record.GetInt("source_row"),
-		Rendered:        rendered,
+		ConfigurationID:   configuration.ID,
+		ContentHash:       configuration.ContentHash,
+		Approved:          configuration.ApprovalCurrent(),
+		SourceRow:         record.GetInt("source_row"),
+		RecipientIndex:    storedPosition(record.GetInt("recipient_index")),
+		OriginalRecipient: record.GetString("original_recipient"),
+		Rendered:          rendered,
 	}, nil
+}
+
+// storedPosition normalizes a membership saved before positions existed. Such a
+// row is a single occurrence at position 1.
+func storedPosition(position int) int {
+	if position < 1 {
+		return 1
+	}
+	return position
 }
 
 // Validate turns a staging task into a ready one by validating the selected
@@ -415,7 +433,7 @@ func (s *Service) Preflight(ctx context.Context, ownerID, taskID string) (*Prefl
 	}
 	result.ConfigurationID = configuration.ID
 	result.Approved = configuration.ApprovalCurrent()
-	result.ResultLabels = ResolveResultLabels(target.ResultLabels, task.Headers)
+	result.ResultLabels = TaskResultLabels(target.ResultLabels, task.Headers)
 	result.Stale = configuration.ContentHash != task.ContentHash
 	if result.Stale {
 		result.Reasons = append(result.Reasons, "the campaign content changed after this task was validated; revalidate this task before starting")
@@ -579,12 +597,16 @@ func (s *Service) validate(ctx context.Context, ownerID string, task *Task, shee
 		return s.fail(task, err)
 	}
 
+	admissions, err := planRows(workbook, configuration.Mappings)
+	if err != nil {
+		return s.fail(task, &ValidationError{Message: err.Error(), Err: err})
+	}
 	return s.publish(ctx, publishInput{
 		task:          task,
 		target:        target,
 		configuration: configuration,
 		workbook:      workbook,
-		admissions:    planRows(workbook, configuration.Mappings),
+		admissions:    admissions,
 	})
 }
 
@@ -592,14 +614,18 @@ func (s *Service) validate(ctx context.Context, ownerID string, task *Task, shee
 // it never becomes a candidate. It is not a stored membership state.
 const rowInvalid = "invalid"
 
-// admission is one candidate row's planned outcome before candidate storage.
+// admission is one expanded recipient entry's planned outcome before candidate
+// storage. Siblings from one source row share everything except the recipient
+// token, its position and their own copied value map.
 type admission struct {
-	sourceRow int
-	recipient string
-	emailKey  string
-	// state is "" for a duplicate row, rowInvalid for a row without a usable
-	// address, and otherwise the state to apply once the candidate identity is
-	// known: RowEligible or RowIneligible.
+	sourceRow         int
+	recipientIndex    int
+	recipient         string
+	originalRecipient string
+	emailKey          string
+	// state is "" for a duplicate entry, rowInvalid for an entry without a
+	// usable address, and otherwise the state to apply once the candidate
+	// identity is known: RowEligible or RowIneligible.
 	state      string
 	group      int
 	raw        map[string]string
@@ -607,19 +633,26 @@ type admission struct {
 	missing    []string
 }
 
-// planRows classifies every row of the complete selected input before any
-// candidate is touched. Duplicate detection deliberately runs over raw
-// trimmed/lowercase recipient keys across the whole input, so a row that is
-// both duplicated and otherwise invalid is still held as a duplicate instead of
-// letting its group member through.
-func planRows(workbook *Workbook, mappings []campaign.Mapping) []admission {
+// planRows expands the selected recipient mapping of every data row into
+// individual entries and classifies them before any candidate is touched.
+//
+// Comma splitting is the only expansion. Every token keeps its 1-based position
+// and the full original cell stays available for comparison; the other mapped
+// values are copied unchanged, and each entry gets its own map so one sibling's
+// normalization can never leak into another. Duplicate detection deliberately
+// runs over raw trimmed/lowercase recipient keys across the whole expanded
+// input, so an entry that is both duplicated and otherwise invalid is still held
+// as a duplicate instead of letting its group member through.
+func planRows(workbook *Workbook, mappings []campaign.Mapping) ([]admission, error) {
 	recipientOffset := -1
+	recipientVariable := ""
 	offsets := make(map[string]int, len(mappings))
 	for _, mapping := range mappings {
 		offset, _ := columnOffset(workbook.Headers, mapping.Header)
 		offsets[mapping.Variable] = offset
 		if mapping.Recipient {
 			recipientOffset = offset
+			recipientVariable = mapping.Variable
 		}
 	}
 
@@ -627,9 +660,8 @@ func planRows(workbook *Workbook, mappings []campaign.Mapping) []admission {
 	duplicates := map[string][]int{}
 	var order []string
 	for _, row := range workbook.Rows {
-		recipient := row.Column(recipientOffset)
 		raw := make(map[string]string, len(mappings))
-		carriesData := strings.TrimSpace(recipient) != ""
+		carriesData := false
 		for _, mapping := range mappings {
 			value := row.Column(offsets[mapping.Variable])
 			raw[mapping.Variable] = value
@@ -642,20 +674,34 @@ func planRows(workbook *Workbook, mappings []campaign.Mapping) []admission {
 			// table: it carries no candidate data, so no feedback is due.
 			continue
 		}
-		entry := admission{
-			sourceRow: row.Number,
-			recipient: recipient,
-			emailKey:  RecipientKey(recipient),
-			raw:       raw,
+		// The recipient cell is split only here. A wholly empty cell yields one
+		// empty token, which stays visible as one invalid entry.
+		cell := row.Column(recipientOffset)
+		for index, token := range strings.Split(cell, ",") {
+			if len(planned) >= MaxRecipientEntries {
+				return nil, ErrTooManyRows
+			}
+			values := maps.Clone(raw)
+			if recipientVariable != "" {
+				values[recipientVariable] = token
+			}
+			entry := admission{
+				sourceRow:         row.Number,
+				recipientIndex:    index + 1,
+				recipient:         token,
+				originalRecipient: cell,
+				emailKey:          RecipientKey(token),
+				raw:               values,
+			}
+			planned = append(planned, entry)
+			if entry.emailKey == "" {
+				continue
+			}
+			if _, seen := duplicates[entry.emailKey]; !seen {
+				order = append(order, entry.emailKey)
+			}
+			duplicates[entry.emailKey] = append(duplicates[entry.emailKey], len(planned)-1)
 		}
-		planned = append(planned, entry)
-		if entry.emailKey == "" {
-			continue
-		}
-		if _, seen := duplicates[entry.emailKey]; !seen {
-			order = append(order, entry.emailKey)
-		}
-		duplicates[entry.emailKey] = append(duplicates[entry.emailKey], len(planned)-1)
 	}
 
 	// Groups are numbered in order of first appearance so the manifest and the
@@ -678,7 +724,7 @@ func planRows(workbook *Workbook, mappings []campaign.Mapping) []admission {
 	for i := range planned {
 		entry := &planned[i]
 		if entry.group > 0 {
-			continue // a duplicate row is excluded whatever else is wrong
+			continue // a duplicate entry is excluded whatever else is wrong
 		}
 		if _, err := campaign.NormalizeRecipient(entry.recipient); err != nil {
 			entry.state = rowInvalid
@@ -690,7 +736,7 @@ func planRows(workbook *Workbook, mappings []campaign.Mapping) []admission {
 			entry.state = RowIneligible
 		}
 	}
-	return planned
+	return planned, nil
 }
 
 // normalizeValues prepares one row's replacement values exactly the way the
@@ -740,32 +786,37 @@ func (s *Service) publish(ctx context.Context, input publishInput) error {
 		HeaderRow: input.workbook.HeaderRow,
 		Headers:   headers,
 	}
-	reasons := map[int]string{}
+	reasons := map[Occurrence]string{}
+	sources := make(map[int]struct{}, len(input.workbook.Rows))
 	counts := Counts{Total: len(input.admissions)}
 	admitted := make([]admission, 0, len(input.admissions))
 	for _, entry := range input.admissions {
+		sources[entry.sourceRow] = struct{}{}
+		occurrence := Occurrence{Row: entry.sourceRow, Position: entry.recipientIndex}
+		row := ManifestRow{
+			Row:       entry.sourceRow,
+			Position:  entry.recipientIndex,
+			Recipient: entry.recipient,
+			EmailKey:  entry.emailKey,
+		}
 		switch entry.state {
 		case "":
 			counts.Duplicate++
-			reasons[entry.sourceRow] = ReasonText(ReasonDuplicate)
-			manifest.Rows = append(manifest.Rows, ManifestRow{
-				Row:      entry.sourceRow,
-				EmailKey: entry.emailKey,
-				Reasons:  []string{ReasonDuplicate},
-				Group:    entry.group,
-			})
+			reasons[occurrence] = ReasonText(ReasonDuplicate)
+			row.Reasons = []string{ReasonDuplicate}
+			row.Group = entry.group
+			manifest.Rows = append(manifest.Rows, row)
 		case rowInvalid:
 			counts.Invalid++
-			reasons[entry.sourceRow] = ReasonText(ReasonInvalidAddress)
-			manifest.Rows = append(manifest.Rows, ManifestRow{
-				Row:      entry.sourceRow,
-				EmailKey: entry.emailKey,
-				Reasons:  []string{ReasonInvalidAddress},
-			})
+			reasons[occurrence] = ReasonText(ReasonInvalidAddress)
+			row.Reasons = []string{ReasonInvalidAddress}
+			manifest.Rows = append(manifest.Rows, row)
 		default:
 			admitted = append(admitted, entry)
 		}
 	}
+	counts.SourceRows = len(sources)
+	manifest.SourceRows = counts.SourceRows
 	manifest.Groups = duplicateGroups(input.admissions)
 
 	err := s.app.RunInTransaction(func(txApp core.App) error {
@@ -793,8 +844,9 @@ func (s *Service) publish(ctx context.Context, input publishInput) error {
 		}
 		for i := range admitted {
 			entry := &admitted[i]
+			occurrence := Occurrence{Row: entry.sourceRow, Position: entry.recipientIndex}
 			// The identity is resolved for every unique valid address,
-			// including a row that is missing a required value: the identity
+			// including an entry that is missing a required value: the identity
 			// is campaign-scoped and a corrected upload must reuse it.
 			candidate, err := s.store.EnsureCandidate(txApp, input.task.CampaignID, entry.emailKey)
 			if err != nil {
@@ -813,6 +865,8 @@ func (s *Service) publish(ctx context.Context, input publishInput) error {
 			record.Set("task", input.task.ID)
 			record.Set("candidate", candidate.ID)
 			record.Set("source_row", entry.sourceRow)
+			record.Set("recipient_index", entry.recipientIndex)
+			record.Set("original_recipient", entry.originalRecipient)
 			record.Set("state", state)
 			record.Set("reason", reason)
 			record.Set("raw", entry.raw)
@@ -821,31 +875,41 @@ func (s *Service) publish(ctx context.Context, input publishInput) error {
 				return err
 			}
 			if state != RowEligible {
-				reasons[entry.sourceRow] = reason
+				reasons[occurrence] = reason
 			}
 			countRow(&counts, state)
 			manifest.Rows = append(manifest.Rows, ManifestRow{
-				Row:      entry.sourceRow,
-				EmailKey: entry.emailKey,
-				State:    state,
+				Row:       entry.sourceRow,
+				Position:  entry.recipientIndex,
+				Recipient: entry.recipient,
+				EmailKey:  entry.emailKey,
+				State:     state,
 			})
 		}
-		slices.SortFunc(manifest.Rows, func(a, b ManifestRow) int { return a.Row - b.Row })
+		slices.SortFunc(manifest.Rows, func(a, b ManifestRow) int {
+			if a.Row != b.Row {
+				return a.Row - b.Row
+			}
+			return a.Position - b.Position
+		})
 
 		report := make([]ReportRow, 0, len(input.admissions))
 		for _, entry := range input.admissions {
 			if entry.state == RowEligible {
 				continue
 			}
+			occurrence := Occurrence{Row: entry.sourceRow, Position: entry.recipientIndex}
 			row := rowsByNumber[entry.sourceRow]
 			values := make([]string, 0, len(headers))
 			for offset := range headers {
 				values = append(values, row.Column(offset))
 			}
 			report = append(report, ReportRow{
-				Number:  entry.sourceRow,
-				Reasons: []string{reasons[entry.sourceRow]},
-				Values:  values,
+				Row:       entry.sourceRow,
+				Position:  entry.recipientIndex,
+				Recipient: strings.TrimSpace(entry.recipient),
+				Reasons:   []string{reasons[occurrence]},
+				Values:    values,
 			})
 		}
 
@@ -876,7 +940,7 @@ func (s *Service) publish(ctx context.Context, input publishInput) error {
 		record.Set("headers", headers)
 		record.Set("configuration", input.configuration.ID)
 		record.Set("content_hash", input.configuration.ContentHash)
-		record.Set("result_labels", ResolveResultLabels(input.target.ResultLabels, headers))
+		record.Set("result_labels", TaskResultLabels(input.target.ResultLabels, headers))
 		record.Set("counts", counts)
 		record.Set("manifest", manifestFile)
 		record.Set("excluded", reportFile)
@@ -939,7 +1003,7 @@ func duplicateGroups(admissions []admission) []DuplicateGroup {
 			groups[entry.group] = group
 			ordered = append(ordered, entry.group)
 		}
-		group.Rows = append(group.Rows, entry.sourceRow)
+		group.Occurrences = append(group.Occurrences, Occurrence{Row: entry.sourceRow, Position: entry.recipientIndex})
 	}
 	result := make([]DuplicateGroup, 0, len(ordered))
 	for _, number := range ordered {

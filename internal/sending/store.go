@@ -313,7 +313,7 @@ func (s *Store) NextWork(ctx context.Context, exhausted ...string) (*Work, error
 		if slices.Contains(exhausted, connection.Id) {
 			continue
 		}
-		members, e := s.app.FindRecordsByFilter(intake.TaskCandidatesCollection, "task={:task} && dispatch_state='reserved' && (retry_at='' || retry_at <= {:now})", "source_row", 1, 0, dbx.Params{"task": task.Id, "now": now})
+		members, e := s.app.FindRecordsByFilter(intake.TaskCandidatesCollection, "task={:task} && dispatch_state='reserved' && (retry_at='' || retry_at <= {:now})", "source_row,recipient_index", 1, 0, dbx.Params{"task": task.Id, "now": now})
 		if e != nil {
 			return nil, e
 		}

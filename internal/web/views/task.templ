@@ -97,7 +97,9 @@ templ TaskUpload(data TaskUploadData) {
 						@input.Input(input.Props{ID: "task-workbook", Name: "workbook", Type: "file", Accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Required: true, Attributes: templ.Attributes{"aria-describedby": "workbook-guidance"}})
 					}
 					<div id="workbook-guidance" class="space-y-2 text-sm text-muted-foreground">
-						<p>Format: <code>.xlsx</code> · upload size limit: { readableBytes(data.MaxUploadBytes) } · support bound: 1,000 data rows per task. Split larger lists across several tasks.</p>
+						<p>Format: <code>.xlsx</code> · upload size limit: { readableBytes(data.MaxUploadBytes) } · support bound: 1,000 recipient entries per task after splitting. Split larger lists across several tasks.</p>
+						<p>A recipient cell may contain several addresses separated by commas, for example <code>ada@example.com, grace@example.com</code>. Each address becomes its own recipient entry with a copy of that row's other mapped values; only commas separate addresses, and spaces or semicolons alone are invalid.</p>
+						<p>Every expanded entry counts toward the 1,000-entry bound, including empty, invalid and duplicate entries. An excluded entry affects only itself; valid addresses from the same row are still processed.</p>
 						if data.HasRevision {
 							<p>Every mapped column is mandatory in the chosen header row, including optional-value mappings: <span class="wrap-anywhere">{ joinList(data.MappedColumns) }</span>.</p>
 						}
@@ -285,9 +287,11 @@ type TaskCounts struct {
 	ReviewRequired   int
 }
 
-// TaskSummaryView is the validated summary line: total, eligible at
-// validation, excluded at validation and the current rechecked scope.
+// TaskSummaryView is the validated summary line: source rows, expanded
+// recipient entries, entries eligible at validation, entries excluded at
+// validation and the current rechecked scope.
 type TaskSummaryView struct {
+	SourceRows           int
 	Total                int
 	Eligible             int
 	ExcludedAtValidation int
@@ -300,17 +304,19 @@ type TaskCategory struct {
 	Count int
 }
 
-// TaskHeldRow is one manifest row held back from candidate storage.
+// TaskHeldRow is one manifest entry held back from candidate storage.
 type TaskHeldRow struct {
 	Row       int
+	Position  int
 	Recipient string
 	Reason    string
 }
 
-// TaskAdmittedRow is one admitted snapshot row for the review tables.
+// TaskAdmittedRow is one admitted snapshot entry for the review tables.
 type TaskAdmittedRow struct {
 	ID        string
 	Row       int
+	Position  int
 	Recipient string
 	State     string
 	Reason    string
@@ -640,7 +646,7 @@ templ taskRecipients(data TaskPageData) {
 				@card.Content(card.ContentProps{Class: "gap-4"}) {
 					<h3 id="summary-heading" class="cn-card-title">Validation summary</h3>
 					<p class="text-sm">
-						{ strconv.Itoa(data.Summary.Total) } input rows · { strconv.Itoa(data.Summary.Eligible) } eligible at validation · { strconv.Itoa(data.Summary.ExcludedAtValidation) } excluded at validation
+						{ strconv.Itoa(data.Summary.SourceRows) } source rows · { strconv.Itoa(data.Summary.Total) } recipient entries · { strconv.Itoa(data.Summary.Eligible) } eligible at validation · { strconv.Itoa(data.Summary.ExcludedAtValidation) } excluded at validation
 					</p>
 					<p class="text-sm text-muted-foreground">Current eligible/safe remaining: <strong>{ data.Summary.CurrentEligible }</strong>. Rechecked before sending.</p>
 					if data.Stale {
@@ -731,10 +737,13 @@ templ taskPreview(data TaskPageData) {
 	</section>
 }
 
-// previewRowLabel names a row recognizably: worksheet row plus mapped address
-// or state.
+// previewRowLabel names an entry recognizably: worksheet row, its position
+// inside the recipient cell and its individual address or state.
 func previewRowLabel(row TaskAdmittedRow) string {
 	label := "Worksheet row " + strconv.Itoa(row.Row)
+	if row.Position > 0 {
+		label += " · recipient " + strconv.Itoa(row.Position)
+	}
 	if row.Recipient != "" {
 		label += " · " + row.Recipient
 	}
@@ -755,12 +764,13 @@ templ taskRowReasons(data TaskPageData) {
 					<div class="table-scroll">
 						@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Row reasons"}}) {
 							<thead>
-								<tr><th>Worksheet row</th><th>Recipient</th><th>State</th><th>Reason</th></tr>
+								<tr><th>Worksheet row</th><th>Position</th><th>Recipient</th><th>State</th><th>Reason</th></tr>
 							</thead>
 							<tbody>
 								for _, held := range data.HeldRows {
 									<tr>
 										<td>{ held.Row }</td>
+										<td>{ held.Position }</td>
 										<td>{ held.Recipient }</td>
 										<td>Excluded at validation</td>
 										<td>{ held.Reason }</td>
@@ -772,6 +782,7 @@ templ taskRowReasons(data TaskPageData) {
 									}
 									<tr>
 										<td>{ row.Row }</td>
+										<td>{ row.Position }</td>
 										<td>{ row.Recipient }</td>
 										<td><code>{ row.State }</code></td>
 										<td>{ row.Reason }</td>
@@ -1177,7 +1188,7 @@ templ taskRecovery(data TaskPageData) {
 
 templ taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) {
 	<div class="p-[1.1rem] border border-border rounded-4xl bg-muted space-y-2">
-		<h4 class="font-semibold">Recovery · worksheet row { row.Row }</h4>
+		<h4 class="font-semibold">Recovery · worksheet row { row.Row } · recipient { row.Position }</h4>
 		<p>{ row.State } · { row.Reason }</p>
 		if row.Recipient != "" {
 			<p class="text-sm text-muted-foreground">Recipient: { row.Recipient }</p>
@@ -1315,7 +1326,7 @@ templ taskResults(data TaskPageData) {
 					<p class="text-sm text-muted-foreground">Result columns: { joinLabels(data.ResultLabels) }</p>
 				}
 				if data.ResultsReady {
-					<p>The workbook keeps every original worksheet, row and cell, and adds the result columns after the source columns.</p>
+					<p>The workbook keeps every original worksheet, row, formula and value, and adds a separate “Recipient results” sheet. That sheet copies the source columns and adds the source worksheet, original row, position in the recipient cell, the individual recipient and the result columns, one row per expanded entry.</p>
 					<p class="text-sm">As of { data.ResultsAsOf }. This is a saved snapshot; sending resumed after it would need a refreshed workbook.</p>
 					<div class="app-card-actions">
 						<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results.xlsx" }>Download results workbook</a>
@@ -1449,15 +1460,17 @@ templ taskAttemptHistory(data TaskPageData) {
 // TaskPreviewData is the view model for the preview partial. The error is a
 // fixed operator-facing message shown instead of rendered content.
 type TaskPreviewData struct {
-	Error       string
-	Recipient   string
-	Subject     string
-	Body        string
-	Values      []PreviewValue
-	SourceRow   int
-	ContentHash string
-	Approved    bool
-	Loading     bool
+	Error             string
+	Recipient         string
+	Subject           string
+	Body              string
+	Values            []PreviewValue
+	SourceRow         int
+	RecipientPosition int
+	OriginalRecipient string
+	ContentHash       string
+	Approved          bool
+	Loading           bool
 }
 
 templ TaskPreviewResult(data TaskPreviewData) {
@@ -1488,6 +1501,8 @@ templ TaskPreviewResult(data TaskPreviewData) {
 				<summary class="cursor-pointer text-muted-foreground">Preview details</summary>
 				<dl class="mt-2 space-y-1">
 					<div class="flex gap-2"><dt class="font-semibold">Worksheet row:</dt><dd>{ data.SourceRow }</dd></div>
+					<div class="flex gap-2"><dt class="font-semibold">Position in recipient cell:</dt><dd>{ data.RecipientPosition }</dd></div>
+					<div class="flex gap-2"><dt class="font-semibold">Original recipient cell:</dt><dd><code class="break-all">{ data.OriginalRecipient }</code></dd></div>
 					<div class="flex gap-2"><dt class="font-semibold">Content hash:</dt><dd><code class="break-all">{ data.ContentHash }</code></dd></div>
 					<div class="flex gap-2">
 						<dt class="font-semibold">Approval:</dt>

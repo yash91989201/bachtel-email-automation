@@ -200,10 +200,14 @@ immutable snapshot of the eligible rows or fails with an actionable reason.
 - Validation runs before any candidate exists: every mapped source header,
   including the revision's explicit `recipient` row, must exist exactly once.
   The recipient supplies the sending address without needing a DOCX placeholder.
-  Duplicate recipient keys hold
-  every row of their group, and unusable addresses are excluded. Excluded rows
-  live only in the stored workbook, a private validation manifest and a
-  downloadable exclusion report — never as candidate records.
+  A recipient cell may hold
+  several comma-separated addresses; each becomes its own recipient entry with
+  the row's other mapped values, counted toward the 1,000-entry bound before any
+  exclusion. Duplicate recipient keys hold every occurrence of their group,
+  including repetitions inside one cell, and unusable addresses exclude only
+  their own entry. Excluded entries live only in the stored workbook, a private
+  validation manifest and a downloadable exclusion report — never as candidate
+  records.
 - Candidates are identified by campaign plus trimmed lowercase email address,
   with generated internal ids, so a corrected upload creates a new task over the
   same identities and an earlier task keeps its snapshot.
@@ -213,8 +217,8 @@ immutable snapshot of the eligible rows or fails with an actionable reason.
   dispatch requires received-format approval for the exact configuration and
   an explicit operator action.
 - The upload screen shows the workbook constraints (supported format, size,
-  expanded-archive limits and the 1,000-row task bound) and reports every
-  rejection inline.
+  expanded-archive limits and the 1,000-recipient-entry bound after comma
+  splitting) and reports every rejection inline.
 
 Workbook support, header matching, recipient-key rules, resource limits,
 duplicate handling and the private artifacts are documented in
@@ -222,8 +226,9 @@ duplicate handling and the private artifacts are documented in
 
 ## History and downloads
 
-Completed, stopped and recovered tasks publish a results workbook built from
-the retained original upload. Campaign pages publish an Excel report and a ZIP
+Completed, stopped and recovered tasks publish a results workbook that keeps
+the retained original upload untouched and adds a `Recipient results` worksheet
+with one row per expanded recipient. Campaign pages publish an Excel report and a ZIP
 package containing report, per-attempt HTML and an index. Generated files are
 private, stored until explicit manual deletion, and regenerable from retained
 records. See [docs/history-exports.md](docs/history-exports.md) for workbook

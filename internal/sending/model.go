@@ -102,7 +102,11 @@ type MemberProgress struct {
 	SampleEligible                   bool
 	ID, State, Reason                string
 	SourceRow                        int
-	LatestAttempt                    *Attempt
+	// RecipientIndex is the entry's position inside its source recipient cell;
+	// Recipient is that entry's own address.
+	RecipientIndex int
+	Recipient      string
+	LatestAttempt  *Attempt
 }
 type Progress struct {
 	RetryableFailed                                                                                  int

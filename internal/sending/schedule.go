@@ -110,7 +110,7 @@ func (s *Store) Schedule(ctx context.Context, ownerID string, in ScheduleRequest
 		if target.GetString("current_configuration") != t.GetString("configuration") {
 			return &ScheduleRefusal{Reason: "the configuration changed; revalidate this task"}
 		}
-		rows, e := records(app, intake.TaskCandidatesCollection, "task={:t}", "source_row", dbx.Params{"t": t.Id})
+		rows, e := records(app, intake.TaskCandidatesCollection, "task={:t}", "source_row,recipient_index", dbx.Params{"t": t.Id})
 		if e != nil {
 			return e
 		}
@@ -233,7 +233,7 @@ func (s *Store) fire(_ context.Context, taskID string) (bool, error) {
 		if !isApproved {
 			return miss("approval for this exact configuration and mailbox is missing; re-approve before sending")
 		}
-		rows, e := records(app, intake.TaskCandidatesCollection, "task={:t}", "source_row", dbx.Params{"t": t.Id})
+		rows, e := records(app, intake.TaskCandidatesCollection, "task={:t}", "source_row,recipient_index", dbx.Params{"t": t.Id})
 		if e != nil {
 			return e
 		}

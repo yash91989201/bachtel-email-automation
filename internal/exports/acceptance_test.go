@@ -53,12 +53,24 @@ func TestExportThousandRowWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(grid) != 1001 {
-		t.Fatalf("results rows %d, want 1001", len(grid))
+		t.Fatalf("original rows %d, want 1001", len(grid))
 	}
 	if grid[1000][1] != "Candidate 0999" {
 		t.Fatalf("original source value changed: %v", grid[1000])
 	}
-	status, err := book.GetCellValue("Candidates", "C1001")
+	// The original worksheet is untouched; the added recipient-results sheet
+	// carries one entry per recipient in source order.
+	if width := len(grid[0]); width != 2 {
+		t.Fatalf("original header gained columns: %v", grid[0])
+	}
+	results, err := book.GetRows("Recipient results")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1001 {
+		t.Fatalf("results rows %d, want 1001", len(results))
+	}
+	status, err := book.GetCellValue("Recipient results", "G1001")
 	if err != nil {
 		t.Fatal(err)
 	}

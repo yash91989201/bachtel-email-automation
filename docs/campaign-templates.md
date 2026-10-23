@@ -99,16 +99,21 @@ The draft starts with required text rows; explicitly change the address row to
 `recipient` before saving. Intake uses the saved revision's mappings, independently
 of the draft headers.
 
-Each worksheet row must carry one single email address: no comma/semicolon
-lists, no `Name <addr>` wrappers, no control characters. The trimmed lowercase
-address is the campaign identity. The application validates the address
-syntax; it does not check that the mailbox exists.
+A worksheet cell may carry several email addresses separated by commas; intake
+expands them into one recipient entry per address with the row's other mapped
+values. Semicolon or space-separated lists, `Name <addr>` wrappers and control
+characters are rejected, and each entry is validated on its own. The trimmed
+lowercase address is the campaign identity. The application validates the
+address syntax; it does not check that the mailbox exists.
 
 ## Output labels
 
 Downloadable result columns default to `Email Status`, `Submitted At`,
-`Email Error`. Labels are output settings: changing them does not change the
-personalized-content hash, so a pending content approval is unaffected.
+`Email Error`. They are written to the added `Recipient results` worksheet;
+a label that collides with a source column or with that sheet's metadata
+columns is renamed with a numbered suffix. Labels are output settings: changing
+them does not change the personalized-content hash, so a pending content
+approval is unaffected.
 
 ## Revisions
 

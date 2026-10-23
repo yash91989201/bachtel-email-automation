@@ -12,6 +12,7 @@
 package intake
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -55,10 +56,11 @@ const (
 	TaskSendingTypeScheduled = "scheduled"
 )
 
-// MaxCandidateRows is the supported number of rows carrying data in one task's
-// selected worksheet. It is a support bound, not a tunable: a larger workbook
-// fails validation before any candidate is admitted.
-const MaxCandidateRows = 1000
+// MaxRecipientEntries is the supported number of expanded recipient entries in
+// one task, counted after comma splitting and before duplicate or invalid-address
+// exclusions. It is a support bound, not a tunable: a larger input fails
+// validation before any candidate is admitted.
+const MaxRecipientEntries = 1000
 
 // MaxUploadBytes is the hard ceiling for one uploaded workbook, in bytes. It is
 // also the storage bound of the task's source file field, so a configured limit
@@ -227,9 +229,9 @@ var (
 	ErrInvalidHeaderRow = errors.New("choose the row number of the header row that names the workbook columns")
 	// ErrNoUpload reports a submission without a workbook.
 	ErrNoUpload = errors.New("choose an XLSX workbook to upload")
-	// ErrTooManyRows reports a selected worksheet above the supported number
-	// of rows carrying data.
-	ErrTooManyRows = fmt.Errorf("the selected worksheet has more than %d rows with data; split the workbook and upload one task at a time", MaxCandidateRows)
+	// ErrTooManyRows reports a selection that expands into more recipient
+	// entries than one task supports, whatever their validation outcome.
+	ErrTooManyRows = fmt.Errorf("the selected worksheet produces more than %d recipient entries after splitting recipient cells on commas; split the workbook and upload one task at a time", MaxRecipientEntries)
 	// ErrNotFound reports a task, row or candidate that does not exist or
 	// belongs to another operator. Both refusals are identical so an id can
 	// never be probed across operators.
@@ -300,6 +302,12 @@ type RowSnapshot struct {
 	ID          string
 	CandidateID string
 	SourceRow   int
+	// RecipientIndex is the 1-based position of this entry inside its source
+	// recipient cell, so siblings from one worksheet row stay distinguishable.
+	RecipientIndex int
+	// OriginalRecipient is the full recipient cell the entry was expanded
+	// from, kept for comparison display only.
+	OriginalRecipient string
 	// State is RowEligible, RowIneligible, RowAlreadySubmitted,
 	// RowAlreadyScheduled or RowReviewRequired.
 	State string
@@ -311,11 +319,16 @@ type RowSnapshot struct {
 	Normalized map[string]string
 }
 
-// Counts summarizes one task validation. Total counts every candidate row, so
-// Total equals Eligible + Ineligible + Duplicate + Invalid + AlreadySubmitted +
-// AlreadyScheduled + ReviewRequired. Duplicate and Invalid rows are file-only.
+// Counts summarizes one task validation. Total counts every expanded recipient
+// entry, so Total equals Eligible + Ineligible + Duplicate + Invalid +
+// AlreadySubmitted + AlreadyScheduled + ReviewRequired. SourceRows counts the
+// distinct worksheet rows that contributed at least one entry. Duplicate and
+// Invalid entries are file-only.
 type Counts struct {
-	Total            int `json:"total"`
+	Total int `json:"total"`
+	// SourceRows is the number of distinct source worksheet rows that
+	// contributed entries. It is never summed with the category counts.
+	SourceRows       int `json:"source_rows"`
 	Eligible         int `json:"eligible"`
 	Ineligible       int `json:"ineligible"`
 	Duplicate        int `json:"duplicate"`
@@ -364,51 +377,124 @@ type Task struct {
 // Admitted reports whether the task holds a published validation snapshot.
 func (t *Task) Admitted() bool { return t.Status == TaskReady }
 
-// DuplicateGroup is one detected recipient-key group. Every member row is
-// excluded from candidate storage and listed here with its original row number.
+// Occurrence identifies one expanded recipient entry: its original 1-based
+// worksheet row and its 1-based position inside that row's recipient cell.
+type Occurrence struct {
+	Row      int `json:"row"`
+	Position int `json:"position"`
+}
+
+// DuplicateGroup is one detected recipient-key group. Every occurrence is
+// excluded from candidate storage and listed here with its source coordinates.
 type DuplicateGroup struct {
-	Group    int    `json:"group"`
-	EmailKey string `json:"email_key"`
-	Rows     []int  `json:"rows"`
+	Group       int          `json:"group"`
+	EmailKey    string       `json:"email_key"`
+	Occurrences []Occurrence `json:"occurrences"`
 }
 
-// ManifestRow is one candidate row's outcome, keyed by its original worksheet
-// row. Reasons is empty exactly for an admitted row, whose State names the
-// membership snapshot recorded for it.
+// ManifestRow is one expanded entry's outcome, keyed by its source coordinates.
+// Recipient is the raw token this entry came from; Reasons is empty exactly for
+// an admitted entry, whose State names the membership snapshot recorded for it.
 type ManifestRow struct {
-	Row      int      `json:"row"`
-	EmailKey string   `json:"email_key,omitempty"`
-	Reasons  []string `json:"reasons,omitempty"`
-	State    string   `json:"state,omitempty"`
-	Group    int      `json:"group,omitempty"`
+	Row       int      `json:"row"`
+	Position  int      `json:"position"`
+	Recipient string   `json:"recipient,omitempty"`
+	EmailKey  string   `json:"email_key,omitempty"`
+	Reasons   []string `json:"reasons,omitempty"`
+	State     string   `json:"state,omitempty"`
+	Group     int      `json:"group,omitempty"`
 }
 
-// Excluded reports whether the row was held back from candidate storage.
+// Occurrence returns the source coordinates of the entry.
+func (r ManifestRow) Occurrence() Occurrence {
+	return Occurrence{Row: r.Row, Position: r.Position}
+}
+
+// Excluded reports whether the entry was held back from candidate storage.
 func (r ManifestRow) Excluded() bool { return len(r.Reasons) > 0 }
 
 // Manifest is the private validation manifest: the original sheet, header row
-// and column labels plus every candidate row's outcome, so row coordinates and
-// excluded-row reasons survive outside the candidate records.
+// and column labels plus every expanded entry's outcome, so row coordinates and
+// excluded-entry reasons survive outside the candidate records.
 type Manifest struct {
-	Version   int              `json:"version"`
-	Sheet     string           `json:"sheet"`
-	HeaderRow int              `json:"header_row"`
-	Headers   []string         `json:"headers"`
-	Rows      []ManifestRow    `json:"rows"`
-	Groups    []DuplicateGroup `json:"duplicate_groups,omitempty"`
+	Version   int      `json:"version"`
+	Sheet     string   `json:"sheet"`
+	HeaderRow int      `json:"header_row"`
+	Headers   []string `json:"headers"`
+	// SourceRows counts the distinct worksheet rows that contributed entries.
+	SourceRows int              `json:"source_rows"`
+	Rows       []ManifestRow    `json:"rows"`
+	Groups     []DuplicateGroup `json:"duplicate_groups,omitempty"`
 }
 
-// ReportRow is one excluded row of the exclusion report: its original row
-// number, the fixed operator-facing reasons it was excluded, and its original
-// column values in the report's column order.
+// UnmarshalJSON reads both manifest layouts at this one boundary. A version 1
+// manifest recorded single-address source rows without positions: each row is
+// upgraded to position 1 and keeps its saved address, and its group members
+// become occurrences. Nothing is resplit or mutated.
+func (m *Manifest) UnmarshalJSON(data []byte) error {
+	type manifestAlias Manifest
+	var decoded manifestAlias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*m = Manifest(decoded)
+	if m.Version >= ManifestVersion {
+		return nil
+	}
+	var legacy struct {
+		Groups []struct {
+			Group    int    `json:"group"`
+			EmailKey string `json:"email_key"`
+			Rows     []int  `json:"rows"`
+		} `json:"duplicate_groups"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+	for i := range m.Rows {
+		if m.Rows[i].Position == 0 {
+			m.Rows[i].Position = 1
+		}
+		if m.Rows[i].Recipient == "" {
+			m.Rows[i].Recipient = m.Rows[i].EmailKey
+		}
+	}
+	m.Groups = make([]DuplicateGroup, 0, len(legacy.Groups))
+	for _, group := range legacy.Groups {
+		upgraded := DuplicateGroup{Group: group.Group, EmailKey: group.EmailKey}
+		for _, row := range group.Rows {
+			upgraded.Occurrences = append(upgraded.Occurrences, Occurrence{Row: row, Position: 1})
+		}
+		m.Groups = append(m.Groups, upgraded)
+	}
+	if m.SourceRows == 0 {
+		m.SourceRows = distinctRows(m.Rows)
+	}
+	return nil
+}
+
+// distinctRows counts the distinct source rows of a set of manifest entries.
+func distinctRows(rows []ManifestRow) int {
+	seen := make(map[int]struct{}, len(rows))
+	for _, row := range rows {
+		seen[row.Row] = struct{}{}
+	}
+	return len(seen)
+}
+
+// ReportRow is one excluded entry of the exclusion report: its source
+// coordinates, the fixed operator-facing reasons it was excluded, its raw
+// recipient token and its original column values.
 type ReportRow struct {
-	Number  int
-	Reasons []string
-	Values  []string
+	Row       int
+	Position  int
+	Recipient string
+	Reasons   []string
+	Values    []string
 }
 
 // ManifestVersion is the current manifest layout version.
-const ManifestVersion = 1
+const ManifestVersion = 2
 
 // ClaimOutcome reports the result of one reservation attempt for a candidate.
 type ClaimOutcome struct {
@@ -482,6 +568,20 @@ func ReasonText(code string) string {
 // reported as a duplicate instead of bypassing duplicate detection.
 func RecipientKey(raw string) string {
 	return strings.ToLower(strings.TrimSpace(raw))
+}
+
+// ResultSheetLabels are the metadata columns the recipient-results worksheet
+// adds after the copied source columns and before the configured result
+// columns. They are occupied names for result-label collision resolution.
+var ResultSheetLabels = []string{"Source worksheet", "Source worksheet row", "Recipient position", "Recipient"}
+
+// TaskResultLabels resolves the configured result labels for one task against
+// both the source columns and the recipient-results metadata columns, so a
+// generated results worksheet can never duplicate or overwrite a label.
+func TaskResultLabels(labels, sourceHeaders []string) []string {
+	occupied := SourceColumnLabels(sourceHeaders)
+	occupied = append(occupied, ResultSheetLabels...)
+	return ResolveResultLabels(labels, occupied)
 }
 
 // ResolveResultLabels returns the result column labels to snapshot for one

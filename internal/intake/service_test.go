@@ -292,7 +292,7 @@ func TestValidatePublishesSnapshotAndCounts(t *testing.T) {
 	if task.Status != intake.TaskReady {
 		t.Fatalf("status = %q, want %q", task.Status, intake.TaskReady)
 	}
-	want := intake.Counts{Total: 8, Eligible: 1, Ineligible: 1, Duplicate: 5, Invalid: 1}
+	want := intake.Counts{Total: 8, SourceRows: 8, Eligible: 1, Ineligible: 1, Duplicate: 5, Invalid: 1}
 	if task.Counts != want {
 		t.Fatalf("counts = %+v, want %+v", task.Counts, want)
 	}
@@ -348,14 +348,14 @@ func TestValidatePublishesSnapshotAndCounts(t *testing.T) {
 		t.Fatalf("duplicate groups = %d, want 2", len(manifest.Groups))
 	}
 	for _, group := range manifest.Groups {
-		if len(group.Rows) < 2 {
-			t.Fatalf("group %d has %d rows, want every member held", group.Group, len(group.Rows))
+		if len(group.Occurrences) < 2 {
+			t.Fatalf("group %d has %d entries, want every member held", group.Group, len(group.Occurrences))
 		}
-		// No member is picked as the preferred copy: every row of the group is
+		// No member is picked as the preferred copy: every entry of the group is
 		// excluded, so the group can never send one of them.
-		for _, number := range group.Rows {
-			if state := manifestState(manifest, number); state != "" {
-				t.Fatalf("duplicate row %d carries state %q, want excluded", number, state)
+		for _, occurrence := range group.Occurrences {
+			if state := manifestState(manifest, occurrence.Row); state != "" {
+				t.Fatalf("duplicate entry %+v carries state %q, want excluded", occurrence, state)
 			}
 		}
 	}
@@ -468,37 +468,37 @@ func TestExclusionReportDownloadsEveryHeldRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Header plus every held row: five duplicates, one unusable address and one
-	// missing value, in original row order.
+	// Header plus every held entry: five duplicates, one unusable address and
+	// one missing value, in original row order.
 	if len(rows) != 8 {
-		t.Fatalf("report rows = %d, want header plus 7 held rows", len(rows))
+		t.Fatalf("report rows = %d, want header plus 7 held entries", len(rows))
 	}
-	if got := strings.Join(rows[0], "|"); got != "Row Number|Reason|Email|Applicant Full Name|Location|Status" {
+	if got := strings.Join(rows[0], "|"); got != "Email|Applicant Full Name|Location|Status|Source worksheet row|Recipient position|Recipient|Reason" {
 		t.Fatalf("report header = %q", got)
 	}
 	held := map[string][]string{}
 	var order []string
 	for _, row := range rows[1:] {
-		held[row[0]] = row
-		order = append(order, row[0])
+		held[row[4]] = row
+		order = append(order, row[4])
 	}
 	if fmt.Sprint(order) != "[2 3 4 5 6 9 10]" {
-		t.Fatalf("held rows = %v, want every held row in original row order", order)
+		t.Fatalf("held rows = %v, want every held entry in original row order", order)
 	}
-	if !strings.Contains(held["2"][1], "duplicate") {
+	if !strings.Contains(held["2"][7], "duplicate") {
 		t.Fatalf("duplicate row = %v", held["2"])
 	}
-	if held["2"][2] != "alice@example.com" || held["2"][3] != "Ada Lovelace" {
-		t.Fatalf("duplicate row lost its original columns: %v", held["2"])
+	if held["2"][0] != "alice@example.com" || held["2"][1] != "Ada Lovelace" || held["2"][5] != "1" || held["2"][6] != "alice@example.com" {
+		t.Fatalf("duplicate row lost its original columns or entry identity: %v", held["2"])
 	}
 	// The padded, mixed-case member of the same group is held as well.
-	if !strings.Contains(held["3"][1], "duplicate") || held["3"][2] != " ALICE@example.com " {
+	if !strings.Contains(held["3"][7], "duplicate") || held["3"][0] != " ALICE@example.com " {
 		t.Fatalf("padded duplicate row = %v", held["3"])
 	}
-	if !strings.Contains(held["6"][1], "recipient cell") {
+	if !strings.Contains(held["6"][7], "recipient cell") {
 		t.Fatalf("unusable address row = %v", held["6"])
 	}
-	if !strings.Contains(held["5"][1], "required") {
+	if !strings.Contains(held["5"][7], "required") {
 		t.Fatalf("missing value row = %v: %v", held["5"], held)
 	}
 }
@@ -530,9 +530,9 @@ func TestValidationFailuresLeaveTheTaskUnscheduled(t *testing.T) {
 			}}),
 			want: `no "Email" column`,
 		},
-		"too many candidate rows": {
-			workbook: manyRows(t, intake.MaxCandidateRows+1),
-			want:     "more than 1000 rows",
+		"too many recipient entries": {
+			workbook: manyRows(t, intake.MaxRecipientEntries+1),
+			want:     "more than 1000 recipient entries",
 		},
 	}
 	for name, testCase := range cases {
@@ -1056,28 +1056,28 @@ func TestThousandRowFixture(t *testing.T) {
 
 	// A 1,000-row mixed workbook: unique recipients, one duplicate pair, one
 	// unusable address and one missing required value.
-	rows := make([][]string, 0, intake.MaxCandidateRows+1)
+	rows := make([][]string, 0, intake.MaxRecipientEntries+1)
 	rows = append(rows, []string{"Email", "Applicant Full Name", "Status"})
 	rows = append(rows, []string{"duplicate@example.com", "Duplicate One", "SUBMITTED"})
 	rows = append(rows, []string{" DUPLICATE@example.com ", "Duplicate Two", ""})
 	rows = append(rows, []string{"not-an-address", "Zoe Quinn", ""})
 	rows = append(rows, []string{"missing@example.com", "", ""})
-	for i := 4; i < intake.MaxCandidateRows; i++ {
+	for i := 4; i < intake.MaxRecipientEntries; i++ {
 		rows = append(rows, []string{fmt.Sprintf("person%d@example.com", i), fmt.Sprintf("Person %d", i), ""})
 	}
-	if len(rows)-1 != intake.MaxCandidateRows {
-		t.Fatalf("fixture rows = %d, want %d candidate rows", len(rows)-1, intake.MaxCandidateRows)
+	if len(rows)-1 != intake.MaxRecipientEntries {
+		t.Fatalf("fixture rows = %d, want %d candidate rows", len(rows)-1, intake.MaxRecipientEntries)
 	}
 	task := env.validate(buildWorkbook(t, sheetSpec{name: "Candidates", rows: rows}))
 
 	counts := task.Counts
-	if counts.Total != intake.MaxCandidateRows {
-		t.Fatalf("total = %d, want %d", counts.Total, intake.MaxCandidateRows)
+	if counts.Total != intake.MaxRecipientEntries {
+		t.Fatalf("total = %d, want %d", counts.Total, intake.MaxRecipientEntries)
 	}
 	if counts.Duplicate != 2 || counts.Invalid != 1 || counts.Ineligible != 1 {
 		t.Fatalf("counts = %+v", counts)
 	}
-	wantEligible := intake.MaxCandidateRows - 4
+	wantEligible := intake.MaxRecipientEntries - 4
 	if counts.Eligible != wantEligible {
 		t.Fatalf("eligible = %d, want %d", counts.Eligible, wantEligible)
 	}
@@ -1168,7 +1168,7 @@ func TestRecipientMappingDrivesIntakeAndIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(manifest.Groups) != 1 || len(manifest.Groups[0].Rows) != 2 {
+	if len(manifest.Groups) != 1 || len(manifest.Groups[0].Occurrences) != 2 {
 		t.Fatalf("duplicate groups = %+v", manifest.Groups)
 	}
 }

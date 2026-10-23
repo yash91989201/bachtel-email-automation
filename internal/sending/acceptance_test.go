@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/xuri/excelize/v2"
@@ -140,6 +141,13 @@ func newAcceptanceFixture(t *testing.T) *acceptanceFixture {
 // createCampaign creates an owned campaign with one configured revision.
 func (f *acceptanceFixture) createCampaign(t *testing.T, ownerID, name string) string {
 	t.Helper()
+	return f.createCampaignWithSubject(t, ownerID, name, "Hello {{candidate_name}}")
+}
+
+// createCampaignWithSubject builds the same revision shape with an explicit
+// subject, so a test can exercise the recipient placeholder.
+func (f *acceptanceFixture) createCampaignWithSubject(t *testing.T, ownerID, name, subject string) string {
+	t.Helper()
 	campaigns := campaign.NewServiceWithConverter(f.app, convert.Converter{Path: f.pandocPath})
 	ctx := context.Background()
 	created, err := campaigns.CreateCampaign(ctx, ownerID, campaign.CreateCampaignInput{Name: name, SourceHeaders: []string{"Email", "Name"}})
@@ -158,7 +166,7 @@ func (f *acceptanceFixture) createCampaign(t *testing.T, ownerID, name string) s
 	if err = z.Close(); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = campaigns.CreateRevision(ctx, ownerID, created.ID, campaign.RevisionInput{Subject: "Hello {{candidate_name}}", Document: doc.Bytes(), DocumentName: "body.docx", Mappings: []campaign.Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail}, {Variable: "candidate_name", Header: "Name", Required: true, Format: campaign.FormatName}}})
+	_, _, err = campaigns.CreateRevision(ctx, ownerID, created.ID, campaign.RevisionInput{Subject: subject, Document: doc.Bytes(), DocumentName: "body.docx", Mappings: []campaign.Mapping{{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail}, {Variable: "candidate_name", Header: "Name", Required: true, Format: campaign.FormatName}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -647,5 +655,143 @@ func TestAcceptanceRestartConservativeIntentsAndCooldown(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// taskWithRows stages and validates one workbook with explicit data rows.
+func (f *acceptanceFixture) taskWithRows(t *testing.T, campaignID string, rows [][]string) string {
+	t.Helper()
+	book := excelize.NewFile()
+	defer func() {
+		if err := book.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	if err := book.SetSheetName("Sheet1", "Candidates"); err != nil {
+		t.Fatal(err)
+	}
+	if err := book.SetSheetRow("Candidates", "A1", &[]string{"Email", "Name"}); err != nil {
+		t.Fatal(err)
+	}
+	for i, row := range rows {
+		if err := book.SetSheetRow("Candidates", fmt.Sprintf("A%d", i+2), &row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, err := book.WriteToBuffer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := f.intake.Stage(context.Background(), f.ownerID, campaignID, "expanded.xlsx", data.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.intake.Validate(context.Background(), f.ownerID, task.ID, "Candidates", 1); err != nil {
+		t.Fatal(err)
+	}
+	return task.ID
+}
+
+// TestAcceptanceExpandedSiblingsSendIndependently sends two recipients that
+// shared one workbook cell to separate addresses with their own content, and
+// confirms submission history still applies per email.
+func TestAcceptanceExpandedSiblingsSendIndependently(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	campaignID := f.createCampaignWithSubject(t, f.ownerID, "Expanded siblings", "To {{candidate_email}} for {{candidate_name}}")
+	task := f.taskWithRows(t, campaignID, [][]string{
+		{"alice@example.invalid, bob@example.invalid", "Shared Person"},
+		{"carol@example.invalid", "Carol"},
+	})
+	mailbox := &acceptanceMailbox{}
+	d := f.dispatcher(t, mailbox)
+
+	// Saving, listing and previewing the snapshot never dispatches anything.
+	rows, err := f.intake.Rows(context.Background(), f.ownerID, task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("membership rows = %d, want the three expanded recipients", len(rows))
+	}
+	var alice, bob intake.RowSnapshot
+	for _, row := range rows {
+		switch row.Normalized["candidate_email"] {
+		case "alice@example.invalid":
+			alice = row
+		case "bob@example.invalid":
+			bob = row
+		}
+	}
+	if alice.ID == "" || bob.ID == "" || alice.SourceRow != bob.SourceRow || alice.RecipientIndex != 1 || bob.RecipientIndex != 2 {
+		t.Fatalf("sibling memberships = %+v / %+v", alice, bob)
+	}
+	for _, row := range []intake.RowSnapshot{alice, bob} {
+		if _, err := f.intake.Preview(context.Background(), f.ownerID, task, row.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mailbox.mu.Lock()
+	sentBeforeStart := len(mailbox.messages)
+	mailbox.mu.Unlock()
+	if sentBeforeStart != 0 {
+		t.Fatalf("import or preview dispatched %d messages", sentBeforeStart)
+	}
+	attempts, err := f.app.FindRecordsByFilter(sending.AttemptsCollection, "task={:t} && kind='candidate'", "", 0, 0, dbx.Params{"t": task})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(attempts) != 0 {
+		t.Fatalf("import or preview created %d attempts", len(attempts))
+	}
+
+	f.approve(t, task, d)
+	if act := f.act(t, task, "start", "expanded-start", 3); act.Claimed != 3 {
+		t.Fatalf("claimed %d, want 3", act.Claimed)
+	}
+	d.Wake()
+	acceptanceEventually(t, func() bool {
+		r, e := f.app.FindRecordById(intake.TasksCollection, task)
+		return e == nil && r.GetString("status") == "completed"
+	})
+
+	attempts, err = f.app.FindRecordsByFilter(sending.AttemptsCollection, "task={:t} && kind='candidate'", "recipient", 0, 0, dbx.Params{"t": task})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(attempts) != 3 {
+		t.Fatalf("candidate attempts = %d, want one per expanded recipient", len(attempts))
+	}
+	want := map[string]string{
+		"alice@example.invalid": "To alice@example.invalid for Shared Person",
+		"bob@example.invalid":   "To bob@example.invalid for Shared Person",
+		"carol@example.invalid": "To carol@example.invalid for Carol",
+	}
+	ids := map[string]bool{}
+	for _, attempt := range attempts {
+		recipient := attempt.GetString("recipient")
+		if ids[attempt.Id] {
+			t.Fatalf("attempt %s recorded twice", attempt.Id)
+		}
+		ids[attempt.Id] = true
+		if attempt.GetString("subject") != want[recipient] {
+			t.Fatalf("%s subject = %q, want %q", recipient, attempt.GetString("subject"), want[recipient])
+		}
+		if attempt.GetString("state") != sending.AttemptSubmitted {
+			t.Fatalf("%s attempt state = %q", recipient, attempt.GetString("state"))
+		}
+	}
+
+	// Campaign history still applies per email: a later upload of one sibling
+	// is held as already submitted and cannot be started.
+	second := f.taskWithRows(t, campaignID, [][]string{{"alice@example.invalid", "Alice"}})
+	secondRows, err := f.intake.Rows(context.Background(), f.ownerID, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(secondRows) != 1 || secondRows[0].State != intake.RowAlreadySubmitted {
+		t.Fatalf("re-uploaded sibling = %+v, want already submitted", secondRows)
+	}
+	if _, err := f.store.Act(context.Background(), f.ownerID, sending.ActionRequest{ActionID: "expanded-again", TaskID: second, Kind: "start", Confirmed: true, ExpectedCount: 1}); err == nil {
+		t.Fatal("a submitted sibling was scheduled again")
 	}
 }
