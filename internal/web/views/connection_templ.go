@@ -464,9 +464,9 @@ func connectionSection(data ConnectionData) templ.Component {
 								return templ_7745c5c3_Err
 							}
 							var templ_7745c5c3_Var22 templ.SafeURL
-							templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinURLErrs("/account?provider=" + data.Provider)
+							templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinURLErrs("/account/mailbox?provider=" + data.Provider)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/connection.templ`, Line: 141, Col: 91}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/connection.templ`, Line: 141, Col: 99}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 							if templ_7745c5c3_Err != nil {
@@ -687,7 +687,7 @@ func connectionSection(data ConnectionData) templ.Component {
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, Href: "/account?change_provider=1#provider-setup"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var32), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, Href: "/account/mailbox?change_provider=1#provider-setup"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var32), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -785,13 +785,13 @@ func connectionSection(data ConnectionData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					if data.SelectedProvider == "" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div class=\"grid grid-cols-2 gap-4 max-[760px]:grid-cols-1\" aria-label=\"Choose a mailbox provider\"><a class=\"block rounded-4xl border bg-card p-5 hover:border-primary focus-visible:outline-2\" href=\"/account?provider=microsoft365\"><h3 class=\"font-semibold\">Microsoft 365</h3><p class=\"mt-2 text-muted-foreground text-sm\">Connect with your own Microsoft application registration.</p><span class=\"mt-4 inline-block text-sm font-semibold\">Choose Microsoft 365 →</span></a> <a class=\"block rounded-4xl border bg-card p-5 hover:border-primary focus-visible:outline-2\" href=\"/account?provider=godaddy-titan\"><h3 class=\"font-semibold\">Titan</h3><p class=\"mt-2 text-muted-foreground text-sm\">Connect with your mailbox address and email password.</p><span class=\"mt-4 inline-block text-sm font-semibold\">Choose Titan →</span></a></div>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div class=\"grid grid-cols-2 gap-4 max-[760px]:grid-cols-1\" aria-label=\"Choose a mailbox provider\"><a class=\"block rounded-4xl border bg-card p-5 hover:border-primary focus-visible:outline-2\" href=\"/account/mailbox?provider=microsoft365\"><h3 class=\"font-semibold\">Microsoft 365</h3><p class=\"mt-2 text-muted-foreground text-sm\">Connect with your own Microsoft application registration.</p><span class=\"mt-4 inline-block text-sm font-semibold\">Choose Microsoft 365 →</span></a> <a class=\"block rounded-4xl border bg-card p-5 hover:border-primary focus-visible:outline-2\" href=\"/account/mailbox?provider=godaddy-titan\"><h3 class=\"font-semibold\">Titan</h3><p class=\"mt-2 text-muted-foreground text-sm\">Connect with your mailbox address and email password.</p><span class=\"mt-4 inline-block text-sm font-semibold\">Choose Titan →</span></a></div>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					} else if data.SelectedProvider == string(mailbox.ProviderTitan) {
 						if !data.Locked {
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<p><a class=\"text-primary underline\" href=\"/account?change_provider=1#provider-setup\">← Change provider</a></p>")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<p><a class=\"text-primary underline\" href=\"/account/mailbox?change_provider=1#provider-setup\">← Change provider</a></p>")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -960,7 +960,7 @@ func connectionSection(data ConnectionData) templ.Component {
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantGhost, Href: "/account?change_provider=1#provider-setup"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var41), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantGhost, Href: "/account/mailbox?change_provider=1#provider-setup"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var41), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -1098,7 +1098,7 @@ func connectionSection(data ConnectionData) templ.Component {
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantGhost, Href: "/account?change_provider=1#provider-setup"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var46), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantGhost, Href: "/account/mailbox?change_provider=1#provider-setup"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var46), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -1241,7 +1241,7 @@ func connectionSection(data ConnectionData) templ.Component {
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantGhost, Href: "/account?change_provider=1#provider-setup"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var51), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantGhost, Href: "/account/mailbox?change_provider=1#provider-setup"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var51), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}

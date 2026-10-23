@@ -2252,7 +2252,7 @@ func campaignTaskLink(campaignID string, row CampaignTaskRow) string {
 	case "campaign-tasks":
 		return "/campaigns/" + campaignID + "#tasks"
 	case "mailbox":
-		return "/account"
+		return "/account/mailbox"
 	}
 	if row.NextSection == "" {
 		return base
