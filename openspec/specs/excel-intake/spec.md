@@ -24,7 +24,7 @@ The system SHALL accept XLSX uploads and allow selection of one worksheet and he
 - **AND** no candidate submission is scheduled
 
 ### Requirement: Campaign-level preflight
-The system SHALL validate every mapped source header, including the source header selected by the revision's recipient mapping, against the selected worksheet header row before accepting sendable rows. Missing or ambiguous mapped headers SHALL block the task, while empty or invalid recipient entries SHALL only exclude those entries.
+The system SHALL validate every mapped source header, including the source header selected by the revision's recipient mapping, against the selected worksheet header row before AI preparation or final-upload acceptance. Required/optional checks SHALL run after AI preparation or directly on final uploads, which SHALL NOT call AI. Missing or ambiguous mapped headers SHALL block the task, while empty or invalid recipient entries SHALL only exclude those entries.
 
 #### Scenario: Missing mapped column
 - **WHEN** a configured source header is absent
@@ -42,6 +42,17 @@ The system SHALL validate every mapped source header, including the source heade
 - **WHEN** a source row produces an empty or invalid entry in the selected recipient mapping's source column
 - **THEN** only that entry is held with its source row and recipient validation reason
 - **AND** other valid unique entries, including those from the same source row, remain eligible
+
+#### Scenario: Mapped AI findings are combined with backend checks
+- **WHEN** initial preparation finishes with a mapped-field uncertainty or semantic mismatch
+- **THEN** affected entries are excluded alongside missing required values, invalid addresses, duplicates and campaign-history restrictions
+- **AND** all applicable reasons are retained, while unmapped-field problems do not affect eligibility
+
+#### Scenario: Optional empty versus optional flagged
+- **WHEN** an optional prepared or final value is empty
+- **THEN** its existing fallback or an empty replacement is used
+- **WHEN** initial preparation flags a populated optional mapped value
+- **THEN** it is excluded rather than hidden by fallback
 
 ### Requirement: Immediate duplicate detection
 The system SHALL detect duplicate recipient keys using trimmed lowercase email addresses across all expanded entries of the complete selected input before creating candidate records. Every entry in a duplicate group SHALL be excluded, including repetitions within one cell, identical source rows and entries with other validation errors.
@@ -76,15 +87,15 @@ The system SHALL offer a protected XLSX duplicate report as soon as validation f
 
 #### Scenario: Correct while another task proceeds
 - **WHEN** the upload has duplicate groups and other eligible recipients
-- **THEN** the operator can immediately download the duplicates, start the eligible portion and create a new task from corrected data
+- **THEN** the operator can immediately download the duplicates, finalize the eligible portion through approve as-is or an edited final upload before testing and explicitly starting it, and use corrected data in a final upload or new task
 - **AND** the original task snapshot remains unchanged
 
 ### Requirement: Review before explicit start
-The system SHALL show row counts and reasons in Recipients and fresh action scope in Sending. Type changes never authorize dispatch or mutate schedules; explicit confirmations and server checks remain required.
+The system SHALL show row counts and reasons in Recipients and fresh action scope in Sending. New tasks SHALL require approve as-is or acceptance of an edited final upload before sending controls become usable. Final-snapshot test approval and explicit start or schedule confirmation SHALL remain separate prerequisites.
 
 #### Scenario: Configuration changes after upload
 - **WHEN** campaign content changes between upload validation and the first start
-- **THEN** the task must be revalidated and previewed against the new current revision and approved configuration before starting
+- **THEN** the unstarted task must be explicitly revalidated and reviewed against the new current revision, finalized again, and given its own successful test and received-format approval before starting
 - **AND** Recipients identifies the saved/current revision difference and offers explicit revalidation; navigation alone does not update the snapshot
 
 #### Scenario: Revalidation would reuse a prior schedule authorization
@@ -105,7 +116,7 @@ The system SHALL show row counts and reasons in Recipients and fresh action scop
 - **AND** Recipients continues to expose validation counts and row reasons without duplicating candidate start controls
 
 #### Scenario: Recheck at scheduled fire
-- **WHEN** a schedule was enabled and the campaign configuration or approval changes before its time
+- **WHEN** a schedule was enabled and the campaign configuration, final snapshot or approval changes before its time
 - **THEN** the scheduled fire does not send from the stale snapshot
 - **AND** the task returns to the review state that requires revalidation and approval
 - **AND** the unified workspace explains the blocked/missed start and links to its required remedy without silently starting another schedule
@@ -166,7 +177,7 @@ The system SHALL retain the original workbook and row order, preserve original c
 - **AND** no original cell is overwritten
 
 ### Requirement: Comma-separated recipient expansion
-The system SHALL split the selected recipient column on commas, trim surrounding whitespace per entry, and copy other mapped values for each entry. Every entry SHALL retain its source worksheet row and position within the cell. Commas SHALL be the only list delimiter; invalid entries SHALL NOT prevent valid unique siblings from being saved.
+After initial AI preparation or directly on a final upload, the system SHALL split the selected recipient column on commas, trim surrounding whitespace per entry, and copy other mapped values for each entry. Every entry SHALL retain its source worksheet row and position within the cell. Commas SHALL be the only list delimiter; invalid entries SHALL NOT prevent valid unique siblings from being saved.
 
 #### Scenario: Two valid addresses share details
 - **WHEN** a row contains `Person 1 | a@example.com, b@example.com | Designation 1`
@@ -193,3 +204,12 @@ The system SHALL split the selected recipient column on commas, trim surrounding
 #### Scenario: Exclusions do not bypass the task limit
 - **WHEN** splitting produces 1,001 entries even though duplicates or invalid values would leave fewer than 1,000 sendable recipients
 - **THEN** validation refuses the complete new snapshot and publishes no partial import
+
+#### Scenario: AI separator cleanup occurs before expansion
+- **WHEN** initial AI preparation recognizes two addresses separated by a slash
+- **THEN** its verified comma-and-space result is passed to backend expansion
+- **AND** each supplied address is retained apart from trim/lowercase and no AI-generated address can silently replace the source identity
+
+#### Scenario: Edited final upload has unsupported separators
+- **WHEN** a final email cell contains slash-separated addresses
+- **THEN** no AI is invoked to repair it and backend comma-only parsing reports the entry as invalid with a correction remedy

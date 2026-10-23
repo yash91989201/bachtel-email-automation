@@ -26,24 +26,35 @@ The system SHALL distinguish absent mapped columns from empty values: every conf
 - **THEN** task-level validation reports the missing header before sending is allowed
 
 ### Requirement: Field-specific normalization
-The system SHALL support explicit name, designation/department, email and preserve-text formatting choices per mapping. Names SHALL use word capitalization; designation/department SHALL use word capitalization with documented known acronyms; emails SHALL be trimmed and lowercased; other text SHALL retain capitalization.
+The system SHALL prepare new task values through header-guided AI normalization and operator review rather than mapping format selections. Final accepted values SHALL be used directly for rendering without AI or name/designation/case transforms. Historical snapshots SHALL retain their original rendering behavior.
 
 #### Scenario: Names and designations
-- **WHEN** a name is john doe and a designation is head of hr
-- **THEN** name formatting produces John Doe and designation formatting produces Head Of HR
-- **AND** short ordinary words are not automatically uppercased
+- **WHEN** initial preparation receives a name of john doe and a designation of head of hr
+- **THEN** header-guided cleanup can produce John Doe and Head of HR, retaining the acronym
+- **AND** no name or designation formatting choice is required in the mapping
 
 #### Scenario: Preserved text
-- **WHEN** a preserve-text variable contains iOS Engineer
-- **THEN** its capitalization remains iOS Engineer
+- **WHEN** a mapped value contains iOS Engineer
+- **THEN** its intentional spelling is preserved by preparation
+- **AND** operator-reviewed final text is not recased at render time
+
+#### Scenario: Human-edited values
+- **WHEN** the final upload contains an operator-selected spelling or capitalization
+- **THEN** accepted text appears unchanged in subject and body, subject to contextual escaping
+- **AND** neither preview nor sending normalizes it again
 
 ### Requirement: Whitespace and original values
-The system SHALL preserve original uploaded values independently of replacement values. Single-line replacement fields SHALL trim surrounding whitespace and normalize internal whitespace predictably before validation.
+The system SHALL preserve original uploaded values independently of prepared and final values. Initial AI preparation SHALL clean single-line whitespace before backend validation. Final-upload content SHALL remain operator-authored; whitespace-only values SHALL count as empty without silently trimming or collapsing populated content.
 
 #### Scenario: Irregular spacing
-- **WHEN** a name contains surrounding spaces and repeated internal spaces
-- **THEN** its normalized replacement has clean spacing
-- **AND** the original value remains available in the source artifact and comparison preview
+- **WHEN** initial preparation receives a name with surrounding spaces and repeated internal spaces
+- **THEN** its prepared replacement has clean spacing
+- **AND** the original value remains available in source artifacts and comparison preview
+
+#### Scenario: Final whitespace and fallback
+- **WHEN** a final mapped cell contains only whitespace
+- **THEN** required/optional rules treat it as empty and apply the configured optional fallback if any
+- **AND** a non-empty final content value is not rewritten to impose preparation whitespace conventions
 
 ### Requirement: Single recipient validation
 The system SHALL obtain each recipient from the single mapping marked recipient, expand comma-separated workbook cells during intake, and require one non-empty valid bare address per resulting entry. Individual rendering and test-recipient input SHALL reject address lists, display-name wrappers and header-control characters, and use each address's trimmed lowercase form for delivery and campaign identity. It SHALL NOT claim to verify mailbox existence or delivery.
@@ -84,9 +95,14 @@ The system SHALL replace variables in both subject and body without evaluating u
 - **THEN** that row is ineligible with a clear validation error
 
 ### Requirement: Stable preview and submission content
-The system SHALL render preview, test and candidate email content from the same pinned configuration and normalized values, with the test recipient override as the only intentional addressing difference.
+The system SHALL render task preview, test and candidate email content from the same immutable final sending snapshot and pinned configuration, with test-recipient override as the only intentional addressing difference. Previewing or sending SHALL NOT call AI or rerun normalization.
 
 #### Scenario: Approved content later sent
-- **WHEN** a candidate submission uses an unchanged validated snapshot
-- **THEN** its subject and body match that snapshot's preview
-- **AND** changes in later uploads cannot alter its stored content
+- **WHEN** a candidate submission uses an unchanged finalized snapshot
+- **THEN** its subject and body match that snapshot's preview and selected-row test content
+- **AND** later uploads, prompts, provider settings or model updates cannot alter its stored content
+
+#### Scenario: Prepared preview is not final authorization
+- **WHEN** an operator previews data before approve as-is or final-upload acceptance
+- **THEN** the preview is identified as prepared data
+- **AND** it cannot supply final-snapshot test approval or authorize candidate sending

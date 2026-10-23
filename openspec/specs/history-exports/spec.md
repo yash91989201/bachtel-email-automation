@@ -39,6 +39,11 @@ The system SHALL generate and store an XLSX task-results workbook after completi
 - **THEN** the generated workbook still uses the separate recipient-results worksheet with one entry per source row
 - **AND** existing original worksheets remain unmodified
 
+#### Scenario: Edited final upload preserves original and final sources
+- **WHEN** an accepted final upload reorders, adds or removes recipient entries from the prepared sheet
+- **THEN** the original uploaded workbook remains available and unchanged
+- **AND** the recipient-results worksheet represents each entry in the frozen final snapshot with its own source location and outcome
+
 ### Requirement: Automatic export activation and idle behavior
 The system SHALL automatically generate task results when committed task state becomes completed, stopped or recovered-interrupted, independently of browser requests. When no export work is pending and no export recovery operation has failed, it SHALL wait without recurring export-work discovery queries. Rolled-back task changes SHALL NOT activate export generation.
 
@@ -170,3 +175,40 @@ The system SHALL retain uploads, revisions, candidate/task history, attempts and
 - **WHEN** a generation worker completes work for a task deleted by mailbox replacement
 - **THEN** the obsolete artifact is not published or made downloadable
 - **AND** reset recovery cleans remaining deleted-scope files without deleting retained templates
+
+### Requirement: Preparation sending sheets contain only accepted mapped values
+The system SHALL provide protected preparation and accepted-final sending workbooks containing only accepted mapped values, one row per recipient, in a form that can be uploaded for final review.
+
+#### Scenario: Download preparation sending sheet
+- **WHEN** the operator downloads the prepared sending sheet
+- **THEN** it contains only accepted mapped values with one row per recipient entry
+- **AND** it contains no original unmapped columns or excluded entries
+- **AND** the sheet can be conveniently uploaded for final review
+
+#### Scenario: Several variables share a source header
+- **WHEN** two mappings reference the same source header
+- **THEN** their output columns have distinct recognizable labels tied to their variables and can be imported without merging or overwriting values
+- **AND** missing or ambiguous expected final-upload labels are reported before any snapshot replacement
+
+#### Scenario: Download accepted final sheet
+- **WHEN** the operator finalizes a valid snapshot through either review path
+- **THEN** the accepted-final sending sheet contains only the accepted mapped values with one row per recipient entry
+- **AND** the task email preview and subsequent email content use those accepted final values
+- **AND** excluded entries are absent from the sending sheet
+
+### Requirement: Preparation exclusions preserve source and correction evidence
+The system SHALL provide a separate protected exclusion report that preserves original source columns and identifies before and after mapped values with each finding or exclusion reason.
+
+#### Scenario: Download exclusion report
+- **WHEN** the operator downloads the preparation or final-upload exclusion report
+- **THEN** each rejected recipient entry is identified by source row, position and address
+- **AND** the report includes original source columns, before and after mapped values, and applicable reasons
+- **AND** shared-field and address-specific findings are attributed to the affected recipients
+
+#### Scenario: No exclusions
+- **WHEN** preparation or final validation has no excluded entries
+- **THEN** the workspace reports that no exclusion rows exist without adding excluded entries to the sending sheet
+
+#### Scenario: Download is refused
+- **WHEN** an operator without access to the task requests a preparation, accepted-final or exclusion workbook
+- **THEN** no file content or private task metadata is returned
