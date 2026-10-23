@@ -23,6 +23,10 @@ type Props struct {
 	// user click leaves the mixed state like the native input does.
 	Indeterminate bool
 	Form          string
+	// InputAttributes are applied to the visually hidden native input, the
+	// element that owns the value and emits change. Use them for model
+	// bindings and form or validation attributes.
+	InputAttributes templ.Attributes
 }
 
 func initialChecked(p Props) bool {
@@ -126,5 +130,6 @@ templ Checkbox(props ...Props) {
 		} else {
 			style="clip-path:inset(50%);overflow:hidden;white-space:nowrap;border:0;padding:0;width:1px;height:1px;margin:-1px;position:fixed;top:0;left:0"
 		}
+		{ p.InputAttributes... }
 	/>
 }
