@@ -80,6 +80,11 @@ The system SHALL show recovery within Sending when applicable as one table whose
 - **AND** a row that is no longer eligible refuses the whole request with the changed count instead of acting partially
 - **AND** uncertain rows still require the duplicate-risk warning for Send again and one recorded external-verification basis for manual resolution
 
+#### Scenario: A row's action is unavailable
+- **WHEN** a recovery row's action is withheld by active work, restore review or a changed count
+- **THEN** the row explains why the action is unavailable instead of rendering an empty action cell
+- **AND** the row keeps its state, reason and prior attempt visible
+
 #### Scenario: Recovery rows stay readable without the selection layer
 - **WHEN** the selection layer is unavailable
 - **THEN** each row's own dialog still performs Retry, Send again or Mark already submitted with its explicit confirmation

@@ -1490,11 +1490,8 @@ templ taskRecoveryRowActions(data TaskPageData, row TaskAdmittedRow) {
 				@recoveryResolveDialog(data, row)
 			}
 		}
-		if row.State == "correction_required" {
-			<p class="text-xs text-muted-foreground">Upload a corrected task to send this row.</p>
-		}
-		if row.State == "manually_submitted" {
-			<p class="text-xs text-muted-foreground">Marked already submitted after external verification.</p>
+		if hint := recoveryActionHint(data, row); hint != "" {
+			<p class="text-xs text-muted-foreground">{ hint }</p>
 		}
 	</div>
 }
@@ -1996,6 +1993,41 @@ func recoveryCanRetry(row TaskAdmittedRow, controls TaskControls) bool {
 // row is resolved or resent, never both.
 func recoveryCanReview(row TaskAdmittedRow, controls TaskControls) bool {
 	return row.State == "review_required" && (controls.ResendRow || controls.ResolveRow)
+}
+
+// recoveryActionHint explains an action cell that has no control, so a gated
+// recovery row never renders blank. An empty result means an action is shown.
+func recoveryActionHint(data TaskPageData, row TaskAdmittedRow) string {
+	switch row.State {
+	case "correction_required":
+		return "Upload a corrected task to send this row."
+	case "manually_submitted":
+		return "Marked already submitted after external verification."
+	}
+	if recoveryCanRetry(row, data.Controls) || recoveryCanReview(row, data.Controls) {
+		return ""
+	}
+	if data.RestoreReview {
+		return "Restore review is active; reconcile recorded submissions before acting on this row."
+	}
+	if !taskStatusSettled(data.StoredStatus) {
+		return "Available after the active sending work settles."
+	}
+	if row.State == "review_required" {
+		return "Send again and Mark already submitted are unavailable for this task."
+	}
+	return "This row is no longer retryable; reload the task."
+}
+
+// taskStatusSettled mirrors presentation's settled states: retry and resend are
+// withheld until active work stops launching.
+func taskStatusSettled(status string) bool {
+	switch status {
+	case "paused", "interrupted", "stopped", "completed":
+		return true
+	default:
+		return false
+	}
 }
 
 // recoverySelectLabel names one selection checkbox for assistive technology.

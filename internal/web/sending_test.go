@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pocketbase/dbx"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
@@ -253,5 +254,68 @@ func TestBulkRecoveryPostsEverySelectedMember(t *testing.T) {
 	}
 	if progress.Reserved != 2 || progress.RetryableFailed != 0 {
 		t.Fatalf("bulk retry claimed %d reserved, %d retryable; want 2 and 0", progress.Reserved, progress.RetryableFailed)
+	}
+}
+
+// A provider rejection pauses the task; the paused task must still render the
+// per-row Retry dialog, not an empty action column.
+func TestRecoveryActionsRenderAfterProviderPause(t *testing.T) {
+	app, handler := newTaskServer(t)
+	cookie := login(t, handler)
+	campaignID := createCampaign(t, handler, cookie, "Engineers")
+	if rec := postRevision(t, handler, cookie, campaignID, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
+		t.Fatalf("revision: %d", rec.Code)
+	}
+	taskID := stageTask(t, handler, cookie, campaignID, taskWorkbook(t, "Sheet1", [][]string{
+		{"Email", "Applicant Full Name", "Location"},
+		{"alice@example.com", "Ada Lovelace", "Remote"},
+		{"carol@example.com", "Carol Danvers", "Lisbon"},
+	}))
+	owner := operatorID(t, app)
+	installMailbox(t, app, owner, "sender@example.test")
+	store := sending.NewStore(app, sending.StoreOptions{})
+	ctx := context.Background()
+	attempt, err := store.QueueTest(ctx, owner, sending.TestRequest{
+		ActionID: "pause-recovery-test-123456", TaskID: taskID, Actor: "operator",
+		Recipient: "sample@example.invalid",
+		Values:    map[string]string{"candidate_email": "sample@example.invalid", "candidate_name": "Sample"},
+	})
+	if err != nil {
+		t.Fatalf("queue test: %v", err)
+	}
+	if _, err = app.DB().NewQuery("UPDATE submission_attempts SET state='submitted' WHERE id={:id}").Bind(dbx.Params{"id": attempt.ID}).Execute(); err != nil {
+		t.Fatalf("mark test submitted: %v", err)
+	}
+	if err = store.Approve(ctx, owner, taskID, attempt.ID, "operator", "approve-"+taskID); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	base := "/campaigns/" + campaignID + "/tasks/" + taskID + "/sending"
+	if rec := do(t, handler, http.MethodPost, base+"/start", url.Values{"action_id": {"pause-recovery-start-123456"}, "expected_count": {"2"}, "confirmed": {"yes"}}, withCookie(cookie)); rec.Code != http.StatusSeeOther {
+		t.Fatalf("start: %d %.300s", rec.Code, rec.Body.String())
+	}
+	work, err := store.NextWork(ctx)
+	if err != nil || work == nil {
+		t.Fatalf("next work: %v", err)
+	}
+	first, err := store.BeginAttempt(ctx, work, time.Now(), time.Now().Add(3*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.CompleteAttempt(ctx, first.ID, sending.Outcome{State: sending.AttemptFailed, Reason: "Titan rejected the message; operator action is required.", PauseMailbox: true}); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	task, err := app.FindRecordById(intake.TasksCollection, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.GetString("status") != "paused" {
+		t.Fatalf("task status = %q, want paused", task.GetString("status"))
+	}
+	page := do(t, handler, http.MethodGet, base, nil, withCookie(cookie))
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `data-slot="dialog-trigger"`) {
+		t.Fatalf("paused recovery row has no action: %d %.400s", page.Code, page.Body.String())
+	}
+	if !strings.Contains(page.Body.String(), "Retry worksheet row") {
+		t.Fatalf("paused recovery row is missing its retry dialog: %.400s", page.Body.String())
 	}
 }

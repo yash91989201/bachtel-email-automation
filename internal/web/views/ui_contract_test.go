@@ -341,6 +341,50 @@ func TestRecoveryTableBulkSelectionContract(t *testing.T) {
 	}
 }
 
+// A recovery row whose action is gated off must say why: an empty action cell
+// reads as a missing feature rather than a withheld operation.
+func TestRecoveryRowsExplainUnavailableActions(t *testing.T) {
+	base := TaskPageData{
+		CampaignID: "campaign-1", TaskID: "task-1", ActionID: "row-key-", Approved: true,
+		Rows: []TaskAdmittedRow{{ID: "candidate-1", Row: 2, State: "definite_failure", Reason: "Titan rejected"}},
+	}
+	for _, tc := range []struct {
+		name       string
+		status     string
+		restore    bool
+		want       string
+		wantAction bool
+	}{
+		{name: "active work", status: "running", want: "Available after the active sending work settles."},
+		{name: "restore review", status: "paused", restore: true, want: "Restore review is active"},
+		{name: "row no longer retryable", status: "paused", want: "no longer retryable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := base
+			data.StoredStatus = tc.status
+			data.RestoreReview = tc.restore
+			page := renderWorkspace(t, taskRecovery(data))
+			if !strings.Contains(page, tc.want) {
+				t.Fatalf("recovery hint missing %q", tc.want)
+			}
+			if strings.Contains(page, `data-slot="dialog-trigger"`) {
+				t.Error("gated recovery row must not render an action")
+			}
+		})
+	}
+	// A settled task with a retryable failure shows the action and no hint.
+	data := base
+	data.StoredStatus = "paused"
+	data.Controls = TaskControls{RetryRow: true}
+	page := renderWorkspace(t, taskRecovery(data))
+	if !strings.Contains(page, `data-slot="dialog-trigger"`) {
+		t.Fatal("settled retryable row must render its action")
+	}
+	if strings.Contains(page, "no longer retryable") || strings.Contains(page, "active sending work settles") {
+		t.Error("available action must not carry an unavailable hint")
+	}
+}
+
 // Every card is a labelled landmark and every labelled control resolves its
 // label, across all pages, so the primitive migration kept the structure the
 // operator navigates by.

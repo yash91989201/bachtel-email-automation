@@ -7161,14 +7161,21 @@ func taskRecoveryRowActions(data TaskPageData, row TaskAdmittedRow) templ.Compon
 				}
 			}
 		}
-		if row.State == "correction_required" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 406, "<p class=\"text-xs text-muted-foreground\">Upload a corrected task to send this row.</p>")
+		if hint := recoveryActionHint(data, row); hint != "" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 406, "<p class=\"text-xs text-muted-foreground\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		}
-		if row.State == "manually_submitted" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 407, "<p class=\"text-xs text-muted-foreground\">Marked already submitted after external verification.</p>")
+			var templ_7745c5c3_Var341 string
+			templ_7745c5c3_Var341, templ_7745c5c3_Err = templ.JoinStringErrs(hint)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1494, Col: 50}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var341))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 407, "</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -7197,12 +7204,12 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var341 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var341 == nil {
-			templ_7745c5c3_Var341 = templ.NopComponent
+		templ_7745c5c3_Var342 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var342 == nil {
+			templ_7745c5c3_Var342 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var342 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var343 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -7214,7 +7221,7 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Var343 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var344 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -7226,22 +7233,22 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				var templ_7745c5c3_Var344 string
-				templ_7745c5c3_Var344, templ_7745c5c3_Err = templ.JoinStringErrs("Retry")
+				var templ_7745c5c3_Var345 string
+				templ_7745c5c3_Var345, templ_7745c5c3_Err = templ.JoinStringErrs("Retry")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1505, Col: 12}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1502, Col: 12}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var344))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var345))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Attributes: dialog.Trigger(ctx)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var343), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantSecondary, Size: button.SizeSm, Attributes: dialog.Trigger(ctx)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var344), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var345 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var346 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -7253,7 +7260,7 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Var346 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var347 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -7265,7 +7272,7 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Var347 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var348 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -7277,22 +7284,22 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						var templ_7745c5c3_Var348 string
-						templ_7745c5c3_Var348, templ_7745c5c3_Err = templ.JoinStringErrs("Retry worksheet row " + strconv.Itoa(row.Row))
+						var templ_7745c5c3_Var349 string
+						templ_7745c5c3_Var349, templ_7745c5c3_Err = templ.JoinStringErrs("Retry worksheet row " + strconv.Itoa(row.Row))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1510, Col: 53}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1507, Col: 53}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var348))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var349))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = dialog.Title(dialog.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var347), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = dialog.Title(dialog.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var348), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Var349 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var350 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -7304,24 +7311,24 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						var templ_7745c5c3_Var350 string
-						templ_7745c5c3_Var350, templ_7745c5c3_Err = templ.JoinStringErrs("A new attempt uses the unchanged snapshot and this mailbox's pacing. The earlier attempt stays in history.")
+						var templ_7745c5c3_Var351 string
+						templ_7745c5c3_Var351, templ_7745c5c3_Err = templ.JoinStringErrs("A new attempt uses the unchanged snapshot and this mailbox's pacing. The earlier attempt stays in history.")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1513, Col: 115}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1510, Col: 115}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var350))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var351))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = dialog.Description(dialog.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var349), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = dialog.Description(dialog.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var350), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Header(dialog.HeaderProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var346), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Header(dialog.HeaderProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var347), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -7333,12 +7340,12 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var351 string
-				templ_7745c5c3_Var351, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-retry-" + row.ID + "-" + row.State + "-" + sendingControlKey(data))
+				var templ_7745c5c3_Var352 string
+				templ_7745c5c3_Var352, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-retry-" + row.ID + "-" + row.State + "-" + sendingControlKey(data))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1517, Col: 89}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1514, Col: 89}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var351)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var352)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -7346,12 +7353,12 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var352 templ.SafeURL
-				templ_7745c5c3_Var352, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/retry#sending")
+				var templ_7745c5c3_Var353 templ.SafeURL
+				templ_7745c5c3_Var353, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/retry#sending")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1517, Col: 163}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1514, Col: 163}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var352))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var353))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -7363,7 +7370,7 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var353 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var354 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -7385,11 +7392,11 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = uilabel.Label(uilabel.Props{Class: "cn-label"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var353), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = uilabel.Label(uilabel.Props{Class: "cn-label"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var354), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var354 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var355 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -7401,7 +7408,7 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Var355 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var356 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -7413,24 +7420,24 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						var templ_7745c5c3_Var356 string
-						templ_7745c5c3_Var356, templ_7745c5c3_Err = templ.JoinStringErrs("Retry")
+						var templ_7745c5c3_Var357 string
+						templ_7745c5c3_Var357, templ_7745c5c3_Err = templ.JoinStringErrs("Retry")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1525, Col: 15}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1522, Col: 15}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var356))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var357))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Approved}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var355), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Approved}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var356), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Footer(dialog.FooterProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var354), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Footer(dialog.FooterProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var355), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -7440,13 +7447,13 @@ func recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) templ.Component
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Content(dialog.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var345), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Content(dialog.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var346), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = dialog.Dialog(dialog.Props{ID: "recovery-retry-" + row.ID}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var342), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = dialog.Dialog(dialog.Props{ID: "recovery-retry-" + row.ID}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var343), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -7470,12 +7477,12 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var357 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var357 == nil {
-			templ_7745c5c3_Var357 = templ.NopComponent
+		templ_7745c5c3_Var358 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var358 == nil {
+			templ_7745c5c3_Var358 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var358 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var359 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -7487,7 +7494,7 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Var359 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var360 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -7499,22 +7506,22 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				var templ_7745c5c3_Var360 string
-				templ_7745c5c3_Var360, templ_7745c5c3_Err = templ.JoinStringErrs("Send again")
+				var templ_7745c5c3_Var361 string
+				templ_7745c5c3_Var361, templ_7745c5c3_Err = templ.JoinStringErrs("Send again")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1536, Col: 17}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1533, Col: 17}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var360))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var361))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "status-warning", Attributes: dialog.Trigger(ctx)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var359), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Class: "status-warning", Attributes: dialog.Trigger(ctx)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var360), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var361 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var362 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -7526,7 +7533,7 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Var362 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var363 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -7538,7 +7545,7 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Var363 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var364 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -7550,22 +7557,22 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						var templ_7745c5c3_Var364 string
-						templ_7745c5c3_Var364, templ_7745c5c3_Err = templ.JoinStringErrs("Send worksheet row " + strconv.Itoa(row.Row) + " again")
+						var templ_7745c5c3_Var365 string
+						templ_7745c5c3_Var365, templ_7745c5c3_Err = templ.JoinStringErrs("Send worksheet row " + strconv.Itoa(row.Row) + " again")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1541, Col: 63}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1538, Col: 63}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var364))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var365))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = dialog.Title(dialog.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var363), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = dialog.Title(dialog.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var364), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Var365 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var366 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -7577,24 +7584,24 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						var templ_7745c5c3_Var366 string
-						templ_7745c5c3_Var366, templ_7745c5c3_Err = templ.JoinStringErrs("The earlier request may have been accepted. Sending again can create a duplicate; the uncertain attempt is kept.")
+						var templ_7745c5c3_Var367 string
+						templ_7745c5c3_Var367, templ_7745c5c3_Err = templ.JoinStringErrs("The earlier request may have been accepted. Sending again can create a duplicate; the uncertain attempt is kept.")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1544, Col: 121}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1541, Col: 121}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var366))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var367))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = dialog.Description(dialog.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var365), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = dialog.Description(dialog.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var366), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Header(dialog.HeaderProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var362), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Header(dialog.HeaderProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var363), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -7606,12 +7613,12 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var367 string
-				templ_7745c5c3_Var367, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-resend-" + row.ID + "-" + row.State + "-" + sendingControlKey(data))
+				var templ_7745c5c3_Var368 string
+				templ_7745c5c3_Var368, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-resend-" + row.ID + "-" + row.State + "-" + sendingControlKey(data))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1548, Col: 90}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1545, Col: 90}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var367)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var368)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -7619,12 +7626,12 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var368 templ.SafeURL
-				templ_7745c5c3_Var368, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/resend#sending")
+				var templ_7745c5c3_Var369 templ.SafeURL
+				templ_7745c5c3_Var369, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/resend#sending")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1548, Col: 165}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1545, Col: 165}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var368))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var369))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -7636,7 +7643,7 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var369 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var370 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -7658,11 +7665,11 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = uilabel.Label(uilabel.Props{Class: "cn-label"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var369), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = uilabel.Label(uilabel.Props{Class: "cn-label"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var370), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var370 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var371 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -7684,11 +7691,11 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = uilabel.Label(uilabel.Props{Class: "cn-label"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var370), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = uilabel.Label(uilabel.Props{Class: "cn-label"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var371), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var371 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var372 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -7700,7 +7707,7 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Var372 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var373 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -7712,24 +7719,24 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						var templ_7745c5c3_Var373 string
-						templ_7745c5c3_Var373, templ_7745c5c3_Err = templ.JoinStringErrs("Send again — duplicate risk")
+						var templ_7745c5c3_Var374 string
+						templ_7745c5c3_Var374, templ_7745c5c3_Err = templ.JoinStringErrs("Send again — duplicate risk")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1560, Col: 39}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1557, Col: 39}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var373))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var374))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Approved, Class: "status-warning"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var372), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Disabled: !data.Approved, Class: "status-warning"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var373), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Footer(dialog.FooterProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var371), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Footer(dialog.FooterProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var372), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -7739,13 +7746,13 @@ func recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) templ.Componen
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Content(dialog.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var361), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Content(dialog.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var362), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = dialog.Dialog(dialog.Props{ID: "recovery-resend-" + row.ID}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var358), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = dialog.Dialog(dialog.Props{ID: "recovery-resend-" + row.ID}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var359), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -7769,12 +7776,12 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var374 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var374 == nil {
-			templ_7745c5c3_Var374 = templ.NopComponent
+		templ_7745c5c3_Var375 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var375 == nil {
+			templ_7745c5c3_Var375 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var375 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var376 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -7786,7 +7793,7 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Var376 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var377 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -7798,22 +7805,22 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				var templ_7745c5c3_Var377 string
-				templ_7745c5c3_Var377, templ_7745c5c3_Err = templ.JoinStringErrs("Mark already submitted")
+				var templ_7745c5c3_Var378 string
+				templ_7745c5c3_Var378, templ_7745c5c3_Err = templ.JoinStringErrs("Mark already submitted")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1571, Col: 29}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1568, Col: 29}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var377))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var378))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: dialog.Trigger(ctx)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var376), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Attributes: dialog.Trigger(ctx)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var377), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var378 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var379 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -7825,7 +7832,7 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Var379 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var380 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -7837,7 +7844,7 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Var380 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var381 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -7849,22 +7856,22 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						var templ_7745c5c3_Var381 string
-						templ_7745c5c3_Var381, templ_7745c5c3_Err = templ.JoinStringErrs("Resolve worksheet row " + strconv.Itoa(row.Row))
+						var templ_7745c5c3_Var382 string
+						templ_7745c5c3_Var382, templ_7745c5c3_Err = templ.JoinStringErrs("Resolve worksheet row " + strconv.Itoa(row.Row))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1576, Col: 55}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1573, Col: 55}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var381))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var382))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = dialog.Title(dialog.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var380), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = dialog.Title(dialog.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var381), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Var382 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var383 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -7876,24 +7883,24 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						var templ_7745c5c3_Var383 string
-						templ_7745c5c3_Var383, templ_7745c5c3_Err = templ.JoinStringErrs("Records the operator, basis and resolution time after external verification. It does not invent a Microsoft acceptance timestamp.")
+						var templ_7745c5c3_Var384 string
+						templ_7745c5c3_Var384, templ_7745c5c3_Err = templ.JoinStringErrs("Records the operator, basis and resolution time after external verification. It does not invent a Microsoft acceptance timestamp.")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1579, Col: 138}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1576, Col: 138}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var383))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var384))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = dialog.Description(dialog.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var382), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = dialog.Description(dialog.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var383), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Header(dialog.HeaderProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var379), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Header(dialog.HeaderProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var380), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -7905,12 +7912,12 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var384 string
-				templ_7745c5c3_Var384, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-resolve-" + row.ID + "-" + row.State + "-" + sendingControlKey(data))
+				var templ_7745c5c3_Var385 string
+				templ_7745c5c3_Var385, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-resolve-" + row.ID + "-" + row.State + "-" + sendingControlKey(data))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1583, Col: 91}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1580, Col: 91}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var384)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var385)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -7918,12 +7925,12 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var385 templ.SafeURL
-				templ_7745c5c3_Var385, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/resolve#sending")
+				var templ_7745c5c3_Var386 templ.SafeURL
+				templ_7745c5c3_Var386, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/resolve#sending")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1583, Col: 167}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1580, Col: 167}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var385))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var386))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -7935,7 +7942,7 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var386 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var387 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -7947,7 +7954,7 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Var387 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var388 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -7965,7 +7972,7 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = field.Label(field.LabelProps{For: "sending-resolution-basis-" + row.ID}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var387), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = field.Label(field.LabelProps{For: "sending-resolution-basis-" + row.ID}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var388), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -7975,11 +7982,11 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = field.Field(field.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var386), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = field.Field(field.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var387), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var388 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var389 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -8001,11 +8008,11 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = uilabel.Label(uilabel.Props{Class: "cn-label"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var388), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = uilabel.Label(uilabel.Props{Class: "cn-label"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var389), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var389 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var390 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -8017,7 +8024,7 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Var390 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var391 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -8029,24 +8036,24 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						var templ_7745c5c3_Var391 string
-						templ_7745c5c3_Var391, templ_7745c5c3_Err = templ.JoinStringErrs("Mark already submitted")
+						var templ_7745c5c3_Var392 string
+						templ_7745c5c3_Var392, templ_7745c5c3_Err = templ.JoinStringErrs("Mark already submitted")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1597, Col: 32}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1594, Col: 32}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var391))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var392))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var390), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var391), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = dialog.Footer(dialog.FooterProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var389), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = dialog.Footer(dialog.FooterProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var390), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -8056,13 +8063,13 @@ func recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) templ.Compone
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = dialog.Content(dialog.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var378), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = dialog.Content(dialog.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var379), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = dialog.Dialog(dialog.Props{ID: "recovery-resolve-" + row.ID}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var375), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = dialog.Dialog(dialog.Props{ID: "recovery-resolve-" + row.ID}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var376), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -8086,9 +8093,9 @@ func recoveryPriorAttempt(row TaskAdmittedRow) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var392 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var392 == nil {
-			templ_7745c5c3_Var392 = templ.NopComponent
+		templ_7745c5c3_Var393 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var393 == nil {
+			templ_7745c5c3_Var393 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if row.AttemptID != "" {
@@ -8096,12 +8103,12 @@ func recoveryPriorAttempt(row TaskAdmittedRow) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var393 string
-			templ_7745c5c3_Var393, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptID)
+			var templ_7745c5c3_Var394 string
+			templ_7745c5c3_Var394, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1609, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1606, Col: 49}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var393))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var394))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -8109,12 +8116,12 @@ func recoveryPriorAttempt(row TaskAdmittedRow) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var394 string
-			templ_7745c5c3_Var394, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptRecipient)
+			var templ_7745c5c3_Var395 string
+			templ_7745c5c3_Var395, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptRecipient)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1610, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1607, Col: 50}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var394))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var395))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -8122,12 +8129,12 @@ func recoveryPriorAttempt(row TaskAdmittedRow) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var395 string
-			templ_7745c5c3_Var395, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptState)
+			var templ_7745c5c3_Var396 string
+			templ_7745c5c3_Var396, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptState)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1610, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1607, Col: 74}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var395))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var396))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -8135,12 +8142,12 @@ func recoveryPriorAttempt(row TaskAdmittedRow) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var396 string
-			templ_7745c5c3_Var396, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptTime)
+			var templ_7745c5c3_Var397 string
+			templ_7745c5c3_Var397, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptTime)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1610, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1607, Col: 97}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var396))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var397))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -8153,12 +8160,12 @@ func recoveryPriorAttempt(row TaskAdmittedRow) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var397 string
-				templ_7745c5c3_Var397, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptReason)
+				var templ_7745c5c3_Var398 string
+				templ_7745c5c3_Var398, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptReason)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1612, Col: 48}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1609, Col: 48}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var397))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var398))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -8192,21 +8199,21 @@ func sendingRowFields(data TaskPageData, row TaskAdmittedRow) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var398 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var398 == nil {
-			templ_7745c5c3_Var398 = templ.NopComponent
+		templ_7745c5c3_Var399 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var399 == nil {
+			templ_7745c5c3_Var399 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 434, "<input type=\"hidden\" name=\"action_id\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var399 string
-		templ_7745c5c3_Var399, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "row" + row.ID)
+		var templ_7745c5c3_Var400 string
+		templ_7745c5c3_Var400, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "row" + row.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1619, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1616, Col: 77}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var399)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var400)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -8214,12 +8221,12 @@ func sendingRowFields(data TaskPageData, row TaskAdmittedRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var400 string
-		templ_7745c5c3_Var400, templ_7745c5c3_Err = templ.ResolveAttributeValue(row.ID)
+		var templ_7745c5c3_Var401 string
+		templ_7745c5c3_Var401, templ_7745c5c3_Err = templ.ResolveAttributeValue(row.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1620, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1617, Col: 53}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var400)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var401)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -8247,12 +8254,12 @@ func taskPacing(data TaskPageData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var401 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var401 == nil {
-			templ_7745c5c3_Var401 = templ.NopComponent
+		templ_7745c5c3_Var402 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var402 == nil {
+			templ_7745c5c3_Var402 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var402 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var403 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -8264,7 +8271,7 @@ func taskPacing(data TaskPageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Var403 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var404 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -8276,7 +8283,7 @@ func taskPacing(data TaskPageData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Var404 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var405 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -8294,11 +8301,11 @@ func taskPacing(data TaskPageData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = accordion.Trigger(accordion.TriggerProps{Class: "p-5 font-semibold hover:no-underline"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var404), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = accordion.Trigger(accordion.TriggerProps{Class: "p-5 font-semibold hover:no-underline"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var405), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var405 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var406 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -8314,12 +8321,12 @@ func taskPacing(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var406 string
-					templ_7745c5c3_Var406, templ_7745c5c3_Err = templ.JoinStringErrs(data.Rate)
+					var templ_7745c5c3_Var407 string
+					templ_7745c5c3_Var407, templ_7745c5c3_Err = templ.JoinStringErrs(data.Rate)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1635, Col: 80}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1632, Col: 80}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var406))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var407))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8332,12 +8339,12 @@ func taskPacing(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var407 string
-						templ_7745c5c3_Var407, templ_7745c5c3_Err = templ.JoinStringErrs(data.Cooldown)
+						var templ_7745c5c3_Var408 string
+						templ_7745c5c3_Var408, templ_7745c5c3_Err = templ.JoinStringErrs(data.Cooldown)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1645, Col: 29}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1642, Col: 29}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var407))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var408))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -8356,12 +8363,12 @@ func taskPacing(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var408 string
-						templ_7745c5c3_Var408, templ_7745c5c3_Err = templ.JoinStringErrs(data.CooldownReason)
+						var templ_7745c5c3_Var409 string
+						templ_7745c5c3_Var409, templ_7745c5c3_Err = templ.JoinStringErrs(data.CooldownReason)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1651, Col: 74}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1648, Col: 74}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var408))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var409))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -8374,12 +8381,12 @@ func taskPacing(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var409 string
-					templ_7745c5c3_Var409, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-rate-" + sendingControlKey(data))
+					var templ_7745c5c3_Var410 string
+					templ_7745c5c3_Var410, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-rate-" + sendingControlKey(data))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1655, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1652, Col: 56}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var409)
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var410)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8387,12 +8394,12 @@ func taskPacing(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var410 templ.SafeURL
-					templ_7745c5c3_Var410, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/rate#sending")
+					var templ_7745c5c3_Var411 templ.SafeURL
+					templ_7745c5c3_Var411, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/rate#sending")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1655, Col: 129}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1652, Col: 129}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var410))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var411))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8400,12 +8407,12 @@ func taskPacing(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var411 string
-					templ_7745c5c3_Var411, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "rate")
+					var templ_7745c5c3_Var412 string
+					templ_7745c5c3_Var412, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "rate")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1656, Col: 73}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1653, Col: 73}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var411)
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var412)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8413,7 +8420,7 @@ func taskPacing(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Var412 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var413 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -8425,7 +8432,7 @@ func taskPacing(data TaskPageData) templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Var413 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var414 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -8443,7 +8450,7 @@ func taskPacing(data TaskPageData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = field.Label(field.LabelProps{For: "sending-rate"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var413), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = field.Label(field.LabelProps{For: "sending-rate"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var414), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -8457,7 +8464,7 @@ func taskPacing(data TaskPageData) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = field.Field(field.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var412), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = field.Field(field.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var413), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8465,7 +8472,7 @@ func taskPacing(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Var414 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var415 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -8483,7 +8490,7 @@ func taskPacing(data TaskPageData) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Class: "shrink-0"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var414), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Class: "shrink-0"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var415), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8493,19 +8500,19 @@ func taskPacing(data TaskPageData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = accordion.Content(accordion.ContentProps{Class: "space-y-5 px-1 pb-5"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var405), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = accordion.Content(accordion.ContentProps{Class: "space-y-5 px-1 pb-5"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var406), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = accordion.Item(accordion.ItemProps{ID: "sending-settings-item", Value: "pacing", Class: "data-open:bg-transparent"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var403), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = accordion.Item(accordion.ItemProps{ID: "sending-settings-item", Value: "pacing", Class: "data-open:bg-transparent"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var404), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = accordion.Accordion(accordion.Props{ID: "sending-settings", Class: "rounded-4xl", Attributes: templ.Attributes{"data-workspace-persist": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var402), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = accordion.Accordion(accordion.Props{ID: "sending-settings", Class: "rounded-4xl", Attributes: templ.Attributes{"data-workspace-persist": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var403), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -8529,16 +8536,16 @@ func taskResults(data TaskPageData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var415 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var415 == nil {
-			templ_7745c5c3_Var415 = templ.NopComponent
+		templ_7745c5c3_Var416 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var416 == nil {
+			templ_7745c5c3_Var416 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 454, "<section class=\"space-y-6\" id=\"task-results\" aria-labelledby=\"results-heading\"><h2 id=\"results-heading\" class=\"font-bold text-[1.2rem] tracking-[-.02em]\">Results</h2>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var416 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var417 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -8550,7 +8557,7 @@ func taskResults(data TaskPageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Var417 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var418 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -8571,12 +8578,12 @@ func taskResults(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var418 string
-					templ_7745c5c3_Var418, templ_7745c5c3_Err = templ.JoinStringErrs(joinLabels(data.ResultLabels))
+					var templ_7745c5c3_Var419 string
+					templ_7745c5c3_Var419, templ_7745c5c3_Err = templ.JoinStringErrs(joinLabels(data.ResultLabels))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1687, Col: 93}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1684, Col: 93}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var418))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var419))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8594,12 +8601,12 @@ func taskResults(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var419 string
-					templ_7745c5c3_Var419, templ_7745c5c3_Err = templ.JoinStringErrs(data.ResultsAsOf)
+					var templ_7745c5c3_Var420 string
+					templ_7745c5c3_Var420, templ_7745c5c3_Err = templ.JoinStringErrs(data.ResultsAsOf)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1691, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1688, Col: 48}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var419))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var420))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8607,8 +8614,8 @@ func taskResults(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var420 = []any{button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault})}
-					templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var420...)
+					var templ_7745c5c3_Var421 = []any{button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault})}
+					templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var421...)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8616,12 +8623,12 @@ func taskResults(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var421 string
-					templ_7745c5c3_Var421, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var420).String())
+					var templ_7745c5c3_Var422 string
+					templ_7745c5c3_Var422, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var421).String())
 					if templ_7745c5c3_Err != nil {
 						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1, Col: 0}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var421)
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var422)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8629,12 +8636,12 @@ func taskResults(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var422 templ.SafeURL
-					templ_7745c5c3_Var422, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results.xlsx")
+					var templ_7745c5c3_Var423 templ.SafeURL
+					templ_7745c5c3_Var423, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results.xlsx")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1693, Col: 189}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1690, Col: 189}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var422))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var423))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8647,12 +8654,12 @@ func taskResults(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var423 templ.SafeURL
-						templ_7745c5c3_Var423, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results")
+						var templ_7745c5c3_Var424 templ.SafeURL
+						templ_7745c5c3_Var424, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1695, Col: 114}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1692, Col: 114}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var423))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var424))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -8660,7 +8667,7 @@ func taskResults(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Var424 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var425 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -8678,7 +8685,7 @@ func taskResults(data TaskPageData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantGhost, Size: button.SizeDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var424), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantGhost, Size: button.SizeDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var425), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -8691,12 +8698,12 @@ func taskResults(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var425 templ.SafeURL
-					templ_7745c5c3_Var425, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results/delete#results")
+					var templ_7745c5c3_Var426 templ.SafeURL
+					templ_7745c5c3_Var426, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results/delete#results")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1701, Col: 150}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1698, Col: 150}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var425))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var426))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8704,7 +8711,7 @@ func taskResults(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Var426 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var427 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -8716,7 +8723,7 @@ func taskResults(data TaskPageData) templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Var427 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var428 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -8734,11 +8741,11 @@ func taskResults(data TaskPageData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault, Attributes: alertdialog.Trigger(ctx)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var427), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault, Attributes: alertdialog.Trigger(ctx)}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var428), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Var428 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var429 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -8750,7 +8757,7 @@ func taskResults(data TaskPageData) templ.Component {
 								}()
 							}
 							ctx = templ.InitializeContext(ctx)
-							templ_7745c5c3_Var429 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+							templ_7745c5c3_Var430 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 								templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 								templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 								if !templ_7745c5c3_IsBuffer {
@@ -8762,7 +8769,7 @@ func taskResults(data TaskPageData) templ.Component {
 									}()
 								}
 								ctx = templ.InitializeContext(ctx)
-								templ_7745c5c3_Var430 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var431 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -8780,11 +8787,11 @@ func taskResults(data TaskPageData) templ.Component {
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = alertdialog.Title(alertdialog.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var430), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = alertdialog.Title(alertdialog.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var431), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Var431 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var432 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -8802,17 +8809,17 @@ func taskResults(data TaskPageData) templ.Component {
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = alertdialog.Description(alertdialog.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var431), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = alertdialog.Description(alertdialog.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var432), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = alertdialog.Header(alertdialog.HeaderProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var429), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = alertdialog.Header(alertdialog.HeaderProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var430), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Var432 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+							templ_7745c5c3_Var433 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 								templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 								templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 								if !templ_7745c5c3_IsBuffer {
@@ -8834,11 +8841,11 @@ func taskResults(data TaskPageData) templ.Component {
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = uilabel.Label(uilabel.Props{Class: "cursor-pointer justify-start gap-3"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var432), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = uilabel.Label(uilabel.Props{Class: "cursor-pointer justify-start gap-3"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var433), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Var433 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+							templ_7745c5c3_Var434 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 								templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 								templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 								if !templ_7745c5c3_IsBuffer {
@@ -8850,7 +8857,7 @@ func taskResults(data TaskPageData) templ.Component {
 									}()
 								}
 								ctx = templ.InitializeContext(ctx)
-								templ_7745c5c3_Var434 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var435 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -8868,11 +8875,11 @@ func taskResults(data TaskPageData) templ.Component {
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = alertdialog.Cancel(alertdialog.CancelProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var434), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = alertdialog.Cancel(alertdialog.CancelProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var435), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Var435 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var436 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -8890,25 +8897,25 @@ func taskResults(data TaskPageData) templ.Component {
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit, Attributes: templ.Attributes{"form": "task-results-delete-form"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var435), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = button.Button(button.Props{Variant: button.VariantDestructive, Type: button.TypeSubmit, Attributes: templ.Attributes{"form": "task-results-delete-form"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var436), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
 								return nil
 							})
-							templ_7745c5c3_Err = alertdialog.Footer(alertdialog.FooterProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var433), templ_7745c5c3_Buffer)
+							templ_7745c5c3_Err = alertdialog.Footer(alertdialog.FooterProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var434), templ_7745c5c3_Buffer)
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = alertdialog.Content(alertdialog.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var428), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = alertdialog.Content(alertdialog.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var429), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = alertdialog.AlertDialog(alertdialog.Props{ID: "task-results-delete"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var426), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = alertdialog.AlertDialog(alertdialog.Props{ID: "task-results-delete"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var427), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -8923,7 +8930,7 @@ func taskResults(data TaskPageData) templ.Component {
 					}
 				} else if data.ResultsState == "failed" {
 					if data.ResultsError != "" {
-						templ_7745c5c3_Var436 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var437 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -8935,18 +8942,18 @@ func taskResults(data TaskPageData) templ.Component {
 								}()
 							}
 							ctx = templ.InitializeContext(ctx)
-							var templ_7745c5c3_Var437 string
-							templ_7745c5c3_Var437, templ_7745c5c3_Err = templ.JoinStringErrs(data.ResultsError)
+							var templ_7745c5c3_Var438 string
+							templ_7745c5c3_Var438, templ_7745c5c3_Err = templ.JoinStringErrs(data.ResultsError)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1736, Col: 26}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1733, Col: 26}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var437))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var438))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = alert.Alert(alert.Props{Variant: alert.VariantDestructive}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var436), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = alert.Alert(alert.Props{Variant: alert.VariantDestructive}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var437), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -8960,12 +8967,12 @@ func taskResults(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var438 templ.SafeURL
-						templ_7745c5c3_Var438, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results")
+						var templ_7745c5c3_Var439 templ.SafeURL
+						templ_7745c5c3_Var439, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1741, Col: 113}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1738, Col: 113}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var438))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var439))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -8973,7 +8980,7 @@ func taskResults(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Var439 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var440 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -8991,7 +8998,7 @@ func taskResults(data TaskPageData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var439), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var440), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -9010,12 +9017,12 @@ func taskResults(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var440 templ.SafeURL
-						templ_7745c5c3_Var440, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results")
+						var templ_7745c5c3_Var441 templ.SafeURL
+						templ_7745c5c3_Var441, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1750, Col: 113}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1747, Col: 113}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var440))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var441))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -9023,7 +9030,7 @@ func taskResults(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Var441 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var442 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -9041,7 +9048,7 @@ func taskResults(data TaskPageData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var441), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var442), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -9065,12 +9072,12 @@ func taskResults(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var442 string
-					templ_7745c5c3_Var442, templ_7745c5c3_Err = templ.JoinStringErrs(data.StatusLabel)
+					var templ_7745c5c3_Var443 string
+					templ_7745c5c3_Var443, templ_7745c5c3_Err = templ.JoinStringErrs(data.StatusLabel)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1761, Col: 80}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1758, Col: 80}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var442))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var443))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -9081,13 +9088,13 @@ func taskResults(data TaskPageData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = card.Content(card.ContentProps{Class: "gap-4"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var417), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = card.Content(card.ContentProps{Class: "gap-4"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var418), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "results-workbook-heading"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var416), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "results-workbook-heading"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var417), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -9119,16 +9126,16 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var443 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var443 == nil {
-			templ_7745c5c3_Var443 = templ.NopComponent
+		templ_7745c5c3_Var444 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var444 == nil {
+			templ_7745c5c3_Var444 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 493, "<section aria-labelledby=\"task-history-trigger\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var444 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var445 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -9140,7 +9147,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Var445 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var446 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -9152,7 +9159,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Var446 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var447 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -9170,11 +9177,11 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = accordion.Trigger(accordion.TriggerProps{Class: "p-5 font-semibold hover:no-underline"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var446), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = accordion.Trigger(accordion.TriggerProps{Class: "p-5 font-semibold hover:no-underline"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var447), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var447 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var448 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -9190,7 +9197,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Var448 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var449 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -9202,7 +9209,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 							}()
 						}
 						ctx = templ.InitializeContext(ctx)
-						templ_7745c5c3_Var449 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var450 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -9215,7 +9222,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 							}
 							ctx = templ.InitializeContext(ctx)
 							if len(data.Recent) == 0 && len(data.Resolutions) == 0 {
-								templ_7745c5c3_Var450 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var451 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -9227,7 +9234,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									templ_7745c5c3_Var451 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_Var452 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 										if !templ_7745c5c3_IsBuffer {
@@ -9239,7 +9246,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											}()
 										}
 										ctx = templ.InitializeContext(ctx)
-										templ_7745c5c3_Var452 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+										templ_7745c5c3_Var453 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 											templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 											templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 											if !templ_7745c5c3_IsBuffer {
@@ -9257,25 +9264,25 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											}
 											return nil
 										})
-										templ_7745c5c3_Err = item.Description(item.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var452), templ_7745c5c3_Buffer)
+										templ_7745c5c3_Err = item.Description(item.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var453), templ_7745c5c3_Buffer)
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = item.Content(item.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var451), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = item.Content(item.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var452), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = item.Item(item.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var450), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = item.Item(item.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var451), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
 							}
 							for _, outcome := range data.Recent {
-								templ_7745c5c3_Var453 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var454 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -9287,7 +9294,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									templ_7745c5c3_Var454 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_Var455 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 										if !templ_7745c5c3_IsBuffer {
@@ -9299,7 +9306,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											}()
 										}
 										ctx = templ.InitializeContext(ctx)
-										templ_7745c5c3_Var455 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+										templ_7745c5c3_Var456 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 											templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 											templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 											if !templ_7745c5c3_IsBuffer {
@@ -9311,12 +9318,12 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 												}()
 											}
 											ctx = templ.InitializeContext(ctx)
-											var templ_7745c5c3_Var456 string
-											templ_7745c5c3_Var456, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Time)
+											var templ_7745c5c3_Var457 string
+											templ_7745c5c3_Var457, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Time)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1793, Col: 25}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1790, Col: 25}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var456))
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var457))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
@@ -9324,12 +9331,12 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											var templ_7745c5c3_Var457 string
-											templ_7745c5c3_Var457, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Kind)
+											var templ_7745c5c3_Var458 string
+											templ_7745c5c3_Var458, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Kind)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1793, Col: 45}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1790, Col: 45}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var457))
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var458))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
@@ -9337,22 +9344,22 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											var templ_7745c5c3_Var458 string
-											templ_7745c5c3_Var458, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Recipient)
+											var templ_7745c5c3_Var459 string
+											templ_7745c5c3_Var459, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Recipient)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1793, Col: 70}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1790, Col: 70}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var458))
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var459))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 											return nil
 										})
-										templ_7745c5c3_Err = item.Title(item.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var455), templ_7745c5c3_Buffer)
+										templ_7745c5c3_Err = item.Title(item.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var456), templ_7745c5c3_Buffer)
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Var459 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+										templ_7745c5c3_Var460 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 											templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 											templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 											if !templ_7745c5c3_IsBuffer {
@@ -9364,12 +9371,12 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 												}()
 											}
 											ctx = templ.InitializeContext(ctx)
-											var templ_7745c5c3_Var460 string
-											templ_7745c5c3_Var460, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.State)
+											var templ_7745c5c3_Var461 string
+											templ_7745c5c3_Var461, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.State)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1796, Col: 26}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1793, Col: 26}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var460))
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var461))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
@@ -9377,36 +9384,36 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											var templ_7745c5c3_Var461 string
-											templ_7745c5c3_Var461, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Reason)
+											var templ_7745c5c3_Var462 string
+											templ_7745c5c3_Var462, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Reason)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1796, Col: 48}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1793, Col: 48}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var461))
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var462))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 											return nil
 										})
-										templ_7745c5c3_Err = item.Description(item.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var459), templ_7745c5c3_Buffer)
+										templ_7745c5c3_Err = item.Description(item.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var460), templ_7745c5c3_Buffer)
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = item.Content(item.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var454), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = item.Content(item.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var455), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var453), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var454), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
 							}
 							for _, resolution := range data.Resolutions {
-								templ_7745c5c3_Var462 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var463 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -9418,7 +9425,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									templ_7745c5c3_Var463 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_Var464 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 										templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 										templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 										if !templ_7745c5c3_IsBuffer {
@@ -9430,7 +9437,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											}()
 										}
 										ctx = templ.InitializeContext(ctx)
-										templ_7745c5c3_Var464 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+										templ_7745c5c3_Var465 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 											templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 											templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 											if !templ_7745c5c3_IsBuffer {
@@ -9442,12 +9449,12 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 												}()
 											}
 											ctx = templ.InitializeContext(ctx)
-											var templ_7745c5c3_Var465 string
-											templ_7745c5c3_Var465, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Time)
+											var templ_7745c5c3_Var466 string
+											templ_7745c5c3_Var466, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Time)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1805, Col: 28}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1802, Col: 28}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var465))
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var466))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
@@ -9455,12 +9462,12 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											var templ_7745c5c3_Var466 string
-											templ_7745c5c3_Var466, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Row)
+											var templ_7745c5c3_Var467 string
+											templ_7745c5c3_Var467, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Row)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1805, Col: 64}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1802, Col: 64}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var466))
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var467))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
@@ -9470,11 +9477,11 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											}
 											return nil
 										})
-										templ_7745c5c3_Err = item.Title(item.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var464), templ_7745c5c3_Buffer)
+										templ_7745c5c3_Err = item.Title(item.TitleProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var465), templ_7745c5c3_Buffer)
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
-										templ_7745c5c3_Var467 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+										templ_7745c5c3_Var468 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 											templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 											templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 											if !templ_7745c5c3_IsBuffer {
@@ -9490,12 +9497,12 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											var templ_7745c5c3_Var468 string
-											templ_7745c5c3_Var468, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Basis)
+											var templ_7745c5c3_Var469 string
+											templ_7745c5c3_Var469, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Basis)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1808, Col: 36}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1805, Col: 36}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var468))
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var469))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
@@ -9503,61 +9510,61 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
-											var templ_7745c5c3_Var469 string
-											templ_7745c5c3_Var469, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Actor)
+											var templ_7745c5c3_Var470 string
+											templ_7745c5c3_Var470, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Actor)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1808, Col: 72}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1805, Col: 72}
 											}
-											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var469))
+											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var470))
 											if templ_7745c5c3_Err != nil {
 												return templ_7745c5c3_Err
 											}
 											return nil
 										})
-										templ_7745c5c3_Err = item.Description(item.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var467), templ_7745c5c3_Buffer)
+										templ_7745c5c3_Err = item.Description(item.DescriptionProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var468), templ_7745c5c3_Buffer)
 										if templ_7745c5c3_Err != nil {
 											return templ_7745c5c3_Err
 										}
 										return nil
 									})
-									templ_7745c5c3_Err = item.Content(item.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var463), templ_7745c5c3_Buffer)
+									templ_7745c5c3_Err = item.Content(item.ContentProps{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var464), templ_7745c5c3_Buffer)
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var462), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = item.Item(item.Props{Size: item.SizeSm, Variant: item.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var463), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = item.Group(item.GroupProps{Class: "p-1 pr-3"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var449), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = item.Group(item.GroupProps{Class: "p-1 pr-3"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var450), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = scrollarea.ScrollArea(scrollarea.Props{Class: "[&_[data-slot=scroll-area-viewport]]:h-auto [&_[data-slot=scroll-area-viewport]]:max-h-[min(28rem,60vh)]"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var448), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = scrollarea.ScrollArea(scrollarea.Props{Class: "[&_[data-slot=scroll-area-viewport]]:h-auto [&_[data-slot=scroll-area-viewport]]:max-h-[min(28rem,60vh)]"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var449), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = accordion.Content(accordion.ContentProps{Class: "space-y-3 pb-5"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var447), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = accordion.Content(accordion.ContentProps{Class: "space-y-3 pb-5"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var448), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = accordion.Item(accordion.ItemProps{ID: "task-history", Value: "history", Class: "data-open:bg-transparent"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var445), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = accordion.Item(accordion.ItemProps{ID: "task-history", Value: "history", Class: "data-open:bg-transparent"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var446), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = accordion.Accordion(accordion.Props{ID: "task-results-history", Class: "rounded-4xl", Attributes: templ.Attributes{"data-workspace-persist": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var444), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = accordion.Accordion(accordion.Props{ID: "task-results-history", Class: "rounded-4xl", Attributes: templ.Attributes{"data-workspace-persist": true}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var445), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -9601,9 +9608,9 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var470 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var470 == nil {
-			templ_7745c5c3_Var470 = templ.NopComponent
+		templ_7745c5c3_Var471 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var471 == nil {
+			templ_7745c5c3_Var471 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 505, "<div class=\"p-[1.1rem] border border-border rounded-4xl bg-muted space-y-4\">")
@@ -9611,7 +9618,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if data.Error != "" {
-			templ_7745c5c3_Var471 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var472 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -9623,18 +9630,18 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				var templ_7745c5c3_Var472 string
-				templ_7745c5c3_Var472, templ_7745c5c3_Err = templ.JoinStringErrs(data.Error)
+				var templ_7745c5c3_Var473 string
+				templ_7745c5c3_Var473, templ_7745c5c3_Err = templ.JoinStringErrs(data.Error)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1841, Col: 16}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1838, Col: 16}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var472))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var473))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = alert.Alert(alert.Props{Variant: alert.VariantDestructive}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var471), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = alert.Alert(alert.Props{Variant: alert.VariantDestructive}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var472), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -9652,12 +9659,12 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var473 string
-			templ_7745c5c3_Var473, templ_7745c5c3_Err = templ.JoinStringErrs(data.Recipient)
+			var templ_7745c5c3_Var474 string
+			templ_7745c5c3_Var474, templ_7745c5c3_Err = templ.JoinStringErrs(data.Recipient)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1849, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1846, Col: 45}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var473))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var474))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -9665,12 +9672,12 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var474 string
-			templ_7745c5c3_Var474, templ_7745c5c3_Err = templ.JoinStringErrs(data.Subject)
+			var templ_7745c5c3_Var475 string
+			templ_7745c5c3_Var475, templ_7745c5c3_Err = templ.JoinStringErrs(data.Subject)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1853, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1850, Col: 43}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var474))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var475))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -9686,12 +9693,12 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var475 string
-			templ_7745c5c3_Var475, templ_7745c5c3_Err = templ.JoinStringErrs(data.SourceRow)
+			var templ_7745c5c3_Var476 string
+			templ_7745c5c3_Var476, templ_7745c5c3_Err = templ.JoinStringErrs(data.SourceRow)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1864, Col: 94}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1861, Col: 94}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var475))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var476))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -9699,12 +9706,12 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var476 string
-			templ_7745c5c3_Var476, templ_7745c5c3_Err = templ.JoinStringErrs(data.RecipientPosition)
+			var templ_7745c5c3_Var477 string
+			templ_7745c5c3_Var477, templ_7745c5c3_Err = templ.JoinStringErrs(data.RecipientPosition)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1865, Col: 115}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1862, Col: 115}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var476))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var477))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -9712,12 +9719,12 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var477 string
-			templ_7745c5c3_Var477, templ_7745c5c3_Err = templ.JoinStringErrs(data.OriginalRecipient)
+			var templ_7745c5c3_Var478 string
+			templ_7745c5c3_Var478, templ_7745c5c3_Err = templ.JoinStringErrs(data.OriginalRecipient)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1866, Col: 136}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1863, Col: 136}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var477))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var478))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -9725,12 +9732,12 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var478 string
-			templ_7745c5c3_Var478, templ_7745c5c3_Err = templ.JoinStringErrs(data.ContentHash)
+			var templ_7745c5c3_Var479 string
+			templ_7745c5c3_Var479, templ_7745c5c3_Err = templ.JoinStringErrs(data.ContentHash)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1867, Col: 119}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1864, Col: 119}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var478))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var479))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -9746,7 +9753,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Var479 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var480 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -9767,12 +9774,12 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var480 string
-					templ_7745c5c3_Var480, templ_7745c5c3_Err = templ.JoinStringErrs(value.Variable)
+					var templ_7745c5c3_Var481 string
+					templ_7745c5c3_Var481, templ_7745c5c3_Err = templ.JoinStringErrs(value.Variable)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1880, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1877, Col: 32}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var480))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var481))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -9780,12 +9787,12 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var481 string
-					templ_7745c5c3_Var481, templ_7745c5c3_Err = templ.JoinStringErrs(value.Header)
+					var templ_7745c5c3_Var482 string
+					templ_7745c5c3_Var482, templ_7745c5c3_Err = templ.JoinStringErrs(value.Header)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1880, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1877, Col: 63}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var481))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var482))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -9793,12 +9800,12 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var482 string
-					templ_7745c5c3_Var482, templ_7745c5c3_Err = templ.JoinStringErrs(value.Raw)
+					var templ_7745c5c3_Var483 string
+					templ_7745c5c3_Var483, templ_7745c5c3_Err = templ.JoinStringErrs(value.Raw)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1880, Col: 98}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1877, Col: 98}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var482))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var483))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -9806,12 +9813,12 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var483 string
-					templ_7745c5c3_Var483, templ_7745c5c3_Err = templ.JoinStringErrs(value.Normalized)
+					var templ_7745c5c3_Var484 string
+					templ_7745c5c3_Var484, templ_7745c5c3_Err = templ.JoinStringErrs(value.Normalized)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1880, Col: 140}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1877, Col: 140}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var483))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var484))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -9826,7 +9833,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var479), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var480), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -9954,6 +9961,41 @@ func recoveryCanReview(row TaskAdmittedRow, controls TaskControls) bool {
 	return row.State == "review_required" && (controls.ResendRow || controls.ResolveRow)
 }
 
+// recoveryActionHint explains an action cell that has no control, so a gated
+// recovery row never renders blank. An empty result means an action is shown.
+func recoveryActionHint(data TaskPageData, row TaskAdmittedRow) string {
+	switch row.State {
+	case "correction_required":
+		return "Upload a corrected task to send this row."
+	case "manually_submitted":
+		return "Marked already submitted after external verification."
+	}
+	if recoveryCanRetry(row, data.Controls) || recoveryCanReview(row, data.Controls) {
+		return ""
+	}
+	if data.RestoreReview {
+		return "Restore review is active; reconcile recorded submissions before acting on this row."
+	}
+	if !taskStatusSettled(data.StoredStatus) {
+		return "Available after the active sending work settles."
+	}
+	if row.State == "review_required" {
+		return "Send again and Mark already submitted are unavailable for this task."
+	}
+	return "This row is no longer retryable; reload the task."
+}
+
+// taskStatusSettled mirrors presentation's settled states: retry and resend are
+// withheld until active work stops launching.
+func taskStatusSettled(status string) bool {
+	switch status {
+	case "paused", "interrupted", "stopped", "completed":
+		return true
+	default:
+		return false
+	}
+}
+
 // recoverySelectLabel names one selection checkbox for assistive technology.
 func recoverySelectLabel(row TaskAdmittedRow) string {
 	return "Select worksheet row " + strconv.Itoa(row.Row) + " recipient " + strconv.Itoa(row.Position)
@@ -10006,12 +10048,12 @@ func taskStatusBadge(label, class string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var484 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var484 == nil {
-			templ_7745c5c3_Var484 = templ.NopComponent
+		templ_7745c5c3_Var485 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var485 == nil {
+			templ_7745c5c3_Var485 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var485 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var486 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -10023,18 +10065,18 @@ func taskStatusBadge(label, class string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			var templ_7745c5c3_Var486 string
-			templ_7745c5c3_Var486, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+			var templ_7745c5c3_Var487 string
+			templ_7745c5c3_Var487, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2039, Col: 9}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2071, Col: 9}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var486))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var487))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: class}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var485), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = badge.Badge(badge.Props{Variant: badge.VariantDefault, Class: class}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var486), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -10058,29 +10100,29 @@ func sheetLabel(sheet TaskSheetOption) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var487 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var487 == nil {
-			templ_7745c5c3_Var487 = templ.NopComponent
+		templ_7745c5c3_Var488 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var488 == nil {
+			templ_7745c5c3_Var488 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		switch sheet.Visible {
 		case true:
-			var templ_7745c5c3_Var488 string
-			templ_7745c5c3_Var488, templ_7745c5c3_Err = templ.JoinStringErrs(sheet.Name)
+			var templ_7745c5c3_Var489 string
+			templ_7745c5c3_Var489, templ_7745c5c3_Err = templ.JoinStringErrs(sheet.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2046, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2078, Col: 15}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var488))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var489))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		default:
-			var templ_7745c5c3_Var489 string
-			templ_7745c5c3_Var489, templ_7745c5c3_Err = templ.JoinStringErrs(sheet.Name)
+			var templ_7745c5c3_Var490 string
+			templ_7745c5c3_Var490, templ_7745c5c3_Err = templ.JoinStringErrs(sheet.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2048, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2080, Col: 15}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var489))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var490))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -10135,16 +10177,16 @@ func taskPreparation(data TaskPageData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var490 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var490 == nil {
-			templ_7745c5c3_Var490 = templ.NopComponent
+		templ_7745c5c3_Var491 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var491 == nil {
+			templ_7745c5c3_Var491 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 527, "<section class=\"space-y-4\" id=\"task-preparation\" aria-labelledby=\"preparation-heading\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Var491 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var492 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -10156,7 +10198,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Var492 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var493 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -10173,7 +10215,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				if data.Preparation.BlockedReason != "" {
-					templ_7745c5c3_Var493 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var494 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -10189,12 +10231,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var494 string
-						templ_7745c5c3_Var494, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.BlockedReason)
+						var templ_7745c5c3_Var495 string
+						templ_7745c5c3_Var495, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.BlockedReason)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2087, Col: 41}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2119, Col: 41}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var494))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var495))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -10204,7 +10246,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var493), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var494), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10218,12 +10260,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var495 string
-					templ_7745c5c3_Var495, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.ConnectionLabel)
+					var templ_7745c5c3_Var496 string
+					templ_7745c5c3_Var496, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.ConnectionLabel)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2092, Col: 51}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2124, Col: 51}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var495))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var496))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10231,12 +10273,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var496 string
-					templ_7745c5c3_Var496, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Endpoint)
+					var templ_7745c5c3_Var497 string
+					templ_7745c5c3_Var497, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Endpoint)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2093, Col: 112}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2125, Col: 112}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var496))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var497))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10245,7 +10287,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Var497 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var498 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -10263,7 +10305,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = alert.Alert(alert.Props{Variant: alert.VariantDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var497), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = alert.Alert(alert.Props{Variant: alert.VariantDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var498), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10282,12 +10324,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var498 templ.SafeURL
-						templ_7745c5c3_Var498, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/prepare")
+						var templ_7745c5c3_Var499 templ.SafeURL
+						templ_7745c5c3_Var499, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/prepare")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2103, Col: 118}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2135, Col: 118}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var498))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var499))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -10295,7 +10337,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Var499 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var500 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -10313,7 +10355,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var499), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var500), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -10327,12 +10369,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var500 templ.SafeURL
-						templ_7745c5c3_Var500, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/retry")
+						var templ_7745c5c3_Var501 templ.SafeURL
+						templ_7745c5c3_Var501, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/retry")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2110, Col: 116}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2142, Col: 116}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var500))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var501))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -10340,7 +10382,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Var501 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var502 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -10358,7 +10400,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var501), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var502), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -10372,12 +10414,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						var templ_7745c5c3_Var502 templ.SafeURL
-						templ_7745c5c3_Var502, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/rerun")
+						var templ_7745c5c3_Var503 templ.SafeURL
+						templ_7745c5c3_Var503, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/rerun")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2117, Col: 116}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2149, Col: 116}
 						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var502))
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var503))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -10385,7 +10427,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Var503 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var504 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -10403,7 +10445,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var503), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var504), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -10436,12 +10478,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var504 string
-					templ_7745c5c3_Var504, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.SourceRows)
+					var templ_7745c5c3_Var505 string
+					templ_7745c5c3_Var505, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.SourceRows)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2133, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2165, Col: 61}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var504))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var505))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10449,12 +10491,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var505 string
-					templ_7745c5c3_Var505, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Entries)
+					var templ_7745c5c3_Var506 string
+					templ_7745c5c3_Var506, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Entries)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2133, Col: 112}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2165, Col: 112}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var505))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var506))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10462,12 +10504,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var506 string
-					templ_7745c5c3_Var506, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Accepted)
+					var templ_7745c5c3_Var507 string
+					templ_7745c5c3_Var507, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Accepted)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2133, Col: 169}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2165, Col: 169}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var506))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var507))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10475,12 +10517,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var507 string
-					templ_7745c5c3_Var507, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Held)
+					var templ_7745c5c3_Var508 string
+					templ_7745c5c3_Var508, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Held)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2133, Col: 214}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2165, Col: 214}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var507))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var508))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10488,12 +10530,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var508 string
-					templ_7745c5c3_Var508, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Corrections)
+					var templ_7745c5c3_Var509 string
+					templ_7745c5c3_Var509, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Corrections)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2133, Col: 274}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2165, Col: 274}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var508))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var509))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10501,12 +10543,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var509 string
-					templ_7745c5c3_Var509, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Findings)
+					var templ_7745c5c3_Var510 string
+					templ_7745c5c3_Var510, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Findings)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2133, Col: 326}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2165, Col: 326}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var509))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var510))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10519,12 +10561,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var510 string
-				templ_7745c5c3_Var510, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.PromptVersion)
+				var templ_7745c5c3_Var511 string
+				templ_7745c5c3_Var511, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.PromptVersion)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2138, Col: 104}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2170, Col: 104}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var510))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var511))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -10532,12 +10574,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var511 string
-				templ_7745c5c3_Var511, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Prompt)
+				var templ_7745c5c3_Var512 string
+				templ_7745c5c3_Var512, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Prompt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2139, Col: 161}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2171, Col: 161}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var511))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var512))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -10545,12 +10587,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var512 templ.SafeURL
-				templ_7745c5c3_Var512, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/instructions")
+				var templ_7745c5c3_Var513 templ.SafeURL
+				templ_7745c5c3_Var513, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/instructions")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2141, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2173, Col: 120}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var512))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var513))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -10558,7 +10600,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var513 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var514 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -10570,7 +10612,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						}()
 					}
 					ctx = templ.InitializeContext(ctx)
-					templ_7745c5c3_Var514 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var515 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -10588,7 +10630,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = field.Label(field.LabelProps{For: "preparation-instructions"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var514), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = field.Label(field.LabelProps{For: "preparation-instructions"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var515), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10602,7 +10644,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = field.Field(field.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var513), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = field.Field(field.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var514), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -10610,7 +10652,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Var515 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_Var516 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 					if !templ_7745c5c3_IsBuffer {
@@ -10628,7 +10670,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 					}
 					return nil
 				})
-				templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm, Disabled: !data.Preparation.CanManage}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var515), templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm, Disabled: !data.Preparation.CanManage}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var516), templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -10641,7 +10683,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Var516 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_Var517 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 						if !templ_7745c5c3_IsBuffer {
@@ -10662,12 +10704,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var517 string
-							templ_7745c5c3_Var517, templ_7745c5c3_Err = templ.JoinStringErrs(run.CreatedAt)
+							var templ_7745c5c3_Var518 string
+							templ_7745c5c3_Var518, templ_7745c5c3_Err = templ.JoinStringErrs(run.CreatedAt)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2164, Col: 29}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2196, Col: 29}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var517))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var518))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -10675,12 +10717,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var518 string
-							templ_7745c5c3_Var518, templ_7745c5c3_Err = templ.JoinStringErrs(run.Kind)
+							var templ_7745c5c3_Var519 string
+							templ_7745c5c3_Var519, templ_7745c5c3_Err = templ.JoinStringErrs(run.Kind)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2166, Col: 27}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2198, Col: 27}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var518))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var519))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -10699,12 +10741,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var519 string
-								templ_7745c5c3_Var519, templ_7745c5c3_Err = templ.JoinStringErrs(run.Error)
+								var templ_7745c5c3_Var520 string
+								templ_7745c5c3_Var520, templ_7745c5c3_Err = templ.JoinStringErrs(run.Error)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2171, Col: 70}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2203, Col: 70}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var519))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var520))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -10717,12 +10759,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var520 string
-							templ_7745c5c3_Var520, templ_7745c5c3_Err = templ.JoinStringErrs(run.State)
+							var templ_7745c5c3_Var521 string
+							templ_7745c5c3_Var521, templ_7745c5c3_Err = templ.JoinStringErrs(run.State)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2174, Col: 31}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2206, Col: 31}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var520))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var521))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -10730,12 +10772,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var521 string
-							templ_7745c5c3_Var521, templ_7745c5c3_Err = templ.JoinStringErrs(run.Provider)
+							var templ_7745c5c3_Var522 string
+							templ_7745c5c3_Var522, templ_7745c5c3_Err = templ.JoinStringErrs(run.Provider)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2175, Col: 50}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2207, Col: 50}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var521))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var522))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -10743,12 +10785,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var522 string
-							templ_7745c5c3_Var522, templ_7745c5c3_Err = templ.JoinStringErrs(run.APIFormat)
+							var templ_7745c5c3_Var523 string
+							templ_7745c5c3_Var523, templ_7745c5c3_Err = templ.JoinStringErrs(run.APIFormat)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2175, Col: 71}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2207, Col: 71}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var522))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var523))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -10756,12 +10798,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var523 string
-							templ_7745c5c3_Var523, templ_7745c5c3_Err = templ.JoinStringErrs(run.Model)
+							var templ_7745c5c3_Var524 string
+							templ_7745c5c3_Var524, templ_7745c5c3_Err = templ.JoinStringErrs(run.Model)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2175, Col: 88}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2207, Col: 88}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var523))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var524))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -10769,12 +10811,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var524 string
-							templ_7745c5c3_Var524, templ_7745c5c3_Err = templ.JoinStringErrs(run.Batches)
+							var templ_7745c5c3_Var525 string
+							templ_7745c5c3_Var525, templ_7745c5c3_Err = templ.JoinStringErrs(run.Batches)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2176, Col: 27}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2208, Col: 27}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var524))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var525))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -10782,12 +10824,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var525 string
-							templ_7745c5c3_Var525, templ_7745c5c3_Err = templ.JoinStringErrs(run.Accepted)
+							var templ_7745c5c3_Var526 string
+							templ_7745c5c3_Var526, templ_7745c5c3_Err = templ.JoinStringErrs(run.Accepted)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2177, Col: 28}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2209, Col: 28}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var525))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var526))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -10795,12 +10837,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var526 string
-							templ_7745c5c3_Var526, templ_7745c5c3_Err = templ.JoinStringErrs(run.Held)
+							var templ_7745c5c3_Var527 string
+							templ_7745c5c3_Var527, templ_7745c5c3_Err = templ.JoinStringErrs(run.Held)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2177, Col: 53}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2209, Col: 53}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var526))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var527))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -10808,12 +10850,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var527 string
-							templ_7745c5c3_Var527, templ_7745c5c3_Err = templ.JoinStringErrs(run.Corrections)
+							var templ_7745c5c3_Var528 string
+							templ_7745c5c3_Var528, templ_7745c5c3_Err = templ.JoinStringErrs(run.Corrections)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2177, Col: 81}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2209, Col: 81}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var527))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var528))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -10821,12 +10863,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var528 string
-							templ_7745c5c3_Var528, templ_7745c5c3_Err = templ.JoinStringErrs(run.Findings)
+							var templ_7745c5c3_Var529 string
+							templ_7745c5c3_Var529, templ_7745c5c3_Err = templ.JoinStringErrs(run.Findings)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2177, Col: 113}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2209, Col: 113}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var528))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var529))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -10839,12 +10881,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var529 templ.SafeURL
-								templ_7745c5c3_Var529, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/select")
+								var templ_7745c5c3_Var530 templ.SafeURL
+								templ_7745c5c3_Var530, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/select")
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2180, Col: 122}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2212, Col: 122}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var529))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var530))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -10852,12 +10894,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var530 string
-								templ_7745c5c3_Var530, templ_7745c5c3_Err = templ.ResolveAttributeValue(run.ID)
+								var templ_7745c5c3_Var531 string
+								templ_7745c5c3_Var531, templ_7745c5c3_Err = templ.ResolveAttributeValue(run.ID)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2181, Col: 59}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2213, Col: 59}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var530)
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var531)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -10865,7 +10907,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								templ_7745c5c3_Var531 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+								templ_7745c5c3_Var532 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 									if !templ_7745c5c3_IsBuffer {
@@ -10883,7 +10925,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 									}
 									return nil
 								})
-								templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var531), templ_7745c5c3_Buffer)
+								templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var532), templ_7745c5c3_Buffer)
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -10908,7 +10950,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						}
 						return nil
 					})
-					templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Preparation runs"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var516), templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Preparation runs"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var517), templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -10936,7 +10978,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Var532 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var533 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -10957,12 +10999,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var533 string
-								templ_7745c5c3_Var533, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Row)
+								var templ_7745c5c3_Var534 string
+								templ_7745c5c3_Var534, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Row)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2207, Col: 28}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2239, Col: 28}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var533))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var534))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -10971,12 +11013,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 									return templ_7745c5c3_Err
 								}
 								if finding.Position > 0 {
-									var templ_7745c5c3_Var534 string
-									templ_7745c5c3_Var534, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Position)
+									var templ_7745c5c3_Var535 string
+									templ_7745c5c3_Var535, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Position)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2210, Col: 31}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2242, Col: 31}
 									}
-									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var534))
+									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var535))
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}
@@ -10990,12 +11032,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var535 string
-								templ_7745c5c3_Var535, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Field)
+								var templ_7745c5c3_Var536 string
+								templ_7745c5c3_Var536, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Field)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2215, Col: 30}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2247, Col: 30}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var535))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var536))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -11003,12 +11045,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var536 string
-								templ_7745c5c3_Var536, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Scope)
+								var templ_7745c5c3_Var537 string
+								templ_7745c5c3_Var537, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Scope)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2216, Col: 36}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2248, Col: 36}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var536))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var537))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -11016,12 +11058,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var537 string
-								templ_7745c5c3_Var537, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Note)
+								var templ_7745c5c3_Var538 string
+								templ_7745c5c3_Var538, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Note)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2217, Col: 29}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2249, Col: 29}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var537))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var538))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -11036,7 +11078,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Unresolved preparation findings"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var532), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Unresolved preparation findings"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var533), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -11049,12 +11091,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var538 string
-							templ_7745c5c3_Var538, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.FindingsHidden)
+							var templ_7745c5c3_Var539 string
+							templ_7745c5c3_Var539, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.FindingsHidden)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2224, Col: 81}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2256, Col: 81}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var538))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var539))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -11078,7 +11120,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Var539 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var540 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -11099,12 +11141,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var540 string
-								templ_7745c5c3_Var540, templ_7745c5c3_Err = templ.JoinStringErrs(correction.Row)
+								var templ_7745c5c3_Var541 string
+								templ_7745c5c3_Var541, templ_7745c5c3_Err = templ.JoinStringErrs(correction.Row)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2236, Col: 34}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2268, Col: 34}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var540))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var541))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -11112,12 +11154,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var541 string
-								templ_7745c5c3_Var541, templ_7745c5c3_Err = templ.JoinStringErrs(correction.Field)
+								var templ_7745c5c3_Var542 string
+								templ_7745c5c3_Var542, templ_7745c5c3_Err = templ.JoinStringErrs(correction.Field)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2236, Col: 63}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2268, Col: 63}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var541))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var542))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -11125,12 +11167,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var542 string
-								templ_7745c5c3_Var542, templ_7745c5c3_Err = templ.JoinStringErrs(correction.Note)
+								var templ_7745c5c3_Var543 string
+								templ_7745c5c3_Var543, templ_7745c5c3_Err = templ.JoinStringErrs(correction.Note)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2236, Col: 91}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2268, Col: 91}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var542))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var543))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -11145,7 +11187,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Resolved preparation corrections"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var539), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Resolved preparation corrections"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var540), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -11158,12 +11200,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var543 string
-							templ_7745c5c3_Var543, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.CorrectionsHidden)
+							var templ_7745c5c3_Var544 string
+							templ_7745c5c3_Var544, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.CorrectionsHidden)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2242, Col: 84}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2274, Col: 84}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var543))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var544))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -11182,7 +11224,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Var544 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_Var545 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 							if !templ_7745c5c3_IsBuffer {
@@ -11203,12 +11245,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var545 string
-								templ_7745c5c3_Var545, templ_7745c5c3_Err = templ.JoinStringErrs(held.Row)
+								var templ_7745c5c3_Var546 string
+								templ_7745c5c3_Var546, templ_7745c5c3_Err = templ.JoinStringErrs(held.Row)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2252, Col: 28}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2284, Col: 28}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var545))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var546))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -11216,12 +11258,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var546 string
-								templ_7745c5c3_Var546, templ_7745c5c3_Err = templ.JoinStringErrs(held.Position)
+								var templ_7745c5c3_Var547 string
+								templ_7745c5c3_Var547, templ_7745c5c3_Err = templ.JoinStringErrs(held.Position)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2252, Col: 54}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2284, Col: 54}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var546))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var547))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -11229,12 +11271,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var547 string
-								templ_7745c5c3_Var547, templ_7745c5c3_Err = templ.JoinStringErrs(held.Recipient)
+								var templ_7745c5c3_Var548 string
+								templ_7745c5c3_Var548, templ_7745c5c3_Err = templ.JoinStringErrs(held.Recipient)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2252, Col: 81}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2284, Col: 81}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var547))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var548))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -11242,12 +11284,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
-								var templ_7745c5c3_Var548 string
-								templ_7745c5c3_Var548, templ_7745c5c3_Err = templ.JoinStringErrs(held.Reasons)
+								var templ_7745c5c3_Var549 string
+								templ_7745c5c3_Var549, templ_7745c5c3_Err = templ.JoinStringErrs(held.Reasons)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2252, Col: 106}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2284, Col: 106}
 								}
-								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var548))
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var549))
 								if templ_7745c5c3_Err != nil {
 									return templ_7745c5c3_Err
 								}
@@ -11262,7 +11304,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 							}
 							return nil
 						})
-						templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Prepared entries held by findings"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var544), templ_7745c5c3_Buffer)
+						templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Prepared entries held by findings"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var545), templ_7745c5c3_Buffer)
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -11275,12 +11317,12 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							var templ_7745c5c3_Var549 string
-							templ_7745c5c3_Var549, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.HeldHidden)
+							var templ_7745c5c3_Var550 string
+							templ_7745c5c3_Var550, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.HeldHidden)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2258, Col: 77}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2290, Col: 77}
 							}
-							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var549))
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var550))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -11293,13 +11335,13 @@ func taskPreparation(data TaskPageData) templ.Component {
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = card.Content(card.ContentProps{Class: "gap-4"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var492), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = card.Content(card.ContentProps{Class: "gap-4"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var493), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "preparation-heading"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var491), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "preparation-heading"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var492), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

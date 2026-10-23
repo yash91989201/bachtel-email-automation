@@ -4,7 +4,8 @@
 
 - [x] 1.1 Replace the recovery cards with one table that keeps recipient, worksheet position, state, reason and prior-attempt evidence per row, with correction-required and manually resolved rows pointing at their remedy instead of an unusable action. Verify the rendered table keeps a state badge per row and offers no action for those states.
 - [x] 1.2 Move Retry, Send again and Mark already submitted into per-row dialogs that repeat the prior attempt and keep the required confirmations, duplicate-risk acknowledgement and resolution basis. Verify each dialog form still posts to its sending route with `hx-preserve` and an explicit submit button.
-- [x] 1.3 Forward input attributes to the checkbox native input so a row selection can bind to the value the browser emits. Verify the selection checkbox carries the model binding on the input, not on the visual span.
+- [x] 1.3 Explain a withheld row action instead of rendering an empty cell, naming active work, restore review or a row that is no longer retryable. Verify each gated state renders its reason and no action, and a settled retryable row renders the action without a hint.
+- [x] 1.4 Forward input attributes to the checkbox native input so a row selection can bind to the value the browser emits. Verify the selection checkbox carries the model binding on the input, not on the visual span.
 
 ## 2. Selection-scoped bulk actions
 
