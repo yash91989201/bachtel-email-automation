@@ -10,10 +10,13 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/hook"
 	"github.com/yash91989201/bachtel-email-automation/internal/ai"
+	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
+	"github.com/yash91989201/bachtel-email-automation/internal/preparation"
 	"github.com/yash91989201/bachtel-email-automation/internal/reset"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web"
@@ -27,6 +30,7 @@ func bindSending(app core.App, cfg config.Config) {
 	var mu sync.Mutex
 	var dispatcher *sending.Dispatcher
 	var exportWorker func()
+	var preparationWorker func()
 	var terminating bool
 	app.OnServe().BindFunc(func(event *core.ServeEvent) error {
 		mu.Lock()
@@ -46,6 +50,16 @@ func bindSending(app core.App, cfg config.Config) {
 		// submissions to settle before the credentials are swapped.
 		connections.SetDrainer(dispatcher)
 		aiStore := ai.NewStore(app, cfg.EncryptionKey)
+		campaigns := campaign.NewService(app, cfg.PandocPath)
+		intakeService := intake.NewService(app, campaigns, cfg.Intake)
+		prepared := preparation.NewService(app, intakeService, campaigns, aiStore)
+		// Preparation settlement releases a requested closure only after the
+		// AI work reached a terminal state; a closed task never publishes.
+		prepared.SetSettled(func(taskID string) {
+			if err := store.SettleClosure(context.Background(), taskID); err != nil {
+				app.Logger().Error("settle closure after preparation", "task", taskID, "error", err)
+			}
+		})
 		exported := exports.NewService(app, cfg)
 		exported.BindTaskNotifications()
 		resets := reset.NewService(app, mailboxes)
@@ -75,6 +89,23 @@ func bindSending(app core.App, cfg config.Config) {
 				app.Logger().Warn("export worker did not stop within the shutdown allowance")
 			}
 		}
+		// The preparation worker is process-owned like the dispatcher and the
+		// export worker: an interrupted run is marked incomplete at the next
+		// startup and only an explicit retry starts it again.
+		prepCtx, cancelPreparation := context.WithCancel(context.Background())
+		prepDone := make(chan struct{})
+		go func() {
+			defer close(prepDone)
+			prepared.Run(prepCtx)
+		}()
+		preparationWorker = func() {
+			cancelPreparation()
+			select {
+			case <-prepDone:
+			case <-time.After(5 * time.Second):
+				app.Logger().Warn("preparation worker did not stop within the shutdown allowance")
+			}
+		}
 		event.Router.Any("/{path...}", apis.WrapStdHandler(web.NewHandler(app, cfg, web.Services{
 			Connections: connections,
 			Mailboxes:   mailboxes,
@@ -83,6 +114,7 @@ func bindSending(app core.App, cfg config.Config) {
 			Exports:     exported,
 			Resets:      resets,
 			AI:          aiStore,
+			Preparation: prepared,
 		})))
 		return event.Next()
 	})
@@ -94,7 +126,11 @@ func bindSending(app core.App, cfg config.Config) {
 			terminating = true
 			active := dispatcher
 			stopExports := exportWorker
+			stopPreparation := preparationWorker
 			mu.Unlock()
+			if stopPreparation != nil {
+				stopPreparation()
+			}
 			if stopExports != nil {
 				stopExports()
 			}

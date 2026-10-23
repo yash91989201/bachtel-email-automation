@@ -486,6 +486,7 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 		ActionID:        actionID(),
 	}
 	data.SendingType = task.SendingType
+	data.Preparation = s.preparationData(ctx, ownerID, task)
 	if task.ScheduleState == intake.ScheduleScheduled || task.ScheduleState == intake.ScheduleMissed {
 		data.SendingType = views.TaskSendingTypeScheduled
 	}

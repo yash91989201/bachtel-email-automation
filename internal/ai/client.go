@@ -32,22 +32,33 @@ type probeContract struct {
 // validateConnection performs the one synthetic normalization request against
 // the exact configuration. It never retries and never calls another model.
 func validateConnection(ctx context.Context, o ValidationOptions, cfg Config, apiKey string) error {
+	body, err := probeRequest(cfg)
+	if err != nil {
+		return err
+	}
+	text, err := postJSON(ctx, o, cfg, apiKey, "", body)
+	if err != nil {
+		return err
+	}
+	return checkContract(text)
+}
+
+// postJSON sends one exact-format request and returns the assistant text. It
+// is the single transport boundary shared by connection validation and
+// normalization, so both use the same endpoint policy, bounds and redaction.
+func postJSON(ctx context.Context, o ValidationOptions, cfg Config, apiKey, session string, body []byte) (string, error) {
 	if o.MaxResponseBytes <= 0 {
 		o.MaxResponseBytes = DefaultValidationOptions().MaxResponseBytes
 	}
 	target, err := endpointURL(cfg, o.AllowPrivate)
 	if err != nil {
-		return err
-	}
-	body, err := probeRequest(cfg)
-	if err != nil {
-		return err
+		return "", err
 	}
 	ctx, cancel := context.WithTimeout(ctx, o.Timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
 	if err != nil {
-		return ErrEndpointUnsafe
+		return "", ErrEndpointUnsafe
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -56,9 +67,12 @@ func validateConnection(ctx context.Context, o ValidationOptions, cfg Config, ap
 	// session per conversation.
 	req.Header.Set("User-Agent", "bachtel-email-automation/1.0")
 	if cfg.Provider == ProviderOpenCodeGo {
-		session, err := newSessionID()
-		if err != nil {
-			return fmt.Errorf("%w: %v", ErrProviderFailure, "could not create a request session")
+		if session == "" {
+			generated, err := newSessionID()
+			if err != nil {
+				return "", fmt.Errorf("%w: %v", ErrProviderFailure, "could not create a request session")
+			}
+			session = generated
 		}
 		req.Header.Set("x-opencode-session", session)
 	}
@@ -66,7 +80,7 @@ func validateConnection(ctx context.Context, o ValidationOptions, cfg Config, ap
 
 	resp, err := newClient(o).Do(req)
 	if err != nil {
-		return classifyTransport(err)
+		return "", classifyTransport(err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -78,31 +92,27 @@ func validateConnection(ctx context.Context, o ValidationOptions, cfg Config, ap
 	switch resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return ErrAuthentication
+		return "", ErrAuthentication
 	case http.StatusNotFound:
-		return ErrModelUnavailable
+		return "", ErrModelUnavailable
 	case http.StatusTooManyRequests:
-		return ErrThrottled
+		return "", ErrThrottled
 	default:
 		if resp.StatusCode >= 500 {
-			return ErrProviderFailure
+			return "", ErrProviderFailure
 		}
-		return fmt.Errorf("%w: the endpoint refused the request", ErrInvalidSetup)
+		return "", fmt.Errorf("%w: the endpoint refused the request", ErrInvalidSetup)
 	}
 
 	limited := io.LimitReader(resp.Body, o.MaxResponseBytes+1)
 	raw, err := io.ReadAll(limited)
 	if err != nil {
-		return classifyTransport(err)
+		return "", classifyTransport(err)
 	}
 	if int64(len(raw)) > o.MaxResponseBytes {
-		return ErrResponseTooLarge
+		return "", ErrResponseTooLarge
 	}
-	text, err := extractText(cfg.APIFormat, raw)
-	if err != nil {
-		return err
-	}
-	return checkContract(text)
+	return extractText(cfg.APIFormat, raw)
 }
 
 // probeRequest builds the exact-format request body. It deliberately sets no
@@ -112,33 +122,19 @@ func probeRequest(cfg Config) ([]byte, error) {
 	case FormatResponses:
 		return json.Marshal(map[string]any{
 			"model":             cfg.Model,
-			"input":             probeInput(),
+			"input":             inputMessages(probeSystem, probeUser),
 			"max_output_tokens": 256,
 			"store":             false,
 		})
 	case FormatChatCompletions:
 		return json.Marshal(map[string]any{
 			"model":       cfg.Model,
-			"messages":    probeMessages(),
+			"messages":    chatMessages(probeSystem, probeUser),
 			"max_tokens":  256,
 			"temperature": 0,
 		})
 	default:
 		return nil, fmt.Errorf("%w: unsupported API format", ErrInvalidSetup)
-	}
-}
-
-func probeInput() []map[string]any {
-	return []map[string]any{
-		{"role": "system", "content": []map[string]string{{"type": "input_text", "text": probeSystem}}},
-		{"role": "user", "content": []map[string]string{{"type": "input_text", "text": probeUser}}},
-	}
-}
-
-func probeMessages() []map[string]string {
-	return []map[string]string{
-		{"role": "system", "content": probeSystem},
-		{"role": "user", "content": probeUser},
 	}
 }
 

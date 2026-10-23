@@ -82,6 +82,20 @@ does not promise zero retention. Treat that as a deployment-suitability
 decision for real workbook data, not as an assumed coding-subscription
 contract.
 
+## Task preparation
+
+A validated task can prepare its mapped values with the confirmed connection
+from its Recipients section. Initial preparation, retry and rerun each create an
+immutable run capturing the mapped input, base prompt version and text, task
+instructions, provider/endpoint/API format/model, configuration and credential
+generations, inference options and the published output. Every batch of a run
+uses the captured configuration; a provider failure never calls another model.
+Runs execute in a server-owned durable job, so closing the browser does not stop
+them, and a restart marks unfinished work incomplete until an explicit retry.
+Prepared values and findings are review evidence only: no candidate, attempt or
+schedule record is written, and sending keeps using the validated task snapshot
+until the later review/finalization workflow is installed.
+
 ## Validation, activation and repair
 
 1. Submit provider, API root, API format, exact model and API key.

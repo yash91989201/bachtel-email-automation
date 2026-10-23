@@ -1169,6 +1169,9 @@ func taskFromRecord(record *core.Record, campaignName string) *Task {
 		ClosureRequestedAt: record.GetDateTime("closure_requested_at").Time().UTC(),
 		ClosedBy:           record.GetString("closure_actor"),
 		ClosedAt:           record.GetDateTime("closed_at").Time().UTC(),
+
+		PreparationInstructions:  record.GetString("preparation_instructions"),
+		SelectedPreparationRunID: record.GetString("selected_preparation_run"),
 	}
 	if task.ScheduleState == "" {
 		task.ScheduleState = ScheduleNone

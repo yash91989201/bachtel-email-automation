@@ -30,6 +30,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/scrollarea"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/table"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tabs"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/textarea"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tooltip"
 )
 
@@ -112,7 +113,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(data.CampaignName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 64, Col: 141}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 65, Col: 141}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -130,7 +131,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(data.Revision)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 67, Col: 71}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 68, Col: 71}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -166,7 +167,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(data.Error)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 75, Col: 16}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 76, Col: 16}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 					if templ_7745c5c3_Err != nil {
@@ -237,7 +238,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 						var templ_7745c5c3_Var10 templ.SafeURL
 						templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "#template")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 85, Col: 90}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 86, Col: 90}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 						if templ_7745c5c3_Err != nil {
@@ -267,7 +268,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 			var templ_7745c5c3_Var11 templ.SafeURL
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 89, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 90, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -356,7 +357,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 					var templ_7745c5c3_Var16 string
 					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(readableBytes(data.MaxUploadBytes))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 100, Col: 94}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 101, Col: 94}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 					if templ_7745c5c3_Err != nil {
@@ -374,7 +375,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 						var templ_7745c5c3_Var17 string
 						templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(joinList(data.MappedColumns))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 104, Col: 162}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 105, Col: 162}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 						if templ_7745c5c3_Err != nil {
@@ -442,7 +443,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 							var templ_7745c5c3_Var21 string
 							templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(TaskSendingTypeDirect)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 114, Col: 45}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 115, Col: 45}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 							if templ_7745c5c3_Err != nil {
@@ -465,7 +466,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 							var templ_7745c5c3_Var22 string
 							templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(TaskSendingTypeScheduled)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 115, Col: 48}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 116, Col: 48}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 							if templ_7745c5c3_Err != nil {
@@ -548,7 +549,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 					var templ_7745c5c3_Var26 templ.SafeURL
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "#tasks")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 124, Col: 154}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 125, Col: 154}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 					if templ_7745c5c3_Err != nil {
@@ -618,7 +619,7 @@ func TaskUpload(data TaskUploadData) templ.Component {
 					var templ_7745c5c3_Var29 string
 					templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(sizeLine)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 134, Col: 19}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 135, Col: 19}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 					if templ_7745c5c3_Err != nil {
@@ -746,6 +747,8 @@ type TaskPageData struct {
 	ResultsAsOf    string
 	ResultsReady   bool
 	ResultEligible bool
+
+	Preparation TaskPreparationView
 }
 
 // TaskControls is the rendered subset of the action matrix.
@@ -862,6 +865,85 @@ type TaskResolutionRow struct {
 	Time  string
 }
 
+// TaskPreparationView is the stored AI data-preparation evidence of one task.
+// It is review evidence only: nothing here authorizes sending or eligibility.
+type TaskPreparationView struct {
+	Available         bool
+	Configured        bool
+	ConnectionLabel   string
+	Endpoint          string
+	PromptVersion     int
+	Prompt            string
+	Instructions      string
+	CanManage         bool
+	CanPrepare        bool
+	CanRetry          bool
+	CanRerun          bool
+	BlockedReason     string
+	SelectedRunID     string
+	EvidenceRunID     string
+	EvidenceSelected  bool
+	Runs              []TaskPreparationRun
+	Counts            TaskPreparationCounts
+	Corrections       []TaskPreparationNote
+	CorrectionsHidden int
+	Findings          []TaskPreparationNote
+	FindingsHidden    int
+	Held              []TaskPreparationHeld
+	HeldHidden        int
+}
+
+// TaskPreparationRun is one preparation run row.
+type TaskPreparationRun struct {
+	ID            string
+	Kind          string
+	State         string
+	Provider      string
+	APIRoot       string
+	APIFormat     string
+	Model         string
+	PromptVersion int
+	Instructions  string
+	Batches       string
+	CreatedAt     string
+	StartedAt     string
+	FinishedAt    string
+	Error         string
+	Accepted      int
+	Held          int
+	Corrections   int
+	Findings      int
+	Selected      bool
+	CanSelect     bool
+}
+
+// TaskPreparationCounts is the prepared dataset summary of one run.
+type TaskPreparationCounts struct {
+	SourceRows  int
+	Entries     int
+	Accepted    int
+	Held        int
+	Corrections int
+	Findings    int
+}
+
+// TaskPreparationNote is one resolved correction or unresolved finding.
+type TaskPreparationNote struct {
+	Row      int
+	Position int
+	Field    string
+	Scope    string
+	Note     string
+}
+
+// TaskPreparationHeld is one prepared entry held by an unresolved finding.
+type TaskPreparationHeld struct {
+	Row       int
+	Position  int
+	Recipient string
+	Reasons   string
+}
+
 func TaskPage(data TaskPageData) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -910,7 +992,7 @@ func TaskPage(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(data.Filename)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 361, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 443, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 			if templ_7745c5c3_Err != nil {
@@ -944,7 +1026,7 @@ func TaskPage(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var34 string
 					templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(data.Error)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 368, Col: 17}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 450, Col: 17}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 					if templ_7745c5c3_Err != nil {
@@ -977,7 +1059,7 @@ func TaskPage(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var36 string
 					templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(data.ClosedAt)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 373, Col: 27}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 455, Col: 27}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 					if templ_7745c5c3_Err != nil {
@@ -1383,7 +1465,7 @@ func taskOverview(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var54 string
 				templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(data.UploadedAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 435, Col: 48}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 517, Col: 48}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 				if templ_7745c5c3_Err != nil {
@@ -1396,7 +1478,7 @@ func taskOverview(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var55 templ.SafeURL
 				templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "#tasks")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 436, Col: 113}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 518, Col: 113}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 				if templ_7745c5c3_Err != nil {
@@ -1409,7 +1491,7 @@ func taskOverview(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var56 string
 				templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(data.CampaignName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 436, Col: 135}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 518, Col: 135}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 				if templ_7745c5c3_Err != nil {
@@ -1423,7 +1505,7 @@ func taskOverview(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var57 string
 					templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(data.SavedRevision)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 441, Col: 28}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 523, Col: 28}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 					if templ_7745c5c3_Err != nil {
@@ -1455,7 +1537,7 @@ func taskOverview(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var58 string
 					templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(data.Worksheet)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 454, Col: 49}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 536, Col: 49}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 					if templ_7745c5c3_Err != nil {
@@ -1468,7 +1550,7 @@ func taskOverview(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var59 string
 					templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.JoinStringErrs(data.HeaderRow)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 455, Col: 50}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 537, Col: 50}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var59))
 					if templ_7745c5c3_Err != nil {
@@ -1486,7 +1568,7 @@ func taskOverview(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var60 string
 				templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.SenderStatus)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 457, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 539, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var60)
 				if templ_7745c5c3_Err != nil {
@@ -1499,7 +1581,7 @@ func taskOverview(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var61 string
 				templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(data.Sender)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 457, Col: 91}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 539, Col: 91}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 				if templ_7745c5c3_Err != nil {
@@ -1512,7 +1594,7 @@ func taskOverview(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var62 string
 				templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(data.SenderStatus)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 457, Col: 123}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 539, Col: 123}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 				if templ_7745c5c3_Err != nil {
@@ -1530,7 +1612,7 @@ func taskOverview(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var63 string
 					templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(data.ScheduleAt)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 459, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 541, Col: 56}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 					if templ_7745c5c3_Err != nil {
@@ -1543,7 +1625,7 @@ func taskOverview(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var64 string
 					templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(data.ScheduleState)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 459, Col: 80}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 541, Col: 80}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 					if templ_7745c5c3_Err != nil {
@@ -1562,7 +1644,7 @@ func taskOverview(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var65 string
 					templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinStringErrs(data.ClosedAt)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 462, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 544, Col: 45}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 					if templ_7745c5c3_Err != nil {
@@ -1580,7 +1662,7 @@ func taskOverview(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var66 string
 				templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(data.Reference)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 467, Col: 48}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 549, Col: 48}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
 				if templ_7745c5c3_Err != nil {
@@ -1593,7 +1675,7 @@ func taskOverview(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var67 string
 				templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(data.TaskID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 468, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 550, Col: 67}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 				if templ_7745c5c3_Err != nil {
@@ -1606,7 +1688,7 @@ func taskOverview(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var68 string
 				templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(data.StoredStatus)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 468, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 550, Col: 120}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 				if templ_7745c5c3_Err != nil {
@@ -1672,7 +1754,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var70 string
 			templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(step.Complete))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 483, Col: 88}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 565, Col: 88}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 			if templ_7745c5c3_Err != nil {
@@ -1685,7 +1767,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var71 string
 			templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(!step.Complete && current))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 483, Col: 148}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 565, Col: 148}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var71)
 			if templ_7745c5c3_Err != nil {
@@ -1714,7 +1796,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var72 string
 				templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.JoinStringErrs(index + 1)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 492, Col: 19}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 574, Col: 19}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var72))
 				if templ_7745c5c3_Err != nil {
@@ -1750,7 +1832,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var75 string
 			templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs(step.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 497, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 579, Col: 86}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 			if templ_7745c5c3_Err != nil {
@@ -1779,7 +1861,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var77 string
 				templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.ResolveAttributeValue("About " + step.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 499, Col: 368}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 581, Col: 368}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var77)
 				if templ_7745c5c3_Err != nil {
@@ -1792,7 +1874,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var78 string
 				templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.ResolveAttributeValue("task-progress-help-" + section)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 499, Col: 421}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 581, Col: 421}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var78)
 				if templ_7745c5c3_Err != nil {
@@ -1830,7 +1912,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var80 string
 						templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(data.StatusExplanation)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 504, Col: 38}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 586, Col: 38}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 						if templ_7745c5c3_Err != nil {
@@ -1848,7 +1930,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var81 string
 						templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(taskLifecycleHelp(step.Name))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 506, Col: 44}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 588, Col: 44}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 						if templ_7745c5c3_Err != nil {
@@ -1868,7 +1950,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var82 string
 							templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(blocker.Label)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 510, Col: 38}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 592, Col: 38}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 							if templ_7745c5c3_Err != nil {
@@ -1881,7 +1963,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var83 string
 							templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(blocker.Remedy)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 510, Col: 67}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 592, Col: 67}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 							if templ_7745c5c3_Err != nil {
@@ -1912,7 +1994,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var84 string
 			templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs(step.State)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 516, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 598, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var84))
 			if templ_7745c5c3_Err != nil {
@@ -1931,7 +2013,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var85 string
 					templ_7745c5c3_Var85, templ_7745c5c3_Err = templ.JoinStringErrs(blocker.Label)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 519, Col: 58}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 601, Col: 58}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var85))
 					if templ_7745c5c3_Err != nil {
@@ -1949,7 +2031,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var86 templ.SafeURL
 						templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.JoinURLErrs(blocker.Href)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 521, Col: 70}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 603, Col: 70}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var86))
 						if templ_7745c5c3_Err != nil {
@@ -1962,7 +2044,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var87 string
 						templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(blocker.Label)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 521, Col: 88}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 603, Col: 88}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
 						if templ_7745c5c3_Err != nil {
@@ -1991,7 +2073,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var89 string
 					templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinStringErrs(data.NextLabel)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 527, Col: 25}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 609, Col: 25}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var89))
 					if templ_7745c5c3_Err != nil {
@@ -2015,7 +2097,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var90 templ.SafeURL
 					templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.JoinURLErrs(href)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 530, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 612, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var90))
 					if templ_7745c5c3_Err != nil {
@@ -2028,7 +2110,7 @@ func taskLifecycle(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var91 string
 					templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.JoinStringErrs("Open " + step.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 530, Col: 85}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 612, Col: 85}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var91))
 					if templ_7745c5c3_Err != nil {
@@ -2147,7 +2229,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var94 string
 					templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.JoinStringErrs(data.ValidationError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 599, Col: 27}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 681, Col: 27}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var94))
 					if templ_7745c5c3_Err != nil {
@@ -2195,7 +2277,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var97 string
 					templ_7745c5c3_Var97, templ_7745c5c3_Err = templ.JoinStringErrs(data.DefaultSheet)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 606, Col: 187}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 688, Col: 187}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var97))
 					if templ_7745c5c3_Err != nil {
@@ -2208,7 +2290,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var98 string
 					templ_7745c5c3_Var98, templ_7745c5c3_Err = templ.JoinStringErrs(data.HeaderRow)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 606, Col: 218}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 688, Col: 218}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var98))
 					if templ_7745c5c3_Err != nil {
@@ -2226,7 +2308,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var99 templ.SafeURL
 						templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/select#recipients")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 608, Col: 115}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 690, Col: 115}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var99))
 						if templ_7745c5c3_Err != nil {
@@ -2292,7 +2374,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 										var templ_7745c5c3_Var103 string
 										templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.ResolveAttributeValue(sheet.Name)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 617, Col: 38}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 699, Col: 38}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var103)
 										if templ_7745c5c3_Err != nil {
@@ -2318,7 +2400,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 										var templ_7745c5c3_Var104 string
 										templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.ResolveAttributeValue(sheet.Name)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 621, Col: 38}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 703, Col: 38}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var104)
 										if templ_7745c5c3_Err != nil {
@@ -2344,7 +2426,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 										var templ_7745c5c3_Var105 string
 										templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.ResolveAttributeValue(sheet.Name)
 										if templ_7745c5c3_Err != nil {
-											return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 625, Col: 38}
+											return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 707, Col: 38}
 										}
 										_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var105)
 										if templ_7745c5c3_Err != nil {
@@ -2512,7 +2594,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 								var templ_7745c5c3_Var112 templ.SafeURL
 								templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "#template")
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 655, Col: 93}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 737, Col: 93}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var112))
 								if templ_7745c5c3_Err != nil {
@@ -2579,7 +2661,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var115 string
 					templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(data.Summary.SourceRows))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 666, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 748, Col: 45}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var115))
 					if templ_7745c5c3_Err != nil {
@@ -2592,7 +2674,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var116 string
 					templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(data.Summary.Total))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 666, Col: 97}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 748, Col: 97}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var116))
 					if templ_7745c5c3_Err != nil {
@@ -2605,7 +2687,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var117 string
 					templ_7745c5c3_Var117, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(data.Summary.Eligible))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 666, Col: 158}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 748, Col: 158}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var117))
 					if templ_7745c5c3_Err != nil {
@@ -2618,7 +2700,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var118 string
 					templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.JoinStringErrs(strconv.Itoa(data.Summary.ExcludedAtValidation))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 666, Col: 236}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 748, Col: 236}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var118))
 					if templ_7745c5c3_Err != nil {
@@ -2631,7 +2713,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var119 string
 					templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.JoinStringErrs(data.Summary.CurrentEligible)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 668, Col: 117}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 750, Col: 117}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var119))
 					if templ_7745c5c3_Err != nil {
@@ -2696,7 +2778,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 									var templ_7745c5c3_Var123 string
 									templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.JoinStringErrs(data.CurrentRevision)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 676, Col: 100}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 758, Col: 100}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var123))
 									if templ_7745c5c3_Err != nil {
@@ -2714,7 +2796,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 									var templ_7745c5c3_Var124 string
 									templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.JoinStringErrs(data.CurrentRevision)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 678, Col: 96}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 760, Col: 96}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var124))
 									if templ_7745c5c3_Err != nil {
@@ -2732,7 +2814,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 								var templ_7745c5c3_Var125 templ.SafeURL
 								templ_7745c5c3_Var125, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate#recipients")
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 680, Col: 121}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 762, Col: 121}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var125))
 								if templ_7745c5c3_Err != nil {
@@ -2849,7 +2931,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 									var templ_7745c5c3_Var130 string
 									templ_7745c5c3_Var130, templ_7745c5c3_Err = templ.JoinStringErrs(category.Label)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 696, Col: 35}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 778, Col: 35}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var130))
 									if templ_7745c5c3_Err != nil {
@@ -2862,7 +2944,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 									var templ_7745c5c3_Var131 string
 									templ_7745c5c3_Var131, templ_7745c5c3_Err = templ.JoinStringErrs(category.Count)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 696, Col: 62}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 778, Col: 62}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var131))
 									if templ_7745c5c3_Err != nil {
@@ -2934,7 +3016,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var134 templ.SafeURL
 					templ_7745c5c3_Var134, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 707, Col: 190}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 789, Col: 190}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var134))
 					if templ_7745c5c3_Err != nil {
@@ -2953,6 +3035,10 @@ func taskRecipients(data TaskPageData) templ.Component {
 				return nil
 			})
 			templ_7745c5c3_Err = card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "summary-heading"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var113), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = taskPreparation(data).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -3034,7 +3120,7 @@ func taskPreview(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var138 templ.SafeURL
 					templ_7745c5c3_Var138, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview#recipients")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 724, Col: 115}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 807, Col: 115}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var138))
 					if templ_7745c5c3_Err != nil {
@@ -3047,7 +3133,7 @@ func taskPreview(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var139 string
 					templ_7745c5c3_Var139, templ_7745c5c3_Err = templ.ResolveAttributeValue("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 724, Col: 198}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 807, Col: 198}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var139)
 					if templ_7745c5c3_Err != nil {
@@ -3112,7 +3198,7 @@ func taskPreview(data TaskPageData) templ.Component {
 									var templ_7745c5c3_Var143 string
 									templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.ResolveAttributeValue(row.ID)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 732, Col: 32}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 815, Col: 32}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var143)
 									if templ_7745c5c3_Err != nil {
@@ -3125,7 +3211,7 @@ func taskPreview(data TaskPageData) templ.Component {
 									var templ_7745c5c3_Var144 string
 									templ_7745c5c3_Var144, templ_7745c5c3_Err = templ.JoinStringErrs(previewRowLabel(row))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 732, Col: 66}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 815, Col: 66}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var144))
 									if templ_7745c5c3_Err != nil {
@@ -3143,7 +3229,7 @@ func taskPreview(data TaskPageData) templ.Component {
 									var templ_7745c5c3_Var145 string
 									templ_7745c5c3_Var145, templ_7745c5c3_Err = templ.ResolveAttributeValue(row.ID)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 734, Col: 32}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 817, Col: 32}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var145)
 									if templ_7745c5c3_Err != nil {
@@ -3156,7 +3242,7 @@ func taskPreview(data TaskPageData) templ.Component {
 									var templ_7745c5c3_Var146 string
 									templ_7745c5c3_Var146, templ_7745c5c3_Err = templ.JoinStringErrs(previewRowLabel(row))
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 734, Col: 57}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 817, Col: 57}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var146))
 									if templ_7745c5c3_Err != nil {
@@ -3365,7 +3451,7 @@ func taskRowReasons(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var152 string
 							templ_7745c5c3_Var152, templ_7745c5c3_Err = templ.JoinStringErrs(held.Row)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 803, Col: 24}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 886, Col: 24}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var152))
 							if templ_7745c5c3_Err != nil {
@@ -3378,7 +3464,7 @@ func taskRowReasons(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var153 string
 							templ_7745c5c3_Var153, templ_7745c5c3_Err = templ.JoinStringErrs(held.Position)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 804, Col: 29}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 887, Col: 29}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var153))
 							if templ_7745c5c3_Err != nil {
@@ -3391,7 +3477,7 @@ func taskRowReasons(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var154 string
 							templ_7745c5c3_Var154, templ_7745c5c3_Err = templ.JoinStringErrs(held.Recipient)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 805, Col: 30}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 888, Col: 30}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var154))
 							if templ_7745c5c3_Err != nil {
@@ -3404,7 +3490,7 @@ func taskRowReasons(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var155 string
 							templ_7745c5c3_Var155, templ_7745c5c3_Err = templ.JoinStringErrs(held.Reason)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 807, Col: 27}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 890, Col: 27}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var155))
 							if templ_7745c5c3_Err != nil {
@@ -3423,7 +3509,7 @@ func taskRowReasons(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var156 string
 							templ_7745c5c3_Var156, templ_7745c5c3_Err = templ.JoinStringErrs(row.Row)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 812, Col: 23}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 895, Col: 23}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var156))
 							if templ_7745c5c3_Err != nil {
@@ -3436,7 +3522,7 @@ func taskRowReasons(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var157 string
 							templ_7745c5c3_Var157, templ_7745c5c3_Err = templ.JoinStringErrs(row.Position)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 813, Col: 28}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 896, Col: 28}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var157))
 							if templ_7745c5c3_Err != nil {
@@ -3449,7 +3535,7 @@ func taskRowReasons(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var158 string
 							templ_7745c5c3_Var158, templ_7745c5c3_Err = templ.JoinStringErrs(row.Recipient)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 814, Col: 29}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 897, Col: 29}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var158))
 							if templ_7745c5c3_Err != nil {
@@ -3462,7 +3548,7 @@ func taskRowReasons(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var159 string
 							templ_7745c5c3_Var159, templ_7745c5c3_Err = templ.JoinStringErrs(row.State)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 815, Col: 31}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 898, Col: 31}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var159))
 							if templ_7745c5c3_Err != nil {
@@ -3475,7 +3561,7 @@ func taskRowReasons(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var160 string
 							templ_7745c5c3_Var160, templ_7745c5c3_Err = templ.JoinStringErrs(row.Reason)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 816, Col: 26}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 899, Col: 26}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var160))
 							if templ_7745c5c3_Err != nil {
@@ -3558,7 +3644,7 @@ func taskTest(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var162 templ.SafeURL
 			templ_7745c5c3_Var162, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "#recipients")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 833, Col: 174}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 916, Col: 174}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var162))
 			if templ_7745c5c3_Err != nil {
@@ -3614,7 +3700,7 @@ func taskTest(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var165 templ.SafeURL
 					templ_7745c5c3_Var165, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "#template")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 841, Col: 208}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 924, Col: 208}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var165))
 					if templ_7745c5c3_Err != nil {
@@ -3708,7 +3794,7 @@ func taskApprovalSummary(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var169 string
 				templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.JoinStringErrs(data.Sender)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 859, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 942, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var169))
 				if templ_7745c5c3_Err != nil {
@@ -3721,7 +3807,7 @@ func taskApprovalSummary(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var170 string
 				templ_7745c5c3_Var170, templ_7745c5c3_Err = templ.JoinStringErrs(data.SenderStatus)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 859, Col: 76}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 942, Col: 76}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var170))
 				if templ_7745c5c3_Err != nil {
@@ -3734,7 +3820,7 @@ func taskApprovalSummary(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var171 string
 				templ_7745c5c3_Var171, templ_7745c5c3_Err = templ.JoinStringErrs(data.SavedRevision)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 859, Col: 119}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 942, Col: 119}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var171))
 				if templ_7745c5c3_Err != nil {
@@ -3757,7 +3843,7 @@ func taskApprovalSummary(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var172 string
 						templ_7745c5c3_Var172, templ_7745c5c3_Err = templ.JoinStringErrs(data.LatestTest)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 863, Col: 97}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 946, Col: 97}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var172))
 						if templ_7745c5c3_Err != nil {
@@ -3786,7 +3872,7 @@ func taskApprovalSummary(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var173 string
 				templ_7745c5c3_Var173, templ_7745c5c3_Err = templ.JoinStringErrs(data.Hash)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 873, Col: 55}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 956, Col: 55}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var173))
 				if templ_7745c5c3_Err != nil {
@@ -3864,7 +3950,7 @@ func taskDiagnostics(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var177 templ.SafeURL
 				templ_7745c5c3_Var177, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending/test#test")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 884, Col: 153}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 967, Col: 153}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var177))
 				if templ_7745c5c3_Err != nil {
@@ -3877,7 +3963,7 @@ func taskDiagnostics(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var178 string
 				templ_7745c5c3_Var178, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "test")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 885, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 968, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var178)
 				if templ_7745c5c3_Err != nil {
@@ -3954,7 +4040,7 @@ func taskDiagnostics(data TaskPageData) templ.Component {
 									var templ_7745c5c3_Var183 string
 									templ_7745c5c3_Var183, templ_7745c5c3_Err = templ.JoinStringErrs(row.Row)
 									if templ_7745c5c3_Err != nil {
-										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 894, Col: 32}
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 977, Col: 32}
 									}
 									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var183))
 									if templ_7745c5c3_Err != nil {
@@ -4043,7 +4129,7 @@ func taskDiagnostics(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var187 string
 					templ_7745c5c3_Var187, templ_7745c5c3_Err = templ.JoinStringErrs("Send formatting test")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 908, Col: 30}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 991, Col: 30}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var187))
 					if templ_7745c5c3_Err != nil {
@@ -4127,7 +4213,7 @@ func taskApprovalForm(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var191 string
 				templ_7745c5c3_Var191, templ_7745c5c3_Err = templ.ResolveAttributeValue(approvalFormID(data))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 921, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1004, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var191)
 				if templ_7745c5c3_Err != nil {
@@ -4140,7 +4226,7 @@ func taskApprovalForm(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var192 templ.SafeURL
 				templ_7745c5c3_Var192, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending/approve#test")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 921, Col: 155}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1004, Col: 155}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var192))
 				if templ_7745c5c3_Err != nil {
@@ -4153,7 +4239,7 @@ func taskApprovalForm(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var193 string
 				templ_7745c5c3_Var193, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "approve")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 922, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1005, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var193)
 				if templ_7745c5c3_Err != nil {
@@ -4166,7 +4252,7 @@ func taskApprovalForm(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var194 string
 				templ_7745c5c3_Var194, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.Hash)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 923, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1006, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var194)
 				if templ_7745c5c3_Err != nil {
@@ -4234,7 +4320,7 @@ func taskApprovalForm(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var198 string
 							templ_7745c5c3_Var198, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.LatestTest)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 931, Col: 38}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1014, Col: 38}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var198)
 							if templ_7745c5c3_Err != nil {
@@ -4247,7 +4333,7 @@ func taskApprovalForm(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var199 string
 							templ_7745c5c3_Var199, templ_7745c5c3_Err = templ.JoinStringErrs(data.LatestTest)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 931, Col: 82}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1014, Col: 82}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var199))
 							if templ_7745c5c3_Err != nil {
@@ -4267,7 +4353,7 @@ func taskApprovalForm(data TaskPageData) templ.Component {
 								var templ_7745c5c3_Var200 string
 								templ_7745c5c3_Var200, templ_7745c5c3_Err = templ.ResolveAttributeValue(outcome.ID)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 935, Col: 34}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1018, Col: 34}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var200)
 								if templ_7745c5c3_Err != nil {
@@ -4280,7 +4366,7 @@ func taskApprovalForm(data TaskPageData) templ.Component {
 								var templ_7745c5c3_Var201 string
 								templ_7745c5c3_Var201, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Recipient)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 935, Col: 56}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1018, Col: 56}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var201))
 								if templ_7745c5c3_Err != nil {
@@ -4293,7 +4379,7 @@ func taskApprovalForm(data TaskPageData) templ.Component {
 								var templ_7745c5c3_Var202 string
 								templ_7745c5c3_Var202, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Time)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 935, Col: 76}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1018, Col: 76}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var202))
 								if templ_7745c5c3_Err != nil {
@@ -4306,7 +4392,7 @@ func taskApprovalForm(data TaskPageData) templ.Component {
 								var templ_7745c5c3_Var203 string
 								templ_7745c5c3_Var203, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.ID)
 								if templ_7745c5c3_Err != nil {
-									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 935, Col: 94}
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1018, Col: 94}
 								}
 								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var203))
 								if templ_7745c5c3_Err != nil {
@@ -4375,7 +4461,7 @@ func taskApprovalForm(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var206 string
 					templ_7745c5c3_Var206, templ_7745c5c3_Err = templ.JoinStringErrs("Approve received formatting")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 946, Col: 37}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1029, Col: 37}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var206))
 					if templ_7745c5c3_Err != nil {
@@ -4443,7 +4529,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var208 string
 		templ_7745c5c3_Var208, templ_7745c5c3_Err = templ.JoinStringErrs(data.StatusLabel)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 959, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1042, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var208))
 		if templ_7745c5c3_Err != nil {
@@ -4456,7 +4542,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var209 string
 		templ_7745c5c3_Var209, templ_7745c5c3_Err = templ.JoinStringErrs(data.StatusExplanation)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 960, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1043, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var209))
 		if templ_7745c5c3_Err != nil {
@@ -4469,7 +4555,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var210 string
 		templ_7745c5c3_Var210, templ_7745c5c3_Err = templ.JoinStringErrs(data.Remaining)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 962, Col: 109}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1045, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var210))
 		if templ_7745c5c3_Err != nil {
@@ -4482,7 +4568,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var211 string
 		templ_7745c5c3_Var211, templ_7745c5c3_Err = templ.JoinStringErrs(data.Submitted)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 963, Col: 104}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1046, Col: 104}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var211))
 		if templ_7745c5c3_Err != nil {
@@ -4495,7 +4581,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var212 string
 		templ_7745c5c3_Var212, templ_7745c5c3_Err = templ.JoinStringErrs(data.RetryableFailed)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 964, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1047, Col: 118}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var212))
 		if templ_7745c5c3_Err != nil {
@@ -4508,7 +4594,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var213 string
 		templ_7745c5c3_Var213, templ_7745c5c3_Err = templ.JoinStringErrs(data.Held)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 965, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1048, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var213))
 		if templ_7745c5c3_Err != nil {
@@ -4521,7 +4607,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var214 string
 		templ_7745c5c3_Var214, templ_7745c5c3_Err = templ.JoinStringErrs(data.InFlight)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 966, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1049, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var214))
 		if templ_7745c5c3_Err != nil {
@@ -4534,7 +4620,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var215 string
 		templ_7745c5c3_Var215, templ_7745c5c3_Err = templ.JoinStringErrs(data.Reserved)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 967, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1050, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var215))
 		if templ_7745c5c3_Err != nil {
@@ -4547,7 +4633,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var216 string
 		templ_7745c5c3_Var216, templ_7745c5c3_Err = templ.JoinStringErrs(data.Invalid)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 969, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1052, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var216))
 		if templ_7745c5c3_Err != nil {
@@ -4560,7 +4646,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var217 string
 		templ_7745c5c3_Var217, templ_7745c5c3_Err = templ.JoinStringErrs(data.Duplicate)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 969, Col: 114}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1052, Col: 114}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var217))
 		if templ_7745c5c3_Err != nil {
@@ -4573,7 +4659,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var218 string
 		templ_7745c5c3_Var218, templ_7745c5c3_Err = templ.JoinStringErrs(data.Ineligible)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 969, Col: 146}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1052, Col: 146}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var218))
 		if templ_7745c5c3_Err != nil {
@@ -4591,7 +4677,7 @@ func TaskSendingLive(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var219 templ.SafeURL
 			templ_7745c5c3_Var219, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "#recipients")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 972, Col: 175}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1055, Col: 175}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var219))
 			if templ_7745c5c3_Err != nil {
@@ -4722,7 +4808,7 @@ func taskSendingControls(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var223 templ.SafeURL
 					templ_7745c5c3_Var223, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "?sending_type=choose#sending")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1015, Col: 143}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1098, Col: 143}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var223))
 					if templ_7745c5c3_Err != nil {
@@ -4751,7 +4837,7 @@ func taskSendingControls(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var224 string
 						templ_7745c5c3_Var224, templ_7745c5c3_Err = templ.JoinStringErrs(data.ScheduleAt)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1022, Col: 81}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1105, Col: 81}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var224))
 						if templ_7745c5c3_Err != nil {
@@ -4769,7 +4855,7 @@ func taskSendingControls(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var225 templ.SafeURL
 					templ_7745c5c3_Var225, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending-type")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1024, Col: 109}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1107, Col: 109}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var225))
 					if templ_7745c5c3_Err != nil {
@@ -4782,7 +4868,7 @@ func taskSendingControls(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var226 string
 					templ_7745c5c3_Var226, templ_7745c5c3_Err = templ.ResolveAttributeValue(TaskSendingTypeDirect)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1025, Col: 77}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1108, Col: 77}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var226)
 					if templ_7745c5c3_Err != nil {
@@ -4795,7 +4881,7 @@ func taskSendingControls(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var227 string
 					templ_7745c5c3_Var227, templ_7745c5c3_Err = templ.ResolveAttributeValue(TaskSendingTypeScheduled)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1030, Col: 80}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1113, Col: 80}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var227)
 					if templ_7745c5c3_Err != nil {
@@ -4934,7 +5020,7 @@ func taskSendingActions(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var232 string
 						templ_7745c5c3_Var232, templ_7745c5c3_Err = templ.JoinStringErrs(data.ScheduleAt)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1063, Col: 39}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1146, Col: 39}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var232))
 						if templ_7745c5c3_Err != nil {
@@ -4952,7 +5038,7 @@ func taskSendingActions(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var233 string
 						templ_7745c5c3_Var233, templ_7745c5c3_Err = templ.JoinStringErrs(data.ScheduleAt)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1065, Col: 39}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1148, Col: 39}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var233))
 						if templ_7745c5c3_Err != nil {
@@ -4984,7 +5070,7 @@ func taskSendingActions(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var234 string
 			templ_7745c5c3_Var234, templ_7745c5c3_Err = templ.JoinStringErrs(data.ScheduleAt)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1071, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1154, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var234))
 			if templ_7745c5c3_Err != nil {
@@ -5031,7 +5117,7 @@ func taskSendingActions(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var235 string
 			templ_7745c5c3_Var235, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-stop-" + data.StoredStatus + "-" + sendingControlKey(data))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1087, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1170, Col: 81}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var235)
 			if templ_7745c5c3_Err != nil {
@@ -5044,7 +5130,7 @@ func taskSendingActions(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var236 templ.SafeURL
 			templ_7745c5c3_Var236, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/stop#sending")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1087, Col: 154}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1170, Col: 154}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var236))
 			if templ_7745c5c3_Err != nil {
@@ -5057,7 +5143,7 @@ func taskSendingActions(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var237 string
 			templ_7745c5c3_Var237, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "stop")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1088, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1171, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var237)
 			if templ_7745c5c3_Err != nil {
@@ -5082,7 +5168,7 @@ func taskSendingActions(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var239 string
 				templ_7745c5c3_Var239, templ_7745c5c3_Err = templ.JoinStringErrs("Stop sending")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1092, Col: 21}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1175, Col: 21}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var239))
 				if templ_7745c5c3_Err != nil {
@@ -5117,7 +5203,7 @@ func taskSendingActions(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var240 templ.SafeURL
 			templ_7745c5c3_Var240, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate#sending")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1101, Col: 112}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1184, Col: 112}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var240))
 			if templ_7745c5c3_Err != nil {
@@ -5185,7 +5271,7 @@ func taskSendingActions(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var242 string
 			templ_7745c5c3_Var242, templ_7745c5c3_Err = templ.ResolveAttributeValue("task-close-form-" + data.TaskID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1120, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1203, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var242)
 			if templ_7745c5c3_Err != nil {
@@ -5198,7 +5284,7 @@ func taskSendingActions(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var243 templ.SafeURL
 			templ_7745c5c3_Var243, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/close")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1120, Col: 139}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1203, Col: 139}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var243))
 			if templ_7745c5c3_Err != nil {
@@ -5211,7 +5297,7 @@ func taskSendingActions(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var244 string
 			templ_7745c5c3_Var244, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "close")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1121, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1204, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var244)
 			if templ_7745c5c3_Err != nil {
@@ -5440,7 +5526,7 @@ func sendingAction(data TaskPageData, kind string, label string, count int) temp
 		var templ_7745c5c3_Var255 string
 		templ_7745c5c3_Var255, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-action-" + kind + "-" + strconv.Itoa(count) + "-" + sendingControlKey(data))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1152, Col: 96}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1235, Col: 96}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var255)
 		if templ_7745c5c3_Err != nil {
@@ -5453,7 +5539,7 @@ func sendingAction(data TaskPageData, kind string, label string, count int) temp
 		var templ_7745c5c3_Var256 templ.SafeURL
 		templ_7745c5c3_Var256, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/" + kind + "#sending")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1152, Col: 177}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1235, Col: 177}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var256))
 		if templ_7745c5c3_Err != nil {
@@ -5466,7 +5552,7 @@ func sendingAction(data TaskPageData, kind string, label string, count int) temp
 		var templ_7745c5c3_Var257 string
 		templ_7745c5c3_Var257, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + kind)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1153, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1236, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var257)
 		if templ_7745c5c3_Err != nil {
@@ -5479,7 +5565,7 @@ func sendingAction(data TaskPageData, kind string, label string, count int) temp
 		var templ_7745c5c3_Var258 string
 		templ_7745c5c3_Var258, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(count))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1154, Col: 72}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1237, Col: 72}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var258)
 		if templ_7745c5c3_Err != nil {
@@ -5500,7 +5586,7 @@ func sendingAction(data TaskPageData, kind string, label string, count int) temp
 		var templ_7745c5c3_Var259 string
 		templ_7745c5c3_Var259, templ_7745c5c3_Err = templ.JoinStringErrs(count)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1157, Col: 18}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1240, Col: 18}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var259))
 		if templ_7745c5c3_Err != nil {
@@ -5525,7 +5611,7 @@ func sendingAction(data TaskPageData, kind string, label string, count int) temp
 			var templ_7745c5c3_Var261 string
 			templ_7745c5c3_Var261, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1160, Col: 10}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1243, Col: 10}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var261))
 			if templ_7745c5c3_Err != nil {
@@ -5578,7 +5664,7 @@ func taskSchedule(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var263 string
 			templ_7745c5c3_Var263, templ_7745c5c3_Err = templ.JoinStringErrs(data.ScheduleAt)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1168, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1251, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var263))
 			if templ_7745c5c3_Err != nil {
@@ -5591,7 +5677,7 @@ func taskSchedule(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var264 string
 			templ_7745c5c3_Var264, templ_7745c5c3_Err = templ.JoinStringErrs(data.ScheduleState)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1168, Col: 104}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1251, Col: 104}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var264))
 			if templ_7745c5c3_Err != nil {
@@ -5626,7 +5712,7 @@ func taskSchedule(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var265 string
 			templ_7745c5c3_Var265, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-schedule-" + sendingControlKey(data))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1186, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1269, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var265)
 			if templ_7745c5c3_Err != nil {
@@ -5639,7 +5725,7 @@ func taskSchedule(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var266 templ.SafeURL
 			templ_7745c5c3_Var266, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/schedule#sending")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1186, Col: 136}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1269, Col: 136}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var266))
 			if templ_7745c5c3_Err != nil {
@@ -5652,7 +5738,7 @@ func taskSchedule(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var267 string
 			templ_7745c5c3_Var267, templ_7745c5c3_Err = templ.ResolveAttributeValue("{ confirmed: false, eligible: " + strconv.FormatBool(data.Approved && data.Remaining > 0) + " }")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1186, Col: 245}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1269, Col: 245}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var267)
 			if templ_7745c5c3_Err != nil {
@@ -5665,7 +5751,7 @@ func taskSchedule(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var268 string
 			templ_7745c5c3_Var268, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "schedule")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1187, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1270, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var268)
 			if templ_7745c5c3_Err != nil {
@@ -5678,7 +5764,7 @@ func taskSchedule(data TaskPageData) templ.Component {
 			var templ_7745c5c3_Var269 string
 			templ_7745c5c3_Var269, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.Itoa(data.Remaining))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1188, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1271, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var269)
 			if templ_7745c5c3_Err != nil {
@@ -5821,7 +5907,7 @@ func taskSchedule(data TaskPageData) templ.Component {
 				var templ_7745c5c3_Var276 string
 				templ_7745c5c3_Var276, templ_7745c5c3_Err = templ.JoinStringErrs("Schedule start")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1207, Col: 24}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1290, Col: 24}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var276))
 				if templ_7745c5c3_Err != nil {
@@ -5880,7 +5966,7 @@ func taskClearSchedule(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var278 string
 		templ_7745c5c3_Var278, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-schedule-clear-" + data.ScheduleState + "-" + sendingControlKey(data))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1219, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1302, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var278)
 		if templ_7745c5c3_Err != nil {
@@ -5893,7 +5979,7 @@ func taskClearSchedule(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var279 templ.SafeURL
 		templ_7745c5c3_Var279, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/schedule#sending")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1219, Col: 167}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1302, Col: 167}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var279))
 		if templ_7745c5c3_Err != nil {
@@ -5906,7 +5992,7 @@ func taskClearSchedule(data TaskPageData) templ.Component {
 		var templ_7745c5c3_Var280 string
 		templ_7745c5c3_Var280, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "scheduleclear")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1220, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1303, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var280)
 		if templ_7745c5c3_Err != nil {
@@ -6064,7 +6150,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 		var templ_7745c5c3_Var286 string
 		templ_7745c5c3_Var286, templ_7745c5c3_Err = templ.JoinStringErrs(row.Row)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1252, Col: 63}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1335, Col: 63}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var286))
 		if templ_7745c5c3_Err != nil {
@@ -6077,7 +6163,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 		var templ_7745c5c3_Var287 string
 		templ_7745c5c3_Var287, templ_7745c5c3_Err = templ.JoinStringErrs(row.Position)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1252, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1335, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var287))
 		if templ_7745c5c3_Err != nil {
@@ -6090,7 +6176,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 		var templ_7745c5c3_Var288 string
 		templ_7745c5c3_Var288, templ_7745c5c3_Err = templ.JoinStringErrs(row.State)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1253, Col: 16}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1336, Col: 16}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var288))
 		if templ_7745c5c3_Err != nil {
@@ -6103,7 +6189,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 		var templ_7745c5c3_Var289 string
 		templ_7745c5c3_Var289, templ_7745c5c3_Err = templ.JoinStringErrs(row.Reason)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1253, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1336, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var289))
 		if templ_7745c5c3_Err != nil {
@@ -6121,7 +6207,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 			var templ_7745c5c3_Var290 string
 			templ_7745c5c3_Var290, templ_7745c5c3_Err = templ.JoinStringErrs(row.Recipient)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1255, Col: 70}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1338, Col: 70}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var290))
 			if templ_7745c5c3_Err != nil {
@@ -6140,7 +6226,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 			var templ_7745c5c3_Var291 string
 			templ_7745c5c3_Var291, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1258, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1341, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var291))
 			if templ_7745c5c3_Err != nil {
@@ -6153,7 +6239,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 			var templ_7745c5c3_Var292 string
 			templ_7745c5c3_Var292, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptRecipient)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1258, Col: 99}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1341, Col: 99}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var292))
 			if templ_7745c5c3_Err != nil {
@@ -6166,7 +6252,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 			var templ_7745c5c3_Var293 string
 			templ_7745c5c3_Var293, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptState)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1258, Col: 123}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1341, Col: 123}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var293))
 			if templ_7745c5c3_Err != nil {
@@ -6179,7 +6265,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 			var templ_7745c5c3_Var294 string
 			templ_7745c5c3_Var294, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptTime)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1258, Col: 146}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1341, Col: 146}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var294))
 			if templ_7745c5c3_Err != nil {
@@ -6192,7 +6278,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 			var templ_7745c5c3_Var295 string
 			templ_7745c5c3_Var295, templ_7745c5c3_Err = templ.JoinStringErrs(row.AttemptReason)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1258, Col: 171}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1341, Col: 171}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var295))
 			if templ_7745c5c3_Err != nil {
@@ -6223,7 +6309,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 				var templ_7745c5c3_Var296 string
 				templ_7745c5c3_Var296, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-resend-" + row.ID + "-" + row.State + "-" + sendingControlKey(data))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1267, Col: 92}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1350, Col: 92}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var296)
 				if templ_7745c5c3_Err != nil {
@@ -6236,7 +6322,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 				var templ_7745c5c3_Var297 templ.SafeURL
 				templ_7745c5c3_Var297, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/resend#sending")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1267, Col: 167}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1350, Col: 167}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var297))
 				if templ_7745c5c3_Err != nil {
@@ -6317,7 +6403,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 					var templ_7745c5c3_Var301 string
 					templ_7745c5c3_Var301, templ_7745c5c3_Err = templ.JoinStringErrs("Send again — duplicate risk")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1278, Col: 40}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1361, Col: 40}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var301))
 					if templ_7745c5c3_Err != nil {
@@ -6346,7 +6432,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 				var templ_7745c5c3_Var302 string
 				templ_7745c5c3_Var302, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-resolve-" + row.ID + "-" + row.State + "-" + sendingControlKey(data))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1283, Col: 93}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1366, Col: 93}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var302)
 				if templ_7745c5c3_Err != nil {
@@ -6359,7 +6445,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 				var templ_7745c5c3_Var303 templ.SafeURL
 				templ_7745c5c3_Var303, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/resolve#sending")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1283, Col: 169}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1366, Col: 169}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var303))
 				if templ_7745c5c3_Err != nil {
@@ -6458,7 +6544,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 					var templ_7745c5c3_Var308 string
 					templ_7745c5c3_Var308, templ_7745c5c3_Err = templ.JoinStringErrs("Mark already submitted")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1296, Col: 33}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1379, Col: 33}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var308))
 					if templ_7745c5c3_Err != nil {
@@ -6484,7 +6570,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 				var templ_7745c5c3_Var309 string
 				templ_7745c5c3_Var309, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-retry-" + row.ID + "-" + row.State + "-" + sendingControlKey(data))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1303, Col: 91}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1386, Col: 91}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var309)
 				if templ_7745c5c3_Err != nil {
@@ -6497,7 +6583,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 				var templ_7745c5c3_Var310 templ.SafeURL
 				templ_7745c5c3_Var310, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/retry#sending")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1303, Col: 165}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1386, Col: 165}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var310))
 				if templ_7745c5c3_Err != nil {
@@ -6552,7 +6638,7 @@ func taskRecoveryRow(data TaskPageData, row TaskAdmittedRow) templ.Component {
 					var templ_7745c5c3_Var313 string
 					templ_7745c5c3_Var313, templ_7745c5c3_Err = templ.JoinStringErrs("Retry")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1310, Col: 16}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1393, Col: 16}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var313))
 					if templ_7745c5c3_Err != nil {
@@ -6606,7 +6692,7 @@ func sendingRowFields(data TaskPageData, row TaskAdmittedRow) templ.Component {
 		var templ_7745c5c3_Var315 string
 		templ_7745c5c3_Var315, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "row" + row.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1319, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1402, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var315)
 		if templ_7745c5c3_Err != nil {
@@ -6619,7 +6705,7 @@ func sendingRowFields(data TaskPageData, row TaskAdmittedRow) templ.Component {
 		var templ_7745c5c3_Var316 string
 		templ_7745c5c3_Var316, templ_7745c5c3_Err = templ.ResolveAttributeValue(row.ID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1320, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1403, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var316)
 		if templ_7745c5c3_Err != nil {
@@ -6719,7 +6805,7 @@ func taskPacing(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var322 string
 					templ_7745c5c3_Var322, templ_7745c5c3_Err = templ.JoinStringErrs(data.Rate)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1335, Col: 80}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1418, Col: 80}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var322))
 					if templ_7745c5c3_Err != nil {
@@ -6737,7 +6823,7 @@ func taskPacing(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var323 string
 						templ_7745c5c3_Var323, templ_7745c5c3_Err = templ.JoinStringErrs(data.Cooldown)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1345, Col: 29}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1428, Col: 29}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var323))
 						if templ_7745c5c3_Err != nil {
@@ -6761,7 +6847,7 @@ func taskPacing(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var324 string
 						templ_7745c5c3_Var324, templ_7745c5c3_Err = templ.JoinStringErrs(data.CooldownReason)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1351, Col: 74}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1434, Col: 74}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var324))
 						if templ_7745c5c3_Err != nil {
@@ -6779,7 +6865,7 @@ func taskPacing(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var325 string
 					templ_7745c5c3_Var325, templ_7745c5c3_Err = templ.ResolveAttributeValue("sending-rate-" + sendingControlKey(data))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1355, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1438, Col: 56}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var325)
 					if templ_7745c5c3_Err != nil {
@@ -6792,7 +6878,7 @@ func taskPacing(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var326 templ.SafeURL
 					templ_7745c5c3_Var326, templ_7745c5c3_Err = templ.JoinURLErrs(sendingBase(data) + "/rate#sending")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1355, Col: 129}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1438, Col: 129}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var326))
 					if templ_7745c5c3_Err != nil {
@@ -6805,7 +6891,7 @@ func taskPacing(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var327 string
 					templ_7745c5c3_Var327, templ_7745c5c3_Err = templ.ResolveAttributeValue(data.ActionID + "rate")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1356, Col: 73}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1439, Col: 73}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var327)
 					if templ_7745c5c3_Err != nil {
@@ -6976,7 +7062,7 @@ func taskResults(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var334 string
 					templ_7745c5c3_Var334, templ_7745c5c3_Err = templ.JoinStringErrs(joinLabels(data.ResultLabels))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1387, Col: 93}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1470, Col: 93}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var334))
 					if templ_7745c5c3_Err != nil {
@@ -6999,7 +7085,7 @@ func taskResults(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var335 string
 					templ_7745c5c3_Var335, templ_7745c5c3_Err = templ.JoinStringErrs(data.ResultsAsOf)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1391, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1474, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var335))
 					if templ_7745c5c3_Err != nil {
@@ -7034,7 +7120,7 @@ func taskResults(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var338 templ.SafeURL
 					templ_7745c5c3_Var338, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results.xlsx")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1393, Col: 189}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1476, Col: 189}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var338))
 					if templ_7745c5c3_Err != nil {
@@ -7052,7 +7138,7 @@ func taskResults(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var339 templ.SafeURL
 						templ_7745c5c3_Var339, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1395, Col: 114}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1478, Col: 114}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var339))
 						if templ_7745c5c3_Err != nil {
@@ -7096,7 +7182,7 @@ func taskResults(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var341 templ.SafeURL
 					templ_7745c5c3_Var341, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results/delete#results")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1401, Col: 150}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1484, Col: 150}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var341))
 					if templ_7745c5c3_Err != nil {
@@ -7340,7 +7426,7 @@ func taskResults(data TaskPageData) templ.Component {
 							var templ_7745c5c3_Var353 string
 							templ_7745c5c3_Var353, templ_7745c5c3_Err = templ.JoinStringErrs(data.ResultsError)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1436, Col: 26}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1519, Col: 26}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var353))
 							if templ_7745c5c3_Err != nil {
@@ -7365,7 +7451,7 @@ func taskResults(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var354 templ.SafeURL
 						templ_7745c5c3_Var354, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1441, Col: 113}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1524, Col: 113}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var354))
 						if templ_7745c5c3_Err != nil {
@@ -7415,7 +7501,7 @@ func taskResults(data TaskPageData) templ.Component {
 						var templ_7745c5c3_Var356 templ.SafeURL
 						templ_7745c5c3_Var356, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1450, Col: 113}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1533, Col: 113}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var356))
 						if templ_7745c5c3_Err != nil {
@@ -7470,7 +7556,7 @@ func taskResults(data TaskPageData) templ.Component {
 					var templ_7745c5c3_Var358 string
 					templ_7745c5c3_Var358, templ_7745c5c3_Err = templ.JoinStringErrs(data.StatusLabel)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1461, Col: 80}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1544, Col: 80}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var358))
 					if templ_7745c5c3_Err != nil {
@@ -7716,7 +7802,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											var templ_7745c5c3_Var372 string
 											templ_7745c5c3_Var372, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Time)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1493, Col: 25}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1576, Col: 25}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var372))
 											if templ_7745c5c3_Err != nil {
@@ -7729,7 +7815,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											var templ_7745c5c3_Var373 string
 											templ_7745c5c3_Var373, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Kind)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1493, Col: 45}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1576, Col: 45}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var373))
 											if templ_7745c5c3_Err != nil {
@@ -7742,7 +7828,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											var templ_7745c5c3_Var374 string
 											templ_7745c5c3_Var374, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Recipient)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1493, Col: 70}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1576, Col: 70}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var374))
 											if templ_7745c5c3_Err != nil {
@@ -7769,7 +7855,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											var templ_7745c5c3_Var376 string
 											templ_7745c5c3_Var376, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.State)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1496, Col: 26}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1579, Col: 26}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var376))
 											if templ_7745c5c3_Err != nil {
@@ -7782,7 +7868,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											var templ_7745c5c3_Var377 string
 											templ_7745c5c3_Var377, templ_7745c5c3_Err = templ.JoinStringErrs(outcome.Reason)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1496, Col: 48}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1579, Col: 48}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var377))
 											if templ_7745c5c3_Err != nil {
@@ -7847,7 +7933,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											var templ_7745c5c3_Var381 string
 											templ_7745c5c3_Var381, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Time)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1505, Col: 28}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1588, Col: 28}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var381))
 											if templ_7745c5c3_Err != nil {
@@ -7860,7 +7946,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											var templ_7745c5c3_Var382 string
 											templ_7745c5c3_Var382, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Row)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1505, Col: 64}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1588, Col: 64}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var382))
 											if templ_7745c5c3_Err != nil {
@@ -7895,7 +7981,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											var templ_7745c5c3_Var384 string
 											templ_7745c5c3_Var384, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Basis)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1508, Col: 36}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1591, Col: 36}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var384))
 											if templ_7745c5c3_Err != nil {
@@ -7908,7 +7994,7 @@ func taskAttemptHistory(data TaskPageData) templ.Component {
 											var templ_7745c5c3_Var385 string
 											templ_7745c5c3_Var385, templ_7745c5c3_Err = templ.JoinStringErrs(resolution.Actor)
 											if templ_7745c5c3_Err != nil {
-												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1508, Col: 72}
+												return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1591, Col: 72}
 											}
 											_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var385))
 											if templ_7745c5c3_Err != nil {
@@ -8028,7 +8114,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 				var templ_7745c5c3_Var388 string
 				templ_7745c5c3_Var388, templ_7745c5c3_Err = templ.JoinStringErrs(data.Error)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1541, Col: 16}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1624, Col: 16}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var388))
 				if templ_7745c5c3_Err != nil {
@@ -8057,7 +8143,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			var templ_7745c5c3_Var389 string
 			templ_7745c5c3_Var389, templ_7745c5c3_Err = templ.JoinStringErrs(data.Recipient)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1549, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1632, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var389))
 			if templ_7745c5c3_Err != nil {
@@ -8070,7 +8156,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			var templ_7745c5c3_Var390 string
 			templ_7745c5c3_Var390, templ_7745c5c3_Err = templ.JoinStringErrs(data.Subject)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1553, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1636, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var390))
 			if templ_7745c5c3_Err != nil {
@@ -8091,7 +8177,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			var templ_7745c5c3_Var391 string
 			templ_7745c5c3_Var391, templ_7745c5c3_Err = templ.JoinStringErrs(data.SourceRow)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1564, Col: 94}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1647, Col: 94}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var391))
 			if templ_7745c5c3_Err != nil {
@@ -8104,7 +8190,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			var templ_7745c5c3_Var392 string
 			templ_7745c5c3_Var392, templ_7745c5c3_Err = templ.JoinStringErrs(data.RecipientPosition)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1565, Col: 115}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1648, Col: 115}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var392))
 			if templ_7745c5c3_Err != nil {
@@ -8117,7 +8203,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			var templ_7745c5c3_Var393 string
 			templ_7745c5c3_Var393, templ_7745c5c3_Err = templ.JoinStringErrs(data.OriginalRecipient)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1566, Col: 136}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1649, Col: 136}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var393))
 			if templ_7745c5c3_Err != nil {
@@ -8130,7 +8216,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 			var templ_7745c5c3_Var394 string
 			templ_7745c5c3_Var394, templ_7745c5c3_Err = templ.JoinStringErrs(data.ContentHash)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1567, Col: 119}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1650, Col: 119}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var394))
 			if templ_7745c5c3_Err != nil {
@@ -8172,7 +8258,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 					var templ_7745c5c3_Var396 string
 					templ_7745c5c3_Var396, templ_7745c5c3_Err = templ.JoinStringErrs(value.Variable)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1580, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1663, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var396))
 					if templ_7745c5c3_Err != nil {
@@ -8185,7 +8271,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 					var templ_7745c5c3_Var397 string
 					templ_7745c5c3_Var397, templ_7745c5c3_Err = templ.JoinStringErrs(value.Header)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1580, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1663, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var397))
 					if templ_7745c5c3_Err != nil {
@@ -8198,7 +8284,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 					var templ_7745c5c3_Var398 string
 					templ_7745c5c3_Var398, templ_7745c5c3_Err = templ.JoinStringErrs(value.Raw)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1580, Col: 98}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1663, Col: 98}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var398))
 					if templ_7745c5c3_Err != nil {
@@ -8211,7 +8297,7 @@ func TaskPreviewResult(data TaskPreviewData) templ.Component {
 					var templ_7745c5c3_Var399 string
 					templ_7745c5c3_Var399, templ_7745c5c3_Err = templ.JoinStringErrs(value.Normalized)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1580, Col: 140}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1663, Col: 140}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var399))
 					if templ_7745c5c3_Err != nil {
@@ -8387,7 +8473,7 @@ func taskStatusBadge(label, class string) templ.Component {
 			var templ_7745c5c3_Var402 string
 			templ_7745c5c3_Var402, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1698, Col: 9}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1781, Col: 9}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var402))
 			if templ_7745c5c3_Err != nil {
@@ -8429,7 +8515,7 @@ func sheetLabel(sheet TaskSheetOption) templ.Component {
 			var templ_7745c5c3_Var404 string
 			templ_7745c5c3_Var404, templ_7745c5c3_Err = templ.JoinStringErrs(sheet.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1705, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1788, Col: 15}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var404))
 			if templ_7745c5c3_Err != nil {
@@ -8439,7 +8525,7 @@ func sheetLabel(sheet TaskSheetOption) templ.Component {
 			var templ_7745c5c3_Var405 string
 			templ_7745c5c3_Var405, templ_7745c5c3_Err = templ.JoinStringErrs(sheet.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1707, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1790, Col: 15}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var405))
 			if templ_7745c5c3_Err != nil {
@@ -8478,6 +8564,1198 @@ func joinList(items []string) string {
 		result += item
 	}
 	return result
+}
+
+func taskPreparation(data TaskPageData) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var406 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var406 == nil {
+			templ_7745c5c3_Var406 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 490, "<section class=\"space-y-4\" id=\"task-preparation\" aria-labelledby=\"preparation-heading\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Var407 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+			if !templ_7745c5c3_IsBuffer {
+				defer func() {
+					templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err == nil {
+						templ_7745c5c3_Err = templ_7745c5c3_BufErr
+					}
+				}()
+			}
+			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Var408 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+				if !templ_7745c5c3_IsBuffer {
+					defer func() {
+						templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err == nil {
+							templ_7745c5c3_Err = templ_7745c5c3_BufErr
+						}
+					}()
+				}
+				ctx = templ.InitializeContext(ctx)
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 491, "<p class=\"text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]\">AI data preparation</p><h3 id=\"preparation-heading\" class=\"cn-card-title\">Prepare mapped field values</h3><p class=\"text-sm text-muted-foreground max-w-[75ch]\">Only campaign-mapped values are sent to the confirmed AI connection, and only this operator can read the runs. Prepared output is review evidence: it does not send email, make a recipient eligible or replace the validated task snapshot.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if data.Preparation.BlockedReason != "" {
+					templ_7745c5c3_Var409 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+						if !templ_7745c5c3_IsBuffer {
+							defer func() {
+								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+								if templ_7745c5c3_Err == nil {
+									templ_7745c5c3_Err = templ_7745c5c3_BufErr
+								}
+							}()
+						}
+						ctx = templ.InitializeContext(ctx)
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 492, "<p>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var410 string
+						templ_7745c5c3_Var410, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.BlockedReason)
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1829, Col: 41}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var410))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 493, "</p>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						return nil
+					})
+					templ_7745c5c3_Err = alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var409), templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 494, " ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if data.Preparation.Configured {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 495, "<div class=\"space-y-1 text-sm\"><p><strong>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var411 string
+					templ_7745c5c3_Var411, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.ConnectionLabel)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1834, Col: 51}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var411))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 496, "</strong></p><p class=\"text-muted-foreground wrap-anywhere\">Mapped values are sent to <code>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var412 string
+					templ_7745c5c3_Var412, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Endpoint)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1835, Col: 112}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var412))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 497, "</code> under this account's confirmed connection. Account settings describes the provider's data handling.</p></div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Var413 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+						if !templ_7745c5c3_IsBuffer {
+							defer func() {
+								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+								if templ_7745c5c3_Err == nil {
+									templ_7745c5c3_Err = templ_7745c5c3_BufErr
+								}
+							}()
+						}
+						ctx = templ.InitializeContext(ctx)
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 498, "<p>No AI connection is confirmed for this account. <a class=\"app-link text-primary\" href=\"/account/ai\">Set up the AI connection</a> before preparing data.</p>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						return nil
+					})
+					templ_7745c5c3_Err = alert.Alert(alert.Props{Variant: alert.VariantDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var413), templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 499, " ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if data.Preparation.CanPrepare || data.Preparation.CanRetry || data.Preparation.CanRerun {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 500, "<div class=\"app-card-actions items-center\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					if data.Preparation.CanPrepare {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 501, "<form method=\"post\" action=\"")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var414 templ.SafeURL
+						templ_7745c5c3_Var414, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/prepare")
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1845, Col: 118}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var414))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 502, "\">")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Var415 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+							if !templ_7745c5c3_IsBuffer {
+								defer func() {
+									templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+									if templ_7745c5c3_Err == nil {
+										templ_7745c5c3_Err = templ_7745c5c3_BufErr
+									}
+								}()
+							}
+							ctx = templ.InitializeContext(ctx)
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 503, "Prepare mapped data")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							return nil
+						})
+						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var415), templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 504, "</form>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
+					if data.Preparation.CanRetry {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 505, "<form method=\"post\" action=\"")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var416 templ.SafeURL
+						templ_7745c5c3_Var416, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/retry")
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1852, Col: 116}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var416))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 506, "\">")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Var417 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+							if !templ_7745c5c3_IsBuffer {
+								defer func() {
+									templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+									if templ_7745c5c3_Err == nil {
+										templ_7745c5c3_Err = templ_7745c5c3_BufErr
+									}
+								}()
+							}
+							ctx = templ.InitializeContext(ctx)
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 507, "Retry failed preparation")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							return nil
+						})
+						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var417), templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 508, "</form>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
+					if data.Preparation.CanRerun {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 509, "<form method=\"post\" action=\"")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						var templ_7745c5c3_Var418 templ.SafeURL
+						templ_7745c5c3_Var418, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/rerun")
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1859, Col: 116}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var418))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 510, "\">")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Var419 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+							if !templ_7745c5c3_IsBuffer {
+								defer func() {
+									templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+									if templ_7745c5c3_Err == nil {
+										templ_7745c5c3_Err = templ_7745c5c3_BufErr
+									}
+								}()
+							}
+							ctx = templ.InitializeContext(ctx)
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 511, "Run preparation again")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							return nil
+						})
+						templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var419), templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 512, "</form>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 513, "</div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 514, " ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if data.Preparation.EvidenceRunID != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 515, "<div class=\"space-y-2\"><h4 class=\"text-sm font-semibold\">Prepared dataset evidence ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					if data.Preparation.EvidenceSelected {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 516, "<span class=\"text-xs text-primary\">(selected)</span>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 517, "</h4><p class=\"text-sm\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var420 string
+					templ_7745c5c3_Var420, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.SourceRows)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1875, Col: 61}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var420))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 518, " source rows · ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var421 string
+					templ_7745c5c3_Var421, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Entries)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1875, Col: 112}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var421))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 519, " prepared entries · ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var422 string
+					templ_7745c5c3_Var422, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Accepted)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1875, Col: 169}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var422))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 520, " accepted · ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var423 string
+					templ_7745c5c3_Var423, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Held)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1875, Col: 214}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var423))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 521, " held by findings · ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var424 string
+					templ_7745c5c3_Var424, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Corrections)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1875, Col: 274}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var424))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 522, " corrections · ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var425 string
+					templ_7745c5c3_Var425, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Counts.Findings)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1875, Col: 326}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var425))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 523, " findings</p><p class=\"text-sm text-muted-foreground\">Held entries are part of the preparation exclusion evidence. Required/optional, address and duplicate checks still run in the backend when this evidence is later finalized.</p></div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 524, " <details class=\"text-sm\"><summary class=\"cursor-pointer\">Application base prompt · version ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var426 string
+				templ_7745c5c3_Var426, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.PromptVersion)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1880, Col: 104}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var426))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 525, "</summary><pre class=\"mt-2 max-h-96 overflow-auto rounded-md border border-border bg-muted/40 p-3 text-xs wrap-anywhere whitespace-pre-wrap\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var427 string
+				templ_7745c5c3_Var427, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.Prompt)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1881, Col: 161}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var427))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 526, "</pre></details><form method=\"post\" action=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var428 templ.SafeURL
+				templ_7745c5c3_Var428, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/instructions")
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1883, Col: 120}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var428))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 527, "\" class=\"space-y-3\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Var429 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+					if !templ_7745c5c3_IsBuffer {
+						defer func() {
+							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+							if templ_7745c5c3_Err == nil {
+								templ_7745c5c3_Err = templ_7745c5c3_BufErr
+							}
+						}()
+					}
+					ctx = templ.InitializeContext(ctx)
+					templ_7745c5c3_Var430 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+						if !templ_7745c5c3_IsBuffer {
+							defer func() {
+								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+								if templ_7745c5c3_Err == nil {
+									templ_7745c5c3_Err = templ_7745c5c3_BufErr
+								}
+							}()
+						}
+						ctx = templ.InitializeContext(ctx)
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 528, "Task instructions (optional)")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						return nil
+					})
+					templ_7745c5c3_Err = field.Label(field.LabelProps{For: "preparation-instructions"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var430), templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = textarea.Textarea(textarea.Props{ID: "preparation-instructions", Name: "instructions", Rows: 6, Value: data.Preparation.Instructions, Disabled: !data.Preparation.CanManage, Attributes: templ.Attributes{"aria-describedby": "preparation-instructions-hint"}}).Render(ctx, templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 529, "<p id=\"preparation-instructions-hint\" class=\"text-xs text-muted-foreground\">Instructions extend or override the cleanup defaults for this task only. They never bypass output validation, recipient integrity or sending authorization. Editing them does not change a completed run; only an explicit new run captures the new text.</p>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					return nil
+				})
+				templ_7745c5c3_Err = field.Field(field.Props{}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var429), templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 530, "<div class=\"app-card-actions\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Var431 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+					templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+					templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+					if !templ_7745c5c3_IsBuffer {
+						defer func() {
+							templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+							if templ_7745c5c3_Err == nil {
+								templ_7745c5c3_Err = templ_7745c5c3_BufErr
+							}
+						}()
+					}
+					ctx = templ.InitializeContext(ctx)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 531, "Save instructions")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					return nil
+				})
+				templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm, Disabled: !data.Preparation.CanManage}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var431), templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 532, "</div></form>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if len(data.Preparation.Runs) > 0 {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 533, "<div class=\"table-scroll\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Var432 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+						templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+						templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+						if !templ_7745c5c3_IsBuffer {
+							defer func() {
+								templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+								if templ_7745c5c3_Err == nil {
+									templ_7745c5c3_Err = templ_7745c5c3_BufErr
+								}
+							}()
+						}
+						ctx = templ.InitializeContext(ctx)
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 534, "<thead><tr><th>Created</th><th>Run</th><th>State</th><th>Model</th><th>Batches</th><th>Result</th><th>Action</th></tr></thead> <tbody>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						for _, run := range data.Preparation.Runs {
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 535, "<tr><td>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var433 string
+							templ_7745c5c3_Var433, templ_7745c5c3_Err = templ.JoinStringErrs(run.CreatedAt)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1906, Col: 29}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var433))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 536, "</td><td><code>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var434 string
+							templ_7745c5c3_Var434, templ_7745c5c3_Err = templ.JoinStringErrs(run.Kind)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1908, Col: 27}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var434))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 537, "</code> ")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							if run.Selected {
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 538, "<span class=\"ml-1 text-xs text-primary\">selected</span> ")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+							}
+							if run.Error != "" {
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 539, "<p class=\"text-xs status-danger wrap-anywhere\">")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var435 string
+								templ_7745c5c3_Var435, templ_7745c5c3_Err = templ.JoinStringErrs(run.Error)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1913, Col: 70}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var435))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 540, "</p>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 541, "</td><td><code>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var436 string
+							templ_7745c5c3_Var436, templ_7745c5c3_Err = templ.JoinStringErrs(run.State)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1916, Col: 31}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var436))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 542, "</code></td><td class=\"wrap-anywhere\">")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var437 string
+							templ_7745c5c3_Var437, templ_7745c5c3_Err = templ.JoinStringErrs(run.Provider)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1917, Col: 50}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var437))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 543, " · ")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var438 string
+							templ_7745c5c3_Var438, templ_7745c5c3_Err = templ.JoinStringErrs(run.APIFormat)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1917, Col: 71}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var438))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 544, " · ")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var439 string
+							templ_7745c5c3_Var439, templ_7745c5c3_Err = templ.JoinStringErrs(run.Model)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1917, Col: 88}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var439))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 545, "</td><td>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var440 string
+							templ_7745c5c3_Var440, templ_7745c5c3_Err = templ.JoinStringErrs(run.Batches)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1918, Col: 27}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var440))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 546, "</td><td>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var441 string
+							templ_7745c5c3_Var441, templ_7745c5c3_Err = templ.JoinStringErrs(run.Accepted)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1919, Col: 28}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var441))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 547, " accepted · ")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var442 string
+							templ_7745c5c3_Var442, templ_7745c5c3_Err = templ.JoinStringErrs(run.Held)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1919, Col: 53}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var442))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 548, " held · ")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var443 string
+							templ_7745c5c3_Var443, templ_7745c5c3_Err = templ.JoinStringErrs(run.Corrections)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1919, Col: 81}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var443))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 549, " corrections · ")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var444 string
+							templ_7745c5c3_Var444, templ_7745c5c3_Err = templ.JoinStringErrs(run.Findings)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1919, Col: 113}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var444))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 550, " findings</td><td>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							if run.CanSelect {
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 551, "<form method=\"post\" action=\"")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var445 templ.SafeURL
+								templ_7745c5c3_Var445, templ_7745c5c3_Err = templ.JoinURLErrs("/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/select")
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1922, Col: 122}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var445))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 552, "\"><input type=\"hidden\" name=\"run\" value=\"")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var446 string
+								templ_7745c5c3_Var446, templ_7745c5c3_Err = templ.ResolveAttributeValue(run.ID)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1923, Col: 59}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var446)
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 553, "\">")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Var447 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+									templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+									templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+									if !templ_7745c5c3_IsBuffer {
+										defer func() {
+											templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+											if templ_7745c5c3_Err == nil {
+												templ_7745c5c3_Err = templ_7745c5c3_BufErr
+											}
+										}()
+									}
+									ctx = templ.InitializeContext(ctx)
+									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 554, "Select for review")
+									if templ_7745c5c3_Err != nil {
+										return templ_7745c5c3_Err
+									}
+									return nil
+								})
+								templ_7745c5c3_Err = button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var447), templ_7745c5c3_Buffer)
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 555, "</form>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+							} else {
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 556, "<span class=\"text-sm text-muted-foreground\">—</span>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 557, "</td></tr>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 558, "</tbody>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						return nil
+					})
+					templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Preparation runs"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var432), templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 559, "</div>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 560, " ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if data.Preparation.EvidenceRunID != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 561, "<h4 class=\"text-sm font-semibold\">Unresolved findings</h4>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					if len(data.Preparation.Findings) == 0 {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 562, "<p class=\"text-sm text-muted-foreground\">No unresolved findings in this run.</p>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					} else {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 563, "<div class=\"table-scroll\">")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Var448 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+							if !templ_7745c5c3_IsBuffer {
+								defer func() {
+									templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+									if templ_7745c5c3_Err == nil {
+										templ_7745c5c3_Err = templ_7745c5c3_BufErr
+									}
+								}()
+							}
+							ctx = templ.InitializeContext(ctx)
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 564, "<thead><tr><th>Row</th><th>Position</th><th>Field</th><th>Scope</th><th>Finding</th></tr></thead> <tbody>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							for _, finding := range data.Preparation.Findings {
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 565, "<tr><td>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var449 string
+								templ_7745c5c3_Var449, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Row)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1949, Col: 28}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var449))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 566, "</td><td>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								if finding.Position > 0 {
+									var templ_7745c5c3_Var450 string
+									templ_7745c5c3_Var450, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Position)
+									if templ_7745c5c3_Err != nil {
+										return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1952, Col: 31}
+									}
+									_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var450))
+									if templ_7745c5c3_Err != nil {
+										return templ_7745c5c3_Err
+									}
+								} else {
+									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 567, "—")
+									if templ_7745c5c3_Err != nil {
+										return templ_7745c5c3_Err
+									}
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 568, "</td><td>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var451 string
+								templ_7745c5c3_Var451, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Field)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1957, Col: 30}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var451))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 569, "</td><td><code>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var452 string
+								templ_7745c5c3_Var452, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Scope)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1958, Col: 36}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var452))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 570, "</code></td><td>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var453 string
+								templ_7745c5c3_Var453, templ_7745c5c3_Err = templ.JoinStringErrs(finding.Note)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1959, Col: 29}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var453))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 571, "</td></tr>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 572, "</tbody>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							return nil
+						})
+						templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Unresolved preparation findings"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var448), templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 573, "</div>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						if data.Preparation.FindingsHidden > 0 {
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 574, "<p class=\"text-sm text-muted-foreground\">")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var454 string
+							templ_7745c5c3_Var454, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.FindingsHidden)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1966, Col: 81}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var454))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 575, " more findings are stored in the run evidence.</p>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+						}
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 576, " <h4 class=\"text-sm font-semibold\">Resolved corrections</h4>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					if len(data.Preparation.Corrections) == 0 {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 577, "<p class=\"text-sm text-muted-foreground\">No resolved corrections in this run. Corrections alone never hold an entry.</p>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					} else {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 578, "<div class=\"table-scroll\">")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Var455 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+							if !templ_7745c5c3_IsBuffer {
+								defer func() {
+									templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+									if templ_7745c5c3_Err == nil {
+										templ_7745c5c3_Err = templ_7745c5c3_BufErr
+									}
+								}()
+							}
+							ctx = templ.InitializeContext(ctx)
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 579, "<thead><tr><th>Row</th><th>Field</th><th>Correction</th></tr></thead> <tbody>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							for _, correction := range data.Preparation.Corrections {
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 580, "<tr><td>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var456 string
+								templ_7745c5c3_Var456, templ_7745c5c3_Err = templ.JoinStringErrs(correction.Row)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1978, Col: 34}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var456))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 581, "</td><td>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var457 string
+								templ_7745c5c3_Var457, templ_7745c5c3_Err = templ.JoinStringErrs(correction.Field)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1978, Col: 63}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var457))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 582, "</td><td>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var458 string
+								templ_7745c5c3_Var458, templ_7745c5c3_Err = templ.JoinStringErrs(correction.Note)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1978, Col: 91}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var458))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 583, "</td></tr>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 584, "</tbody>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							return nil
+						})
+						templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Resolved preparation corrections"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var455), templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 585, "</div>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						if data.Preparation.CorrectionsHidden > 0 {
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 586, "<p class=\"text-sm text-muted-foreground\">")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var459 string
+							templ_7745c5c3_Var459, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.CorrectionsHidden)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1984, Col: 84}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var459))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 587, " more corrections are stored in the run evidence.</p>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+						}
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 588, " ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					if len(data.Preparation.Held) > 0 {
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 589, "<h4 class=\"text-sm font-semibold\">Prepared entries held by findings</h4><div class=\"table-scroll\">")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Var460 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+							templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+							templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+							if !templ_7745c5c3_IsBuffer {
+								defer func() {
+									templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+									if templ_7745c5c3_Err == nil {
+										templ_7745c5c3_Err = templ_7745c5c3_BufErr
+									}
+								}()
+							}
+							ctx = templ.InitializeContext(ctx)
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 590, "<thead><tr><th>Row</th><th>Position</th><th>Recipient</th><th>Reason</th></tr></thead> <tbody>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							for _, held := range data.Preparation.Held {
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 591, "<tr><td>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var461 string
+								templ_7745c5c3_Var461, templ_7745c5c3_Err = templ.JoinStringErrs(held.Row)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1994, Col: 28}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var461))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 592, "</td><td>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var462 string
+								templ_7745c5c3_Var462, templ_7745c5c3_Err = templ.JoinStringErrs(held.Position)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1994, Col: 54}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var462))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 593, "</td><td>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var463 string
+								templ_7745c5c3_Var463, templ_7745c5c3_Err = templ.JoinStringErrs(held.Recipient)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1994, Col: 81}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var463))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 594, "</td><td>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								var templ_7745c5c3_Var464 string
+								templ_7745c5c3_Var464, templ_7745c5c3_Err = templ.JoinStringErrs(held.Reasons)
+								if templ_7745c5c3_Err != nil {
+									return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 1994, Col: 106}
+								}
+								_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var464))
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+								templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 595, "</td></tr>")
+								if templ_7745c5c3_Err != nil {
+									return templ_7745c5c3_Err
+								}
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 596, "</tbody>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							return nil
+						})
+						templ_7745c5c3_Err = table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Prepared entries held by findings"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var460), templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 597, "</div>")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						if data.Preparation.HeldHidden > 0 {
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 598, "<p class=\"text-sm text-muted-foreground\">")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var465 string
+							templ_7745c5c3_Var465, templ_7745c5c3_Err = templ.JoinStringErrs(data.Preparation.HeldHidden)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/task.templ`, Line: 2000, Col: 77}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var465))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 599, " more held entries are stored in the run evidence.</p>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+						}
+					}
+				}
+				return nil
+			})
+			templ_7745c5c3_Err = card.Content(card.ContentProps{Class: "gap-4"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var408), templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			return nil
+		})
+		templ_7745c5c3_Err = card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "preparation-heading"}}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var407), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 600, "</section>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
 }
 
 var _ = templruntime.GeneratedTemplate

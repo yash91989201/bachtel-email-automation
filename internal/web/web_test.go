@@ -17,12 +17,15 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/ui"
 	"github.com/yash91989201/bachtel-email-automation/internal/ai"
+	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/config"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
+	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
 	"github.com/yash91989201/bachtel-email-automation/internal/operator"
+	"github.com/yash91989201/bachtel-email-automation/internal/preparation"
 	"github.com/yash91989201/bachtel-email-automation/internal/reset"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 )
@@ -44,6 +47,15 @@ func testServices(t *testing.T, app core.App, cfg config.Config, dispatcher Disp
 	aiStore := ai.NewStore(app, testKey)
 	// Simulated endpoints run on loopback plaintext; only tests enable this.
 	aiStore.SetValidationOptions(ai.ValidationOptions{Timeout: 5 * time.Second, MaxResponseBytes: 512 << 10, AllowPrivate: true})
+	campaigns := campaign.NewService(app, cfg.PandocPath)
+	tasks := intake.NewService(app, campaigns, cfg.Intake)
+	prepared := preparation.NewService(app, tasks, campaigns, aiStore)
+	prepared.SetOptions(preparation.Options{BatchSize: 20, MaxTokens: 4096})
+	prepared.SetSettled(func(taskID string) {
+		if err := sending.NewStore(app, sending.StoreOptions{}).SettleClosure(context.Background(), taskID); err != nil {
+			t.Logf("settle closure after preparation: %v", err)
+		}
+	})
 	return Services{
 		Connections: microsoft.NewService(app, cfg, mailboxes),
 		Mailboxes:   mailboxes,
@@ -52,12 +64,21 @@ func testServices(t *testing.T, app core.App, cfg config.Config, dispatcher Disp
 		Exports:     exports.NewService(app, cfg),
 		Resets:      reset.NewService(app, mailboxes),
 		AI:          aiStore,
+		Preparation: prepared,
 	}
 }
 
 // newTestServer boots a temp-data PocketBase app with the operator UI mounted
 // the same way the running application mounts it.
 func newTestServer(t *testing.T, cfg config.Config) (*pocketbase.PocketBase, http.Handler) {
+	t.Helper()
+	app, handler, _ := newTestServerWithServices(t, cfg)
+	return app, handler
+}
+
+// newTestServerWithServices boots the same server and returns its process-owned
+// services so a test can drive a worker exactly as the application does.
+func newTestServerWithServices(t *testing.T, cfg config.Config) (*pocketbase.PocketBase, http.Handler, Services) {
 	t.Helper()
 	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDataDir: t.TempDir()})
 	if err := app.Bootstrap(); err != nil {
@@ -71,7 +92,8 @@ func newTestServer(t *testing.T, cfg config.Config) (*pocketbase.PocketBase, htt
 	if err := app.RunAppMigrations(); err != nil {
 		t.Fatal(err)
 	}
-	return app, wrapWithPocketBase(t, app, NewHandler(app, cfg, testServices(t, app, cfg, nil)))
+	services := testServices(t, app, cfg, nil)
+	return app, wrapWithPocketBase(t, app, NewHandler(app, cfg, services)), services
 }
 
 // wrapWithPocketBase mounts the UI handler behind the PocketBase router, as

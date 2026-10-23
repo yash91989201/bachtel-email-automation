@@ -383,6 +383,12 @@ type Task struct {
 	ClosedBy string
 	// ClosedAt is the terminal closure marker. A closed task never reopens.
 	ClosedAt time.Time
+	// PreparationInstructions is the editable task-instruction draft. Editing
+	// it never changes a completed preparation run.
+	PreparationInstructions string
+	// SelectedPreparationRunID is the completed run explicitly selected for
+	// review. Selection is preparation evidence only.
+	SelectedPreparationRunID string
 }
 
 // Closed reports a finalized terminal closure.

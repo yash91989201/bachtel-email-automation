@@ -218,6 +218,14 @@ immutable snapshot of the eligible rows or fails with an actionable reason.
   actions recheck and claim eligibility transactionally; production candidate
   dispatch requires received-format approval for the exact configuration and
   an explicit operator action.
+- A validated task can optionally prepare its mapped values through the
+  operator's confirmed AI connection. Only mapped values are sent; every run
+  keeps its captured input, base prompt version, task instructions, exact
+  provider/endpoint/model and published output. Resolved corrections are kept
+  apart from unresolved findings, and a shared-field finding holds all recipient
+  siblings. Preparation is durable evidence only: it never writes candidates or
+  attempts, never authorizes sending, and later review/finalization is a
+  separate stage.
 - The upload screen shows the workbook constraints (supported format, size,
   expanded-archive limits and the 1,000-recipient-entry bound after comma
   splitting) and reports every rejection inline.
@@ -273,6 +281,7 @@ internal/
   campaign/                     Campaign revisions, mapping validation, normalization and the single render path
   convert/                      Sandboxed DOCX-to-HTML conversion (pinned Pandoc) and document inspection
   intake/                       Task workbook validation, candidate identity, membership snapshots and reservations
+  preparation/                  AI data-preparation runs, structured response validation and the durable preparation worker
   mailbox/                      Operator-owned mailbox claims, connection status and encrypted credentials
   microsoft/                    Microsoft connection service (OAuth flow, encrypted credentials)
   operator/                     Operator account provisioning
@@ -290,6 +299,8 @@ internal/
     1792320010_sending.go               Attempts, approvals, actions, resolutions, dispatcher state
     1792320020_task_schedule.go         Single-shot task schedules
     1792320030_exports.go               Generated download artifacts
+    1792800000_account_connections.go   Private AI connection and terminal task closure
+    1792900000_task_data_preparation.go Preparation runs/jobs, instruction drafts and run selection
   web/
     web.go                      Route table, handler assembly, render helper
                                 (/health, /robots.txt, /static, GET /{$}, GET /status)
@@ -298,6 +309,7 @@ internal/
     connection.go               GET /connection, Microsoft connect/callback, Titan connect, disconnect, replacement handlers
     campaign.go                 /campaigns pages: create, revision upload, labels, sample preview
     task.go                     Task intake pages: upload, worksheet selection, review, downloads
+    preparation.go              Preparation actions: prepare, retry, rerun, select and instruction drafts
     sending.go                  Sending and recovery pages and actions
     ratelimit.go                Fixed-window login rate limiter
     web_test.go                 Route, auth, CSRF, rate-limit, and DB integration tests

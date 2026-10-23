@@ -10,6 +10,7 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/preparation"
 )
 
 // AttemptCancelled marks a queued operation that explicit closure cancelled
@@ -61,6 +62,9 @@ func (s *Store) CloseTask(ctx context.Context, ownerID, taskID, actor, actionID 
 			if err = cancelQueuedAttempts(app, task.Id, now); err != nil {
 				return err
 			}
+			if err = cancelQueuedPreparation(app, task.Id, now); err != nil {
+				return err
+			}
 			if err = releaseSafeReservations(app, task.Id); err != nil {
 				return err
 			}
@@ -86,6 +90,40 @@ func closureStatus(task *core.Record) string {
 		return "closed"
 	}
 	return "closing"
+}
+
+// cancelQueuedPreparation cancels AI preparation that has not claimed its job.
+// A running claim is left for its worker, which abandons it once the closure
+// request is visible; nothing it returns can publish over the closure.
+func cancelQueuedPreparation(app core.App, taskID string, now time.Time) error {
+	if _, err := app.DB().NewQuery("UPDATE " + preparation.JobsCollection +
+		" SET state = {:cancelled}, error = {:error}, finished_at = {:now}" +
+		" WHERE task = {:task} AND state = {:queued}").
+		Bind(dbx.Params{"cancelled": preparation.JobCancelled, "error": preparation.ErrCancelled.Error(), "now": now, "task": taskID, "queued": preparation.JobQueued}).
+		Execute(); err != nil {
+		return err
+	}
+	_, err := app.DB().NewQuery("UPDATE " + preparation.RunsCollection +
+		" SET state = {:cancelled}, error = {:error}, finished_at = {:now}" +
+		" WHERE task = {:task} AND state = {:queued}").
+		Bind(dbx.Params{"cancelled": preparation.RunCancelled, "error": preparation.ErrCancelled.Error(), "now": now, "task": taskID, "queued": preparation.RunQueued}).
+		Execute()
+	return err
+}
+
+// SettleClosure finalizes a requested closure after an external operation of
+// the task settled. It is safe to call repeatedly.
+func (s *Store) SettleClosure(ctx context.Context, taskID string) error {
+	return s.app.RunInTransaction(func(app core.App) error {
+		task, err := app.FindRecordById(intake.TasksCollection, taskID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return s.finalizeClosure(app, task)
+	})
 }
 
 // cancelQueuedAttempts cancels every operation that has not started. An
@@ -160,15 +198,22 @@ func (s *Store) finalizeClosure(app core.App, task *core.Record) error {
 		return nil
 	}
 	var pending struct {
-		Active   bool `db:"active"`
-		Reserved bool `db:"reserved"`
+		Active    bool `db:"active"`
+		Reserved  bool `db:"reserved"`
+		Preparing bool `db:"preparing"`
 	}
-	if err := app.DB().NewQuery("SELECT EXISTS(SELECT 1 FROM submission_attempts WHERE task = {:task} AND state IN ('queued', 'in_flight')) AS active, EXISTS(SELECT 1 FROM task_candidates WHERE task = {:task} AND dispatch_state IN ('reserved', 'in_flight')) AS reserved").
-		Bind(dbx.Params{"task": task.Id}).
+	// A running preparation claim is bounded by the provider timeout and
+	// abandons itself once the closure request is visible; closure waits for it
+	// to settle instead of publishing under a closed task.
+	query := "SELECT EXISTS(SELECT 1 FROM submission_attempts WHERE task = {:task} AND state IN ('queued', 'in_flight')) AS active," +
+		" EXISTS(SELECT 1 FROM task_candidates WHERE task = {:task} AND dispatch_state IN ('reserved', 'in_flight')) AS reserved," +
+		" EXISTS(SELECT 1 FROM " + preparation.JobsCollection + " WHERE task = {:task} AND state IN ({:queued}, {:running})) AS preparing"
+	if err := app.DB().NewQuery(query).
+		Bind(dbx.Params{"task": task.Id, "queued": preparation.JobQueued, "running": preparation.JobRunning}).
 		One(&pending); err != nil {
 		return err
 	}
-	if pending.Active || pending.Reserved {
+	if pending.Active || pending.Reserved || pending.Preparing {
 		return nil
 	}
 	nowField(task, "closed_at", s.options.Now())

@@ -20,6 +20,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
 	"github.com/yash91989201/bachtel-email-automation/internal/microsoft"
+	"github.com/yash91989201/bachtel-email-automation/internal/preparation"
 	"github.com/yash91989201/bachtel-email-automation/internal/reset"
 	"github.com/yash91989201/bachtel-email-automation/internal/retention"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
@@ -43,6 +44,8 @@ type Services struct {
 	Resets      *reset.Service
 	// AI is the operator-owned AI connection store.
 	AI *ai.Store
+	// Preparation owns AI data-preparation runs and their durable worker.
+	Preparation *preparation.Service
 }
 
 type server struct {
@@ -59,6 +62,7 @@ type server struct {
 	exports     *exports.Service
 	retention   *retention.Service
 	ai          *ai.Store
+	preparation *preparation.Service
 }
 
 // NewHandler serves the application UI. PocketBase owns the server lifecycle,
@@ -81,6 +85,7 @@ func NewHandler(app core.App, cfg config.Config, services Services) http.Handler
 		retention:   retention.NewService(app),
 		logins:      newLoginLimiter(10, 5*time.Minute),
 		ai:          services.AI,
+		preparation: services.Preparation,
 	}
 	// Connection changes share one account-wide lock. The stores recheck it
 	// inside their own transactions; a stale page is never authority.
@@ -135,6 +140,7 @@ func NewHandler(app core.App, cfg config.Config, services Services) http.Handler
 	mux.HandleFunc("POST /connection/replace/cancel", s.requireOperator(s.handleReplaceCancel))
 	s.registerCampaignRoutes(mux)
 	s.registerTaskRoutes(mux)
+	s.registerPreparationRoutes(mux)
 	s.registerSendingRoutes(mux)
 
 	// Cross-origin writes (forms) are rejected before any handler mutates
