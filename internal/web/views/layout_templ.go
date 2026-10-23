@@ -47,7 +47,7 @@ func Layout(title string, signedIn bool, active string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · Bachtel</title><link rel=\"stylesheet\" href=\"/static/app.css\"><script defer src=\"/static/htmx.min.js\"></script><script defer src=\"/static/alpine.min.js\"></script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · Bachtel</title><link rel=\"stylesheet\" href=\"/static/app.css\"><script defer src=\"/static/htmx.min.js\"></script><script defer src=\"/static/ai-setup.js\"></script><script defer src=\"/static/alpine.min.js\"></script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

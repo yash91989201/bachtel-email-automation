@@ -11,11 +11,11 @@ import (
 	"time"
 )
 
-// endpointURL normalizes and checks one connection's request URL. Production
-// policy is encrypted transport only; the test-only private allowance also
-// permits plaintext so simulated servers work without weakening the shipped
-// configuration.
-func endpointURL(cfg Config, allowPrivate bool) (string, error) {
+// apiRoot normalizes and checks one connection's configured root without a
+// protocol path. Production policy is encrypted transport only; the test-only
+// private allowance also permits plaintext so simulated servers work without
+// weakening the shipped configuration.
+func apiRoot(cfg Config, allowPrivate bool) (string, error) {
 	root := strings.TrimSpace(cfg.APIRoot)
 	if root == "" || len(root) > 2048 {
 		return "", ErrEndpointUnsafe
@@ -40,7 +40,15 @@ func endpointURL(cfg Config, allowPrivate bool) (string, error) {
 	if _, err := checkHost(parsed.Hostname(), allowPrivate); err != nil {
 		return "", err
 	}
-	base := strings.TrimRight(parsed.String(), "/")
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+// endpointURL returns the validated request URL of one API format.
+func endpointURL(cfg Config, allowPrivate bool) (string, error) {
+	base, err := apiRoot(cfg, allowPrivate)
+	if err != nil {
+		return "", err
+	}
 	return base + cfg.APIFormat.Path(), nil
 }
 

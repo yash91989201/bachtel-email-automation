@@ -13,7 +13,9 @@ workbook, or sends email.
   Account mailbox section, so bookmarks keep working without a second mailbox
   surface.
 - **AI connection** (`/account/ai`) configures the operator's single confirmed
-  AI provider, exact model, API format and API key.
+  AI provider, exact model, resolved API format and API key. Supported presets
+  are OpenCode Go and Xiaomi MiMo, both with an editable default endpoint and a
+  Fetch models action; Custom compatible keeps the fully manual setup.
 
 Both sections show the shared pending-task warning. It names every blocking
 task with campaign, filename, distinguishing short reference, state and a link
@@ -26,13 +28,18 @@ Each operator owns at most one confirmed AI connection:
 
 | Stored value | Purpose |
 | --- | --- |
-| provider preset | `opencode-go` or `custom` |
-| API root | Exact HTTPS base for the protocol path |
-| API format | `responses` or `chat-completions`; never inferred |
+| provider preset | `opencode-go`, `xiaomi-mimo` or `custom` |
+| API root | Exact HTTPS base for the protocol path; preset defaults are starting values, an override is preserved |
+| API format | `responses` or `chat-completions`; resolved on the server from the selected preset model, explicit only for `custom` |
 | model | Exact provider model identifier; no fallback |
 | configuration generation | Bumped only by a configuration switch |
 | credential generation | Bumped only when the API key changes |
 | sealed credential | AES-256-GCM under `APP_ENCRYPTION_KEY`, bound to the owner and credential generation |
+
+The stored provider field is free text bounded to 32 characters, so adding the
+Xiaomi preset needed no migration and never rewrote a saved connection. Older
+application versions do not recognize a Xiaomi selection: switch those accounts
+deliberately before rolling the application back.
 
 A proposal is validated and stored separately. It becomes the confirmed
 connection only when the operator confirms the exact provider, endpoint,
@@ -47,13 +54,21 @@ operator's connection.
 There are no deployment-wide AI credentials. Connection records and drafts are
 owner-scoped, and every request is guarded by the operator session.
 
-## OpenCode Go preset
+## Supported providers
+
+Both presets share one contract: an API key, an editable API root that starts
+at the documented default, a Fetch models action and server-resolved API
+formats. Empty roots receive the preset default; any submitted override is
+validated and preserved, so no request silently moves to the official host.
+
+### OpenCode Go preset
 
 Current verified contract (checked 2026-10-23; see
-[OpenCode inference docs](https://opencode.ai/v2/docs/console/api/inference) and
-[Go docs](https://opencode.ai/v2/docs/console/go)):
+[OpenCode inference docs](https://opencode.ai/v2/docs/console/go) and the
+[Go docs](https://opencode.ai/v2/docs/console/api/inference)):
 
-- API root: `https://opencode.ai/inference/openai/v1`
+- Default API root: `https://opencode.ai/inference/go/openai/v1`
+- Default model list: `https://opencode.ai/inference/go/v1/models`
 - Responses: `POST /responses`; Chat Completions: `POST /chat/completions`
 - Authentication: `Authorization: Bearer <api key>`
 - Client identity: a product user agent, plus a stable `x-opencode-session`
@@ -61,9 +76,9 @@ Current verified contract (checked 2026-10-23; see
   header editor.
 - Model families are fixed per model, not per endpoint: Muse Spark 1.3
   (`muse-spark-1.3`) uses Responses; DeepSeek V4.1 Flash
-  (`deepseek-v4.1-flash`) uses Chat Completions. The setup form suggests IDs
-  but requires the exact one and an explicit format; treating them as
-  interchangeable is refused by validation.
+  (`deepseek-v4.1-flash`) uses Chat Completions. The server resolves the format
+  from the verified contract; a format field cannot override it, and an
+  unlisted model is refused instead of guessed.
 
 The Go plan is documented for single-member workspaces and coding-agent
 traffic. This project's validation sends one small synthetic normalization
@@ -72,15 +87,51 @@ and the current model list must be confirmed with the operator's own Console
 credentials: this change deliberately uses no live credentials, so it records
 that readiness limitation rather than claiming verified production access.
 
+### Xiaomi MiMo preset
+
+Current verified contract (checked 2026-10-23; see the
+[model-list docs](https://mimo.mi.com/docs/en-US/api/model/list-models) and the
+[OpenAI-compatible chat docs](https://mimo.mi.com/docs/api/chat/openai-api)):
+
+- Default API root: `https://api.xiaomimimo.com/v1`
+- Default model list: `https://api.xiaomimimo.com/v1/models`
+- Chat Completions: `POST /chat/completions`
+- Authentication: `Authorization: Bearer <api key>`
+- Verified text models (`mimo-v2.6-flash`, `mimo-v2.6-pro`,
+  `mimo-v2.6-pro-ultraspeed`) use Chat Completions. The Anthropic-compatible
+  and audio endpoints are not supported here.
+
+The preset uses the standard API, not the Token Plan host or its
+coding-oriented usage limits. Use ordinary production API credentials with
+provider permission appropriate to the work.
+
+### Model discovery
+
+`POST /account/ai/models` fetches the selected preset's model list with the
+submitted key and endpoint. It is operator-authenticated, form-bounded,
+no-store, and shares the inference endpoint policy: HTTPS, public destination
+checks on the resolved address, same-origin redirects only, timeout and
+response-size bounds, and fixed redacted failures. The browser keeps the typed
+key; the response contains only model options or fixed safe error text, never
+the key, outbound headers or a raw provider body.
+
+Discovery is read-only: it does not stage a proposal, activate a configuration,
+validate normalization or start task work. A public list may prove neither key
+entitlement nor billing; only the exact synthetic validation establishes setup
+readiness. Models outside the verified contract are listed but disabled with a
+reason, and a Custom compatible connection with an explicitly supported format
+is the manual remedy. Changing the provider, endpoint or key clears the fetched
+selection and late responses cannot replace models for newer inputs.
+
 ### Provider data handling
 
 Normalization sends only mapped workbook values, mapping/header metadata and
 necessary source references to the confirmed endpoint. Account settings states
 the external destination. OpenCode documents traffic monitoring for abuse, and
 its Muse Contributor option may allow training on prompts and completions; it
-does not promise zero retention. Treat that as a deployment-suitability
-decision for real workbook data, not as an assumed coding-subscription
-contract.
+does not promise zero retention. Review Xiaomi's data-handling terms too. Treat
+both as deployment-suitability decisions for real workbook data, not as assumed
+coding-subscription contracts.
 
 ## Task preparation
 
@@ -98,7 +149,10 @@ until the later review/finalization workflow is installed.
 
 ## Validation, activation and repair
 
-1. Submit provider, API root, API format, exact model and API key.
+1. Submit the provider credentials. A preset asks for API root and API key,
+   optionally fetches models and then requires one model choice; the server
+   resolves its format. Custom compatible asks for endpoint, supported API
+   format, exact model and API key explicitly.
 2. The server checks the endpoint policy: HTTPS only, no loopback, private,
    link-local, multicast, unspecified or metadata target; the resolved dial
    address is checked again; redirects may not leave the validated origin; the
@@ -110,9 +164,11 @@ until the later review/finalization workflow is installed.
    it with the expected configuration generation and the account lock.
 5. A same-configuration key replacement is allowed while tasks are pending and
    takes effect for future calls only. It does not resume, retry or regenerate
-   anything; failed work still needs an explicit retry. A repair that changes
-   provider, endpoint, format, model or output options is refused with the
-   named blocking tasks.
+   anything; failed work still needs an explicit retry. The saved model and
+   root remain selectable without a discovery round trip, including a model
+   that has since left the verified catalog; its recorded format is kept. A
+   repair that changes provider, endpoint, format, model or output options is
+   refused with the named blocking tasks.
 
 ## Pending-task lock
 
@@ -167,8 +223,9 @@ settles, then releases the lock. Future processing requires a new task.
 ## Future presets and adapters
 
 Add a provider as a `Preset` (label, default root, supported API formats,
-suggested exact model IDs, guidance) when a verified compatible endpoint
-exists. Reuse an adapter for a supported protocol; add one small adapter when a
-provider speaks a different protocol. Native Xiaomi MiMo and Fireworks presets,
-a live model marketplace, automatic routing/fallback, arbitrary headers and
-plugin scripts are deliberately outside this change.
+verified model contracts and guidance) when a documented compatible endpoint
+exists, and extend the verified model-to-format table for each new model
+contract. Reuse an adapter for a supported protocol; add one small adapter when
+a provider speaks a different protocol. Fireworks, a live model marketplace,
+automatic routing/fallback, arbitrary headers and plugin scripts are
+deliberately outside this change.

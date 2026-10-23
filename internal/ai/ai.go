@@ -14,6 +14,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -31,20 +32,26 @@ const (
 type Provider string
 
 const (
-	// ProviderOpenCodeGo is the initial preset.
+	// ProviderOpenCodeGo is the OpenCode Go preset.
 	ProviderOpenCodeGo Provider = "opencode-go"
+	// ProviderXiaomiMiMo is the Xiaomi MiMo standard API preset.
+	ProviderXiaomiMiMo Provider = "xiaomi-mimo"
 	// ProviderCustom is any endpoint speaking a supported API format.
 	ProviderCustom Provider = "custom"
 )
 
 // Valid reports whether the provider preset is supported.
-func (p Provider) Valid() bool { return p == ProviderOpenCodeGo || p == ProviderCustom }
+func (p Provider) Valid() bool {
+	return p == ProviderOpenCodeGo || p == ProviderXiaomiMiMo || p == ProviderCustom
+}
 
 // Label is the operator-facing provider name.
 func (p Provider) Label() string {
 	switch p {
 	case ProviderOpenCodeGo:
 		return "OpenCode Go"
+	case ProviderXiaomiMiMo:
+		return "Xiaomi MiMo"
 	case ProviderCustom:
 		return "Custom compatible endpoint"
 	default:
@@ -89,49 +96,106 @@ func (f APIFormat) Path() string {
 	}
 }
 
-// Preset is provider reference data: labels, default endpoint, supported API
-// formats, suggested exact model IDs and setup guidance. It carries no
-// protocol behavior.
-type Preset struct {
-	Provider        Provider
-	Label           string
-	DefaultRoot     string
-	Formats         []APIFormat
-	SuggestedModels []string
-	Guidance        []string
+// ModelContract is one verified model identifier and the single API format
+// that serves it. A model outside this table is never assigned a guessed
+// format: it is listed as unavailable with a remedy instead.
+type ModelContract struct {
+	ID     string
+	Format APIFormat
 }
 
-// OpenCodeRoot is the documented OpenCode inference root verified on
-// 2026-10-23; the Go plan uses the same OpenAI-compatible inference roots.
-const OpenCodeRoot = "https://opencode.ai/inference/openai/v1"
+// Preset is provider reference data: labels, default endpoint, supported API
+// formats, verified model contracts and setup guidance. It carries no
+// protocol behavior. Every default is a starting value the operator may
+// override; nothing here pins a submitted endpoint.
+type Preset struct {
+	Provider    Provider
+	Label       string
+	DefaultRoot string
+	Formats     []APIFormat
+	Models      []ModelContract
+	Guidance    []string
+}
+
+const (
+	// OpenCodeRoot is the documented OpenCode Go OpenAI-compatible root,
+	// verified on 2026-10-23.
+	OpenCodeRoot = "https://opencode.ai/inference/go/openai/v1"
+	// XiaomiRoot is the documented Xiaomi MiMo standard API root. The Token
+	// Plan host is deliberately not used.
+	XiaomiRoot = "https://api.xiaomimimo.com/v1"
+)
 
 // Presets lists every supported provider in display order.
 func Presets() []Preset {
 	return []Preset{
 		{
-			Provider:        ProviderOpenCodeGo,
-			Label:           ProviderOpenCodeGo.Label(),
-			DefaultRoot:     OpenCodeRoot,
-			Formats:         []APIFormat{FormatResponses, FormatChatCompletions},
-			SuggestedModels: []string{"muse-spark-1.3", "deepseek-v4.1-flash"},
+			Provider:    ProviderOpenCodeGo,
+			Label:       ProviderOpenCodeGo.Label(),
+			DefaultRoot: OpenCodeRoot,
+			Formats:     []APIFormat{FormatResponses, FormatChatCompletions},
+			Models: []ModelContract{
+				{ID: "grok-4.7", Format: FormatResponses},
+				{ID: "gpt-6-luna", Format: FormatResponses},
+				{ID: "gpt-5.6-luna", Format: FormatResponses},
+				{ID: "muse-spark-1.3", Format: FormatResponses},
+				{ID: "glm-5.3-flash", Format: FormatChatCompletions},
+				{ID: "glm-5.3", Format: FormatChatCompletions},
+				{ID: "glm-5.2", Format: FormatChatCompletions},
+				{ID: "kimi-k3", Format: FormatChatCompletions},
+				{ID: "kimi-k2.7-code", Format: FormatChatCompletions},
+				{ID: "longcat-2.0", Format: FormatChatCompletions},
+				{ID: "deepseek-v4.1-flash", Format: FormatChatCompletions},
+			},
 			Guidance: []string{
 				"Use the API key from your OpenCode Console workspace. The Go plan covers time-limited usage for a single-member workspace.",
-				"Each model is served by one API format. Muse Spark 1.3 uses the Responses API; DeepSeek V4.1 Flash uses Chat Completions. They are not interchangeable.",
+				"Each model is served by one API format; the format follows the selected model and is not editable.",
 				"Only the mapped workbook values and preparation metadata are sent to this endpoint. OpenCode documents traffic monitoring for abuse; the Muse Contributor option may allow training on prompts and completions.",
 			},
 		},
 		{
-			Provider:        ProviderCustom,
-			Label:           ProviderCustom.Label(),
-			DefaultRoot:     "",
-			Formats:         []APIFormat{FormatResponses, FormatChatCompletions},
-			SuggestedModels: nil,
+			Provider:    ProviderXiaomiMiMo,
+			Label:       ProviderXiaomiMiMo.Label(),
+			DefaultRoot: XiaomiRoot,
+			Formats:     []APIFormat{FormatChatCompletions},
+			Models: []ModelContract{
+				{ID: "mimo-v2.6-flash", Format: FormatChatCompletions},
+				{ID: "mimo-v2.6-pro", Format: FormatChatCompletions},
+				{ID: "mimo-v2.6-pro-ultraspeed", Format: FormatChatCompletions},
+			},
+			Guidance: []string{
+				"Use a Xiaomi MiMo standard API key. The Token Plan host and its coding-oriented usage limits are not used by this preset.",
+				"The documented MiMo text models speak Chat Completions; the Anthropic-compatible and audio endpoints are not supported here.",
+				"Only the mapped workbook values and preparation metadata are sent to this endpoint. Review Xiaomi's data-handling terms before sending real workbook data.",
+			},
+		},
+		{
+			Provider:    ProviderCustom,
+			Label:       ProviderCustom.Label(),
+			DefaultRoot: "",
+			Formats:     []APIFormat{FormatResponses, FormatChatCompletions},
 			Guidance: []string{
 				"Enter the HTTPS API root that comes before /responses or /chat/completions.",
 				"A successful validation proves only that this endpoint, format and exact model return the normalization contract. It does not claim every model there supports it.",
 			},
 		},
 	}
+}
+
+// ModelFormat resolves the verified API format of one preset model. It never
+// guesses from a model name suffix.
+func ModelFormat(provider Provider, model string) (APIFormat, bool) {
+	preset, ok := PresetFor(provider)
+	if !ok {
+		return "", false
+	}
+	model = strings.TrimSpace(model)
+	for _, contract := range preset.Models {
+		if contract.ID == model {
+			return contract.Format, true
+		}
+	}
+	return "", false
 }
 
 // PresetFor returns the preset for a provider.
@@ -168,6 +232,15 @@ func (c Config) Fingerprint() string {
 // and model.
 func (c Config) Equal(other Config) bool { return c.Fingerprint() == other.Fingerprint() }
 
+// SameSelection reports whether two configurations select the same provider,
+// endpoint and model. Presets resolve their API format on the server, so a
+// stored selection is repaired by comparing the operator's visible choice.
+func (c Config) SameSelection(other Config) bool {
+	return c.Provider == other.Provider &&
+		strings.TrimRight(strings.TrimSpace(c.APIRoot), "/") == strings.TrimRight(strings.TrimSpace(other.APIRoot), "/") &&
+		strings.TrimSpace(c.Model) == strings.TrimSpace(other.Model)
+}
+
 // Connection is the operator-visible confirmed connection. It never carries
 // the API key.
 type Connection struct {
@@ -201,6 +274,30 @@ type Proposal struct {
 	APIKey string
 }
 
+// ModelOption is one model a preset endpoint lists. Supported models carry the
+// verified API format; every other listed model stays visible but unusable,
+// with the reason. Discovery never invents availability.
+type ModelOption struct {
+	ID        string
+	Format    APIFormat
+	Supported bool
+	Reason    string
+}
+
+// Bounded operator input. The API key ceiling is generous but finite; model
+// identifiers are one non-empty token, never a path or a sentence.
+const (
+	maxModelIDLength = 200
+	maxAPIKeyLength  = 4096
+)
+
+// validModelID reports whether a model identifier is one bounded token.
+func validModelID(id string) bool {
+	return id != "" && len(id) <= maxModelIDLength && strings.IndexFunc(id, func(r rune) bool {
+		return unicode.IsControl(r) || unicode.IsSpace(r)
+	}) < 0
+}
+
 // Errors reported by this package. Every message is fixed text safe to show
 // to an operator: no request, response, header or secret value is included.
 var (
@@ -216,6 +313,7 @@ var (
 	ErrResponseTooLarge     = errors.New("the AI response exceeded the allowed size")
 	ErrOutputContract       = errors.New("the selected model did not return the required normalization output")
 	ErrProviderFailure      = errors.New("the AI endpoint returned an error")
+	ErrDiscoveryUnavailable = errors.New("this endpoint did not return a usable model list")
 )
 
 // LockCheck refuses a connection switch while the owning account still has

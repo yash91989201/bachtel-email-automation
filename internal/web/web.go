@@ -127,6 +127,7 @@ func NewHandler(app core.App, cfg config.Config, services Services) http.Handler
 	mux.HandleFunc("GET /status", s.requireOperator(s.handleStatus))
 	mux.HandleFunc("GET /account", s.requireOperator(s.handleAccount))
 	mux.HandleFunc("GET /account/ai", s.requireOperator(s.handleAccountAI))
+	mux.HandleFunc("POST /account/ai/models", s.requireOperator(s.handleAIModels))
 	mux.HandleFunc("POST /account/ai/validate", s.requireOperator(s.handleAIValidate))
 	mux.HandleFunc("POST /account/ai/confirm", s.requireOperator(s.handleAIConfirm))
 	mux.HandleFunc("GET /connection", s.requireOperator(s.handleConnection))

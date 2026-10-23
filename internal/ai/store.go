@@ -82,27 +82,28 @@ func findDraftRecord(app core.App, ownerID string) (*core.Record, error) {
 	return app.FindFirstRecordByFilter(DraftsCollection, "owner = {:owner}", dbx.Params{"owner": ownerID})
 }
 
-// StageValidation validates a proposed connection with the exact model and
-// API format, then stores it as the owner's single staged proposal. The active
-// configuration and its credential stay untouched until confirmation.
+// StageValidation validates a proposed connection with the exact model and its
+// server-resolved API format, then stores it as the owner's single staged
+// proposal. The active configuration and its credential stay untouched until
+// confirmation.
 func (s *Store) StageValidation(ctx context.Context, ownerID string, proposal Proposal) (*Draft, error) {
 	if strings.TrimSpace(ownerID) == "" {
 		return nil, fmt.Errorf("%w: a connection owner is required", ErrInvalidSetup)
-	}
-	cfg, apiKey, err := normalizeProposal(proposal, s.opts.AllowPrivate)
-	if err != nil {
-		return nil, err
-	}
-	// Resolve the encryption key before any provider request: a deployment
-	// without a usable key must fail without spending provider usage.
-	if _, err := s.cipher(); err != nil {
-		return nil, err
 	}
 	active, err := connection(s.app, ownerID)
 	if errors.Is(err, ErrNotConfigured) {
 		active, err = nil, nil
 	}
 	if err != nil {
+		return nil, err
+	}
+	cfg, apiKey, err := normalizeProposal(proposal, active, s.opts.AllowPrivate)
+	if err != nil {
+		return nil, err
+	}
+	// Resolve the encryption key before any provider request: a deployment
+	// without a usable key must fail without spending provider usage.
+	if _, err := s.cipher(); err != nil {
 		return nil, err
 	}
 	_, credentialGeneration := nextGenerations(active, cfg)
@@ -253,13 +254,14 @@ func (s *Store) Credential(ctx context.Context, ownerID string) (string, error) 
 }
 
 // normalizeProposal checks the submitted values and returns the immutable
-// configuration. A preset pins its documented root; a custom root must pass the
-// endpoint policy.
-func normalizeProposal(proposal Proposal, allowPrivate bool) (Config, string, error) {
+// configuration. A preset resolves its API format from the verified model
+// contract; a custom root must pass the endpoint policy and keeps its explicit
+// format. Every preset default is only a starting value: a submitted root is
+// validated and preserved, and an empty root receives the preset default.
+func normalizeProposal(proposal Proposal, active *Connection, allowPrivate bool) (Config, string, error) {
 	cfg := proposal.Config
 	cfg.Provider = Provider(strings.TrimSpace(string(cfg.Provider)))
 	cfg.APIRoot = strings.TrimRight(strings.TrimSpace(cfg.APIRoot), "/")
-	cfg.APIFormat = APIFormat(strings.TrimSpace(string(cfg.APIFormat)))
 	cfg.Model = strings.TrimSpace(cfg.Model)
 	if !cfg.Provider.Valid() {
 		return Config{}, "", fmt.Errorf("%w: choose a supported provider", ErrInvalidSetup)
@@ -268,30 +270,44 @@ func normalizeProposal(proposal Proposal, allowPrivate bool) (Config, string, er
 	if !ok {
 		return Config{}, "", fmt.Errorf("%w: choose a supported provider", ErrInvalidSetup)
 	}
-	if cfg.Provider == ProviderOpenCodeGo {
-		// The preset root is fixed so a signed client cannot be pointed at an
-		// arbitrary host while still claiming the OpenCode contract.
+	if cfg.APIRoot == "" {
 		cfg.APIRoot = preset.DefaultRoot
 	}
 	if cfg.APIRoot == "" {
 		return Config{}, "", fmt.Errorf("%w: an API root is required", ErrInvalidSetup)
 	}
-	if !cfg.APIFormat.Valid() {
-		return Config{}, "", fmt.Errorf("%w: choose a supported API format", ErrInvalidSetup)
+	if !validModelID(cfg.Model) {
+		return Config{}, "", fmt.Errorf("%w: enter the exact model identifier", ErrInvalidSetup)
+	}
+	// A preset's format is always resolved on the server, so a hidden or stale
+	// format field can never select another wire contract. The one exception is
+	// the exact confirmed selection: a model retired from the catalog keeps its
+	// recorded format, so a same-configuration credential repair needs no
+	// discovery or catalog round trip.
+	repairing := active != nil && active.Config.APIFormat.Valid() && active.Config.SameSelection(cfg)
+	switch {
+	case cfg.Provider == ProviderCustom:
+		cfg.APIFormat = APIFormat(strings.TrimSpace(string(proposal.Config.APIFormat)))
+		if !cfg.APIFormat.Valid() {
+			return Config{}, "", fmt.Errorf("%w: choose a supported API format", ErrInvalidSetup)
+		}
+	case repairing:
+		cfg.APIFormat = active.Config.APIFormat
+	default:
+		format, ok := ModelFormat(cfg.Provider, cfg.Model)
+		if !ok {
+			return Config{}, "", fmt.Errorf("%w: the model is not in this provider's verified list; choose a listed model or use a Custom compatible connection", ErrInvalidSetup)
+		}
+		cfg.APIFormat = format
 	}
 	if !slices.Contains(preset.Formats, cfg.APIFormat) {
 		return Config{}, "", fmt.Errorf("%w: the API format is not supported by this provider", ErrInvalidSetup)
-	}
-	if cfg.Model == "" || len(cfg.Model) > 200 || strings.IndexFunc(cfg.Model, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.IsSpace(r)
-	}) >= 0 {
-		return Config{}, "", fmt.Errorf("%w: enter the exact model identifier", ErrInvalidSetup)
 	}
 	if _, err := endpointURL(cfg, allowPrivate); err != nil {
 		return Config{}, "", err
 	}
 	apiKey := strings.TrimSpace(proposal.APIKey)
-	if apiKey == "" || len(apiKey) > 4096 || strings.IndexFunc(apiKey, unicode.IsControl) >= 0 {
+	if apiKey == "" || len(apiKey) > maxAPIKeyLength || strings.IndexFunc(apiKey, unicode.IsControl) >= 0 {
 		return Config{}, "", fmt.Errorf("%w: enter the API key", ErrInvalidSetup)
 	}
 	return cfg, apiKey, nil

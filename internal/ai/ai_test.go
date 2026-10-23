@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -169,6 +168,37 @@ func TestValidateAndConfirmBothFormats(t *testing.T) {
 				t.Fatalf("user agent = %q", fake.agents[0])
 			}
 		})
+	}
+}
+
+func TestXiaomiPresetSurvivesRestart(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	fake := newFakeEndpoint(t, ai.FormatChatCompletions, respondProbe(t, ai.FormatChatCompletions, probeOutput))
+	store := newStore(t, app)
+	root := fake.server.URL + "/v1"
+	staged, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderXiaomiMiMo, APIRoot: root, Model: "mimo-v2.6-pro"},
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Confirm(context.Background(), owner, staged.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	restarted := newStore(t, app)
+	connection, err := restarted.Connection(context.Background(), owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if connection.Config.Provider != ai.ProviderXiaomiMiMo ||
+		connection.Config.APIFormat != ai.FormatChatCompletions ||
+		connection.Config.APIRoot != root {
+		t.Fatalf("restarted xiaomi connection = %+v", connection.Config)
+	}
+	if key, err := restarted.Credential(context.Background(), owner); err != nil || key != "test-key" {
+		t.Fatalf("restarted credential = %q, err=%v", key, err)
 	}
 }
 
@@ -422,16 +452,351 @@ func TestInvalidSetupIsRejected(t *testing.T) {
 	}
 }
 
-func TestPresetPinsDocumentedRoot(t *testing.T) {
-	preset, ok := ai.PresetFor(ai.ProviderOpenCodeGo)
-	if !ok || preset.DefaultRoot != ai.OpenCodeRoot {
-		t.Fatalf("opencode preset = %+v", preset)
+func TestPresetReferenceData(t *testing.T) {
+	opencode, ok := ai.PresetFor(ai.ProviderOpenCodeGo)
+	if !ok || opencode.DefaultRoot != ai.OpenCodeRoot || ai.OpenCodeRoot != "https://opencode.ai/inference/go/openai/v1" {
+		t.Fatalf("opencode preset = %+v", opencode)
 	}
-	if !strings.HasPrefix(ai.OpenCodeRoot, "https://opencode.ai/inference/") {
-		t.Fatalf("unexpected preset root %q", ai.OpenCodeRoot)
+	xiaomi, ok := ai.PresetFor(ai.ProviderXiaomiMiMo)
+	if !ok || xiaomi.DefaultRoot != ai.XiaomiRoot || ai.XiaomiRoot != "https://api.xiaomimimo.com/v1" {
+		t.Fatalf("xiaomi preset = %+v", xiaomi)
 	}
-	if !strings.Contains(fmt.Sprint(preset.Formats), string(ai.FormatResponses)) {
-		t.Fatalf("preset formats = %v", preset.Formats)
+	if !xiaomi.Formats[0].Valid() {
+		t.Fatalf("xiaomi formats = %v", xiaomi.Formats)
+	}
+	for _, tc := range []struct {
+		provider ai.Provider
+		model    string
+		format   ai.APIFormat
+	}{
+		{ai.ProviderOpenCodeGo, "muse-spark-1.3", ai.FormatResponses},
+		{ai.ProviderOpenCodeGo, "deepseek-v4.1-flash", ai.FormatChatCompletions},
+		{ai.ProviderXiaomiMiMo, "mimo-v2.6-pro", ai.FormatChatCompletions},
+	} {
+		format, ok := ai.ModelFormat(tc.provider, tc.model)
+		if !ok || format != tc.format {
+			t.Fatalf("%s/%s format = %q, %v; want %q", tc.provider, tc.model, format, ok, tc.format)
+		}
+	}
+	if _, ok := ai.ModelFormat(ai.ProviderXiaomiMiMo, "mimo-unknown-suffix"); ok {
+		t.Fatal("an unknown model contract was assigned a format")
+	}
+	if _, ok := ai.ModelFormat(ai.ProviderCustom, "any-model"); ok {
+		t.Fatal("a custom model was assigned a format")
+	}
+}
+
+func TestPresetResolvesFormatAndPreservesSubmittedRoot(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	fake := newFakeEndpoint(t, ai.FormatChatCompletions, respondProbe(t, ai.FormatChatCompletions, probeOutput))
+	store := newStore(t, app)
+	root := fake.server.URL + "/v1"
+
+	staged, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{
+			Provider:  ai.ProviderOpenCodeGo,
+			APIRoot:   root,
+			APIFormat: ai.FormatResponses,
+			Model:     "deepseek-v4.1-flash",
+		},
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if staged.Config.APIRoot != root {
+		t.Fatalf("staged root = %q, want the submitted override %q", staged.Config.APIRoot, root)
+	}
+	if staged.Config.APIFormat != ai.FormatChatCompletions {
+		t.Fatalf("staged format = %q, want the model's verified format", staged.Config.APIFormat)
+	}
+	if _, err := store.Confirm(context.Background(), owner, staged.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.sessions) == 0 || fake.sessions[0] == "" {
+		t.Fatal("opencode session header missing")
+	}
+}
+
+func TestPresetRefusesUnknownModelContractBeforeContactingProvider(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+	}))
+	t.Cleanup(server.Close)
+	store := newStore(t, app)
+	_, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderXiaomiMiMo, APIRoot: server.URL + "/v1", Model: "guessed-model"},
+		APIKey: "test-key",
+	})
+	if !errors.Is(err, ai.ErrInvalidSetup) {
+		t.Fatalf("err = %v, want invalid setup", err)
+	}
+	if requests.Load() != 0 {
+		t.Fatal("an unverified model contract reached the provider")
+	}
+}
+
+// seedConnection writes one confirmed configuration without a provider call,
+// so tests can model a model that has since left the verified catalog.
+func seedConnection(t *testing.T, app core.App, owner string, cfg ai.Config) {
+	t.Helper()
+	collection, err := app.FindCollectionByNameOrId(ai.ConnectionsCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := core.NewRecord(collection)
+	record.Set("owner", owner)
+	record.Set("provider", string(cfg.Provider))
+	record.Set("api_root", cfg.APIRoot)
+	record.Set("api_format", string(cfg.APIFormat))
+	record.Set("model", cfg.Model)
+	record.Set("configuration_generation", 1)
+	record.Set("credential_generation", 1)
+	record.Set("credential", "seeded-ciphertext")
+	if err := app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRepairKeepsStoredFormatForRetiredModel(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	fake := newFakeEndpoint(t, ai.FormatChatCompletions, respondProbe(t, ai.FormatChatCompletions, probeOutput))
+	root := fake.server.URL + "/v1"
+	seedConnection(t, app, owner, ai.Config{
+		Provider:  ai.ProviderOpenCodeGo,
+		APIRoot:   root,
+		APIFormat: ai.FormatChatCompletions,
+		Model:     "retired-model",
+	})
+	store := newStore(t, app)
+
+	staged, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderOpenCodeGo, APIRoot: root, Model: "retired-model"},
+		APIKey: "replacement-key",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if staged.Config.APIFormat != ai.FormatChatCompletions {
+		t.Fatalf("retired model format = %q, want the recorded format", staged.Config.APIFormat)
+	}
+	if !staged.Repair(&ai.Connection{Config: ai.Config{
+		Provider: ai.ProviderOpenCodeGo, APIRoot: root, APIFormat: ai.FormatChatCompletions, Model: "retired-model",
+	}}) {
+		t.Fatal("same-configuration repair was not recognised")
+	}
+	confirmed, err := store.Confirm(context.Background(), owner, staged.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if confirmed.Config.APIFormat != ai.FormatChatCompletions || confirmed.ConfigurationGeneration != 1 || confirmed.CredentialGeneration != 2 {
+		t.Fatalf("repaired connection = %+v", confirmed)
+	}
+}
+
+func TestDiscoverModelsDerivesURLsAndClassifies(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider ai.Provider
+		root     func(base string) string
+		listPath string
+		payload  string
+		wantIDs  []string
+	}{
+		{
+			name:     "opencode documented suffix",
+			provider: ai.ProviderOpenCodeGo,
+			root:     func(base string) string { return base + "/inference/go/openai/v1" },
+			listPath: "/inference/go/v1/models",
+			payload:  `{"data":[{"id":"deepseek-v4.1-flash"},{"id":"mystery-model"},{"id":"deepseek-v4.1-flash"},{"id":"bad model"},{"id":""}]}`,
+			wantIDs:  []string{"deepseek-v4.1-flash", "mystery-model"},
+		},
+		{
+			name:     "xiaomi appends models",
+			provider: ai.ProviderXiaomiMiMo,
+			root:     func(base string) string { return base + "/v1" },
+			listPath: "/v1/models",
+			payload:  `{"data":[{"id":"mimo-v2.6-flash"}]}`,
+			wantIDs:  []string{"mimo-v2.6-flash"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newApp(t)
+			owner := provision(t, app, "operator@example.test")
+			var path, auth, agent string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				path = r.URL.Path
+				auth = r.Header.Get("Authorization")
+				agent = r.Header.Get("User-Agent")
+				w.Header().Set("Content-Type", "application/json")
+				if _, err := w.Write([]byte(tc.payload)); err != nil {
+					t.Errorf("write model list: %v", err)
+				}
+			}))
+			t.Cleanup(server.Close)
+			store := newStore(t, app)
+			options, err := store.DiscoverModels(context.Background(), owner, ai.Proposal{
+				Config: ai.Config{Provider: tc.provider, APIRoot: tc.root(server.URL)},
+				APIKey: "test-key",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if path != tc.listPath {
+				t.Fatalf("list path = %q, want %q", path, tc.listPath)
+			}
+			if auth != "Bearer test-key" || agent != "bachtel-email-automation/1.0" {
+				t.Fatalf("headers = %q %q", auth, agent)
+			}
+			if len(options) != len(tc.wantIDs) {
+				t.Fatalf("options = %+v", options)
+			}
+			for i, id := range tc.wantIDs {
+				if options[i].ID != id {
+					t.Fatalf("option %d = %+v, want id %q", i, options[i], id)
+				}
+			}
+			format, ok := ai.ModelFormat(tc.provider, tc.wantIDs[0])
+			if !ok || !options[0].Supported || options[0].Format != format {
+				t.Fatalf("supported option = %+v", options[0])
+			}
+			if len(options) > 1 {
+				if options[1].Supported || options[1].Reason == "" || options[1].Format != "" {
+					t.Fatalf("unsupported option = %+v", options[1])
+				}
+			}
+			// Discovery is read-only: nothing was staged or activated.
+			if _, err := store.Connection(context.Background(), owner); !errors.Is(err, ai.ErrNotConfigured) {
+				t.Fatalf("discovery activated a connection: %v", err)
+			}
+			if staged, err := store.Draft(context.Background(), owner); err != nil || staged != nil {
+				t.Fatalf("discovery staged a proposal: %+v err=%v", staged, err)
+			}
+		})
+	}
+}
+
+func TestDiscoverModelsOutcomes(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		body    string
+		maxSize int64
+		want    error
+	}{
+		{name: "malformed list", status: http.StatusOK, body: `not json`, want: ai.ErrDiscoveryUnavailable},
+		{name: "missing data envelope", status: http.StatusOK, body: `{"models":[]}`, want: ai.ErrDiscoveryUnavailable},
+		{name: "oversized list", status: http.StatusOK, body: `{"data":[{"id":"` + strings.Repeat("x", 4096) + `"}]}`, maxSize: 256, want: ai.ErrResponseTooLarge},
+		{name: "rejected key", status: http.StatusUnauthorized, want: ai.ErrAuthentication},
+		{name: "throttled", status: http.StatusTooManyRequests, want: ai.ErrThrottled},
+		{name: "provider failure", status: http.StatusBadGateway, want: ai.ErrProviderFailure},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newApp(t)
+			owner := provision(t, app, "operator@example.test")
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.status)
+				if tc.body != "" {
+					if _, err := w.Write([]byte(tc.body)); err != nil {
+						t.Errorf("write model list: %v", err)
+					}
+				}
+			}))
+			t.Cleanup(server.Close)
+			store := ai.NewStore(app, func() ([]byte, error) { return testKey, nil })
+			opts := ai.ValidationOptions{Timeout: time.Second, MaxResponseBytes: 512 << 10, AllowPrivate: true}
+			if tc.maxSize > 0 {
+				opts.MaxResponseBytes = tc.maxSize
+			}
+			store.SetValidationOptions(opts)
+			_, err := store.DiscoverModels(context.Background(), owner, ai.Proposal{
+				Config: ai.Config{Provider: ai.ProviderXiaomiMiMo, APIRoot: server.URL + "/v1"},
+				APIKey: "test-key",
+			})
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v", err, tc.want)
+			}
+			if strings.Contains(err.Error(), "test-key") {
+				t.Fatal("discovery error leaked the API key")
+			}
+		})
+	}
+}
+
+func TestDiscoverModelsEmptyListAndUnsupportedInputs(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := w.Write([]byte(`{"data":[]}`)); err != nil {
+			t.Errorf("write model list: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	store := newStore(t, app)
+
+	options, err := store.DiscoverModels(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderXiaomiMiMo, APIRoot: server.URL + "/v1"},
+		APIKey: "test-key",
+	})
+	if err != nil || len(options) != 0 {
+		t.Fatalf("empty list = %+v, err=%v", options, err)
+	}
+	for name, proposal := range map[string]ai.Proposal{
+		"custom provider":  {Config: ai.Config{Provider: ai.ProviderCustom, APIRoot: server.URL + "/v1"}, APIKey: "test-key"},
+		"unknown provider": {Config: ai.Config{Provider: "unknown", APIRoot: server.URL + "/v1"}, APIKey: "test-key"},
+		"missing key":      {Config: ai.Config{Provider: ai.ProviderXiaomiMiMo, APIRoot: server.URL + "/v1"}},
+	} {
+		if _, err := store.DiscoverModels(context.Background(), owner, proposal); !errors.Is(err, ai.ErrInvalidSetup) {
+			t.Fatalf("%s err = %v, want invalid setup", name, err)
+		}
+	}
+}
+
+func TestDiscoverModelsCancellationAndRedirectAreRefused(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	store := newStore(t, app)
+
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(2 * time.Second):
+		}
+	}))
+	t.Cleanup(slow.Close)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if _, err := store.DiscoverModels(ctx, owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderXiaomiMiMo, APIRoot: slow.URL + "/v1"},
+		APIKey: "test-key",
+	}); !errors.Is(err, ai.ErrEndpointTimeout) {
+		t.Fatalf("cancelled discovery err = %v, want timeout", err)
+	}
+
+	var foreign atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		foreign.Add(1)
+	}))
+	t.Cleanup(target.Close)
+	redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(redirect.Close)
+	if _, err := store.DiscoverModels(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderXiaomiMiMo, APIRoot: redirect.URL + "/v1"},
+		APIKey: "test-key",
+	}); !errors.Is(err, ai.ErrEndpointUnsafe) {
+		t.Fatalf("cross-origin discovery err = %v, want endpoint refusal", err)
+	}
+	if foreign.Load() != 0 {
+		t.Fatal("a discovery redirect delivered the credential to another origin")
 	}
 }
 

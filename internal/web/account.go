@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -54,6 +55,7 @@ var aiFailureMessages = []struct {
 	{ai.ErrEndpointUnsafe, "Use a publicly reachable HTTPS API root. Loopback, private, link-local and metadata destinations are refused, and redirects may not leave the validated origin."},
 	{ai.ErrAuthentication, "The endpoint rejected the API key. Check the key and that it belongs to the selected provider."},
 	{ai.ErrModelUnavailable, "The selected model is not available at this endpoint. Check the exact model identifier and API format."},
+	{ai.ErrDiscoveryUnavailable, "The endpoint did not return a usable model list. Enter the exact model ID with a Custom compatible connection if the provider lists models elsewhere."},
 	{ai.ErrThrottled, "The endpoint is throttling requests. Try validation again later."},
 	{ai.ErrEndpointTimeout, "The endpoint did not answer within the allowed time. Try again later."},
 	{ai.ErrResponseTooLarge, "The endpoint response exceeded the allowed size. The model or endpoint is not suitable for normalization."},
@@ -118,34 +120,117 @@ func (s *server) accountMailboxData(r *http.Request, notice string) views.Accoun
 }
 
 // accountAIData builds the AI section model: confirmed configuration,
-// non-secret saved values, staged proposal and the shared lock.
+// non-secret saved values, staged proposal and the shared lock. A confirmed
+// connection reopens as the form defaults so a repair needs no re-entry.
 func (s *server) accountAIData(r *http.Request, notice, problem string) views.AccountPageData {
+	lock := s.accountLock(r)
 	data := views.AccountPageData{
 		Section: accountSectionAI,
-		Lock:    s.accountLock(r),
+		Lock:    lock,
 		AI: views.AccountAIData{
 			Notice:               notice,
 			Error:                problem,
 			SelectedProvider:     string(ai.ProviderOpenCodeGo),
-			APIFormat:            string(ai.FormatResponses),
-			CanSwitch:            true,
+			APIRoot:              ai.OpenCodeRoot,
+			CanSwitch:            !lock.Blocked,
 			ValidationDisclosure: "Validation sends one synthetic normalization request to the selected provider. It contains no workbook, recipient or candidate value, and it may consume provider usage.",
 		},
 	}
-	data.AI.CanSwitch = !data.Lock.Blocked
 	ownerID := recordFromContext(r).Id
-	if connection, err := s.aiConnection(r.Context(), ownerID); err == nil && connection != nil {
+	connection, err := s.aiConnection(r.Context(), ownerID)
+	if err == nil && connection != nil {
 		data.AI.Connection = aiConnectionView(connection)
+		// Reopen the saved non-secret configuration. The key is never
+		// prefilled.
+		data.AI.SelectedProvider = string(connection.Config.Provider)
+		data.AI.APIRoot = connection.Config.APIRoot
+		data.AI.APIFormat = string(connection.Config.APIFormat)
+		data.AI.Model = connection.Config.Model
 	}
 	if staged, err := s.aiDraft(r.Context(), ownerID); err == nil && staged != nil {
 		data.AI.Draft = aiDraftView(staged)
+		data.AI.Repair = staged.Repair(connection)
+		// With no confirmed connection yet, reopen the validated proposal's
+		// non-secret selection so the page explains the same provider it is
+		// asking the operator to activate.
+		if connection == nil {
+			data.AI.SelectedProvider = string(staged.Config.Provider)
+			data.AI.APIRoot = staged.Config.APIRoot
+			data.AI.APIFormat = string(staged.Config.APIFormat)
+			data.AI.Model = staged.Config.Model
+		}
 	}
-	data.AI.Providers = aiProviderOptions(data.AI.SelectedProvider)
-	data.AI.SuggestedModels = aiSuggestModels(ai.ProviderOpenCodeGo)
-	data.AI.Guidance = aiGuidance(ai.ProviderOpenCodeGo)
-	data.AI.APIFormats = aiFormatOptions(ai.ProviderOpenCodeGo, string(ai.FormatResponses))
-	data.AI.APIRoot = ai.OpenCodeRoot
+	applyAIForm(&data.AI)
 	return data
+}
+
+// applyAIForm derives the provider-dependent setup fields from the current
+// selection: provider cards, guidance, the verified model catalog for a
+// preset and the explicit format list for a custom endpoint. Presets resolve
+// their API format from the model; no manual format control exists for them.
+func applyAIForm(data *views.AccountAIData) {
+	provider := ai.Provider(data.SelectedProvider)
+	preset, ok := ai.PresetFor(provider)
+	data.Providers = aiProviderOptions(data.SelectedProvider)
+	data.Guidance = aiGuidance(provider)
+	data.IsPreset = ok && provider != ai.ProviderCustom
+	if data.IsPreset {
+		data.APIFormats = nil
+		data.ModelOptions = aiModelOptions(provider, data.Model, data.APIFormat)
+		data.DefaultRoot = preset.DefaultRoot
+		data.InferredFormat = ""
+		if data.Model != "" {
+			if format, verified := ai.ModelFormat(provider, data.Model); verified {
+				data.InferredFormat = format.Label()
+			} else {
+				// A retired saved model keeps its stored format label so a
+				// repair never needs a discovery round trip.
+				data.InferredFormat = ai.APIFormat(data.APIFormat).Label()
+			}
+		}
+		return
+	}
+	data.ModelOptions = nil
+	data.InferredFormat = ""
+	if data.APIFormat == "" && len(preset.Formats) > 0 {
+		data.APIFormat = string(preset.Formats[0])
+	}
+	data.APIFormats = aiFormatOptions(provider, data.APIFormat)
+}
+
+// aiModelOptions lists the verified preset catalog, labeled with the single
+// API format that serves each model. A saved model outside the catalog stays
+// listed and selectable so a retired configuration remains repairable.
+func aiModelOptions(provider ai.Provider, selected, storedFormat string) []views.AIModelOption {
+	preset, ok := ai.PresetFor(provider)
+	if !ok {
+		return nil
+	}
+	options := make([]views.AIModelOption, 0, len(preset.Models)+1)
+	saved := false
+	for _, contract := range preset.Models {
+		if contract.ID == selected {
+			saved = true
+		}
+		options = append(options, views.AIModelOption{
+			Value:       contract.ID,
+			Format:      string(contract.Format),
+			FormatLabel: contract.Format.Label(),
+			Selected:    contract.ID == selected,
+			Supported:   true,
+		})
+	}
+	if selected != "" && !saved {
+		label := ai.APIFormat(storedFormat)
+		options = append(options, views.AIModelOption{
+			Value:       selected,
+			Format:      string(label),
+			FormatLabel: label.Label(),
+			Selected:    true,
+			Supported:   true,
+		})
+	}
+	return options
 }
 
 // aiConnection reads the confirmed connection, treating an absent one as an
@@ -218,14 +303,6 @@ func aiFormatOptions(provider ai.Provider, selected string) []views.AIFormatOpti
 	return options
 }
 
-func aiSuggestModels(provider ai.Provider) []string {
-	preset, ok := ai.PresetFor(provider)
-	if !ok {
-		return nil
-	}
-	return preset.SuggestedModels
-}
-
 func aiGuidance(provider ai.Provider) []string {
 	preset, ok := ai.PresetFor(provider)
 	if !ok {
@@ -246,25 +323,100 @@ func (s *server) handleAccount(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, views.AccountPage(data))
 }
 
-// handleAccountAI renders the AI connection section.
+// handleAccountAI renders the AI connection section. A confirmed connection
+// reopens as the form defaults; ?provider= keeps the saved selection for its
+// own provider and starts any other preset from its documented default.
 func (s *server) handleAccountAI(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	data := s.accountAIData(r, aiNotice(query.Get("notice")), "")
-	if provider := ai.Provider(query.Get("provider")); provider.Valid() {
+	if provider := ai.Provider(query.Get("provider")); provider.Valid() && provider != ai.Provider(data.AI.SelectedProvider) {
 		data.AI.SelectedProvider = string(provider)
+		data.AI.Model = ""
+		data.AI.APIFormat = ""
+		if preset, ok := ai.PresetFor(provider); ok {
+			data.AI.APIRoot = preset.DefaultRoot
+		}
 	}
-	if format := ai.APIFormat(query.Get("format")); format.Valid() {
-		data.AI.APIFormat = string(format)
-	}
-	data.AI.Providers = aiProviderOptions(data.AI.SelectedProvider)
-	data.AI.APIFormats = aiFormatOptions(ai.Provider(data.AI.SelectedProvider), data.AI.APIFormat)
-	data.AI.SuggestedModels = aiSuggestModels(ai.Provider(data.AI.SelectedProvider))
-	data.AI.Guidance = aiGuidance(ai.Provider(data.AI.SelectedProvider))
-	if data.AI.SelectedProvider == string(ai.ProviderOpenCodeGo) {
-		data.AI.APIRoot = ai.OpenCodeRoot
-	}
+	applyAIForm(&data.AI)
 	w.Header().Set("Cache-Control", "no-store")
 	s.render(w, r, views.AccountPage(data))
+}
+
+// handleAIModels answers one model-list lookup for a preset form. Discovery
+// is read-only: it never writes a connection, draft or credential, and the
+// response carries only operator-visible options or fixed safe text — never
+// the key, request headers or raw provider bodies.
+func (s *server) handleAIModels(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	if s.ai == nil {
+		s.writeAIModels(w, http.StatusServiceUnavailable, nil, "AI settings are unavailable")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := r.ParseForm(); err != nil {
+		s.writeAIModels(w, http.StatusBadRequest, nil, "Invalid model discovery request")
+		return
+	}
+	ownerID := recordFromContext(r).Id
+	proposal := ai.Proposal{
+		Config: ai.Config{
+			Provider: ai.Provider(r.FormValue("provider")),
+			APIRoot:  r.FormValue("api_root"),
+		},
+		APIKey: r.FormValue("api_key"),
+	}
+	options, err := s.ai.DiscoverModels(r.Context(), ownerID, proposal)
+	if err != nil {
+		s.app.Logger().Warn("AI model discovery rejected", "error", err)
+		s.writeAIModels(w, aiDiscoveryStatus(err), nil, aiFailureMessage(err))
+		return
+	}
+	s.writeAIModels(w, http.StatusOK, options, "")
+}
+
+// aiDiscoveryStatus maps one fixed discovery failure to its HTTP status.
+func aiDiscoveryStatus(err error) int {
+	switch {
+	case errors.Is(err, ai.ErrThrottled):
+		return http.StatusTooManyRequests
+	case errors.Is(err, ai.ErrEndpointTimeout):
+		return http.StatusGatewayTimeout
+	case errors.Is(err, ai.ErrInvalidSetup), errors.Is(err, ai.ErrEndpointUnsafe),
+		errors.Is(err, ai.ErrAuthentication), errors.Is(err, ai.ErrDiscoveryUnavailable),
+		errors.Is(err, ai.ErrModelUnavailable):
+		return http.StatusBadRequest
+	default:
+		return http.StatusBadGateway
+	}
+}
+
+// writeAIModels renders the fixed discovery JSON envelope.
+func (s *server) writeAIModels(w http.ResponseWriter, status int, options []ai.ModelOption, problem string) {
+	payload := views.AIModelDiscovery{Models: []views.AIModelOption{}, Error: problem}
+	for _, option := range options {
+		formatLabel := ""
+		if option.Supported {
+			formatLabel = option.Format.Label()
+		}
+		payload.Models = append(payload.Models, views.AIModelOption{
+			Value:       option.ID,
+			Format:      string(option.Format),
+			FormatLabel: formatLabel,
+			Supported:   option.Supported,
+			Reason:      option.Reason,
+		})
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		s.app.Logger().Error("encode AI model discovery response", "error", err)
+		http.Error(w, "Unable to encode model list", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(status)
+	if _, err := w.Write(body); err != nil {
+		s.app.Logger().Warn("write AI model discovery response", "error", err)
+	}
 }
 
 // handleAIValidate validates the exact submitted configuration with one
@@ -297,10 +449,7 @@ func (s *server) handleAIValidate(w http.ResponseWriter, r *http.Request) {
 		data.AI.APIRoot = proposal.Config.APIRoot
 		data.AI.APIFormat = string(proposal.Config.APIFormat)
 		data.AI.Model = proposal.Config.Model
-		data.AI.Providers = aiProviderOptions(data.AI.SelectedProvider)
-		data.AI.APIFormats = aiFormatOptions(proposal.Config.Provider, string(proposal.Config.APIFormat))
-		data.AI.SuggestedModels = aiSuggestModels(proposal.Config.Provider)
-		data.AI.Guidance = aiGuidance(proposal.Config.Provider)
+		applyAIForm(&data.AI)
 		s.renderWithStatus(w, r, http.StatusBadRequest, views.AccountPage(data))
 		return
 	}

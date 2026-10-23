@@ -82,6 +82,37 @@ func postJSON(ctx context.Context, o ValidationOptions, cfg Config, apiKey, sess
 	if err != nil {
 		return "", classifyTransport(err)
 	}
+	raw, err := readBounded(o, resp, ErrModelUnavailable)
+	if err != nil {
+		return "", err
+	}
+	return extractText(cfg.APIFormat, raw)
+}
+
+// fetchJSON sends one bounded, credential-bearing GET. Discovery shares the
+// inference client, endpoint policy and response bounds, so a read-only model
+// list can never reach a destination validation would refuse.
+func fetchJSON(ctx context.Context, o ValidationOptions, target, apiKey string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, o.Timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return nil, ErrEndpointUnsafe
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "bachtel-email-automation/1.0")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := newClient(o).Do(req)
+	if err != nil {
+		return nil, classifyTransport(err)
+	}
+	return readBounded(o, resp, ErrDiscoveryUnavailable)
+}
+
+// readBounded maps one response to a fixed operator-safe outcome and returns
+// its bounded body. notFound is the caller's fixed meaning of a 404.
+func readBounded(o ValidationOptions, resp *http.Response, notFound error) ([]byte, error) {
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			// The outcome is already decided; a close failure cannot change it.
@@ -92,27 +123,29 @@ func postJSON(ctx context.Context, o ValidationOptions, cfg Config, apiKey, sess
 	switch resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return "", ErrAuthentication
+		return nil, ErrAuthentication
 	case http.StatusNotFound:
-		return "", ErrModelUnavailable
+		return nil, notFound
 	case http.StatusTooManyRequests:
-		return "", ErrThrottled
+		return nil, ErrThrottled
 	default:
 		if resp.StatusCode >= 500 {
-			return "", ErrProviderFailure
+			return nil, ErrProviderFailure
 		}
-		return "", fmt.Errorf("%w: the endpoint refused the request", ErrInvalidSetup)
+		return nil, fmt.Errorf("%w: the endpoint refused the request", ErrInvalidSetup)
 	}
 
-	limited := io.LimitReader(resp.Body, o.MaxResponseBytes+1)
-	raw, err := io.ReadAll(limited)
+	if o.MaxResponseBytes <= 0 {
+		o.MaxResponseBytes = DefaultValidationOptions().MaxResponseBytes
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, o.MaxResponseBytes+1))
 	if err != nil {
-		return "", classifyTransport(err)
+		return nil, classifyTransport(err)
 	}
 	if int64(len(raw)) > o.MaxResponseBytes {
-		return "", ErrResponseTooLarge
+		return nil, ErrResponseTooLarge
 	}
-	return extractText(cfg.APIFormat, raw)
+	return raw, nil
 }
 
 // probeRequest builds the exact-format request body. It deliberately sets no

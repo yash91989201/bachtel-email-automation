@@ -5,6 +5,7 @@ package web
 // activation is explicit, and connection switches are locked by pending tasks.
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/yash91989201/bachtel-email-automation/internal/ai"
 	"github.com/yash91989201/bachtel-email-automation/internal/mailbox"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
 const aiProbeOutput = `{"values":[{"id":"probe","value":"probe@example.test"}]}`
@@ -299,5 +301,237 @@ func TestDisconnectIsRefusedWhileTaskIsPending(t *testing.T) {
 	current, err := mailbox.NewStore(app, testKey).Current(t.Context(), owner.Id)
 	if err != nil || current.Status != mailbox.StatusConnected {
 		t.Fatalf("pending task did not protect the mailbox: %+v err=%v", current, err)
+	}
+}
+
+// fakeModelListEndpoint serves the documented OpenAI-style model list for
+// discovery tests.
+func fakeModelListEndpoint(t *testing.T) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/models" {
+			t.Errorf("unexpected model-list path %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte(`{"data":[{"id":"mimo-v2.6-flash"},{"id":"mystery-model"}]}`)); err != nil {
+			t.Errorf("write simulated model list: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// inputTag extracts one element by id so a control's own attributes can be
+// asserted without parsing the whole page.
+func inputTag(body, id string) string {
+	start := strings.Index(body, `id="`+id+`"`)
+	if start < 0 {
+		return ""
+	}
+	open := strings.LastIndex(body[:start], "<")
+	end := strings.Index(body[start:], ">")
+	if open < 0 || end < 0 {
+		return ""
+	}
+	return body[open : start+end+1]
+}
+
+func TestAIPresetSetupPage(t *testing.T) {
+	app, handler := newTestServer(t, testConfig("http://127.0.0.1:8090"))
+	provisionOperator(t, app)
+	cookie := login(t, handler)
+
+	page := do(t, handler, http.MethodGet, "/account/ai", nil, withCookie(cookie))
+	if page.Code != http.StatusOK {
+		t.Fatalf("AI page: %d", page.Code)
+	}
+	body := page.Body.String()
+	for _, want := range []string{
+		`x-data="aiSetup($el)"`,
+		`data-endpoint="/account/ai/models"`,
+		"Restore default",
+		"Fetch models",
+		`name="model"`,
+		"data-models=",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("preset setup missing %q: %.400s", want, body)
+		}
+	}
+	if strings.Contains(body, `name="api_format"`) || strings.Contains(body, "ai-api-format") {
+		t.Fatal("preset setup must not offer a manual API format control")
+	}
+	root := inputTag(body, "ai-api-root")
+	if root == "" || strings.Contains(root, "readonly") {
+		t.Fatalf("preset API root must be editable, got %q", root)
+	}
+	if !strings.Contains(root, ai.OpenCodeRoot) {
+		t.Fatalf("preset API root lacks the documented default: %q", root)
+	}
+	// The verified catalog is server-rendered as the fallback list, each
+	// option labeled with its single verified API format.
+	if !strings.Contains(body, "deepseek-v4.1-flash · Chat Completions API") || !strings.Contains(body, "grok-4.7 · Responses API") {
+		t.Fatalf("preset model options lack verified format labels: %.600s", body)
+	}
+}
+
+func TestAIModelDiscovery(t *testing.T) {
+	app, handler := newTestServer(t, testConfig("http://127.0.0.1:8090"))
+	provisionOperator(t, app)
+	cookie := login(t, handler)
+	fake := fakeModelListEndpoint(t)
+
+	rec := do(t, handler, http.MethodPost, "/account/ai/models", url.Values{
+		"provider": {"xiaomi-mimo"},
+		"api_root": {fake.URL},
+		"api_key":  {"ai-secret-key"},
+	}, withCookie(cookie))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("discovery: status=%d body=%.400s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("discovery Cache-Control = %q", got)
+	}
+	if strings.Contains(rec.Body.String(), "ai-secret-key") {
+		t.Fatal("discovery response leaked the API key")
+	}
+	var payload views.AIModelDiscovery
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("discovery JSON: %v body=%.400s", err, rec.Body.String())
+	}
+	if payload.Error != "" || len(payload.Models) != 2 {
+		t.Fatalf("discovery payload = %+v", payload)
+	}
+	supported := payload.Models[0]
+	if supported.Value != "mimo-v2.6-flash" || !supported.Supported || supported.Format != string(ai.FormatChatCompletions) || supported.FormatLabel == "" {
+		t.Fatalf("supported option = %+v", supported)
+	}
+	unsupported := payload.Models[1]
+	if unsupported.Value != "mystery-model" || unsupported.Supported || unsupported.Reason == "" {
+		t.Fatalf("unsupported option = %+v", unsupported)
+	}
+	// Discovery is read-only: no draft and no confirmed connection.
+	if count, err := app.CountRecords(ai.DraftsCollection); err != nil || count != 0 {
+		t.Fatalf("discovery staged %d drafts (err=%v)", count, err)
+	}
+	if count, err := app.CountRecords(ai.ConnectionsCollection); err != nil || count != 0 {
+		t.Fatalf("discovery created %d connections (err=%v)", count, err)
+	}
+}
+
+func TestAIModelDiscoveryRejectsInvalidRequests(t *testing.T) {
+	app, handler := newTestServer(t, testConfig("http://127.0.0.1:8090"))
+	provisionOperator(t, app)
+	cookie := login(t, handler)
+
+	// Custom endpoints are configured manually; discovery refuses them.
+	rec := do(t, handler, http.MethodPost, "/account/ai/models", url.Values{
+		"provider": {"custom"},
+		"api_root": {"https://example.test/v1"},
+		"api_key":  {"ai-secret-key"},
+	}, withCookie(cookie))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("custom discovery: status=%d body=%.400s", rec.Code, rec.Body.String())
+	}
+	var payload views.AIModelDiscovery
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("custom discovery JSON: %v", err)
+	}
+	if payload.Error == "" || len(payload.Models) != 0 {
+		t.Fatalf("custom discovery payload = %+v", payload)
+	}
+	if strings.Contains(rec.Body.String(), "ai-secret-key") {
+		t.Fatal("custom discovery response leaked the API key")
+	}
+
+	// An unsafe request without a session is refused before any handler.
+	anonymous := do(t, handler, http.MethodPost, "/account/ai/models", url.Values{
+		"provider": {"xiaomi-mimo"},
+	}, nil)
+	if anonymous.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous discovery: status=%d body=%.200s", anonymous.Code, anonymous.Body.String())
+	}
+}
+
+func TestAIPresetValidationResolvesFormatWithoutDiscovery(t *testing.T) {
+	app, handler := newTestServer(t, testConfig("http://127.0.0.1:8090"))
+	provisionOperator(t, app)
+	cookie := login(t, handler)
+	fake := fakeAIEndpoint(t, ai.FormatChatCompletions)
+	root := fake.URL + "/v1"
+	owner, err := app.FindAuthRecordByEmail("operators", testOperatorEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// No api_format field: the preset resolves the format from the model.
+	rec := do(t, handler, http.MethodPost, "/account/ai/validate", url.Values{
+		"provider": {"xiaomi-mimo"},
+		"api_root": {root},
+		"model":    {"mimo-v2.6-flash"},
+		"api_key":  {"ai-secret-key"},
+	}, withCookie(cookie))
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account/ai?notice=validated" {
+		t.Fatalf("preset validate: status=%d location=%q body=%.400s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+	draft := currentDraft(t, app, owner.Id)
+	// Before confirmation, the page reopens the validated proposal's
+	// non-secret selection, so guidance and controls match what was validated.
+	draftPage := do(t, handler, http.MethodGet, "/account/ai", nil, withCookie(cookie))
+	for _, want := range []string{`data-provider="xiaomi-mimo"`, `value="mimo-v2.6-flash" selected`} {
+		if !strings.Contains(draftPage.Body.String(), want) {
+			t.Fatalf("validated proposal page missing %q: %.600s", want, draftPage.Body.String())
+		}
+	}
+	if confirm := do(t, handler, http.MethodPost, "/account/ai/confirm", url.Values{
+		"draft": {draft.Id}, "expected_configuration_generation": {"0"}, "confirmed": {"yes"},
+	}, withCookie(cookie)); confirm.Code != http.StatusSeeOther {
+		t.Fatalf("preset confirm: status=%d body=%.400s", confirm.Code, confirm.Body.String())
+	}
+	store := ai.NewStore(app, testKey)
+	connection, err := store.Connection(t.Context(), owner.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if connection.Config.APIFormat != ai.FormatChatCompletions || connection.Config.APIRoot != root || connection.Config.Model != "mimo-v2.6-flash" {
+		t.Fatalf("confirmed preset connection = %+v", connection.Config)
+	}
+
+	// The page reopens the saved non-secret configuration: selected provider,
+	// root, model and inferred format, with no discovery round trip.
+	page := do(t, handler, http.MethodGet, "/account/ai", nil, withCookie(cookie))
+	body := page.Body.String()
+	for _, want := range []string{
+		`data-provider="xiaomi-mimo"`,
+		`value="mimo-v2.6-flash" selected`,
+		`id="ai-inferred-format"`,
+		"mimo-v2.6-flash · Chat Completions API",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("reopened page missing %q: %.600s", want, body)
+		}
+	}
+	if !strings.Contains(inputTag(body, "ai-api-root"), root) {
+		t.Fatalf("reopened page does not show the saved root %q: %.400s", root, body)
+	}
+
+	// A same-configuration key repair still works without discovery.
+	if rec := do(t, handler, http.MethodPost, "/account/ai/validate", url.Values{
+		"provider": {"xiaomi-mimo"},
+		"api_root": {root},
+		"model":    {"mimo-v2.6-flash"},
+		"api_key":  {"rotated-key"},
+	}, withCookie(cookie)); rec.Code != http.StatusSeeOther {
+		t.Fatalf("repair validate: status=%d body=%.400s", rec.Code, rec.Body.String())
+	}
+	repair := currentDraft(t, app, owner.Id)
+	repairPage := do(t, handler, http.MethodGet, "/account/ai", nil, withCookie(cookie))
+	if !strings.Contains(repairPage.Body.String(), "Replace API key") || strings.Contains(repairPage.Body.String(), "rotated-key") {
+		t.Fatalf("repair proposal page wrong: %.600s", repairPage.Body.String())
+	}
+	if rec := do(t, handler, http.MethodPost, "/account/ai/confirm", url.Values{
+		"draft": {repair.Id}, "expected_configuration_generation": {"1"}, "confirmed": {"yes"}, "repair": {"yes"},
+	}, withCookie(cookie)); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account/ai?notice=repaired" {
+		t.Fatalf("repair confirm: status=%d location=%q body=%.400s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}
 }

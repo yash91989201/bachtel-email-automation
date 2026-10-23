@@ -78,19 +78,42 @@ type AIFormatOption struct {
 	Selected bool
 }
 
+// AIModelOption is one model choice for the preset setup form: the exact
+// identifier, the single verified API format that serves it and, for a
+// fetched model outside the verified contract, the reason it stays unusable.
+type AIModelOption struct {
+	Value       string `json:"id"`
+	Format      string `json:"format"`
+	FormatLabel string `json:"format_label"`
+	Selected    bool   `json:"-"`
+	Supported   bool   `json:"supported"`
+	Reason      string `json:"reason"`
+}
+
+// AIModelDiscovery is the read-only model-list JSON the setup form fetches.
+// It never carries a key, request header or raw provider body.
+type AIModelDiscovery struct {
+	Models []AIModelOption `json:"models"`
+	Error  string          `json:"error"`
+}
+
 // AccountAIData is the AI connection section model.
 type AccountAIData struct {
 	Notice               string
 	Error                string
 	Connection           *AIConnectionView
 	Draft                *AIDraftView
+	Repair               bool
 	Providers            []AIProviderOption
 	SelectedProvider     string
+	IsPreset             bool
 	APIRoot              string
+	DefaultRoot          string
 	APIFormats           []AIFormatOption
 	APIFormat            string
 	Model                string
-	SuggestedModels      []string
+	ModelOptions         []AIModelOption
+	InferredFormat       string
 	Guidance             []string
 	CanSwitch            bool
 	ValidationDisclosure string
@@ -215,7 +238,7 @@ templ aiConnectionSection(data AccountAIData) {
 						<form method="post" action="/account/ai/confirm" class="grid gap-3">
 							<input type="hidden" name="draft" value={ data.Draft.ID }/>
 							<input type="hidden" name="expected_configuration_generation" value={ strconv.Itoa(data.Draft.BaseGeneration) }/>
-							if aiDraftIsRepair(data) {
+							if data.Repair {
 								<input type="hidden" name="repair" value="yes"/>
 							}
 							<label class="flex items-start gap-2 text-sm">
@@ -224,7 +247,7 @@ templ aiConnectionSection(data AccountAIData) {
 							</label>
 							<div>
 								@button.Button(button.Props{Type: button.TypeSubmit}) {
-									if aiDraftIsRepair(data) {
+									if data.Repair {
 										Replace API key
 									} else {
 										Activate AI connection
@@ -267,51 +290,97 @@ templ aiConnectionSection(data AccountAIData) {
 						</a>
 					}
 				</div>
-				<form method="post" action="/account/ai/validate" class="grid gap-4">
+				<form
+					method="post"
+					action="/account/ai/validate"
+					class="grid gap-4"
+					if data.IsPreset {
+						x-data="aiSetup($el)"
+						data-endpoint="/account/ai/models"
+						data-provider={ data.SelectedProvider }
+						data-default-root={ data.DefaultRoot }
+						data-root={ data.APIRoot }
+						data-model={ data.Model }
+						data-models={ templ.JSONString(data.ModelOptions) }
+					}
+				>
 					<input type="hidden" name="provider" value={ data.SelectedProvider }/>
 					<div class="grid gap-2">
 						@label.Label(label.Props{For: "ai-api-root"}) {
 							API root
 						}
-						if data.SelectedProvider == "opencode-go" {
-							@input.Input(input.Props{ID: "ai-api-root", Name: "api_root", Type: "text", Value: data.APIRoot, ReadOnly: true, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false"}})
+						if data.IsPreset {
+							<div class="flex items-center gap-2">
+								@input.Input(input.Props{ID: "ai-api-root", Name: "api_root", Type: "text", Required: true, Value: data.APIRoot, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "x-on:input": "changed()"}})
+								@button.Button(button.Props{Variant: button.VariantOutline, Size: button.SizeSm, Type: button.TypeButton, Attributes: templ.Attributes{"x-on:click": "restore()", "aria-label": "Restore the default API root"}}) {
+									Restore default
+								}
+							</div>
 						} else {
 							@input.Input(input.Props{ID: "ai-api-root", Name: "api_root", Type: "url", Required: true, Value: data.APIRoot, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "placeholder": "https://example.com/v1"}})
 						}
 					</div>
-					<div class="grid gap-2">
-						@label.Label(label.Props{For: "ai-api-format"}) {
-							API format
-						}
-						@nativeselect.NativeSelect(nativeselect.Props{ID: "ai-api-format", Name: "api_format", Required: true, Class: "w-full"}) {
-							for _, format := range data.APIFormats {
-								@nativeselect.Option(nativeselect.OptionProps{Value: format.Value, Selected: format.Selected}) {
-									{ format.Label }
+					if data.IsPreset {
+						<div class="grid gap-2">
+							@label.Label(label.Props{For: "ai-api-key"}) {
+								API key
+							}
+							@input.Input(input.Props{ID: "ai-api-key", Name: "api_key", Type: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "new-password", "x-on:input": "changed()"}})
+							<p class="text-xs text-muted-foreground">The key is encrypted at rest and never shown again. { data.ValidationDisclosure }</p>
+						</div>
+						<div class="flex flex-wrap items-center gap-3">
+							@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeButton, Attributes: templ.Attributes{"x-on:click": "fetchModels()", "aria-describedby": "ai-discovery-status ai-discovery-error"}}) {
+								<span x-show="!loading">Fetch models</span>
+								<span x-show="loading">Fetching models…</span>
+							}
+							<p id="ai-discovery-status" role="status" class="text-sm text-muted-foreground" x-show="status" x-text="status"></p>
+							<p id="ai-discovery-error" role="alert" class="text-sm text-destructive" x-show="error" x-text="error"></p>
+						</div>
+						<div class="grid gap-2">
+							@label.Label(label.Props{For: "ai-model"}) {
+								Exact model
+							}
+							@nativeselect.NativeSelect(nativeselect.Props{ID: "ai-model", Name: "model", Required: true, Class: "w-full", Attributes: templ.Attributes{"aria-describedby": "ai-model-help ai-discovery-status ai-discovery-error", "x-on:change": "pick()"}}) {
+								for _, model := range data.ModelOptions {
+									@nativeselect.Option(nativeselect.OptionProps{Value: model.Value, Selected: model.Selected, Disabled: !model.Supported}) {
+										{ aiModelOptionLabel(model) }
+									}
 								}
 							}
-						}
-					</div>
-					<div class="grid gap-2">
-						@label.Label(label.Props{For: "ai-model"}) {
-							Exact model identifier
-						}
-						@input.Input(input.Props{ID: "ai-model", Name: "model", Type: "text", Required: true, Value: data.Model, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "list": "ai-model-suggestions", "aria-describedby": "ai-model-help"}})
-						if len(data.SuggestedModels) > 0 {
-							<datalist id="ai-model-suggestions">
-								for _, model := range data.SuggestedModels {
-									<option value={ model }></option>
+							<p id="ai-model-help" class="text-xs text-muted-foreground">Each model is served by one verified API format, shown after the model ID. The format follows the model and is not editable.</p>
+						</div>
+						<div class="grid gap-2">
+							<span class="text-sm font-medium">API format</span>
+							<span id="ai-inferred-format" class="text-sm text-muted-foreground" x-text="format">{ data.InferredFormat }</span>
+						</div>
+					} else {
+						<div class="grid gap-2">
+							@label.Label(label.Props{For: "ai-api-format"}) {
+								API format
+							}
+							@nativeselect.NativeSelect(nativeselect.Props{ID: "ai-api-format", Name: "api_format", Required: true, Class: "w-full"}) {
+								for _, format := range data.APIFormats {
+									@nativeselect.Option(nativeselect.OptionProps{Value: format.Value, Selected: format.Selected}) {
+										{ format.Label }
+									}
 								}
-							</datalist>
-						}
-						<p id="ai-model-help" class="text-xs text-muted-foreground">Enter the provider's exact model ID for the selected API format. Suggested IDs are not interchangeable between formats.</p>
-					</div>
-					<div class="grid gap-2">
-						@label.Label(label.Props{For: "ai-api-key"}) {
-							API key
-						}
-						@input.Input(input.Props{ID: "ai-api-key", Name: "api_key", Type: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "new-password"}})
-						<p class="text-xs text-muted-foreground">The key is encrypted at rest and never shown again. { data.ValidationDisclosure }</p>
-					</div>
+							}
+						</div>
+						<div class="grid gap-2">
+							@label.Label(label.Props{For: "ai-model"}) {
+								Exact model identifier
+							}
+							@input.Input(input.Props{ID: "ai-model", Name: "model", Type: "text", Required: true, Value: data.Model, Attributes: templ.Attributes{"autocomplete": "off", "spellcheck": "false", "aria-describedby": "ai-model-help"}})
+							<p id="ai-model-help" class="text-xs text-muted-foreground">Enter the endpoint's exact model ID for the selected API format.</p>
+						</div>
+						<div class="grid gap-2">
+							@label.Label(label.Props{For: "ai-api-key"}) {
+								API key
+							}
+							@input.Input(input.Props{ID: "ai-api-key", Name: "api_key", Type: "password", Required: true, Attributes: templ.Attributes{"autocomplete": "new-password"}})
+							<p class="text-xs text-muted-foreground">The key is encrypted at rest and never shown again. { data.ValidationDisclosure }</p>
+						</div>
+					}
 					@button.Button(button.Props{Variant: button.VariantOutline, Type: button.TypeSubmit}) {
 						Validate exact configuration
 					}
@@ -328,14 +397,16 @@ func apiKeyState(configured bool) string {
 	return "Not configured"
 }
 
-func aiDraftIsRepair(data AccountAIData) bool {
-	if data.Connection == nil || data.Draft == nil {
-		return false
+// aiModelOptionLabel names one model choice with the single verified API
+// format that serves it, or the fixed reason it stays unusable.
+func aiModelOptionLabel(model AIModelOption) string {
+	if model.FormatLabel != "" {
+		return model.Value + " · " + model.FormatLabel
 	}
-	return data.Connection.ProviderLabel == data.Draft.ProviderLabel &&
-		data.Connection.APIRoot == data.Draft.APIRoot &&
-		data.Connection.APIFormatLabel == data.Draft.APIFormatLabel &&
-		data.Connection.Model == data.Draft.Model
+	if model.Reason != "" {
+		return model.Value + " — " + model.Reason
+	}
+	return model.Value
 }
 
 func accountTabClass(active bool) string {
