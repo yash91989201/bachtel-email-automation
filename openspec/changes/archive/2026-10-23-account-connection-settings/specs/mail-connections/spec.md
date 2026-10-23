@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Safe connection changes
-The system SHALL authorize connection changes only for their owner. Switching, replacement or disconnect SHALL be refused while any account task is pending under the Account settings lock. Same-mailbox reconnect and verified credential repair SHALL remain available, stopping new launches before active credentials change. Active submissions SHALL settle or be classified within bounded deadlines. A disconnected mailbox SHALL remain exclusively claimed and its work paused until reconnect or replacement.
+Connection changes SHALL be owner-authorized. Switching, replacement and disconnect SHALL be refused while any account task is pending under the Account settings lock. Same-mailbox reconnect and verified credential repair SHALL remain available. Active submissions SHALL settle or be classified within bounded deadlines, and a disconnected mailbox SHALL remain exclusively claimed and paused until reconnect or replacement.
 
 #### Scenario: Disconnect while requests are active
 - **WHEN** an operator requests disconnect during dispatch or while another task in the account remains pending
@@ -25,7 +25,7 @@ The system SHALL authorize connection changes only for their owner. Switching, r
 - **AND** reconnect or replacement remains explicit
 
 ### Requirement: Replacement keeps templates and resets sending data
-The system SHALL require explicit confirmation before replacing a mailbox and refuse activation until all account tasks are completed or explicitly closed and outstanding operations have settled. It SHALL preserve the operator's campaigns and template revisions but delete their candidates, tasks, uploads, approvals, attempts, resolutions, history and generated exports. It SHALL release the old claim, require fresh test approval, and preserve other operators' data.
+Mailbox replacement SHALL require explicit confirmation and SHALL be refused until all account tasks are completed or closed and outstanding operations have settled. It SHALL preserve the operator's campaigns and template revisions while deleting candidates, tasks, uploads, approvals, attempts, resolutions, history and generated exports. It SHALL release the old claim, require fresh test approval, and preserve other operators' data.
 
 #### Scenario: Review replacement consequences
 - **WHEN** the operator reviews a validated replacement
