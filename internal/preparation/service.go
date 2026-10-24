@@ -283,15 +283,7 @@ func (s *Service) SelectRun(ctx context.Context, ownerID, taskID, runID string) 
 		if selected.GetString("state") != RunCompleted {
 			return ErrNotCompleted
 		}
-		// Changing selected prepared evidence invalidates any finalized dataset
-		// and its approvals. The snapshot record stays as history; the task no
-		// longer points at it, so no approval can authorize the old values.
-		if currentRecord.GetString("selected_preparation_run") != selected.Id {
-			currentRecord.Set("selected_final_snapshot", "")
-			currentRecord.Set("final_snapshot_digest", "")
-			currentRecord.Set("finalization_error", "")
-		}
-		currentRecord.Set("selected_preparation_run", selected.Id)
+		selectPreparedRun(currentRecord, selected.Id)
 		return txApp.Save(currentRecord)
 	})
 	if err != nil {
@@ -300,6 +292,22 @@ func (s *Service) SelectRun(ctx context.Context, ownerID, taskID, runID string) 
 	mapped := runFromRecord(run)
 	mapped.Selected = true
 	return mapped, nil
+}
+
+// selectPreparedRun records one run as the task's selected prepared evidence.
+// Changing the selection invalidates any finalized dataset and its approvals:
+// the snapshot record stays as history, but the task no longer points at it, so
+// no approval can authorize the old values. It reports whether the selection
+// changed and never saves the record.
+func selectPreparedRun(task *core.Record, runID string) bool {
+	if task.GetString("selected_preparation_run") == runID {
+		return false
+	}
+	task.Set("selected_final_snapshot", "")
+	task.Set("final_snapshot_digest", "")
+	task.Set("finalization_error", "")
+	task.Set("selected_preparation_run", runID)
+	return true
 }
 
 // RunList returns one task's runs newest first with their batch progress.

@@ -351,6 +351,17 @@ func (s *Service) publish(ctx context.Context, jobID, runID, attempt, taskID str
 		if err := txApp.Save(job); err != nil {
 			return err
 		}
+		// Publication selects the completed run as prepared evidence when the
+		// task is still runnable and no dataset is finalized. A finalized
+		// dataset is never replaced because AI finished; that stays an explicit
+		// operator choice. Lifecycle refusals skip selection and still settle.
+		if task.GetString("selected_final_snapshot") == "" && runnableTask(intakeTask(task)) == nil {
+			if selectPreparedRun(task, run.Id) {
+				if err := txApp.Save(task); err != nil {
+					return err
+				}
+			}
+		}
 		settled = true
 		return nil
 	})

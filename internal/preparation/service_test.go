@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
 
+	"github.com/yash91989201/bachtel-email-automation/internal/finalization"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/preparation"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
@@ -123,8 +125,8 @@ func TestPrepareStoresCompleteEvidenceAndOnlySendsMappedFields(t *testing.T) {
 	if string(beforeJSON) != string(afterJSON) {
 		t.Fatal("preparation changed the legacy task snapshot")
 	}
-	if reloaded := e.loadTask(task.ID); reloaded.SelectedPreparationRunID != "" {
-		t.Fatal("a completed run must not become selected implicitly")
+	if reloaded := e.loadTask(task.ID); reloaded.SelectedPreparationRunID != run.ID {
+		t.Fatalf("selected run = %q, want the completed run %q", reloaded.SelectedPreparationRunID, run.ID)
 	}
 	if completed.Counts.Corrections != 2 {
 		t.Fatalf("corrections = %d, want 2", completed.Counts.Corrections)
@@ -208,6 +210,9 @@ func TestClosureRejectsLatePreparationPublication(t *testing.T) {
 	cancelled := e.waitRun(task.ID, run.ID, preparation.RunCancelled)
 	if cancelled.Output != nil {
 		t.Fatal("a response arriving after close was published")
+	}
+	if selected := e.loadTask(task.ID).SelectedPreparationRunID; selected != "" {
+		t.Fatalf("a late publication selected evidence for a closing task: %q", selected)
 	}
 	waitFor(t, "terminal closure", func() bool { return e.loadTask(task.ID).Closed() })
 }
@@ -481,6 +486,127 @@ func TestSelectRunIsPreparationOnly(t *testing.T) {
 	if _, err := e.service.Rerun(context.Background(), e.owner, task.ID); !errors.Is(err, preparation.ErrStarted) {
 		t.Fatalf("rerun after start = %v, want ErrStarted", err)
 	}
+}
+
+// TestPublicationSelectsCompletedRunUnlessDatasetIsFinalized proves the stored
+// selection rule: completion selects evidence, a finalized dataset keeps its
+// evidence and digest, and explicit selection of an older run still clears it.
+func TestPublicationSelectsCompletedRunUnlessDatasetIsFinalized(t *testing.T) {
+	e := newEnv(t)
+	task := e.validate([][]string{
+		{"Email", "Applicant Full Name", "Department", "Certificate", "Status"},
+		{"alice@example.com", "Alice", "", "", ""},
+	})
+	stop := e.startWorker()
+	defer stop()
+
+	first := e.prepare(task)
+	e.waitRun(task.ID, first.ID, preparation.RunCompleted)
+	if selected := e.loadTask(task.ID).SelectedPreparationRunID; selected != first.ID {
+		t.Fatalf("selected run = %q, want the completed run %q", selected, first.ID)
+	}
+
+	// A later completed run replaces the selection while no dataset is final.
+	second, err := e.service.Rerun(context.Background(), e.owner, task.ID)
+	if err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	e.waitRun(task.ID, second.ID, preparation.RunCompleted)
+	if selected := e.loadTask(task.ID).SelectedPreparationRunID; selected != second.ID {
+		t.Fatalf("selected run after rerun = %q, want %q", selected, second.ID)
+	}
+
+	// A selected final snapshot is never replaced because a run completed.
+	snapshotID, digest := e.selectFinalSnapshot(task.ID)
+	third, err := e.service.Rerun(context.Background(), e.owner, task.ID)
+	if err != nil {
+		t.Fatalf("rerun with a finalized dataset: %v", err)
+	}
+	e.waitRun(task.ID, third.ID, preparation.RunCompleted)
+	finalized := e.loadTask(task.ID)
+	if finalized.SelectedPreparationRunID != second.ID {
+		t.Fatalf("a completed run replaced the selection of a finalized task: %q", finalized.SelectedPreparationRunID)
+	}
+	if finalized.SelectedFinalSnapshotID != snapshotID || finalized.FinalSnapshotDigest != digest {
+		t.Fatalf("final snapshot changed = %q/%q, want %q/%q", finalized.SelectedFinalSnapshotID, finalized.FinalSnapshotDigest, snapshotID, digest)
+	}
+
+	// Explicit selection of an older run still clears the finalized dataset.
+	if _, err := e.service.SelectRun(context.Background(), e.owner, task.ID, first.ID); err != nil {
+		t.Fatalf("select older run: %v", err)
+	}
+	replaced := e.loadTask(task.ID)
+	if replaced.SelectedPreparationRunID != first.ID || replaced.SelectedFinalSnapshotID != "" || replaced.FinalSnapshotDigest != "" || replaced.FinalizationError != "" {
+		t.Fatalf("explicit selection = %q/%q/%q/%q, want the older run and no final evidence",
+			replaced.SelectedPreparationRunID, replaced.SelectedFinalSnapshotID, replaced.FinalSnapshotDigest, replaced.FinalizationError)
+	}
+}
+
+// TestStartedTaskKeepsPublicationWithoutSelection proves task lifecycle wins:
+// a run that publishes after the task started still settles but selects no
+// evidence for frozen content.
+func TestStartedTaskKeepsPublicationWithoutSelection(t *testing.T) {
+	e := newEnv(t)
+	block := make(chan struct{})
+	e.model.setBlock(block)
+	task := e.validate([][]string{
+		{"Email", "Applicant Full Name", "Department", "Certificate", "Status"},
+		{"alice@example.com", "Alice", "", "", ""},
+	})
+	stop := e.startWorker()
+	defer stop()
+	run := e.prepare(task)
+	waitFor(t, "the provider request", func() bool {
+		_, payloads, _ := e.model.snapshot()
+		return len(payloads) > 0
+	})
+	record, err := e.app.FindRecordById(intake.TasksCollection, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Set("status", "running")
+	if err := e.app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	close(block)
+	completed := e.waitRun(task.ID, run.ID, preparation.RunCompleted)
+	if completed.Output == nil {
+		t.Fatal("publication for a started task did not settle the run")
+	}
+	if selected := e.loadTask(task.ID).SelectedPreparationRunID; selected != "" {
+		t.Fatalf("a run published after the task started selected evidence: %q", selected)
+	}
+}
+
+// selectFinalSnapshot seeds a selected final snapshot on the task.
+func (e *env) selectFinalSnapshot(taskID string) (string, string) {
+	e.t.Helper()
+	collection, err := e.app.FindCollectionByNameOrId(finalization.SnapshotsCollection)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	snapshot := core.NewRecord(collection)
+	snapshot.Set("owner", e.owner)
+	snapshot.Set("task", taskID)
+	snapshot.Set("campaign", e.campaignID)
+	snapshot.Set("configuration", e.revisionID)
+	snapshot.Set("kind", finalization.KindUpload)
+	snapshot.Set("action_id", "preparation-selection-test")
+	snapshot.Set("digest", "digest-1")
+	snapshot.Set("content_hash", "hash-1")
+	if err := e.app.Save(snapshot); err != nil {
+		e.t.Fatalf("save a final snapshot: %v", err)
+	}
+	record, err := e.app.FindRecordById(intake.TasksCollection, taskID)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	record.Set("selected_final_snapshot", snapshot.Id)
+	record.Set("final_snapshot_digest", "digest-1")
+	if err := e.app.Save(record); err != nil {
+		e.t.Fatalf("select the final snapshot: %v", err)
+	}
+	return snapshot.Id, "digest-1"
 }
 
 // TestPreparationFixtureScenarios drives the documented normalization cases
