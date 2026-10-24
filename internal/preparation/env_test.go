@@ -282,14 +282,16 @@ func (e *env) candidateRows(taskID string) []intake.RowSnapshot {
 // payload so a test can assert what was sent, and delegates the response body
 // to one scripted function.
 type fakeModel struct {
-	t        *testing.T
-	server   *httptest.Server
-	mu       sync.Mutex
-	systems  []string
-	payloads []preparation.RequestPayload
-	models   []string
-	respond  func(payload preparation.RequestPayload) (string, int)
-	block    chan struct{}
+	t               *testing.T
+	server          *httptest.Server
+	mu              sync.Mutex
+	systems         []string
+	payloads        []preparation.RequestPayload
+	models          []string
+	maxOutputTokens []int
+	respond         func(payload preparation.RequestPayload) (string, int)
+	respondRaw      func(payload preparation.RequestPayload, maxOutputTokens int) (string, int)
+	block           chan struct{}
 }
 
 func newFakeModel(t *testing.T) *fakeModel {
@@ -303,8 +305,9 @@ func newFakeModel(t *testing.T) *fakeModel {
 			t.Errorf("missing bearer credential")
 		}
 		var body struct {
-			Model string `json:"model"`
-			Input []struct {
+			Model           string `json:"model"`
+			MaxOutputTokens int    `json:"max_output_tokens"`
+			Input           []struct {
 				Role    string `json:"role"`
 				Content []struct {
 					Type string `json:"type"`
@@ -335,8 +338,10 @@ func newFakeModel(t *testing.T) *fakeModel {
 		fake.systems = append(fake.systems, system)
 		fake.payloads = append(fake.payloads, payload)
 		fake.models = append(fake.models, body.Model)
+		fake.maxOutputTokens = append(fake.maxOutputTokens, body.MaxOutputTokens)
 		block := fake.block
 		respond := fake.respond
+		respondRaw := fake.respondRaw
 		fake.mu.Unlock()
 		if block != nil {
 			select {
@@ -344,6 +349,21 @@ func newFakeModel(t *testing.T) *fakeModel {
 			case <-r.Context().Done():
 				return
 			}
+		}
+		if respondRaw != nil {
+			response, status := respondRaw(payload, body.MaxOutputTokens)
+			if status == 0 {
+				status = http.StatusOK
+			}
+			if status != http.StatusOK {
+				w.WriteHeader(status)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			if _, err := io.WriteString(w, response); err != nil {
+				t.Errorf("write raw response: %v", err)
+			}
+			return
 		}
 		if respond == nil {
 			respond = echoResponse
@@ -368,6 +388,12 @@ func (f *fakeModel) setResponder(respond func(payload preparation.RequestPayload
 	f.respond = respond
 }
 
+func (f *fakeModel) setRawResponder(respond func(payload preparation.RequestPayload, maxOutputTokens int) (string, int)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.respondRaw = respond
+}
+
 func (f *fakeModel) setBlock(block chan struct{}) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -378,6 +404,12 @@ func (f *fakeModel) snapshot() ([]string, []preparation.RequestPayload, []string
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.systems...), append([]preparation.RequestPayload(nil), f.payloads...), append([]string(nil), f.models...)
+}
+
+func (f *fakeModel) requestSnapshot() ([]preparation.RequestPayload, []string, []int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]preparation.RequestPayload(nil), f.payloads...), append([]string(nil), f.models...), append([]int(nil), f.maxOutputTokens...)
 }
 
 func writeResponses(w http.ResponseWriter, text string) {

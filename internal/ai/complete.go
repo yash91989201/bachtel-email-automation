@@ -85,6 +85,9 @@ func Complete(ctx context.Context, o ValidationOptions, cfg Config, apiKey strin
 	if err != nil {
 		return "", err
 	}
+	if o.InferenceTimeout > 0 {
+		o.Timeout = o.InferenceTimeout
+	}
 	return postJSON(ctx, o, cfg, apiKey, request.Session, body, runtimeStatus)
 }
 

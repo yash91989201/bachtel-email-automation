@@ -108,6 +108,54 @@ func TestEmptyTokenLimitResponsesAreSafeOutputContractErrors(t *testing.T) {
 	}
 }
 
+func TestCompleteRejectsTokenLimitedOutput(t *testing.T) {
+	const privateMarker = "PRIVATE_REASONING_MARKER"
+	for _, format := range []ai.APIFormat{ai.FormatResponses, ai.FormatChatCompletions} {
+		for _, output := range []struct {
+			name string
+			text string
+		}{
+			{name: "empty"},
+			{name: "nonempty", text: probeOutput},
+		} {
+			t.Run(string(format)+"/"+output.name, func(t *testing.T) {
+				fake := newFakeEndpoint(t, func(w http.ResponseWriter, _ *http.Request, _ map[string]any) {
+					var envelope map[string]any
+					if format == ai.FormatResponses {
+						envelope = map[string]any{
+							"output_text":        output.text,
+							"incomplete_details": map[string]string{"reason": "max_output_tokens"},
+							"reasoning":          privateMarker,
+						}
+					} else {
+						envelope = map[string]any{"choices": []map[string]any{{
+							"finish_reason": "length",
+							"message":       map[string]string{"content": output.text, "reasoning_content": privateMarker},
+						}}}
+					}
+					if err := json.NewEncoder(w).Encode(envelope); err != nil {
+						t.Errorf("write provider envelope: %v", err)
+					}
+				})
+				opts := ai.DefaultValidationOptions()
+				opts.AllowPrivate = true
+				text, err := ai.Complete(context.Background(), opts, customConfig(fake.server.URL, "model", format), "test-key", ai.InferenceRequest{
+					System: "normalize the supplied fields", User: "synthetic input", MaxTokens: ai.MaxTokens,
+				})
+				if !errors.Is(err, ai.ErrOutputLimit) || !errors.Is(err, ai.ErrOutputContract) {
+					t.Fatalf("error = %v, want output limit and output contract classifications", err)
+				}
+				if text != "" || fake.requests.Load() != 1 {
+					t.Fatalf("text = %q, requests = %d; want no partial output and one request", text, fake.requests.Load())
+				}
+				if strings.Contains(err.Error(), privateMarker) || strings.Contains(err.Error(), "test-key") {
+					t.Fatal("output limit error exposed provider content or credentials")
+				}
+			})
+		}
+	}
+}
+
 func TestValidationAllowsReasoningBeforeProbeOutput(t *testing.T) {
 	for _, tc := range []struct {
 		provider ai.Provider

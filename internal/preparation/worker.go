@@ -520,6 +520,8 @@ func failureText(err error) string {
 		return "the AI response exceeded the allowed size; retry preparation"
 	case errors.Is(err, ai.ErrEndpointUnsafe):
 		return "the confirmed AI endpoint is not usable; fix the AI connection in Account settings"
+	case errors.Is(err, ai.ErrOutputLimit):
+		return "the AI response reached its output token limit; nothing was published; retry preparation"
 	case errors.Is(err, ai.ErrOutputContract), errors.Is(err, ErrInvalidResponse):
 		return ErrInvalidResponse.Error()
 	case errors.Is(err, ai.ErrInvalidSetup):

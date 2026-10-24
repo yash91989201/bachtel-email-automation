@@ -162,9 +162,10 @@ type Options struct {
 	Now         func() time.Time
 }
 
-// DefaultOptions returns the production bounds.
+// DefaultOptions returns the production bounds. Whole-row batches need room for
+// model reasoning as well as the normalized values, corrections and findings.
 func DefaultOptions() Options {
-	return Options{BatchSize: DefaultBatchSize, MaxTokens: ai.DefaultMaxTokens, Temperature: 0, Now: time.Now}
+	return Options{BatchSize: DefaultBatchSize, MaxTokens: ai.MaxTokens, Temperature: 0, Now: time.Now}
 }
 
 // normalize substitutes the defaults for unusable values and enforces the
@@ -177,7 +178,7 @@ func (o Options) normalize() Options {
 		o.BatchSize = MaxBatchSize
 	}
 	if o.MaxTokens <= 0 {
-		o.MaxTokens = ai.DefaultMaxTokens
+		o.MaxTokens = ai.MaxTokens
 	}
 	if o.MaxTokens > ai.MaxTokens {
 		o.MaxTokens = ai.MaxTokens

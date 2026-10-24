@@ -280,6 +280,12 @@ func extractText(format APIFormat, raw []byte) (string, error) {
 		if err := json.Unmarshal(raw, &body); err != nil {
 			return "", fmt.Errorf("%w: invalid response envelope", ErrOutputContract)
 		}
+		var details struct {
+			Reason string `json:"reason"`
+		}
+		if err := json.Unmarshal(body.IncompleteDetails, &details); err == nil && details.Reason == "max_output_tokens" {
+			return "", fmt.Errorf("%w: %w", ErrOutputContract, ErrOutputLimit)
+		}
 		if strings.TrimSpace(body.OutputText) != "" {
 			return body.OutputText, nil
 		}
@@ -295,12 +301,6 @@ func extractText(format APIFormat, raw []byte) (string, error) {
 			}
 		}
 		if len(parts) == 0 {
-			var details struct {
-				Reason string `json:"reason"`
-			}
-			if err := json.Unmarshal(body.IncompleteDetails, &details); err == nil && details.Reason == "max_output_tokens" {
-				return "", fmt.Errorf("%w: no assistant text; output token limit reached", ErrOutputContract)
-			}
 			return "", fmt.Errorf("%w: no assistant text", ErrOutputContract)
 		}
 		return strings.Join(parts, ""), nil
@@ -319,14 +319,11 @@ func extractText(format APIFormat, raw []byte) (string, error) {
 		if len(body.Choices) == 0 {
 			return "", fmt.Errorf("%w: no assistant choices", ErrOutputContract)
 		}
-		text, err := chatContent(body.Choices[0].Message.Content)
-		if err != nil {
-			var reason string
-			if decodeErr := json.Unmarshal(body.Choices[0].FinishReason, &reason); decodeErr == nil && reason == "length" {
-				return "", fmt.Errorf("%w: output token limit reached", err)
-			}
+		var reason string
+		if err := json.Unmarshal(body.Choices[0].FinishReason, &reason); err == nil && reason == "length" {
+			return "", fmt.Errorf("%w: %w", ErrOutputContract, ErrOutputLimit)
 		}
-		return text, err
+		return chatContent(body.Choices[0].Message.Content)
 	default:
 		return "", ErrOutputContract
 	}

@@ -266,6 +266,7 @@ var (
 	ErrEndpointTimeout      = errors.New("the AI endpoint did not answer within the allowed time")
 	ErrResponseTooLarge     = errors.New("the AI response exceeded the allowed size")
 	ErrOutputContract       = errors.New("the selected model did not return the required normalization output")
+	ErrOutputLimit          = errors.New("output token limit reached")
 	ErrProviderFailure      = errors.New("the AI endpoint returned an error")
 	ErrDiscoveryUnavailable = errors.New("this endpoint did not return a usable model list")
 )
@@ -275,9 +276,13 @@ var (
 // task lifecycle implementation.
 type LockCheck func(ctx context.Context, app core.App, ownerID string) error
 
-// ValidationOptions bound the synthetic validation request and its response.
+// ValidationOptions bound provider requests and their responses.
 type ValidationOptions struct {
-	Timeout          time.Duration
+	// Timeout bounds connection validation and model discovery.
+	Timeout time.Duration
+	// InferenceTimeout bounds preparation calls. Zero uses Timeout, so callers
+	// that supply one custom bound retain that behavior.
+	InferenceTimeout time.Duration
 	MaxResponseBytes int64
 	// AllowPrivate permits loopback/private destinations and plaintext HTTP.
 	// It exists only for simulated endpoints in tests and is never enabled by
@@ -287,5 +292,5 @@ type ValidationOptions struct {
 
 // DefaultValidationOptions are the production bounds.
 func DefaultValidationOptions() ValidationOptions {
-	return ValidationOptions{Timeout: 30 * time.Second, MaxResponseBytes: 512 << 10}
+	return ValidationOptions{Timeout: 30 * time.Second, InferenceTimeout: 2 * time.Minute, MaxResponseBytes: 512 << 10}
 }
