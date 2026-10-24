@@ -46,7 +46,10 @@ func validateConnection(ctx context.Context, o ValidationOptions, cfg Config, ap
 	if err != nil {
 		return err
 	}
-	return checkContract(text)
+	if err := checkContract(text); err != nil {
+		return fmt.Errorf("HTTP 200 normalization probe: %w", err)
+	}
+	return nil
 }
 
 // resolveFormat establishes one exact configuration's API format through
@@ -62,6 +65,7 @@ func resolveFormat(ctx context.Context, o ValidationOptions, cfg Config, apiKey 
 	ctx, cancel := context.WithTimeout(ctx, o.Timeout)
 	defer cancel()
 	var incompatible error
+	var failures []string
 	for _, format := range candidates {
 		if ctx.Err() != nil {
 			return Config{}, ErrEndpointTimeout
@@ -73,16 +77,17 @@ func resolveFormat(ctx context.Context, o ValidationOptions, cfg Config, apiKey 
 			return candidate, nil
 		}
 		if !errors.Is(err, errFormatIncompatible) && !errors.Is(err, ErrOutputContract) {
-			return Config{}, err
+			return Config{}, fmt.Errorf("%s: %w", format, err)
 		}
 		incompatible = err
+		failures = append(failures, fmt.Sprintf("%s: %v", format, err))
 	}
 	// Every candidate proved incompatible. A pinned single format reports its
 	// own outcome; a resolved selection reports one safe summary.
 	if len(candidates) == 1 && errors.Is(incompatible, ErrOutputContract) {
-		return Config{}, ErrOutputContract
+		return Config{}, fmt.Errorf("%s: %w", candidates[0], incompatible)
 	}
-	return Config{}, fmt.Errorf("%w: none of the supported API formats passed validation at this endpoint", ErrModelUnavailable)
+	return Config{}, fmt.Errorf("%w: none of the supported API formats passed validation at this endpoint; %s", ErrModelUnavailable, strings.Join(failures, "; "))
 }
 
 // statusClassifier maps one non-200 HTTP status outside the centrally handled
@@ -165,9 +170,13 @@ func postJSON(ctx context.Context, o ValidationOptions, cfg Config, apiKey, sess
 	}
 	raw, err := readBounded(o, resp, classify)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("HTTP %d: %w", resp.StatusCode, err)
 	}
-	return extractText(cfg.APIFormat, raw)
+	text, err := extractText(cfg.APIFormat, raw)
+	if err != nil {
+		return "", fmt.Errorf("HTTP %d response: %w", resp.StatusCode, err)
+	}
+	return text, nil
 }
 
 // fetchJSON sends one bounded, credential-bearing GET. Discovery shares the
@@ -229,21 +238,22 @@ func readBounded(o ValidationOptions, resp *http.Response, classify statusClassi
 }
 
 // probeRequest builds the exact-format request body. It deliberately sets no
-// tools and no fallback or routing fields.
+// tools and no fallback or routing fields. The normal inference token allowance
+// leaves room for reasoning before the small normalization result.
 func probeRequest(cfg Config) ([]byte, error) {
 	switch cfg.APIFormat {
 	case FormatResponses:
 		return json.Marshal(map[string]any{
 			"model":             cfg.Model,
 			"input":             inputMessages(probeSystem, probeUser),
-			"max_output_tokens": 256,
+			"max_output_tokens": DefaultMaxTokens,
 			"store":             false,
 		})
 	case FormatChatCompletions:
 		return json.Marshal(map[string]any{
 			"model":       cfg.Model,
 			"messages":    chatMessages(probeSystem, probeUser),
-			"max_tokens":  256,
+			"max_tokens":  DefaultMaxTokens,
 			"temperature": 0,
 		})
 	default:
@@ -257,8 +267,9 @@ func extractText(format APIFormat, raw []byte) (string, error) {
 	switch format {
 	case FormatResponses:
 		var body struct {
-			OutputText string `json:"output_text"`
-			Output     []struct {
+			IncompleteDetails json.RawMessage `json:"incomplete_details"`
+			OutputText        string          `json:"output_text"`
+			Output            []struct {
 				Type    string `json:"type"`
 				Content []struct {
 					Type string `json:"type"`
@@ -267,7 +278,7 @@ func extractText(format APIFormat, raw []byte) (string, error) {
 			} `json:"output"`
 		}
 		if err := json.Unmarshal(raw, &body); err != nil {
-			return "", ErrOutputContract
+			return "", fmt.Errorf("%w: invalid response envelope", ErrOutputContract)
 		}
 		if strings.TrimSpace(body.OutputText) != "" {
 			return body.OutputText, nil
@@ -284,24 +295,38 @@ func extractText(format APIFormat, raw []byte) (string, error) {
 			}
 		}
 		if len(parts) == 0 {
-			return "", ErrOutputContract
+			var details struct {
+				Reason string `json:"reason"`
+			}
+			if err := json.Unmarshal(body.IncompleteDetails, &details); err == nil && details.Reason == "max_output_tokens" {
+				return "", fmt.Errorf("%w: no assistant text; output token limit reached", ErrOutputContract)
+			}
+			return "", fmt.Errorf("%w: no assistant text", ErrOutputContract)
 		}
 		return strings.Join(parts, ""), nil
 	case FormatChatCompletions:
 		var body struct {
 			Choices []struct {
-				Message struct {
+				FinishReason json.RawMessage `json:"finish_reason"`
+				Message      struct {
 					Content json.RawMessage `json:"content"`
 				} `json:"message"`
 			} `json:"choices"`
 		}
 		if err := json.Unmarshal(raw, &body); err != nil {
-			return "", ErrOutputContract
+			return "", fmt.Errorf("%w: invalid response envelope", ErrOutputContract)
 		}
 		if len(body.Choices) == 0 {
-			return "", ErrOutputContract
+			return "", fmt.Errorf("%w: no assistant choices", ErrOutputContract)
 		}
-		return chatContent(body.Choices[0].Message.Content)
+		text, err := chatContent(body.Choices[0].Message.Content)
+		if err != nil {
+			var reason string
+			if decodeErr := json.Unmarshal(body.Choices[0].FinishReason, &reason); decodeErr == nil && reason == "length" {
+				return "", fmt.Errorf("%w: output token limit reached", err)
+			}
+		}
+		return text, err
 	default:
 		return "", ErrOutputContract
 	}
@@ -312,7 +337,7 @@ func chatContent(raw json.RawMessage) (string, error) {
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
 		if strings.TrimSpace(text) == "" {
-			return "", ErrOutputContract
+			return "", fmt.Errorf("%w: no assistant text", ErrOutputContract)
 		}
 		return text, nil
 	}
@@ -321,7 +346,7 @@ func chatContent(raw json.RawMessage) (string, error) {
 		Text string `json:"text"`
 	}
 	if err := json.Unmarshal(raw, &parts); err != nil {
-		return "", ErrOutputContract
+		return "", fmt.Errorf("%w: unsupported assistant content", ErrOutputContract)
 	}
 	var joined strings.Builder
 	for _, part := range parts {
@@ -330,7 +355,7 @@ func chatContent(raw json.RawMessage) (string, error) {
 		}
 	}
 	if strings.TrimSpace(joined.String()) == "" {
-		return "", ErrOutputContract
+		return "", fmt.Errorf("%w: no assistant text", ErrOutputContract)
 	}
 	return joined.String(), nil
 }
@@ -348,17 +373,17 @@ func checkContract(text string) error {
 	}
 	start, end := strings.IndexByte(normalized, '{'), strings.LastIndexByte(normalized, '}')
 	if start < 0 || end <= start {
-		return ErrOutputContract
+		return fmt.Errorf("%w: no JSON object", ErrOutputContract)
 	}
 	var contract probeContract
 	if err := json.Unmarshal([]byte(normalized[start:end+1]), &contract); err != nil {
-		return ErrOutputContract
+		return fmt.Errorf("%w: invalid JSON", ErrOutputContract)
 	}
 	if len(contract.Values) != 1 || contract.Values[0].ID != "probe" {
-		return ErrOutputContract
+		return fmt.Errorf("%w: unexpected probe fields", ErrOutputContract)
 	}
 	if strings.TrimSpace(contract.Values[0].Value) != probeValue {
-		return ErrOutputContract
+		return fmt.Errorf("%w: normalized probe value mismatch", ErrOutputContract)
 	}
 	return nil
 }
