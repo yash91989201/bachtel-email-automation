@@ -66,7 +66,7 @@ The system SHALL use paths rather than URL fragments to select campaign/task sec
 ## MODIFIED Requirements
 
 ### Requirement: One persistent task workspace
-The system SHALL give each task one workspace with Overview, Recipients, Test & approve, Sending, and Results, defaulting to Overview. The header SHALL show the filename and derived status. Overview SHALL integrate status, next-step guidance and blocker remedies into the lifecycle tracker before Task details. Controls and results SHALL each have one canonical location. Section changes SHALL use normal links and full-page server rendering with native browser history rather than client-side tab switching.
+The system SHALL give each task one workspace with Overview, Recipients, Test & approve, Sending, and Results, defaulting to Overview. The header SHALL show the filename and derived status. Overview SHALL integrate status, next-step guidance and blocker remedies into the lifecycle tracker before Task details. Controls and results SHALL each have one canonical location. Section changes SHALL use ordinary links and full-page server rendering with native browser history.
 
 #### Scenario: Operator opens and navigates through a task
 - **WHEN** the operator opens a task without a section or moves between task sections

@@ -34,6 +34,67 @@ Workbook | Status | Recipients | Next action
 - **AND** source-header suggestions are available in Template & preview rather than occupying a primary campaign-list column
 - **AND** opening the campaign name opens Tasks
 
+### Requirement: Campaign sections have direct paths
+The system SHALL expose campaign sections at `/campaigns/{id}/tasks`, `/campaigns/{id}/template`, `/campaigns/{id}/activity` and `/campaigns/{id}/settings`. Each path SHALL directly render its matching section with the existing campaign shell and selected navigation state. Opening `/campaigns/{id}` without an explicit section path SHALL show Tasks.
+
+#### Scenario: Direct campaign section visit
+- **WHEN** the owner opens or reloads any campaign section path
+- **THEN** the matching Tasks, Template & preview, Activity & downloads or Settings section is selected without requiring a fragment
+- **AND** section navigation, campaign/task breadcrumbs, template remedies and campaign action return destinations use section paths
+- **AND** opening a section neither creates a revision nor generates exports nor changes campaign data
+
+#### Scenario: Campaign entry and invalid section
+- **WHEN** the owner opens the campaign root without an explicit section path
+- **THEN** Tasks is shown and new links to that section use its explicit path
+- **WHEN** an unknown section path is requested
+- **THEN** it returns not found instead of silently selecting another section
+
+### Requirement: Task sections have direct paths
+The system SHALL expose task sections at `/campaigns/{id}/tasks/{task}/{section}`, where section is `overview`, `recipients`, `test`, `sending` or `results`. Each path SHALL directly select its matching section in the existing task shell. The task root without an explicit section path SHALL show Overview. All entries SHALL enforce operator ownership and campaign-task membership.
+
+#### Scenario: Direct task section visit
+- **WHEN** the owner opens or reloads a task section path
+- **THEN** its matching section is selected with the same task identity, status and section navigation
+- **AND** breadcrumbs, next-action links, lifecycle remedies and task-operation return destinations use section paths
+- **AND** `sending_type=choose` retains its existing view-only meaning on the Sending path without changing the saved type
+- **AND** unavailable actions retain their existing prerequisite explanations
+
+#### Scenario: Invalid or foreign task navigation
+- **WHEN** an unknown section, another operator's task or a task under the wrong campaign is requested
+- **THEN** the request reveals no private task content and is refused using the existing access/not-found policy
+- **AND** navigation never sends, approves, finalizes data, reserves work, schedules, resumes, retries or generates an export
+
+### Requirement: Sections use native page navigation
+Campaign and task sections SHALL use ordinary links and server-rendered pages, rendering only the selected section's content with the shared identity and navigation. Section navigation SHALL work without JavaScript interception or custom browser-history handlers. Unsaved form values and disclosure choices SHALL NOT be guaranteed to persist across full-page section changes.
+
+#### Scenario: Navigate and use browser history
+- **WHEN** an operator follows a section link, opens it in another tab, reloads or uses Back/Forward
+- **THEN** ordinary browser navigation reaches the corresponding server-rendered section
+- **AND** the selected link is visibly and programmatically identified as the current page
+- **AND** inactive section forms, panels and polling regions are absent from that response
+- **AND** section navigation works with JavaScript disabled and does not require a client-side section router
+
+#### Scenario: Section-local progress and rejected action
+- **WHEN** an update arrives within the selected section or an operation is rejected
+- **THEN** live updates preserve valid inputs, disclosure choices and keyboard focus within that page while retaining existing stale-confirmation rules
+- **AND** a rejected operation renders its relevant section with safe error feedback and valid non-secret submitted inputs
+- **AND** successful operations return to their corresponding section GET path without replaying the operation
+- **AND** no client-side history rewrite is required on a rejected POST response
+
+### Requirement: Fragments do not select workspace sections
+The system SHALL use paths rather than URL fragments to select campaign/task sections. Old section fragments and aliases SHALL NOT require translation or custom navigation handlers. Legitimate accessibility, within-section anchor and disclosure targets SHALL remain available.
+
+#### Scenario: Old fragment bookmark
+- **WHEN** the owner opens a campaign or task root with an obsolete section fragment or legacy alias
+- **THEN** the server renders its ordinary default section without interpreting that fragment as section selection
+- **AND** an explicit section path retains its selected section regardless of obsolete section fragments
+- **AND** generated navigation and action return links use section paths
+
+#### Scenario: Anchors and existing operation endpoints
+- **WHEN** an operator follows a within-section anchor, or uses an existing upload, action, progress or download endpoint
+- **THEN** the anchor remains a within-page target and the endpoint retains its existing authorization and method contract
+- **AND** no section navigation mutates task state or invokes a provider
+
 ### Requirement: Recognizable task list entries
 The system SHALL identify each task by its original workbook filename, linked to that task's Overview, and show only the derived status and the eligible count in its row. Each row SHALL offer one next-action link into the section the workspace rule chose and SHALL disclose remaining detail through keyboard-reachable per-cell tooltips. Header-row and worksheet details stay inside the task instead of displacing operational information in its list.
 
@@ -142,13 +203,13 @@ The system SHALL show campaign context throughout workbook upload and worksheet/
 - **AND** after template creation the same staged workbook can be validated without another upload
 
 ### Requirement: One persistent task workspace
-The system SHALL give each task one workspace with Overview, Recipients, Test & approve, Sending, and Results, defaulting to Overview. The header SHALL show the filename and derived status. Overview SHALL integrate status, next-step guidance and blocker remedies into the lifecycle tracker before Task details. Controls and results SHALL each have one canonical location.
+The system SHALL give each task one workspace with Overview, Recipients, Test & approve, Sending, and Results, defaulting to Overview. The header SHALL show the filename and derived status. Overview SHALL integrate status, next-step guidance and blocker remedies into the lifecycle tracker before Task details. Controls and results SHALL each have one canonical location. Section changes SHALL use ordinary links and full-page server rendering with native browser history.
 
 #### Scenario: Operator opens and navigates through a task
 - **WHEN** the operator opens a task without a section or moves between task sections
 - **THEN** Overview is selected by default, the task name is shown without its task ID beside it, and a derived status badge replaces that adjacent ID
 - **AND** the short task reference and full ID remain available in Overview details, while task lists retain their short reference
-- **AND** the compact task-name/status-badge row, breadcrumbs and section navigation remain in place while the selected section's main content changes
+- **AND** the compact task-name/status-badge row, breadcrumbs and section navigation are rendered consistently on each section page while only that section's main content is included
 - **AND** detailed identity/context, upload and revision metadata, sender/connection state, current status and blocking/wait reason, next-action sentence, and lifecycle strip appear in Overview content rather than a dense global header
 - **AND** Overview is a summary section, not a lifecycle step; the lifecycle order remains Upload, Recipients, Test & approve, Sending, Results
 - **AND** its content order is breadcrumbs; task name and status badge; section navigation; selected content
@@ -175,7 +236,7 @@ Technical details: short reference and full task ID
 - **WHEN** the operator follows an existing task review/sending/results link, reloads a section, or uses browser Back/Forward
 - **THEN** an entry without a section opens Overview; explicit section links open their corresponding section with linked campaign and Tasks breadcrumbs
 - **AND** navigating alone never sends, approves, reserves, resumes, retries or generates an export
-- **AND** polling does not override an explicitly selected section
+- **AND** section-local polling does not override the section selected by the page path
 - **AND** Recipients orders its content as validation/setup or snapshot summary, preview, then row reasons/report; Test & approve orders it as approval summary, test submission, then received-format approval when needed
 - **AND** Sending orders its content as current progress/wait reason, fresh scoped send/schedule/resume controls, applicable recovery groups, then Sending settings; Results orders it as workbook availability/actions, then task attempt history
 
@@ -502,7 +563,7 @@ The system SHALL place the task result workbook, export state, as-of time and ta
 - **WHEN** the operator opens recorded task outcomes
 - **THEN** Results shows test/candidate kind, recipient, attempt state, date/time +05:30 and available stored-email/resolution details
 - **AND** Task history is a collapsed-by-default accordion with a full-width, keyboard-operable header and expansion indicator; opening it reveals the existing entries, resolutions and empty-state guidance
-- **AND** its expansion choice survives progress updates, and a legacy history bookmark opens the accordion in Results
+- **AND** its expansion choice survives updates within the Results page, and history remains accessible through its ordinary disclosure control without requiring legacy-fragment section selection
 - **AND** “Submitted” is explained as accepted by the provider, not confirmed delivery
 - **AND** test totals, manual resolutions and uncertain attempts are distinguished from provider-confirmed candidate submissions
 
