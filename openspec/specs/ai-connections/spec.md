@@ -15,22 +15,54 @@ The system SHALL maintain at most one confirmed AI connection per operator. Oper
 - **AND** the operator reviews the exact provider, endpoint and selected model before confirmation
 
 #### Scenario: Unsupported or incomplete setup
-- **WHEN** required values are missing or the provider, API format or model is unsupported by the selected connection
+- **WHEN** required values are missing, the provider or explicit API format is unsupported, or the model identifier is malformed
 - **THEN** setup identifies the problem and no new configuration becomes active
-- **AND** merely entering another model name does not assert support
+- **AND** absence from a compiled model list does not make a valid model identifier unsupported
+- **AND** selecting or entering a model identifier alone does not assert compatibility
 
 ### Requirement: Validate the selected model before activation
-The system SHALL validate proposed settings using the exact selected model and supported normalization response contract before activation. Validation SHALL use synthetic data and disclose possible provider usage charges. Failed validation, cancellation or a stale confirmation SHALL preserve the existing confirmed configuration and all task data.
+The system SHALL validate the exact proposed endpoint and model against the normalization response contract before staging settings for confirmation. New preset selections SHALL resolve a supported API format through bounded synthetic validation. Validation SHALL disclose possible provider usage charges. Failure, cancellation or stale confirmation SHALL preserve the confirmed configuration and task data.
 
 #### Scenario: Model verification fails
-- **WHEN** the endpoint rejects authentication, cannot access the selected model or cannot return the required output
-- **THEN** the proposed connection is not activated and the owner receives a safe actionable error
+- **WHEN** the endpoint rejects authentication, cannot access the selected model or cannot return the required output through any attempted format
+- **THEN** no newly validated proposal is staged or activated and the owner receives a safe actionable error
 - **AND** no workbook values, test email or candidate email are used for connection validation
+- **AND** the error distinguishes compatibility failure from authentication, throttling or service failure where the provider outcome permits it
 
 #### Scenario: Successful confirmation
 - **WHEN** the owner confirms successfully validated settings and no pending-task lock prevents the change
-- **THEN** those exact settings become the single confirmed AI configuration
+- **THEN** those exact settings, including the successfully validated API format, become the single confirmed AI configuration
 - **AND** confirmation does not prepare a workbook, change existing snapshots or authorize sending
+
+#### Scenario: Newly discovered model passes compatibility validation
+- **WHEN** the owner validates a valid discovered model ID absent from any previously shipped model catalog
+- **THEN** the system tests the exact submitted endpoint and model using the preset's supported API formats
+- **AND** it stages settings only when a response passes both API-format parsing and the required normalization output checks
+- **AND** a successful HTTP response or a discovery listing alone is insufficient
+- **AND** validation stops at the first passing format and shows that format for review
+
+#### Scenario: One API format is incompatible
+- **WHEN** a new preset selection's first tested format returns HTTP 400, 404, 405, 415 or 422, an invalid expected response envelope, or an invalid normalization result, and another supported format and time budget remain
+- **THEN** validation tests the remaining format with the same endpoint, model and supplied key
+- **AND** each supported format is attempted at most once, with at most two synthetic requests and a single overall 30-second deadline
+- **AND** no alternate provider, endpoint or model is selected
+
+#### Scenario: Validation must stop
+- **WHEN** validation encounters authentication refusal, rate limiting, service or transport failure, cancellation, an exhausted deadline, an unsafe destination, an oversized response or any other failure outside the compatibility continuation cases
+- **THEN** it stops without attempting another format or automatically retrying
+- **AND** no newly validated proposal is staged and the owner can correct the setup or explicitly retry
+
+#### Scenario: Revalidate a changed selection
+- **WHEN** the owner changes provider, endpoint, model, explicit API format or the supplied key after successful validation
+- **THEN** the changed proposal requires fresh validation before it can be confirmed
+- **AND** a prior successful result cannot authorize the changed values
+- **AND** stale confirmation and pending-task checks still apply when activating a staged proposal
+
+#### Scenario: Repair preserves the recorded format
+- **WHEN** the owner validates a replacement key for the unchanged confirmed preset selection
+- **THEN** validation uses only its recorded API format without requiring discovery or a compiled model entry
+- **AND** failure does not trigger automatic format switching
+- **AND** a format change is treated as a configuration switch subject to the existing task lock
 
 ### Requirement: Confirmed model is the only runtime model
 Each normalization run SHALL record and use the operator's confirmed provider, endpoint, model and inference settings. Retries SHALL retain that selection. The system SHALL NOT silently choose a fallback provider/model or use deployment-wide credentials. Unavailable configuration SHALL block AI preparation with a setup or repair remedy.
@@ -47,23 +79,25 @@ Each normalization run SHALL record and use the operator's confirmed provider, e
 - **AND** final-sheet upload, preview, download and sending still do not call AI
 
 ### Requirement: Supported providers share the connection contract
-The system SHALL support OpenCode Go and Xiaomi MiMo presets with editable endpoints, model discovery and automatic API-format selection. Custom compatible connections SHALL expose endpoint, supported API format, exact model ID and API key explicitly. Every confirmed configuration SHALL record its resolved format and retain the same private validation, fixed-selection and pending-task-lock behavior.
+The system SHALL support OpenCode Go and Xiaomi MiMo presets with editable endpoints, selectable discovered models and API-format selection established by validation. Custom compatible connections SHALL expose endpoint, supported API format, exact model ID and API key explicitly. Every confirmed configuration SHALL record its validated format and retain the same private validation, fixed-selection and pending-task-lock behavior.
 
 #### Scenario: Custom compatible endpoint
 - **WHEN** the operator supplies a permitted custom endpoint, supported API format, API key and model identifier
 - **THEN** activation requires successful validation of that exact combination
+- **AND** no other format is automatically attempted for this manual setup
 - **AND** no claim is made that every model at that endpoint supports normalization
 
 #### Scenario: Another provider becomes supported
 - **WHEN** a later release adds another verified provider preset
-- **THEN** its supported models and required settings can be configured through the same account workflow
+- **THEN** its discovered models and required settings can be configured through the same account workflow
 - **AND** existing connections and saved task evidence remain intact
 - **AND** native presets beyond OpenCode Go and Xiaomi MiMo are not required in this change
 
 #### Scenario: Built-in model resolves its format
-- **WHEN** the owner validates a supported preset model
-- **THEN** the system resolves its API format independently of caller-supplied format values
-- **AND** an unsupported or unknown model contract is refused without guessing or calling another model
+- **WHEN** the owner validates a new preset selection
+- **THEN** the system establishes the format through successful compatibility validation independently of caller-supplied format values or model-name heuristics
+- **AND** the absence of a model-specific mapping does not prevent validation
+- **AND** subsequent preparation and retries use only the confirmed format without protocol probing or provider/model fallback
 
 ### Requirement: AI credentials are confidential and owner-scoped
 The system SHALL encrypt AI secrets at rest under the deployment-managed key, use them only for the owning operator's confirmed connection, and exclude them from HTML, logs, downloads and application responses. Saved secrets SHALL NOT be returned to prefill forms. Missing or incorrect encryption keys SHALL block affected use without overwriting ciphertext.
@@ -103,18 +137,20 @@ The system SHALL use certificate-verified encrypted connections to permitted end
 - **AND** Account settings identifies the external processing destination and known provider data-handling limitations
 
 ### Requirement: Discover supported provider models without activation
-The system SHALL fetch models for the selected supported provider using the owner's supplied key and editable endpoint. Discovery SHALL identify compatible models and explain unavailable protocols. It SHALL NOT activate settings, validate normalization, start task work or send email. Missing discovery support or an invalid response SHALL leave the confirmed connection and task data unchanged.
+The system SHALL fetch models for the selected supported provider using the owner's supplied key and editable endpoint. Every syntactically valid returned model ID SHALL be selectable without a compiled eligibility list. Discovery SHALL NOT assert compatibility, validate normalization, stage or activate settings, start task work or send email. Missing discovery support or an invalid response SHALL leave the confirmed connection and task data unchanged.
 
 #### Scenario: Fetch and choose a compatible model
 - **WHEN** the owner requests models from OpenCode Go or Xiaomi MiMo
-- **THEN** compatible models returned by that endpoint can be selected with their API format supplied automatically
-- **AND** listed models requiring an unsupported or unknown protocol are unavailable for selection with an explanation
-- **AND** fetching a list is distinguished from successful exact-model validation
+- **THEN** every syntactically valid returned model ID is selectable, including previously unknown IDs
+- **AND** invalid entries are omitted and duplicate IDs appear once in provider response order
+- **AND** the list does not label an untested model or format as verified
+- **AND** selecting a model still requires exact-configuration validation and explicit confirmation before activation
 
 #### Scenario: Discovery failure and retry
-- **WHEN** the endpoint rejects the key, times out, returns malformed or oversized data, or has no compatible models
+- **WHEN** the endpoint rejects the key, times out, returns malformed or oversized data, or has no valid model IDs
 - **THEN** the operator receives a safe actionable error or empty-state explanation and can retry or change the configuration
 - **AND** no secret-bearing request or raw provider response is disclosed
+- **AND** no compiled fallback model list is substituted
 
 #### Scenario: Endpoint override controls discovery
 - **WHEN** the operator replaces a preset endpoint
