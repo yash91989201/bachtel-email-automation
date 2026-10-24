@@ -681,6 +681,12 @@ The task workspace SHALL present successful AI corrections separately from unres
 - **WHEN** an older completed run is explicitly selected
 - **THEN** the workspace presents that run's evidence and any selected final snapshot is cleared
 
+#### Scenario: Sanitization report is offered with the review
+- **WHEN** a completed run's backend review is displayed for a current role-mapping task
+- **THEN** the workspace links a sanitization report download that explains it holds one row per recipient entry with its outcome, corrections, findings, reasons and original and prepared values
+- **WHEN** no completed run is selected or the review is unavailable
+- **THEN** the download is not offered and the existing review remedy is shown
+
 #### Scenario: Backend outcome replaces provisional counts
 - **WHEN** a completed preparation run is selected for a current role-mapping task
 - **THEN** accepted and held recipient counts come from the backend review of the cleaned values
