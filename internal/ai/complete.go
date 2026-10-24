@@ -78,14 +78,14 @@ func chatMessages(system, user string) []map[string]string {
 }
 
 // Complete sends one normalization request over the exact confirmed
-// configuration and returns the assistant text. It never retries and never
-// calls another model.
+// configuration and returns the assistant text. It never retries, never calls
+// another model and never probes or falls back to another format.
 func Complete(ctx context.Context, o ValidationOptions, cfg Config, apiKey string, request InferenceRequest) (string, error) {
 	body, err := inferenceRequest(cfg, request)
 	if err != nil {
 		return "", err
 	}
-	return postJSON(ctx, o, cfg, apiKey, request.Session, body)
+	return postJSON(ctx, o, cfg, apiKey, request.Session, body, runtimeStatus)
 }
 
 // CompleteFor sends one bounded inference request using the given captured

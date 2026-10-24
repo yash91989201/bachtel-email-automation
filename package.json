@@ -6,6 +6,7 @@
     "lint:tailwind": "node scripts/lint-tailwind.mjs",
     "fix:tailwind": "node scripts/lint-tailwind.mjs --fix",
     "test:tailwind": "node --test scripts/lint-tailwind.test.mjs",
+    "test:js": "node --test scripts/ai-setup.test.mjs",
     "build": "node scripts/copy-assets.mjs && npm run build:css",
     "build:css": "tailwindcss -i web/css/app.css -o internal/web/static/app.css --minify",
     "watch:css": "tailwindcss -i web/css/app.css -o internal/web/static/app.css --watch"

@@ -96,24 +96,15 @@ func (f APIFormat) Path() string {
 	}
 }
 
-// ModelContract is one verified model identifier and the single API format
-// that serves it. A model outside this table is never assigned a guessed
-// format: it is listed as unavailable with a remedy instead.
-type ModelContract struct {
-	ID     string
-	Format APIFormat
-}
-
 // Preset is provider reference data: labels, default endpoint, supported API
-// formats, verified model contracts and setup guidance. It carries no
-// protocol behavior. Every default is a starting value the operator may
-// override; nothing here pins a submitted endpoint.
+// formats and setup guidance. It carries no protocol behavior and makes no
+// claim about individual models. Every default is a starting value the
+// operator may override; nothing here pins a submitted endpoint.
 type Preset struct {
 	Provider    Provider
 	Label       string
 	DefaultRoot string
 	Formats     []APIFormat
-	Models      []ModelContract
 	Guidance    []string
 }
 
@@ -134,22 +125,9 @@ func Presets() []Preset {
 			Label:       ProviderOpenCodeGo.Label(),
 			DefaultRoot: OpenCodeRoot,
 			Formats:     []APIFormat{FormatResponses, FormatChatCompletions},
-			Models: []ModelContract{
-				{ID: "grok-4.7", Format: FormatResponses},
-				{ID: "gpt-6-luna", Format: FormatResponses},
-				{ID: "gpt-5.6-luna", Format: FormatResponses},
-				{ID: "muse-spark-1.3", Format: FormatResponses},
-				{ID: "glm-5.3-flash", Format: FormatChatCompletions},
-				{ID: "glm-5.3", Format: FormatChatCompletions},
-				{ID: "glm-5.2", Format: FormatChatCompletions},
-				{ID: "kimi-k3", Format: FormatChatCompletions},
-				{ID: "kimi-k2.7-code", Format: FormatChatCompletions},
-				{ID: "longcat-2.0", Format: FormatChatCompletions},
-				{ID: "deepseek-v4.1-flash", Format: FormatChatCompletions},
-			},
 			Guidance: []string{
 				"Use the API key from your OpenCode Console workspace. The Go plan covers time-limited usage for a single-member workspace.",
-				"Each model is served by one API format; the format follows the selected model and is not editable.",
+				"The API format is established by validation: Responses is attempted before Chat Completions and the first passing format is shown for confirmation. Model discovery alone verifies neither compatibility nor entitlement.",
 				"Only the mapped workbook values and preparation metadata are sent to this endpoint. OpenCode documents traffic monitoring for abuse; the Muse Contributor option may allow training on prompts and completions.",
 			},
 		},
@@ -158,14 +136,9 @@ func Presets() []Preset {
 			Label:       ProviderXiaomiMiMo.Label(),
 			DefaultRoot: XiaomiRoot,
 			Formats:     []APIFormat{FormatChatCompletions},
-			Models: []ModelContract{
-				{ID: "mimo-v2.6-flash", Format: FormatChatCompletions},
-				{ID: "mimo-v2.6-pro", Format: FormatChatCompletions},
-				{ID: "mimo-v2.6-pro-ultraspeed", Format: FormatChatCompletions},
-			},
 			Guidance: []string{
 				"Use a Xiaomi MiMo standard API key. The Token Plan host and its coding-oriented usage limits are not used by this preset.",
-				"The documented MiMo text models speak Chat Completions; the Anthropic-compatible and audio endpoints are not supported here.",
+				"The API format is established by validation; this preset supports only Chat Completions, and the Anthropic-compatible and audio endpoints are not used. Model discovery alone verifies neither compatibility nor entitlement.",
 				"Only the mapped workbook values and preparation metadata are sent to this endpoint. Review Xiaomi's data-handling terms before sending real workbook data.",
 			},
 		},
@@ -180,22 +153,6 @@ func Presets() []Preset {
 			},
 		},
 	}
-}
-
-// ModelFormat resolves the verified API format of one preset model. It never
-// guesses from a model name suffix.
-func ModelFormat(provider Provider, model string) (APIFormat, bool) {
-	preset, ok := PresetFor(provider)
-	if !ok {
-		return "", false
-	}
-	model = strings.TrimSpace(model)
-	for _, contract := range preset.Models {
-		if contract.ID == model {
-			return contract.Format, true
-		}
-	}
-	return "", false
 }
 
 // PresetFor returns the preset for a provider.
@@ -274,14 +231,11 @@ type Proposal struct {
 	APIKey string
 }
 
-// ModelOption is one model a preset endpoint lists. Supported models carry the
-// verified API format; every other listed model stays visible but unusable,
-// with the reason. Discovery never invents availability.
+// ModelOption is one model a preset endpoint lists. Every option is a
+// selectable, syntactically valid identifier; discovery asserts neither
+// compatibility nor entitlement, which validation establishes later.
 type ModelOption struct {
-	ID        string
-	Format    APIFormat
-	Supported bool
-	Reason    string
+	ID string
 }
 
 // Bounded operator input. The API key ceiling is generous but finite; model

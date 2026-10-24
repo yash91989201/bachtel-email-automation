@@ -8,14 +8,11 @@ import (
 	"unicode"
 )
 
-// unsupportedModelReason explains one listed model this application cannot
-// serve. It never implies a format from the model name.
-const unsupportedModelReason = "not in this application's verified model contract; no API format is guessed. A Custom compatible connection is the manual remedy."
-
 // DiscoverModels fetches the model list of the selected preset with the
-// supplied key and endpoint. It performs one bounded GET, returns only the
-// operator-visible options and never writes a connection, stages a proposal,
-// validates normalization or starts work.
+// supplied key and endpoint. It performs one bounded GET, returns every
+// syntactically valid listed identifier as a selectable choice and never
+// writes a connection, stages a proposal, validates compatibility or starts
+// work.
 func (s *Store) DiscoverModels(ctx context.Context, ownerID string, proposal Proposal) ([]ModelOption, error) {
 	if strings.TrimSpace(ownerID) == "" {
 		return nil, fmt.Errorf("%w: a connection owner is required", ErrInvalidSetup)
@@ -32,7 +29,7 @@ func (s *Store) DiscoverModels(ctx context.Context, ownerID string, proposal Pro
 	if err != nil {
 		return nil, err
 	}
-	return parseModelOptions(cfg.Provider, raw)
+	return parseModelOptions(raw)
 }
 
 // discoveryProposal checks the discovery inputs. A model and format are not
@@ -80,10 +77,10 @@ func modelListURL(cfg Config, allowPrivate bool) (string, error) {
 }
 
 // parseModelOptions reads the documented OpenAI-style data list. Malformed
-// entries are skipped, identifiers are deduplicated in response order, and a
-// model outside the verified contract stays listed but unsupported. An empty
-// list is a fact, not an error.
-func parseModelOptions(provider Provider, raw []byte) ([]ModelOption, error) {
+// entries are skipped and identifiers are deduplicated in response order.
+// Every remaining identifier is an unvalidated choice: an empty list is a
+// fact, not an error.
+func parseModelOptions(raw []byte) ([]ModelOption, error) {
 	var payload struct {
 		Data []struct {
 			ID string `json:"id"`
@@ -103,12 +100,7 @@ func parseModelOptions(provider Provider, raw []byte) ([]ModelOption, error) {
 			continue
 		}
 		seen[id] = struct{}{}
-		format, supported := ModelFormat(provider, id)
-		option := ModelOption{ID: id, Format: format, Supported: supported}
-		if !supported {
-			option.Reason = unsupportedModelReason
-		}
-		options = append(options, option)
+		options = append(options, ModelOption{ID: id})
 	}
 	return options, nil
 }

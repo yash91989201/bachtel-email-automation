@@ -23,7 +23,7 @@ const (
 
 // Only these fixed notices may be selected by an Account URL.
 var accountNotices = map[string]string{
-	"validated":         "The exact provider, endpoint, API format and model returned the required normalization output. Validation may have consumed provider usage. Review the proposal and confirm it to activate it.",
+	"validated":         "The exact provider, endpoint and model passed synthetic normalization validation in the API format shown below. Validation may have consumed provider usage. Review the resolved format and confirm the proposal to activate it.",
 	"confirmed":         "AI connection confirmed. Future normalization runs use exactly this provider, endpoint, API format and model.",
 	"repaired":          "The API key was replaced for the same confirmed configuration. Existing tasks, output and approvals are unchanged.",
 	"settings-saved":    connectionNotices["settings-saved"],
@@ -54,7 +54,7 @@ var aiFailureMessages = []struct {
 }{
 	{ai.ErrEndpointUnsafe, "Use a publicly reachable HTTPS API root. Loopback, private, link-local and metadata destinations are refused, and redirects may not leave the validated origin."},
 	{ai.ErrAuthentication, "The endpoint rejected the API key. Check the key and that it belongs to the selected provider."},
-	{ai.ErrModelUnavailable, "The selected model is not available at this endpoint. Check the exact model identifier and API format."},
+	{ai.ErrModelUnavailable, "The selected model could not serve the required normalization output through any supported API format at this endpoint. Check the exact model identifier and API root."},
 	{ai.ErrDiscoveryUnavailable, "The endpoint did not return a usable model list. Enter the exact model ID with a Custom compatible connection if the provider lists models elsewhere."},
 	{ai.ErrThrottled, "The endpoint is throttling requests. Try validation again later."},
 	{ai.ErrEndpointTimeout, "The endpoint did not answer within the allowed time. Try again later."},
@@ -133,7 +133,7 @@ func (s *server) accountAIData(r *http.Request, notice, problem string) views.Ac
 			SelectedProvider:     string(ai.ProviderOpenCodeGo),
 			APIRoot:              ai.OpenCodeRoot,
 			CanSwitch:            !lock.Blocked,
-			ValidationDisclosure: "Validation sends one synthetic normalization request to the selected provider. It contains no workbook, recipient or candidate value, and it may consume provider usage.",
+			ValidationDisclosure: "Validation sends up to two synthetic normalization requests to the selected provider to establish the API format. They contain no workbook, recipient or candidate value, and they may consume provider usage.",
 		},
 	}
 	ownerID := recordFromContext(r).Id
@@ -165,9 +165,10 @@ func (s *server) accountAIData(r *http.Request, notice, problem string) views.Ac
 }
 
 // applyAIForm derives the provider-dependent setup fields from the current
-// selection: provider cards, guidance, the verified model catalog for a
-// preset and the explicit format list for a custom endpoint. Presets resolve
-// their API format from the model; no manual format control exists for them.
+// selection: provider cards, guidance, the selectable model list for a preset
+// and the explicit format list for a custom endpoint. A preset's API format is
+// established by validation, so the form carries no format control and makes
+// no compatibility claim about a listed model.
 func applyAIForm(data *views.AccountAIData) {
 	provider := ai.Provider(data.SelectedProvider)
 	preset, ok := ai.PresetFor(provider)
@@ -176,61 +177,26 @@ func applyAIForm(data *views.AccountAIData) {
 	data.IsPreset = ok && provider != ai.ProviderCustom
 	if data.IsPreset {
 		data.APIFormats = nil
-		data.ModelOptions = aiModelOptions(provider, data.Model, data.APIFormat)
+		data.ModelOptions = aiModelOptions(data.Model)
 		data.DefaultRoot = preset.DefaultRoot
-		data.InferredFormat = ""
-		if data.Model != "" {
-			if format, verified := ai.ModelFormat(provider, data.Model); verified {
-				data.InferredFormat = format.Label()
-			} else {
-				// A retired saved model keeps its stored format label so a
-				// repair never needs a discovery round trip.
-				data.InferredFormat = ai.APIFormat(data.APIFormat).Label()
-			}
-		}
 		return
 	}
 	data.ModelOptions = nil
-	data.InferredFormat = ""
 	if data.APIFormat == "" && len(preset.Formats) > 0 {
 		data.APIFormat = string(preset.Formats[0])
 	}
 	data.APIFormats = aiFormatOptions(provider, data.APIFormat)
 }
 
-// aiModelOptions lists the verified preset catalog, labeled with the single
-// API format that serves each model. A saved model outside the catalog stays
-// listed and selectable so a retired configuration remains repairable.
-func aiModelOptions(provider ai.Provider, selected, storedFormat string) []views.AIModelOption {
-	preset, ok := ai.PresetFor(provider)
-	if !ok {
+// aiModelOptions returns the only server-rendered preset choice: the current
+// saved, staged or submitted model. A fresh setup offers no list until the
+// operator fetches the provider's models; no compiled catalog is substituted,
+// and a submitted ID is not represented as provider-discovered.
+func aiModelOptions(selected string) []views.AIModelOption {
+	if selected == "" {
 		return nil
 	}
-	options := make([]views.AIModelOption, 0, len(preset.Models)+1)
-	saved := false
-	for _, contract := range preset.Models {
-		if contract.ID == selected {
-			saved = true
-		}
-		options = append(options, views.AIModelOption{
-			Value:       contract.ID,
-			Format:      string(contract.Format),
-			FormatLabel: contract.Format.Label(),
-			Selected:    contract.ID == selected,
-			Supported:   true,
-		})
-	}
-	if selected != "" && !saved {
-		label := ai.APIFormat(storedFormat)
-		options = append(options, views.AIModelOption{
-			Value:       selected,
-			Format:      string(label),
-			FormatLabel: label.Label(),
-			Selected:    true,
-			Supported:   true,
-		})
-	}
-	return options
+	return []views.AIModelOption{{Value: selected, Selected: true}}
 }
 
 // aiConnection reads the confirmed connection, treating an absent one as an
@@ -394,17 +360,7 @@ func aiDiscoveryStatus(err error) int {
 func (s *server) writeAIModels(w http.ResponseWriter, status int, options []ai.ModelOption, problem string) {
 	payload := views.AIModelDiscovery{Models: []views.AIModelOption{}, Error: problem}
 	for _, option := range options {
-		formatLabel := ""
-		if option.Supported {
-			formatLabel = option.Format.Label()
-		}
-		payload.Models = append(payload.Models, views.AIModelOption{
-			Value:       option.ID,
-			Format:      string(option.Format),
-			FormatLabel: formatLabel,
-			Supported:   option.Supported,
-			Reason:      option.Reason,
-		})
+		payload.Models = append(payload.Models, views.AIModelOption{Value: option.ID})
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

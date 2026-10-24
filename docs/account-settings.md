@@ -14,7 +14,7 @@ workbook, or sends email.
   URLs return 404; there is no compatibility redirect and no second mailbox
   surface.
 - **AI connection** (`/account/ai`) configures the operator's single confirmed
-  AI provider, exact model, resolved API format and API key. Supported presets
+  AI provider, exact model, validated API format and API key. Supported presets
   are OpenCode Go and Xiaomi MiMo, both with an editable default endpoint and a
   Fetch models action; Custom compatible keeps the fully manual setup.
 
@@ -31,7 +31,7 @@ Each operator owns at most one confirmed AI connection:
 | --- | --- |
 | provider preset | `opencode-go`, `xiaomi-mimo` or `custom` |
 | API root | Exact HTTPS base for the protocol path; preset defaults are starting values, an override is preserved |
-| API format | `responses` or `chat-completions`; resolved on the server from the selected preset model, explicit only for `custom` |
+| API format | `responses` or `chat-completions`; established by validation for presets, explicit only for `custom` |
 | model | Exact provider model identifier; no fallback |
 | configuration generation | Bumped only by a configuration switch |
 | credential generation | Bumped only when the API key changes |
@@ -58,9 +58,10 @@ owner-scoped, and every request is guarded by the operator session.
 ## Supported providers
 
 Both presets share one contract: an API key, an editable API root that starts
-at the documented default, a Fetch models action and server-resolved API
-formats. Empty roots receive the preset default; any submitted override is
-validated and preserved, so no request silently moves to the official host.
+at the documented default, a Fetch models action and API formats established
+during validation. Empty roots receive the preset default; any submitted
+override is validated and preserved, so no request silently moves to the
+official host.
 
 ### OpenCode Go preset
 
@@ -75,15 +76,16 @@ Current verified contract (checked 2026-10-23; see
 - Client identity: a product user agent, plus a stable `x-opencode-session`
   per conversation. The adapter sends both; there is no operator-controlled
   header editor.
-- Model families are fixed per model, not per endpoint: Muse Spark 1.3
-  (`muse-spark-1.3`) uses Responses; DeepSeek V4.1 Flash
-  (`deepseek-v4.1-flash`) uses Chat Completions. The server resolves the format
-  from the verified contract; a format field cannot override it, and an
-  unlisted model is refused instead of guessed.
+- Both formats are candidates for any listed model: validation establishes
+  which one the exact endpoint and model accept. There is no per-model format
+  mapping, and a model absent from any shipped list is not refused for that
+  reason.
 
 The Go plan is documented for single-member workspaces and coding-agent
-traffic. This project's validation sends one small synthetic normalization
-request, which may consume provider usage. Deployment access, plan suitability
+traffic. This project's validation sends up to two small synthetic
+normalization requests (Responses first, then Chat Completions only if the
+first fails with a continuation-case error), which may consume provider usage.
+Deployment access, plan suitability
 and the current model list must be confirmed with the operator's own Console
 credentials: this change deliberately uses no live credentials, so it records
 that readiness limitation rather than claiming verified production access.
@@ -98,8 +100,7 @@ Current verified contract (checked 2026-10-23; see the
 - Default model list: `https://api.xiaomimimo.com/v1/models`
 - Chat Completions: `POST /chat/completions`
 - Authentication: `Authorization: Bearer <api key>`
-- Verified text models (`mimo-v2.6-flash`, `mimo-v2.6-pro`,
-  `mimo-v2.6-pro-ultraspeed`) use Chat Completions. The Anthropic-compatible
+- The preset attempts only Chat Completions. The Anthropic-compatible
   and audio endpoints are not supported here.
 
 The preset uses the standard API, not the Token Plan host or its
@@ -116,13 +117,16 @@ response-size bounds, and fixed redacted failures. The browser keeps the typed
 key; the response contains only model options or fixed safe error text, never
 the key, outbound headers or a raw provider body.
 
-Discovery is read-only: it does not stage a proposal, activate a configuration,
-validate normalization or start task work. A public list may prove neither key
-entitlement nor billing; only the exact synthetic validation establishes setup
-readiness. Models outside the verified contract are listed but disabled with a
-reason, and a Custom compatible connection with an explicitly supported format
-is the manual remedy. Changing the provider, endpoint or key clears the fetched
-selection and late responses cannot replace models for newer inputs.
+Discovery is read-only: it never asserts compatibility, stages a draft,
+activates a configuration, validates normalization, prepares work or sends
+email. A public list may prove neither key entitlement nor billing; only the
+exact synthetic validation establishes setup readiness. Every syntactically
+valid listed model ID is selectable as an unvalidated choice, including IDs
+the application has never seen: there is no compiled model catalog or
+fallback list, no disabled unknown models and no model-to-format mapping.
+Invalid IDs are omitted, and duplicate IDs appear once in provider response
+order. Changing the provider, endpoint or key clears the fetched selection and
+late responses cannot replace models for newer inputs.
 
 ### Provider data handling
 
@@ -151,25 +155,74 @@ until the later review/finalization workflow is installed.
 ## Validation, activation and repair
 
 1. Submit the provider credentials. A preset asks for API root and API key,
-   optionally fetches models and then requires one model choice; the server
-   resolves its format. Custom compatible asks for endpoint, supported API
-   format, exact model and API key explicitly.
+   optionally fetches models and then requires one model choice; its API
+   format is resolved during validation (step 3), never from the model name or
+   a compiled mapping. Custom compatible asks for endpoint, supported API
+   format, exact model and API key explicitly, and that one explicit format is
+   validated once without ever probing another.
 2. The server checks the endpoint policy: HTTPS only, no loopback, private,
    link-local, multicast, unspecified or metadata target; the resolved dial
    address is checked again; redirects may not leave the validated origin; the
    request is time- and size-bounded; errors are fixed redacted text.
-3. One synthetic request uses no workbook, recipient or candidate value and
-   verifies the exact normalization output contract: one known id, one expected
-   normalized value. Unknown, omitted or duplicated records fail.
-4. The validated proposal shows its exact configuration. Confirmation installs
-   it with the expected configuration generation and the account lock.
-5. A same-configuration key replacement is allowed while tasks are pending and
+   Encryption-key availability is checked before any provider usage is spent,
+   and no network call is made inside a database transaction.
+3. A new preset selection resolves its API format with a short sequential
+   synthetic probe over the preset's supported formats: OpenCode Go tries
+   Responses first, then Chat Completions; Xiaomi MiMo tries only Chat
+   Completions. Each request keeps the provider, endpoint, model and supplied
+   key constant, uses no workbook, recipient or candidate value, and must pass
+   both response-envelope parsing and the exact normalization output contract:
+   one known id, one expected normalized value; unknown, omitted or duplicated
+   records fail. The first format that passes wins, and no further request is
+   made after success; if both would pass, the result is deterministically the
+   first. Each format is attempted at most once, so at most two requests total,
+   under a single overall 30-second deadline and the existing 512 KiB response
+   bound; there are no retries and no backoff.
+4. Validation continues to the next format only on HTTP 400, 404, 405, 415 or
+   422, an invalid response envelope, or a normalization-contract failure. It
+   stops without trying another format on authentication or authorization
+   refusal, throttling, service or transport failure, an unsafe destination,
+   an oversized response, cancellation or deadline exhaustion, and any other
+   failure. Only fixed redacted errors reach the operator; provider prose and
+   response bodies are never exposed or parsed for routing.
+5. The successfully validated API format, with the exact provider, endpoint and
+   model, is shown for review before explicit confirmation. The validated
+   configuration is staged with fingerprints, configuration and credential
+   generations and the sealed credential; confirmation installs that exact
+   staged proposal with the expected configuration generation and the account
+   lock.
+6. A same-configuration key replacement is allowed while tasks are pending and
    takes effect for future calls only. It does not resume, retry or regenerate
    anything; failed work still needs an explicit retry. The saved model and
-   root remain selectable without a discovery round trip, including a model
-   that has since left the verified catalog; its recorded format is kept. A
-   repair that changes provider, endpoint, format, model or output options is
-   refused with the named blocking tasks.
+   root remain selectable without a discovery round trip, including a retired
+   model the provider no longer lists: the replacement key is validated
+   against the recorded API format only, with no discovery and no catalog
+   lookup. A repair failure never switches format automatically; a format
+   change is a configuration switch refused with the named blocking tasks
+   while tasks are pending. A repair that changes provider, endpoint, model or
+   output options is refused the same way.
+
+After confirmation there is no probing anywhere: runtime preparation and
+retries use only the stored endpoint, model and format, with no protocol
+probing and no provider or model fallback.
+
+### Setup feedback on the page
+
+The Account page keeps each setup state distinct:
+
+- A fresh preset form offers no model list until Fetch models succeeds; there
+  is no compiled fallback. Every fetched ID is enabled as an unvalidated
+  choice, with no format or compatibility claim.
+- Changing the provider, root or key clears the fetched selection and ignores
+  late discovery responses. A saved selection stays available for repair
+  without another fetch.
+- After a failed validation the page keeps the submitted non-secret values,
+  including the model ID, as an unvalidated form choice and shows a fixed safe
+  error. The entered key is never returned.
+- The validated proposal is a separate card showing its exact provider,
+  endpoint, model and resolved API format. Edited or failed inputs cannot
+  acquire that evidence, and confirmation submits only the staged proposal's
+  identity.
 
 ## Pending-task lock
 
@@ -223,10 +276,11 @@ settles, then releases the lock. Future processing requires a new task.
 
 ## Future presets and adapters
 
-Add a provider as a `Preset` (label, default root, supported API formats,
-verified model contracts and guidance) when a documented compatible endpoint
-exists, and extend the verified model-to-format table for each new model
-contract. Reuse an adapter for a supported protocol; add one small adapter when
-a provider speaks a different protocol. Fireworks, a live model marketplace,
-automatic routing/fallback, arbitrary headers and plugin scripts are
-deliberately outside this change.
+Add a provider as a `Preset` (label, default root, supported API formats and
+guidance) when a documented compatible endpoint exists. The preset supplies its
+supported API formats; models are discovered at setup and the format is
+resolved by validation of the exact configuration; there is no
+model-to-format table to extend. Reuse an adapter for a supported protocol;
+add one small adapter when a provider speaks a different protocol. Fireworks,
+a live model marketplace, automatic routing/fallback, arbitrary headers and
+plugin scripts are deliberately outside this change.

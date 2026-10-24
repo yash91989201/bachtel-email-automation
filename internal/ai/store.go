@@ -106,12 +106,21 @@ func (s *Store) StageValidation(ctx context.Context, ownerID string, proposal Pr
 	if _, err := s.cipher(); err != nil {
 		return nil, err
 	}
-	_, credentialGeneration := nextGenerations(active, cfg)
-	sealed, err := s.sealKey(ownerID, credentialGeneration, apiKey)
+	// A pinned configuration (custom setup or same-selection repair) is
+	// validated against exactly its one format; a new preset selection
+	// resolves its format from the preset's supported list, in order.
+	candidates := []APIFormat{cfg.APIFormat}
+	if cfg.APIFormat == "" {
+		preset, _ := PresetFor(cfg.Provider)
+		candidates = preset.Formats
+	}
+	resolved, err := resolveFormat(ctx, s.opts, cfg, apiKey, candidates)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateConnection(ctx, s.opts, cfg, apiKey); err != nil {
+	_, credentialGeneration := nextGenerations(active, resolved)
+	sealed, err := s.sealKey(ownerID, credentialGeneration, apiKey)
+	if err != nil {
 		return nil, err
 	}
 
@@ -137,14 +146,14 @@ func (s *Store) StageValidation(ctx context.Context, ownerID string, proposal Pr
 		}
 		record := core.NewRecord(collection)
 		record.Set("owner", ownerID)
-		record.Set("provider", string(cfg.Provider))
-		record.Set("api_root", cfg.APIRoot)
-		record.Set("api_format", string(cfg.APIFormat))
-		record.Set("model", cfg.Model)
+		record.Set("provider", string(resolved.Provider))
+		record.Set("api_root", resolved.APIRoot)
+		record.Set("api_format", string(resolved.APIFormat))
+		record.Set("model", resolved.Model)
 		record.Set("credential", sealed)
 		record.Set("base_configuration_generation", baseGeneration(active))
 		record.Set("base_credential_generation", baseCredential(active))
-		record.Set("fingerprint", cfg.Fingerprint())
+		record.Set("fingerprint", resolved.Fingerprint())
 		record.Set("validated_at", time.Now().UTC())
 		if err := txApp.Save(record); err != nil {
 			return err
@@ -254,10 +263,13 @@ func (s *Store) Credential(ctx context.Context, ownerID string) (string, error) 
 }
 
 // normalizeProposal checks the submitted values and returns the immutable
-// configuration. A preset resolves its API format from the verified model
-// contract; a custom root must pass the endpoint policy and keeps its explicit
-// format. Every preset default is only a starting value: a submitted root is
-// validated and preserved, and an empty root receives the preset default.
+// configuration, whose API format is empty for a new preset selection: that
+// format is established by synthetic validation, so a submitted preset
+// format is ignored and never selects a wire contract. A custom setup keeps
+// its explicit supported format, and an exact same-selection credential
+// repair keeps the recorded format. Every preset default is only a starting
+// value: a submitted root is validated and preserved, and an empty root
+// receives the preset default.
 func normalizeProposal(proposal Proposal, active *Connection, allowPrivate bool) (Config, string, error) {
 	cfg := proposal.Config
 	cfg.Provider = Provider(strings.TrimSpace(string(cfg.Provider)))
@@ -279,11 +291,6 @@ func normalizeProposal(proposal Proposal, active *Connection, allowPrivate bool)
 	if !validModelID(cfg.Model) {
 		return Config{}, "", fmt.Errorf("%w: enter the exact model identifier", ErrInvalidSetup)
 	}
-	// A preset's format is always resolved on the server, so a hidden or stale
-	// format field can never select another wire contract. The one exception is
-	// the exact confirmed selection: a model retired from the catalog keeps its
-	// recorded format, so a same-configuration credential repair needs no
-	// discovery or catalog round trip.
 	repairing := active != nil && active.Config.APIFormat.Valid() && active.Config.SameSelection(cfg)
 	switch {
 	case cfg.Provider == ProviderCustom:
@@ -294,16 +301,14 @@ func normalizeProposal(proposal Proposal, active *Connection, allowPrivate bool)
 	case repairing:
 		cfg.APIFormat = active.Config.APIFormat
 	default:
-		format, ok := ModelFormat(cfg.Provider, cfg.Model)
-		if !ok {
-			return Config{}, "", fmt.Errorf("%w: the model is not in this provider's verified list; choose a listed model or use a Custom compatible connection", ErrInvalidSetup)
-		}
-		cfg.APIFormat = format
+		// A new preset selection carries no format: validation resolves it
+		// from the preset's supported list.
+		cfg.APIFormat = ""
 	}
-	if !slices.Contains(preset.Formats, cfg.APIFormat) {
+	if cfg.APIFormat != "" && !slices.Contains(preset.Formats, cfg.APIFormat) {
 		return Config{}, "", fmt.Errorf("%w: the API format is not supported by this provider", ErrInvalidSetup)
 	}
-	if _, err := endpointURL(cfg, allowPrivate); err != nil {
+	if _, err := apiRoot(cfg, allowPrivate); err != nil {
 		return Config{}, "", err
 	}
 	apiKey := strings.TrimSpace(proposal.APIKey)

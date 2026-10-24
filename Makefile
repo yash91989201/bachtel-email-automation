@@ -64,6 +64,7 @@ lint: generate assets
 # One dependency graph generates templates/assets once, including with make -j.
 # The final gate always checks every package, regardless of focused test flags.
 check: check-format check-generated lint build
+	npm run test:js
 	go test -race -timeout 20m ./...
 
 # Pin the analysis tool independently; do not change application dependencies.

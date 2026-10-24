@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,6 +22,11 @@ const (
 	probeValue  = "probe@example.test"
 )
 
+// errFormatIncompatible reports that this endpoint answered but cannot serve
+// the attempted API format. It is internal: resolution maps it to an
+// operator-safe error before anything is shown or staged.
+var errFormatIncompatible = errors.New("the endpoint cannot serve this API format")
+
 // probeContract is the required response shape.
 type probeContract struct {
 	Values []struct {
@@ -29,24 +35,99 @@ type probeContract struct {
 	} `json:"values"`
 }
 
-// validateConnection performs the one synthetic normalization request against
-// the exact configuration. It never retries and never calls another model.
+// validateConnection performs one synthetic normalization request against the
+// exact configuration. It never retries and never calls another model.
 func validateConnection(ctx context.Context, o ValidationOptions, cfg Config, apiKey string) error {
 	body, err := probeRequest(cfg)
 	if err != nil {
 		return err
 	}
-	text, err := postJSON(ctx, o, cfg, apiKey, "", body)
+	text, err := postJSON(ctx, o, cfg, apiKey, "", body, probeStatus)
 	if err != nil {
 		return err
 	}
 	return checkContract(text)
 }
 
+// resolveFormat establishes one exact configuration's API format through
+// bounded synthetic validation. Candidates are attempted once each in order,
+// against the same endpoint, model and key under a single overall deadline;
+// the first passing format wins. Only bounded compatibility failures continue
+// to the next candidate; every other outcome stops the resolution immediately
+// and is returned unchanged. No retry or backoff is introduced.
+func resolveFormat(ctx context.Context, o ValidationOptions, cfg Config, apiKey string, candidates []APIFormat) (Config, error) {
+	if o.Timeout <= 0 {
+		o.Timeout = DefaultValidationOptions().Timeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, o.Timeout)
+	defer cancel()
+	var incompatible error
+	for _, format := range candidates {
+		if ctx.Err() != nil {
+			return Config{}, ErrEndpointTimeout
+		}
+		candidate := cfg
+		candidate.APIFormat = format
+		err := validateConnection(ctx, o, candidate, apiKey)
+		if err == nil {
+			return candidate, nil
+		}
+		if !errors.Is(err, errFormatIncompatible) && !errors.Is(err, ErrOutputContract) {
+			return Config{}, err
+		}
+		incompatible = err
+	}
+	// Every candidate proved incompatible. A pinned single format reports its
+	// own outcome; a resolved selection reports one safe summary.
+	if len(candidates) == 1 && errors.Is(incompatible, ErrOutputContract) {
+		return Config{}, ErrOutputContract
+	}
+	return Config{}, fmt.Errorf("%w: none of the supported API formats passed validation at this endpoint", ErrModelUnavailable)
+}
+
+// statusClassifier maps one non-200 HTTP status outside the centrally handled
+// classes (401/403, 429 and 5xx) to a fixed operator-safe error.
+type statusClassifier func(status int) error
+
+// errRefused is the fixed outcome for any status a classifier does not
+// specially map. It never includes provider prose or bodies.
+var errRefused = fmt.Errorf("%w: the endpoint refused the request", ErrInvalidSetup)
+
+// probeStatus classifies validation statuses: a format-level rejection is a
+// bounded compatibility failure; anything else refuses the setup.
+func probeStatus(status int) error {
+	switch status {
+	case http.StatusBadRequest, http.StatusNotFound, http.StatusMethodNotAllowed,
+		http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity:
+		return errFormatIncompatible
+	}
+	return errRefused
+}
+
+// discoveryStatus classifies model-list statuses: only a missing list path is
+// a discovery outage; anything else refuses the setup.
+func discoveryStatus(status int) error {
+	if status == http.StatusNotFound {
+		return ErrDiscoveryUnavailable
+	}
+	return errRefused
+}
+
+// runtimeStatus classifies runtime inference statuses: a missing model path
+// is an unavailable model; anything else refuses the setup. The runtime path
+// never probes or falls back.
+func runtimeStatus(status int) error {
+	if status == http.StatusNotFound {
+		return ErrModelUnavailable
+	}
+	return errRefused
+}
+
 // postJSON sends one exact-format request and returns the assistant text. It
 // is the single transport boundary shared by connection validation and
-// normalization, so both use the same endpoint policy, bounds and redaction.
-func postJSON(ctx context.Context, o ValidationOptions, cfg Config, apiKey, session string, body []byte) (string, error) {
+// normalization, so both use the same endpoint policy, bounds and redaction;
+// only the status mapping of a refusal differs per caller.
+func postJSON(ctx context.Context, o ValidationOptions, cfg Config, apiKey, session string, body []byte, classify statusClassifier) (string, error) {
 	if o.MaxResponseBytes <= 0 {
 		o.MaxResponseBytes = DefaultValidationOptions().MaxResponseBytes
 	}
@@ -82,7 +163,7 @@ func postJSON(ctx context.Context, o ValidationOptions, cfg Config, apiKey, sess
 	if err != nil {
 		return "", classifyTransport(err)
 	}
-	raw, err := readBounded(o, resp, ErrModelUnavailable)
+	raw, err := readBounded(o, resp, classify)
 	if err != nil {
 		return "", err
 	}
@@ -107,12 +188,14 @@ func fetchJSON(ctx context.Context, o ValidationOptions, target, apiKey string) 
 	if err != nil {
 		return nil, classifyTransport(err)
 	}
-	return readBounded(o, resp, ErrDiscoveryUnavailable)
+	return readBounded(o, resp, discoveryStatus)
 }
 
 // readBounded maps one response to a fixed operator-safe outcome and returns
-// its bounded body. notFound is the caller's fixed meaning of a 404.
-func readBounded(o ValidationOptions, resp *http.Response, notFound error) ([]byte, error) {
+// its bounded body. Authentication, throttling and service failures are
+// handled centrally; every other non-200 status is mapped by the caller's
+// classifier.
+func readBounded(o ValidationOptions, resp *http.Response, classify statusClassifier) ([]byte, error) {
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			// The outcome is already decided; a close failure cannot change it.
@@ -120,19 +203,16 @@ func readBounded(o ValidationOptions, resp *http.Response, notFound error) ([]by
 		}
 	}()
 
-	switch resp.StatusCode {
-	case http.StatusOK:
-	case http.StatusUnauthorized, http.StatusForbidden:
+	switch {
+	case resp.StatusCode == http.StatusOK:
+	case resp.StatusCode == http.StatusUnauthorized, resp.StatusCode == http.StatusForbidden:
 		return nil, ErrAuthentication
-	case http.StatusNotFound:
-		return nil, notFound
-	case http.StatusTooManyRequests:
+	case resp.StatusCode == http.StatusTooManyRequests:
 		return nil, ErrThrottled
+	case resp.StatusCode >= 500:
+		return nil, ErrProviderFailure
 	default:
-		if resp.StatusCode >= 500 {
-			return nil, ErrProviderFailure
-		}
-		return nil, fmt.Errorf("%w: the endpoint refused the request", ErrInvalidSetup)
+		return nil, classify(resp.StatusCode)
 	}
 
 	if o.MaxResponseBytes <= 0 {

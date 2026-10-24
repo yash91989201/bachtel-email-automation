@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -152,9 +153,14 @@ func sameOrigin(first, next *url.URL) bool {
 }
 
 // classifyTransport maps a request error to a fixed operator-safe failure.
+// Cancellation and deadline exhaustion share one outcome so an aborted run
+// never reads as a provider outage.
 func classifyTransport(err error) error {
 	if errors.Is(err, ErrEndpointUnsafe) {
 		return ErrEndpointUnsafe
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return ErrEndpointTimeout
 	}
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {

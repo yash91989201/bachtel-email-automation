@@ -477,8 +477,18 @@ func TestAIPresetSetupPage(t *testing.T) {
 			t.Fatalf("preset setup missing %q: %.400s", want, body)
 		}
 	}
+	// A fresh preset setup has an empty model choice: no compiled fallback
+	// catalog and no manual format control exist.
 	if strings.Contains(body, `name="api_format"`) || strings.Contains(body, "ai-api-format") {
 		t.Fatal("preset setup must not offer a manual API format control")
+	}
+	for _, stale := range []string{"deepseek-v4.1-flash · Chat Completions API", "grok-4.7 · Responses API", "verified API format", `value="grok-4.7"`} {
+		if strings.Contains(body, stale) {
+			t.Fatalf("fresh preset setup still renders the compiled catalog: %q", stale)
+		}
+	}
+	if !strings.Contains(body, "Awaiting validation") || !strings.Contains(body, "up to two synthetic normalization requests") {
+		t.Fatalf("preset setup does not explain validation-resolved formats: %.600s", body)
 	}
 	root := inputTag(body, "ai-api-root")
 	if root == "" || strings.Contains(root, "readonly") {
@@ -487,10 +497,9 @@ func TestAIPresetSetupPage(t *testing.T) {
 	if !strings.Contains(root, ai.OpenCodeRoot) {
 		t.Fatalf("preset API root lacks the documented default: %q", root)
 	}
-	// The verified catalog is server-rendered as the fallback list, each
-	// option labeled with its single verified API format.
-	if !strings.Contains(body, "deepseek-v4.1-flash · Chat Completions API") || !strings.Contains(body, "grok-4.7 · Responses API") {
-		t.Fatalf("preset model options lack verified format labels: %.600s", body)
+	selectTag := body[strings.Index(body, `id="ai-model"`):]
+	if options, _, ok := strings.Cut(selectTag, "</select>"); ok && strings.Contains(options, "<option") {
+		t.Fatalf("fresh preset setup offered models before fetching: %s", options)
 	}
 }
 
@@ -521,13 +530,19 @@ func TestAIModelDiscovery(t *testing.T) {
 	if payload.Error != "" || len(payload.Models) != 2 {
 		t.Fatalf("discovery payload = %+v", payload)
 	}
-	supported := payload.Models[0]
-	if supported.Value != "mimo-v2.6-flash" || !supported.Supported || supported.Format != string(ai.FormatChatCompletions) || supported.FormatLabel == "" {
-		t.Fatalf("supported option = %+v", supported)
+	// Every valid returned ID is a selectable choice in provider order.
+	// Discovery asserts no format, eligibility or verification.
+	got := make([]string, 0, len(payload.Models))
+	for _, model := range payload.Models {
+		got = append(got, model.Value)
 	}
-	unsupported := payload.Models[1]
-	if unsupported.Value != "mystery-model" || unsupported.Supported || unsupported.Reason == "" {
-		t.Fatalf("unsupported option = %+v", unsupported)
+	if strings.Join(got, ",") != "mimo-v2.6-flash,mystery-model" {
+		t.Fatalf("discovery models = %v", got)
+	}
+	for _, absent := range []string{`"supported"`, `"format"`, `"reason"`, "verified"} {
+		if strings.Contains(rec.Body.String(), absent) {
+			t.Fatalf("discovery response still claims model eligibility (%q): %.400s", absent, rec.Body.String())
+		}
 	}
 	// Discovery is read-only: no draft and no confirmed connection.
 	if count, err := app.CountRecords(ai.DraftsCollection); err != nil || count != 0 {
@@ -572,7 +587,42 @@ func TestAIModelDiscoveryRejectsInvalidRequests(t *testing.T) {
 	}
 }
 
-func TestAIPresetValidationResolvesFormatWithoutDiscovery(t *testing.T) {
+// fakeFormatEndpoint answers the probe over every supported protocol except
+// one rejected format and records each request path in order.
+func fakeFormatEndpoint(t *testing.T, reject ai.APIFormat, status int) (*httptest.Server, *[]string) {
+	t.Helper()
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if got := r.Header.Get("Authorization"); !strings.HasPrefix(got, "Bearer ") || len(got) <= len("Bearer ") {
+			t.Errorf("missing bearer credential")
+		}
+		format := ai.FormatChatCompletions
+		switch r.URL.Path {
+		case "/v1" + ai.FormatResponses.Path():
+			format = ai.FormatResponses
+		case "/v1" + ai.FormatChatCompletions.Path():
+		default:
+			t.Errorf("unexpected AI path %q", r.URL.Path)
+		}
+		if format == reject {
+			w.WriteHeader(status)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		payload := `{"choices":[{"message":{"content":` + quoteJSON(aiProbeOutput) + `}}]}`
+		if format == ai.FormatResponses {
+			payload = `{"output":[{"type":"message","content":[{"type":"output_text","text":` + quoteJSON(aiProbeOutput) + `}]}]}`
+		}
+		if _, err := w.Write([]byte(payload)); err != nil {
+			t.Errorf("write simulated response: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server, &paths
+}
+
+func TestAIPresetValidationResolvesUnknownModel(t *testing.T) {
 	app, handler := newTestServer(t, testConfig("http://127.0.0.1:8090"))
 	provisionOperator(t, app)
 	cookie := login(t, handler)
@@ -583,21 +633,30 @@ func TestAIPresetValidationResolvesFormatWithoutDiscovery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// No api_format field: the preset resolves the format from the model.
+	// A model absent from every prior catalog is submitted directly. Xiaomi
+	// supports one format, so validation uses exactly that format once.
 	rec := do(t, handler, http.MethodPost, "/account/ai/validate", url.Values{
 		"provider": {"xiaomi-mimo"},
 		"api_root": {root},
-		"model":    {"mimo-v2.6-flash"},
+		"model":    {"brand-new-model"},
 		"api_key":  {"ai-secret-key"},
 	}, withCookie(cookie))
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account/ai?notice=validated" {
 		t.Fatalf("preset validate: status=%d location=%q body=%.400s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}
 	draft := currentDraft(t, app, owner.Id)
+	if draft.GetString("api_format") != string(ai.FormatChatCompletions) {
+		t.Fatalf("staged format = %q, want the validated format", draft.GetString("api_format"))
+	}
 	// Before confirmation, the page reopens the validated proposal's
-	// non-secret selection, so guidance and controls match what was validated.
+	// non-secret selection and shows only its recorded format.
 	draftPage := do(t, handler, http.MethodGet, "/account/ai", nil, withCookie(cookie))
-	for _, want := range []string{`data-provider="xiaomi-mimo"`, `value="mimo-v2.6-flash" selected`} {
+	for _, want := range []string{
+		`data-provider="xiaomi-mimo"`,
+		`value="brand-new-model" selected`,
+		"Validated proposal",
+		"Chat Completions API",
+	} {
 		if !strings.Contains(draftPage.Body.String(), want) {
 			t.Fatalf("validated proposal page missing %q: %.600s", want, draftPage.Body.String())
 		}
@@ -612,23 +671,25 @@ func TestAIPresetValidationResolvesFormatWithoutDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if connection.Config.APIFormat != ai.FormatChatCompletions || connection.Config.APIRoot != root || connection.Config.Model != "mimo-v2.6-flash" {
+	if connection.Config.APIFormat != ai.FormatChatCompletions || connection.Config.APIRoot != root || connection.Config.Model != "brand-new-model" {
 		t.Fatalf("confirmed preset connection = %+v", connection.Config)
 	}
 
 	// The page reopens the saved non-secret configuration: selected provider,
-	// root, model and inferred format, with no discovery round trip.
+	// root, model and the recorded format, with no discovery round trip.
 	page := do(t, handler, http.MethodGet, "/account/ai", nil, withCookie(cookie))
 	body := page.Body.String()
 	for _, want := range []string{
 		`data-provider="xiaomi-mimo"`,
-		`value="mimo-v2.6-flash" selected`,
-		`id="ai-inferred-format"`,
-		"mimo-v2.6-flash · Chat Completions API",
+		`value="brand-new-model" selected`,
+		"Chat Completions API",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("reopened page missing %q: %.600s", want, body)
 		}
+	}
+	if strings.Contains(body, "verified API format") {
+		t.Fatalf("reopened page still claims a verified preset catalog: %.600s", body)
 	}
 	if !strings.Contains(inputTag(body, "ai-api-root"), root) {
 		t.Fatalf("reopened page does not show the saved root %q: %.400s", root, body)
@@ -638,7 +699,7 @@ func TestAIPresetValidationResolvesFormatWithoutDiscovery(t *testing.T) {
 	if rec := do(t, handler, http.MethodPost, "/account/ai/validate", url.Values{
 		"provider": {"xiaomi-mimo"},
 		"api_root": {root},
-		"model":    {"mimo-v2.6-flash"},
+		"model":    {"brand-new-model"},
 		"api_key":  {"rotated-key"},
 	}, withCookie(cookie)); rec.Code != http.StatusSeeOther {
 		t.Fatalf("repair validate: status=%d body=%.400s", rec.Code, rec.Body.String())
@@ -652,5 +713,121 @@ func TestAIPresetValidationResolvesFormatWithoutDiscovery(t *testing.T) {
 		"draft": {repair.Id}, "expected_configuration_generation": {"1"}, "confirmed": {"yes"}, "repair": {"yes"},
 	}, withCookie(cookie)); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account/ai?notice=repaired" {
 		t.Fatalf("repair confirm: status=%d location=%q body=%.400s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+}
+
+func TestAIPresetValidationContinuesToSecondFormat(t *testing.T) {
+	app, handler := newTestServer(t, testConfig("http://127.0.0.1:8090"))
+	provisionOperator(t, app)
+	cookie := login(t, handler)
+	server, paths := fakeFormatEndpoint(t, ai.FormatResponses, http.StatusBadRequest)
+	root := server.URL + "/v1"
+	owner, err := app.FindAuthRecordByEmail("operators", testOperatorEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := do(t, handler, http.MethodPost, "/account/ai/validate", url.Values{
+		"provider": {"opencode-go"},
+		"api_root": {root},
+		"model":    {"brand-new-model"},
+		"api_key":  {"ai-secret-key"},
+	}, withCookie(cookie))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("validate: status=%d body=%.400s", rec.Code, rec.Body.String())
+	}
+	if got := *paths; len(got) != 2 || got[0] != "/v1/responses" || got[1] != "/v1/chat/completions" {
+		t.Fatalf("format probe paths = %v, want the rejected then remaining format", got)
+	}
+	draft := currentDraft(t, app, owner.Id)
+	if draft.GetString("api_format") != string(ai.FormatChatCompletions) {
+		t.Fatalf("staged format = %q, want the second format", draft.GetString("api_format"))
+	}
+
+	// The page discloses the up-to-two-request cost and shows the resolved
+	// format for review, not a name-inferred one.
+	page := do(t, handler, http.MethodGet, "/account/ai", nil, withCookie(cookie))
+	body := page.Body.String()
+	for _, want := range []string{"Chat Completions API", "up to two synthetic normalization requests", "brand-new-model"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("validated page missing %q: %.600s", want, body)
+		}
+	}
+	if strings.Contains(body, "ai-secret-key") {
+		t.Fatal("validated page leaked the API key")
+	}
+}
+
+func TestAIPresetValidationFailureKeepsSubmittedModelAndSeparateDraft(t *testing.T) {
+	app, handler := newTestServer(t, testConfig("http://127.0.0.1:8090"))
+	provisionOperator(t, app)
+	cookie := login(t, handler)
+	owner, err := app.FindAuthRecordByEmail("operators", testOperatorEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := fakeAIEndpoint(t, ai.FormatChatCompletions)
+	// One successful proposal exists before a failed attempt for other inputs.
+	if rec := do(t, handler, http.MethodPost, "/account/ai/validate", url.Values{
+		"provider": {"xiaomi-mimo"},
+		"api_root": {fake.URL + "/v1"},
+		"model":    {"validated-model"},
+		"api_key":  {"ai-secret-key"},
+	}, withCookie(cookie)); rec.Code != http.StatusSeeOther {
+		t.Fatalf("first validate: status=%d body=%.400s", rec.Code, rec.Body.String())
+	}
+	validated := currentDraft(t, app, owner.Id)
+
+	rejecting := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	t.Cleanup(rejecting.Close)
+	root := rejecting.URL + "/v1"
+	rec := do(t, handler, http.MethodPost, "/account/ai/validate", url.Values{
+		"provider": {"opencode-go"},
+		"api_root": {root},
+		"model":    {"submitted-unknown"},
+		"api_key":  {"failed-secret-key"},
+	}, withCookie(cookie))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("failed validate status = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "could not serve the required normalization output") {
+		t.Fatalf("failed page lacks a safe compatibility error: %.600s", body)
+	}
+	for _, want := range []string{`value="submitted-unknown" selected`, root, "Validated proposal", "validated-model"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("failed page missing %q: %.600s", want, body)
+		}
+	}
+	for _, absent := range []string{"failed-secret-key", "ai-secret-key"} {
+		if strings.Contains(body, absent) {
+			t.Fatalf("failed page leaked the API key %q", absent)
+		}
+	}
+	modelTag := body[strings.Index(body, `value="submitted-unknown"`):]
+	if end := strings.Index(modelTag, ">"); end >= 0 && strings.Contains(modelTag[:end], "disabled") {
+		t.Fatalf("submitted model is not selectable: %s", modelTag[:end])
+	}
+	// The failed attempt did not replace the earlier validated proposal.
+	if drafts, err := app.CountRecords(ai.DraftsCollection); err != nil || drafts != 1 {
+		t.Fatalf("drafts after failed validation = %d, err=%v", drafts, err)
+	}
+	if current := currentDraft(t, app, owner.Id); current.Id != validated.Id {
+		t.Fatalf("failed validation replaced the validated proposal: %s != %s", current.Id, validated.Id)
+	}
+	// Confirmation activates the exact server-staged proposal, never the
+	// failed form values.
+	confirm := do(t, handler, http.MethodPost, "/account/ai/confirm", url.Values{
+		"draft": {validated.Id}, "expected_configuration_generation": {"0"}, "confirmed": {"yes"},
+	}, withCookie(cookie))
+	if confirm.Code != http.StatusSeeOther {
+		t.Fatalf("confirm: status=%d body=%.400s", confirm.Code, confirm.Body.String())
+	}
+	store := ai.NewStore(app, testKey)
+	connection, err := store.Connection(t.Context(), owner.Id)
+	if err != nil || connection.Config.Model != "validated-model" {
+		t.Fatalf("confirmed connection = %+v err=%v", connection, err)
 	}
 }

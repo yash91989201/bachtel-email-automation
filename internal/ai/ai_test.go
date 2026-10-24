@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -53,37 +54,32 @@ func provision(t *testing.T, app core.App, email string) string {
 	return record.Id
 }
 
-// fakeEndpoint simulates one supported protocol. It verifies the bearer
-// credential and records the model, user agent and session headers.
+// fakeEndpoint simulates one or more protocol paths on the same root. It
+// records every request so tests can assert exact counts, paths and bodies.
 type fakeEndpoint struct {
 	server   *httptest.Server
 	requests atomic.Int32
-	models   []string
+	paths    []string
+	bodies   []map[string]any
 	agents   []string
 	sessions []string
+	auths    []string
 }
 
-func newFakeEndpoint(t *testing.T, format ai.APIFormat, handler func(w http.ResponseWriter, r *http.Request, body map[string]any)) *fakeEndpoint {
+func newFakeEndpoint(t *testing.T, handler func(w http.ResponseWriter, r *http.Request, body map[string]any)) *fakeEndpoint {
 	t.Helper()
 	fake := &fakeEndpoint{}
 	fake.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fake.requests.Add(1)
-		expectedPath := "/v1" + format.Path()
-		if r.URL.Path != expectedPath {
-			t.Errorf("path = %q, want %q", r.URL.Path, expectedPath)
-		}
-		if got := r.Header.Get("Authorization"); !strings.HasPrefix(got, "Bearer ") || len(got) <= len("Bearer ") {
-			t.Errorf("authorization header missing")
-		}
 		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Errorf("decode request: %v", err)
 		}
-		if model, ok := body["model"].(string); ok && model != "" {
-			fake.models = append(fake.models, model)
-		}
+		fake.paths = append(fake.paths, r.URL.Path)
+		fake.bodies = append(fake.bodies, body)
 		fake.agents = append(fake.agents, r.Header.Get("User-Agent"))
 		fake.sessions = append(fake.sessions, r.Header.Get("x-opencode-session"))
+		fake.auths = append(fake.auths, r.Header.Get("Authorization"))
 		handler(w, r, body)
 	}))
 	t.Cleanup(fake.server.Close)
@@ -114,6 +110,19 @@ func respondProbe(t *testing.T, format ai.APIFormat, text string) func(http.Resp
 	}
 }
 
+// respondProbeByPath answers the probe contract over whichever format path
+// the request used, so one fake can serve both protocols.
+func respondProbeByPath(t *testing.T, text string) func(http.ResponseWriter, *http.Request, map[string]any) {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request, _ map[string]any) {
+		format := ai.FormatChatCompletions
+		if strings.HasSuffix(r.URL.Path, "/responses") {
+			format = ai.FormatResponses
+		}
+		respondProbe(t, format, text)(w, nil, nil)
+	}
+}
+
 func customConfig(root, model string, format ai.APIFormat) ai.Config {
 	return ai.Config{Provider: ai.ProviderCustom, APIRoot: root + "/v1", APIFormat: format, Model: model}
 }
@@ -123,7 +132,7 @@ func TestValidateAndConfirmBothFormats(t *testing.T) {
 		t.Run(string(format), func(t *testing.T) {
 			app := newApp(t)
 			owner := provision(t, app, "operator@example.test")
-			fake := newFakeEndpoint(t, format, respondProbe(t, format, probeOutput))
+			fake := newFakeEndpoint(t, respondProbe(t, format, probeOutput))
 			store := newStore(t, app)
 			cfg := customConfig(fake.server.URL, "model-exact", format)
 
@@ -151,8 +160,8 @@ func TestValidateAndConfirmBothFormats(t *testing.T) {
 			if staged, err := store.Draft(context.Background(), owner); err != nil || staged != nil {
 				t.Fatalf("draft after confirm = %+v, err=%v", staged, err)
 			}
-			if len(fake.models) != 1 || fake.models[0] != "model-exact" {
-				t.Fatalf("models requested = %v", fake.models)
+			if len(fake.bodies) != 1 || fake.bodies[0]["model"] != "model-exact" {
+				t.Fatalf("request bodies = %v", fake.bodies)
 			}
 			if fake.agents[0] != "bachtel-email-automation/1.0" {
 				t.Fatalf("user agent = %q", fake.agents[0])
@@ -164,7 +173,7 @@ func TestValidateAndConfirmBothFormats(t *testing.T) {
 func TestXiaomiPresetSurvivesRestart(t *testing.T) {
 	app := newApp(t)
 	owner := provision(t, app, "operator@example.test")
-	fake := newFakeEndpoint(t, ai.FormatChatCompletions, respondProbe(t, ai.FormatChatCompletions, probeOutput))
+	fake := newFakeEndpoint(t, respondProbe(t, ai.FormatChatCompletions, probeOutput))
 	store := newStore(t, app)
 	root := fake.server.URL + "/v1"
 	staged, err := store.StageValidation(context.Background(), owner, ai.Proposal{
@@ -195,7 +204,7 @@ func TestXiaomiPresetSurvivesRestart(t *testing.T) {
 func TestRestartKeepsConnectionAndRevealsNoSecret(t *testing.T) {
 	app := newApp(t)
 	owner := provision(t, app, "operator@example.test")
-	fake := newFakeEndpoint(t, ai.FormatResponses, respondProbe(t, ai.FormatResponses, probeOutput))
+	fake := newFakeEndpoint(t, respondProbe(t, ai.FormatResponses, probeOutput))
 	store := newStore(t, app)
 	staged, err := store.StageValidation(context.Background(), owner, ai.Proposal{Config: customConfig(fake.server.URL, "model", ai.FormatResponses), APIKey: "test-key"})
 	if err != nil {
@@ -232,12 +241,16 @@ func TestRestartKeepsConnectionAndRevealsNoSecret(t *testing.T) {
 func TestMissingEncryptionKeyBlocksSetup(t *testing.T) {
 	app := newApp(t)
 	owner := provision(t, app, "operator@example.test")
-	fake := newFakeEndpoint(t, ai.FormatResponses, respondProbe(t, ai.FormatResponses, probeOutput))
+	fake := newFakeEndpoint(t, respondProbeByPath(t, probeOutput))
 	store := ai.NewStore(app, func() ([]byte, error) { return nil, errors.New("missing") })
 	store.SetValidationOptions(ai.ValidationOptions{Timeout: time.Second, AllowPrivate: true})
-	_, err := store.StageValidation(context.Background(), owner, ai.Proposal{Config: customConfig(fake.server.URL, "model", ai.FormatResponses), APIKey: "test-key"})
-	if !errors.Is(err, ai.ErrCredentialUnreadable) {
-		t.Fatalf("stage without key err = %v", err)
+	for name, proposal := range map[string]ai.Proposal{
+		"custom explicit format": {Config: customConfig(fake.server.URL, "model", ai.FormatResponses), APIKey: "test-key"},
+		"preset new selection":   {Config: ai.Config{Provider: ai.ProviderOpenCodeGo, APIRoot: fake.server.URL + "/v1", Model: "brand-new-model"}, APIKey: "test-key"},
+	} {
+		if _, err := store.StageValidation(context.Background(), owner, proposal); !errors.Is(err, ai.ErrCredentialUnreadable) {
+			t.Fatalf("%s stage without key err = %v", name, err)
+		}
 	}
 	if fake.requests.Load() != 0 {
 		t.Fatal("provider was contacted without a usable encryption key")
@@ -266,7 +279,7 @@ func TestValidationOutcomes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			app := newApp(t)
 			owner := provision(t, app, "operator@example.test")
-			fake := newFakeEndpoint(t, ai.FormatResponses, func(w http.ResponseWriter, _ *http.Request, _ map[string]any) {
+			fake := newFakeEndpoint(t, func(w http.ResponseWriter, _ *http.Request, _ map[string]any) {
 				if tc.delay > 0 {
 					time.Sleep(tc.delay)
 				}
@@ -336,7 +349,7 @@ func TestCrossOriginRedirectNeverReceivesCredentials(t *testing.T) {
 func TestSwitchLockAndSameConfigurationRepair(t *testing.T) {
 	app := newApp(t)
 	owner := provision(t, app, "operator@example.test")
-	fake := newFakeEndpoint(t, ai.FormatResponses, respondProbe(t, ai.FormatResponses, probeOutput))
+	fake := newFakeEndpoint(t, respondProbe(t, ai.FormatResponses, probeOutput))
 	store := newStore(t, app)
 	first, err := store.StageValidation(context.Background(), owner, ai.Proposal{Config: customConfig(fake.server.URL, "model-a", ai.FormatResponses), APIKey: "test-key"})
 	if err != nil {
@@ -381,7 +394,7 @@ func TestSwitchLockAndSameConfigurationRepair(t *testing.T) {
 func TestStaleProposalNeverOverwritesNewerConfiguration(t *testing.T) {
 	app := newApp(t)
 	owner := provision(t, app, "operator@example.test")
-	fake := newFakeEndpoint(t, ai.FormatResponses, respondProbe(t, ai.FormatResponses, probeOutput))
+	fake := newFakeEndpoint(t, respondProbe(t, ai.FormatResponses, probeOutput))
 	store := newStore(t, app)
 	first, err := store.StageValidation(context.Background(), owner, ai.Proposal{Config: customConfig(fake.server.URL, "model-a", ai.FormatResponses), APIKey: "test-key"})
 	if err != nil {
@@ -408,7 +421,7 @@ func TestOwnershipIsolation(t *testing.T) {
 	app := newApp(t)
 	alice := provision(t, app, "alice@example.test")
 	bob := provision(t, app, "bob@example.test")
-	fake := newFakeEndpoint(t, ai.FormatResponses, respondProbe(t, ai.FormatResponses, probeOutput))
+	fake := newFakeEndpoint(t, respondProbe(t, ai.FormatResponses, probeOutput))
 	store := newStore(t, app)
 	staged, err := store.StageValidation(context.Background(), alice, ai.Proposal{Config: customConfig(fake.server.URL, "model", ai.FormatResponses), APIKey: "test-key"})
 	if err != nil {
@@ -447,39 +460,35 @@ func TestPresetReferenceData(t *testing.T) {
 	if !ok || opencode.DefaultRoot != ai.OpenCodeRoot || ai.OpenCodeRoot != "https://opencode.ai/inference/go/openai/v1" {
 		t.Fatalf("opencode preset = %+v", opencode)
 	}
+	if !slices.Equal(opencode.Formats, []ai.APIFormat{ai.FormatResponses, ai.FormatChatCompletions}) {
+		t.Fatalf("opencode formats = %v", opencode.Formats)
+	}
 	xiaomi, ok := ai.PresetFor(ai.ProviderXiaomiMiMo)
 	if !ok || xiaomi.DefaultRoot != ai.XiaomiRoot || ai.XiaomiRoot != "https://api.xiaomimimo.com/v1" {
 		t.Fatalf("xiaomi preset = %+v", xiaomi)
 	}
-	if !xiaomi.Formats[0].Valid() {
+	if !slices.Equal(xiaomi.Formats, []ai.APIFormat{ai.FormatChatCompletions}) {
 		t.Fatalf("xiaomi formats = %v", xiaomi.Formats)
 	}
-	for _, tc := range []struct {
-		provider ai.Provider
-		model    string
-		format   ai.APIFormat
-	}{
-		{ai.ProviderOpenCodeGo, "muse-spark-1.3", ai.FormatResponses},
-		{ai.ProviderOpenCodeGo, "deepseek-v4.1-flash", ai.FormatChatCompletions},
-		{ai.ProviderXiaomiMiMo, "mimo-v2.6-pro", ai.FormatChatCompletions},
-	} {
-		format, ok := ai.ModelFormat(tc.provider, tc.model)
-		if !ok || format != tc.format {
-			t.Fatalf("%s/%s format = %q, %v; want %q", tc.provider, tc.model, format, ok, tc.format)
-		}
-	}
-	if _, ok := ai.ModelFormat(ai.ProviderXiaomiMiMo, "mimo-unknown-suffix"); ok {
-		t.Fatal("an unknown model contract was assigned a format")
-	}
-	if _, ok := ai.ModelFormat(ai.ProviderCustom, "any-model"); ok {
-		t.Fatal("a custom model was assigned a format")
+	custom, ok := ai.PresetFor(ai.ProviderCustom)
+	if !ok || custom.DefaultRoot != "" || !slices.Equal(custom.Formats, []ai.APIFormat{ai.FormatResponses, ai.FormatChatCompletions}) {
+		t.Fatalf("custom preset = %+v", custom)
 	}
 }
 
-func TestPresetResolvesFormatAndPreservesSubmittedRoot(t *testing.T) {
+// A caller-supplied preset format is ignored: the staged format comes from
+// the endpoint's first passing format, and the submitted root override is
+// preserved exactly.
+func TestPresetIgnoresSubmittedFormatAndPreservesRoot(t *testing.T) {
 	app := newApp(t)
 	owner := provision(t, app, "operator@example.test")
-	fake := newFakeEndpoint(t, ai.FormatChatCompletions, respondProbe(t, ai.FormatChatCompletions, probeOutput))
+	fake := newFakeEndpoint(t, func(w http.ResponseWriter, r *http.Request, _ map[string]any) {
+		if strings.HasSuffix(r.URL.Path, "/responses") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		respondProbe(t, ai.FormatChatCompletions, probeOutput)(w, nil, nil)
+	})
 	store := newStore(t, app)
 	root := fake.server.URL + "/v1"
 
@@ -487,8 +496,8 @@ func TestPresetResolvesFormatAndPreservesSubmittedRoot(t *testing.T) {
 		Config: ai.Config{
 			Provider:  ai.ProviderOpenCodeGo,
 			APIRoot:   root,
-			APIFormat: ai.FormatResponses,
-			Model:     "deepseek-v4.1-flash",
+			APIFormat: ai.FormatResponses, // ignored for a new preset selection
+			Model:     "brand-new-model",
 		},
 		APIKey: "test-key",
 	})
@@ -499,39 +508,344 @@ func TestPresetResolvesFormatAndPreservesSubmittedRoot(t *testing.T) {
 		t.Fatalf("staged root = %q, want the submitted override %q", staged.Config.APIRoot, root)
 	}
 	if staged.Config.APIFormat != ai.FormatChatCompletions {
-		t.Fatalf("staged format = %q, want the model's verified format", staged.Config.APIFormat)
-	}
-	if _, err := store.Confirm(context.Background(), owner, staged.ID, 0); err != nil {
-		t.Fatal(err)
+		t.Fatalf("staged format = %q, want the first passing format", staged.Config.APIFormat)
 	}
 	if len(fake.sessions) == 0 || fake.sessions[0] == "" {
 		t.Fatal("opencode session header missing")
 	}
 }
 
-func TestPresetRefusesUnknownModelContractBeforeContactingProvider(t *testing.T) {
+// A model no compiled catalog has ever listed validates and stages on the
+// first format with exactly one request to its path.
+func TestOpenCodeUnknownModelStagesFirstFormat(t *testing.T) {
 	app := newApp(t)
 	owner := provision(t, app, "operator@example.test")
-	var requests atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		requests.Add(1)
-	}))
-	t.Cleanup(server.Close)
+	fake := newFakeEndpoint(t, respondProbeByPath(t, probeOutput))
 	store := newStore(t, app)
-	_, err := store.StageValidation(context.Background(), owner, ai.Proposal{
-		Config: ai.Config{Provider: ai.ProviderXiaomiMiMo, APIRoot: server.URL + "/v1", Model: "guessed-model"},
+	root := fake.server.URL + "/v1"
+
+	staged, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderOpenCodeGo, APIRoot: root, Model: "brand-new-model"},
 		APIKey: "test-key",
 	})
-	if !errors.Is(err, ai.ErrInvalidSetup) {
-		t.Fatalf("err = %v, want invalid setup", err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if requests.Load() != 0 {
-		t.Fatal("an unverified model contract reached the provider")
+	if staged.Config.APIFormat != ai.FormatResponses {
+		t.Fatalf("staged format = %q, want Responses", staged.Config.APIFormat)
+	}
+	if staged.Config.APIRoot != root || staged.Config.Model != "brand-new-model" {
+		t.Fatalf("staged config = %+v", staged.Config)
+	}
+	if fake.requests.Load() != 1 || len(fake.paths) != 1 || fake.paths[0] != "/v1/responses" {
+		t.Fatalf("requests = %d paths = %v", fake.requests.Load(), fake.paths)
+	}
+	if fake.bodies[0]["model"] != "brand-new-model" {
+		t.Fatalf("request body model = %v", fake.bodies[0]["model"])
+	}
+	if fake.auths[0] != "Bearer test-key" {
+		t.Fatalf("authorization = %q", fake.auths[0])
+	}
+}
+
+// A first-format compatibility rejection continues to the second format with
+// the same endpoint, model and key, in exactly two requests.
+func TestOpenCodeFallsBackToChatCompletions(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	fake := newFakeEndpoint(t, func(w http.ResponseWriter, r *http.Request, _ map[string]any) {
+		if strings.HasSuffix(r.URL.Path, "/responses") {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		respondProbe(t, ai.FormatChatCompletions, probeOutput)(w, nil, nil)
+	})
+	store := newStore(t, app)
+
+	staged, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderOpenCodeGo, APIRoot: fake.server.URL + "/v1", Model: "brand-new-model"},
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if staged.Config.APIFormat != ai.FormatChatCompletions {
+		t.Fatalf("staged format = %q, want Chat Completions", staged.Config.APIFormat)
+	}
+	if fake.requests.Load() != 2 ||
+		fake.paths[0] != "/v1/responses" || fake.paths[1] != "/v1/chat/completions" {
+		t.Fatalf("requests = %d paths = %v", fake.requests.Load(), fake.paths)
+	}
+	for i, body := range fake.bodies {
+		if body["model"] != "brand-new-model" {
+			t.Fatalf("request %d model = %v", i, body["model"])
+		}
+		if fake.auths[i] != "Bearer test-key" {
+			t.Fatalf("request %d authorization = %q", i, fake.auths[i])
+		}
+	}
+}
+
+// When both formats would pass, only the first is attempted and staged: the
+// choice is deterministic and no second request is spent.
+func TestOpenCodeKeepsFirstPassingFormat(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	fake := newFakeEndpoint(t, respondProbeByPath(t, probeOutput))
+	store := newStore(t, app)
+
+	staged, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderOpenCodeGo, APIRoot: fake.server.URL + "/v1", Model: "brand-new-model"},
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if staged.Config.APIFormat != ai.FormatResponses {
+		t.Fatalf("staged format = %q, want Responses", staged.Config.APIFormat)
+	}
+	if fake.requests.Load() != 1 || fake.paths[0] != "/v1/responses" {
+		t.Fatalf("requests = %d paths = %v", fake.requests.Load(), fake.paths)
+	}
+}
+
+// The Xiaomi preset supports one format, so exactly one Chat Completions
+// request is made even when the endpoint would also serve Responses.
+func TestXiaomiValidatesChatCompletionsOnly(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	fake := newFakeEndpoint(t, respondProbeByPath(t, probeOutput))
+	store := newStore(t, app)
+
+	staged, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderXiaomiMiMo, APIRoot: fake.server.URL + "/v1", Model: "mimo-v2.6-flash"},
+		APIKey: "test-key",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if staged.Config.APIFormat != ai.FormatChatCompletions {
+		t.Fatalf("staged format = %q, want Chat Completions", staged.Config.APIFormat)
+	}
+	if fake.requests.Load() != 1 || fake.paths[0] != "/v1/chat/completions" {
+		t.Fatalf("requests = %d paths = %v", fake.requests.Load(), fake.paths)
+	}
+}
+
+// A 200 answer that fails the response envelope or the normalization
+// contract is a bounded compatibility failure: validation continues to the
+// second format and stages that one.
+func TestInvalidNormalizationContinuesToNextFormat(t *testing.T) {
+	for name, bad := range map[string]string{
+		"malformed envelope": "not json",
+		"wrong probe value":  `{"values":[{"id":"probe","value":"changed@example.test"}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			app := newApp(t)
+			owner := provision(t, app, "operator@example.test")
+			fake := newFakeEndpoint(t, func(w http.ResponseWriter, r *http.Request, _ map[string]any) {
+				if strings.HasSuffix(r.URL.Path, "/responses") {
+					w.Header().Set("Content-Type", "application/json")
+					if _, err := w.Write([]byte(bad)); err != nil {
+						t.Errorf("write simulated response: %v", err)
+					}
+					return
+				}
+				respondProbe(t, ai.FormatChatCompletions, probeOutput)(w, nil, nil)
+			})
+			store := newStore(t, app)
+
+			staged, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+				Config: ai.Config{Provider: ai.ProviderOpenCodeGo, APIRoot: fake.server.URL + "/v1", Model: "brand-new-model"},
+				APIKey: "test-key",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if staged.Config.APIFormat != ai.FormatChatCompletions {
+				t.Fatalf("staged format = %q, want Chat Completions", staged.Config.APIFormat)
+			}
+			if fake.requests.Load() != 2 ||
+				fake.paths[0] != "/v1/responses" || fake.paths[1] != "/v1/chat/completions" {
+				t.Fatalf("requests = %d paths = %v", fake.requests.Load(), fake.paths)
+			}
+		})
+	}
+}
+
+// The pinned single format reports the contract failure itself and stages
+// nothing.
+func TestSingleFormatInvalidOutputStagesNothing(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	fake := newFakeEndpoint(t, func(w http.ResponseWriter, _ *http.Request, _ map[string]any) {
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write([]byte("not json")); err != nil {
+			t.Errorf("write simulated response: %v", err)
+		}
+	})
+	store := newStore(t, app)
+
+	_, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+		Config: customConfig(fake.server.URL, "model", ai.FormatResponses),
+		APIKey: "test-key",
+	})
+	if !errors.Is(err, ai.ErrOutputContract) {
+		t.Fatalf("err = %v, want output contract failure", err)
+	}
+	if fake.requests.Load() != 1 {
+		t.Fatalf("requests = %d, want exactly one", fake.requests.Load())
+	}
+	if staged, err := store.Draft(context.Background(), owner); err != nil || staged != nil {
+		t.Fatalf("failed validation staged a proposal: %+v err=%v", staged, err)
+	}
+	if _, err := store.Connection(context.Background(), owner); !errors.Is(err, ai.ErrNotConfigured) {
+		t.Fatalf("failed validation activated a connection: %v", err)
+	}
+}
+
+// When every supported format is incompatible, both are attempted once and
+// nothing is staged; the error names no secret.
+func TestAllFormatsIncompatibleStagesNothing(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	fake := newFakeEndpoint(t, func(w http.ResponseWriter, _ *http.Request, _ map[string]any) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	store := newStore(t, app)
+
+	_, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderOpenCodeGo, APIRoot: fake.server.URL + "/v1", Model: "brand-new-model"},
+		APIKey: "test-key",
+	})
+	if !errors.Is(err, ai.ErrModelUnavailable) {
+		t.Fatalf("err = %v, want model unavailable", err)
+	}
+	if strings.Contains(err.Error(), "test-key") {
+		t.Fatal("error leaked the API key")
+	}
+	if fake.requests.Load() != 2 {
+		t.Fatalf("requests = %d, want one attempt per format", fake.requests.Load())
+	}
+	if staged, err := store.Draft(context.Background(), owner); err != nil || staged != nil {
+		t.Fatalf("incompatible formats staged a proposal: %+v err=%v", staged, err)
+	}
+	if _, err := store.Connection(context.Background(), owner); !errors.Is(err, ai.ErrNotConfigured) {
+		t.Fatalf("incompatible formats activated a connection: %v", err)
+	}
+}
+
+// Every failure outside the compatibility continuation classes stops the
+// resolution after exactly one request: no second format is attempted.
+func TestResolutionStopsOnFirstFailure(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		body    string
+		delay   time.Duration
+		maxSize int64
+		cancel  bool
+		want    error
+	}{
+		{name: "unauthorized", status: http.StatusUnauthorized, want: ai.ErrAuthentication},
+		{name: "forbidden", status: http.StatusForbidden, want: ai.ErrAuthentication},
+		{name: "throttled", status: http.StatusTooManyRequests, want: ai.ErrThrottled},
+		{name: "service failure", status: http.StatusBadGateway, want: ai.ErrProviderFailure},
+		{name: "unclassified client error", status: http.StatusPaymentRequired, want: ai.ErrInvalidSetup},
+		{name: "deadline exhausted by slow response", delay: 300 * time.Millisecond, body: probeOutput, want: ai.ErrEndpointTimeout},
+		{name: "oversized response", body: strings.Repeat("x", 4096), maxSize: 256, want: ai.ErrResponseTooLarge},
+		{name: "parent cancellation", cancel: true, want: ai.ErrEndpointTimeout},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			app := newApp(t)
+			owner := provision(t, app, "operator@example.test")
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			fake := newFakeEndpoint(t, func(w http.ResponseWriter, r *http.Request, _ map[string]any) {
+				if tc.cancel {
+					cancel()
+					<-r.Context().Done()
+					return
+				}
+				if tc.delay > 0 {
+					time.Sleep(tc.delay)
+				}
+				if tc.status != 0 {
+					w.WriteHeader(tc.status)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				if _, err := w.Write([]byte(tc.body)); err != nil {
+					t.Errorf("write simulated response: %v", err)
+				}
+			})
+			store := ai.NewStore(app, func() ([]byte, error) { return testKey, nil })
+			opts := ai.ValidationOptions{Timeout: 150 * time.Millisecond, MaxResponseBytes: 512 << 10, AllowPrivate: true}
+			if tc.maxSize > 0 {
+				opts.MaxResponseBytes = tc.maxSize
+			}
+			store.SetValidationOptions(opts)
+
+			_, err := store.StageValidation(ctx, owner, ai.Proposal{
+				Config: ai.Config{Provider: ai.ProviderOpenCodeGo, APIRoot: fake.server.URL + "/v1", Model: "brand-new-model"},
+				APIKey: "test-key",
+			})
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v", err, tc.want)
+			}
+			if strings.Contains(err.Error(), "test-key") {
+				t.Fatal("error leaked the API key")
+			}
+			if fake.requests.Load() != 1 {
+				t.Fatalf("requests = %d, want exactly one attempt", fake.requests.Load())
+			}
+		})
+	}
+}
+
+// A failed same-selection repair stays pinned to the recorded format: the
+// endpoint's willingness to serve another format changes nothing.
+func TestFailedRepairNeverSwitchesFormat(t *testing.T) {
+	app := newApp(t)
+	owner := provision(t, app, "operator@example.test")
+	fake := newFakeEndpoint(t, func(w http.ResponseWriter, r *http.Request, _ map[string]any) {
+		if strings.HasSuffix(r.URL.Path, "/responses") {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		respondProbe(t, ai.FormatChatCompletions, probeOutput)(w, nil, nil)
+	})
+	root := fake.server.URL + "/v1"
+	seedConnection(t, app, owner, ai.Config{
+		Provider:  ai.ProviderOpenCodeGo,
+		APIRoot:   root,
+		APIFormat: ai.FormatResponses,
+		Model:     "saved-model",
+	})
+	store := newStore(t, app)
+
+	_, err := store.StageValidation(context.Background(), owner, ai.Proposal{
+		Config: ai.Config{Provider: ai.ProviderOpenCodeGo, APIRoot: root, Model: "saved-model"},
+		APIKey: "new-key",
+	})
+	if !errors.Is(err, ai.ErrModelUnavailable) {
+		t.Fatalf("err = %v, want model unavailable", err)
+	}
+	if fake.requests.Load() != 1 || fake.paths[0] != "/v1/responses" {
+		t.Fatalf("requests = %d paths = %v, want one pinned-format attempt", fake.requests.Load(), fake.paths)
+	}
+	active, err := store.Connection(context.Background(), owner)
+	if err != nil || active.Config.APIFormat != ai.FormatResponses || active.ConfigurationGeneration != 1 || active.CredentialGeneration != 1 {
+		t.Fatalf("active connection changed after failed repair: %+v err=%v", active, err)
+	}
+	if staged, err := store.Draft(context.Background(), owner); err != nil || staged != nil {
+		t.Fatalf("failed repair staged a proposal: %+v err=%v", staged, err)
 	}
 }
 
 // seedConnection writes one confirmed configuration without a provider call,
-// so tests can model a model that has since left the verified catalog.
+// so tests can model a model the provider no longer lists.
 func seedConnection(t *testing.T, app core.App, owner string, cfg ai.Config) {
 	t.Helper()
 	collection, err := app.FindCollectionByNameOrId(ai.ConnectionsCollection)
@@ -555,7 +869,7 @@ func seedConnection(t *testing.T, app core.App, owner string, cfg ai.Config) {
 func TestRepairKeepsStoredFormatForRetiredModel(t *testing.T) {
 	app := newApp(t)
 	owner := provision(t, app, "operator@example.test")
-	fake := newFakeEndpoint(t, ai.FormatChatCompletions, respondProbe(t, ai.FormatChatCompletions, probeOutput))
+	fake := newFakeEndpoint(t, respondProbe(t, ai.FormatChatCompletions, probeOutput))
 	root := fake.server.URL + "/v1"
 	seedConnection(t, app, owner, ai.Config{
 		Provider:  ai.ProviderOpenCodeGo,
@@ -589,7 +903,7 @@ func TestRepairKeepsStoredFormatForRetiredModel(t *testing.T) {
 	}
 }
 
-func TestDiscoverModelsDerivesURLsAndClassifies(t *testing.T) {
+func TestDiscoverModelsReturnsUnvalidatedChoices(t *testing.T) {
 	tests := []struct {
 		name     string
 		provider ai.Provider
@@ -603,8 +917,8 @@ func TestDiscoverModelsDerivesURLsAndClassifies(t *testing.T) {
 			provider: ai.ProviderOpenCodeGo,
 			root:     func(base string) string { return base + "/inference/go/openai/v1" },
 			listPath: "/inference/go/v1/models",
-			payload:  `{"data":[{"id":"deepseek-v4.1-flash"},{"id":"mystery-model"},{"id":"deepseek-v4.1-flash"},{"id":"bad model"},{"id":""}]}`,
-			wantIDs:  []string{"deepseek-v4.1-flash", "mystery-model"},
+			payload:  `{"data":[{"id":"brand-new-model"},{"id":"mystery-model"},{"id":"brand-new-model"},{"id":"bad model"},{"id":""}]}`,
+			wantIDs:  []string{"brand-new-model", "mystery-model"},
 		},
 		{
 			name:     "xiaomi appends models",
@@ -650,15 +964,6 @@ func TestDiscoverModelsDerivesURLsAndClassifies(t *testing.T) {
 			for i, id := range tc.wantIDs {
 				if options[i].ID != id {
 					t.Fatalf("option %d = %+v, want id %q", i, options[i], id)
-				}
-			}
-			format, ok := ai.ModelFormat(tc.provider, tc.wantIDs[0])
-			if !ok || !options[0].Supported || options[0].Format != format {
-				t.Fatalf("supported option = %+v", options[0])
-			}
-			if len(options) > 1 {
-				if options[1].Supported || options[1].Reason == "" || options[1].Format != "" {
-					t.Fatalf("unsupported option = %+v", options[1])
 				}
 			}
 			// Discovery is read-only: nothing was staged or activated.
@@ -817,7 +1122,7 @@ func pendingTask(t *testing.T, app core.App, owner string) string {
 func TestTaskAppearingDuringValidationBlocksActivation(t *testing.T) {
 	app := newApp(t)
 	owner := provision(t, app, "operator@example.test")
-	fake := newFakeEndpoint(t, ai.FormatResponses, respondProbe(t, ai.FormatResponses, probeOutput))
+	fake := newFakeEndpoint(t, respondProbe(t, ai.FormatResponses, probeOutput))
 	store := newStore(t, app)
 	first, err := store.StageValidation(context.Background(), owner, ai.Proposal{Config: customConfig(fake.server.URL, "model-a", ai.FormatResponses), APIKey: "test-key"})
 	if err != nil {

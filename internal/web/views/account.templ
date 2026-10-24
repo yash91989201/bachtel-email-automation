@@ -78,16 +78,12 @@ type AIFormatOption struct {
 	Selected bool
 }
 
-// AIModelOption is one model choice for the preset setup form: the exact
-// identifier, the single verified API format that serves it and, for a
-// fetched model outside the verified contract, the reason it stays unusable.
+// AIModelOption is one selectable model choice for the preset setup form. The
+// exact identifier is all discovery proves: compatibility and API format are
+// established only by validation.
 type AIModelOption struct {
-	Value       string `json:"id"`
-	Format      string `json:"format"`
-	FormatLabel string `json:"format_label"`
-	Selected    bool   `json:"-"`
-	Supported   bool   `json:"supported"`
-	Reason      string `json:"reason"`
+	Value    string `json:"id"`
+	Selected bool   `json:"-"`
 }
 
 // AIModelDiscovery is the read-only model-list JSON the setup form fetches.
@@ -113,7 +109,6 @@ type AccountAIData struct {
 	APIFormat            string
 	Model                string
 	ModelOptions         []AIModelOption
-	InferredFormat       string
 	Guidance             []string
 	CanSwitch            bool
 	ValidationDisclosure string
@@ -340,18 +335,18 @@ templ aiConnectionSection(data AccountAIData) {
 							@label.Label(label.Props{For: "ai-model"}) {
 								Exact model
 							}
-							@nativeselect.NativeSelect(nativeselect.Props{ID: "ai-model", Name: "model", Required: true, Class: "w-full", Attributes: templ.Attributes{"aria-describedby": "ai-model-help ai-discovery-status ai-discovery-error", "x-on:change": "pick()"}}) {
+							@nativeselect.NativeSelect(nativeselect.Props{ID: "ai-model", Name: "model", Required: true, Class: "w-full", Attributes: templ.Attributes{"aria-describedby": "ai-model-help ai-discovery-status ai-discovery-error"}}) {
 								for _, model := range data.ModelOptions {
-									@nativeselect.Option(nativeselect.OptionProps{Value: model.Value, Selected: model.Selected, Disabled: !model.Supported}) {
-										{ aiModelOptionLabel(model) }
+									@nativeselect.Option(nativeselect.OptionProps{Value: model.Value, Selected: model.Selected}) {
+										{ model.Value }
 									}
 								}
 							}
-							<p id="ai-model-help" class="text-xs text-muted-foreground">Each model is served by one verified API format, shown after the model ID. The format follows the model and is not editable.</p>
+							<p id="ai-model-help" class="text-xs text-muted-foreground">Fetch the model list, then choose any listed ID. Discovery does not verify compatibility; validation establishes the API format and proves setup readiness for this exact endpoint and model.</p>
 						</div>
 						<div class="grid gap-2">
 							<span class="text-sm font-medium">API format</span>
-							<span id="ai-inferred-format" class="text-sm text-muted-foreground" x-text="format">{ data.InferredFormat }</span>
+							<span id="ai-resolved-format" class="text-sm text-muted-foreground">Awaiting validation. The server tries Responses first, then Chat Completions, and keeps the first format that passes.</span>
 						</div>
 					} else {
 						<div class="grid gap-2">
@@ -395,18 +390,6 @@ func apiKeyState(configured bool) string {
 		return "Configured (not shown)"
 	}
 	return "Not configured"
-}
-
-// aiModelOptionLabel names one model choice with the single verified API
-// format that serves it, or the fixed reason it stays unusable.
-func aiModelOptionLabel(model AIModelOption) string {
-	if model.FormatLabel != "" {
-		return model.Value + " · " + model.FormatLabel
-	}
-	if model.Reason != "" {
-		return model.Value + " — " + model.Reason
-	}
-	return model.Value
 }
 
 func accountTabClass(active bool) string {
