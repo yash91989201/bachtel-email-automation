@@ -131,7 +131,7 @@ func TestRoleMappingTaskHidesIntakeRowsUntilPreparedReview(t *testing.T) {
 	for _, want := range []string{
 		"Eligibility pending",
 		"Workbook received",
-		"after a preparation run is selected and backend validation completes",
+		"after a preparation run completes and backend validation finishes",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("preflight page missing %q", want)

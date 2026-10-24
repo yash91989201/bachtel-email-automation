@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -384,6 +385,152 @@ func TestPreparationShowsStoredFindings(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("page is missing %q", want)
 		}
+	}
+}
+
+// Publication selects the completed run without any explicit select request:
+// the stored task points at the run, and the first page load already shows the
+// selected review with approve form and both prepared downloads.
+func TestPreparationAutoSelectionShowsReviewWithoutSelect(t *testing.T) {
+	server := newRolePreparationServer(t)
+	cookie := login(t, server.handler)
+
+	rec := do(t, server.handler, http.MethodPost, server.path("/preparation/prepare"), url.Values{}, withCookie(cookie))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("prepare: status=%d body=%.300s", rec.Code, rec.Body.String())
+	}
+	run := server.latestRun(t)
+
+	taskRecord, err := server.app.FindRecordById(intake.TasksCollection, server.task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected := taskRecord.GetString("selected_preparation_run"); selected != run.ID {
+		t.Fatalf("selected_preparation_run = %q, want auto-selected %q", selected, run.ID)
+	}
+
+	// No preparation/select request happens before this page load.
+	page := do(t, server.handler, http.MethodGet, server.pagePath(), nil, withCookie(cookie))
+	if page.Code != http.StatusOK {
+		t.Fatalf("task page: status=%d", page.Code)
+	}
+	body := page.Body.String()
+	heading := "Selected prepared data · backend validation"
+	headingAt := strings.Index(body, heading)
+	if headingAt < 0 {
+		t.Fatalf("task page is missing the selected review heading %q: %.1500s", heading, body)
+	}
+	// The counts paragraph ends at the first </p> after the heading.
+	reviewLine := body[headingAt:]
+	if end := strings.Index(reviewLine, "</p>"); end >= 0 {
+		reviewLine = reviewLine[:end]
+	}
+	for _, want := range []string{"source rows", "recipient entries", "accepted", "held"} {
+		if !strings.Contains(reviewLine, want) {
+			t.Fatalf("prepared review line is missing %q: %.400s", want, reviewLine)
+		}
+	}
+	for _, want := range []string{
+		`action="` + server.path("/finalization/approve") + `"`,
+		`href="` + server.path("/preparation/sending.xlsx") + `"`,
+		`href="` + server.path("/excluded.xlsx") + `"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("task page is missing %q: %.1500s", want, body)
+		}
+	}
+
+	for _, suffix := range []string{"/preparation/sending.xlsx", "/excluded.xlsx"} {
+		download := do(t, server.handler, http.MethodGet, server.path(suffix), nil, withCookie(cookie))
+		if download.Code != http.StatusOK || download.Body.Len() == 0 {
+			t.Fatalf("%s: status=%d len=%d body=%.300s", suffix, download.Code, download.Body.Len(), download.Body.String())
+		}
+	}
+}
+
+// Explicit selection stays available for history: re-selecting the selected run
+// changes nothing, an older run still offers its select form after a rerun, and
+// selecting that older run replaces a final snapshot by clearing it.
+func TestPreparationExplicitSelectKeepsHistoryAndClearsSnapshot(t *testing.T) {
+	server := newRolePreparationServer(t)
+	cookie := login(t, server.handler)
+
+	rec := do(t, server.handler, http.MethodPost, server.path("/preparation/prepare"), url.Values{}, withCookie(cookie))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("prepare: status=%d body=%.300s", rec.Code, rec.Body.String())
+	}
+	first := server.latestRun(t)
+
+	// Re-selecting the automatically selected run still redirects and keeps
+	// the stored selection.
+	rec = do(t, server.handler, http.MethodPost, server.path("/preparation/select"), url.Values{"run": {first.ID}}, withCookie(cookie))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("select current run: status=%d body=%.300s", rec.Code, rec.Body.String())
+	}
+	taskRecord, err := server.app.FindRecordById(intake.TasksCollection, server.task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected := taskRecord.GetString("selected_preparation_run"); selected != first.ID {
+		t.Fatalf("selected_preparation_run after reselect = %q, want %q", selected, first.ID)
+	}
+
+	rec = do(t, server.handler, http.MethodPost, server.path("/preparation/rerun"), url.Values{}, withCookie(cookie))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("rerun: status=%d body=%.300s", rec.Code, rec.Body.String())
+	}
+	second := server.latestRun(t)
+	if second.ID == first.ID {
+		t.Fatalf("rerun returned the first run %q", first.ID)
+	}
+	taskRecord, err = server.app.FindRecordById(intake.TasksCollection, server.task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected := taskRecord.GetString("selected_preparation_run"); selected != second.ID {
+		t.Fatalf("selected_preparation_run after rerun = %q, want the new run %q", selected, second.ID)
+	}
+
+	// The older run row still offers explicit selection.
+	page := do(t, server.handler, http.MethodGet, server.pagePath(), nil, withCookie(cookie))
+	if page.Code != http.StatusOK {
+		t.Fatalf("task page: status=%d", page.Code)
+	}
+	selectForm := regexp.MustCompile(`<form method="post" action="[^"]*/preparation/select">\s*<input type="hidden" name="run" value="` + regexp.QuoteMeta(first.ID) + `"`)
+	if !selectForm.MatchString(page.Body.String()) {
+		t.Fatalf("older run %s has no select form on the page: %.1500s", first.ID, page.Body.String())
+	}
+
+	// A final upload selects a snapshot; selecting the older run clears it.
+	uploadFinalRows(t, server.handler, cookie, server.campaign, server.task.ID, "auto-select-clear-final-123456", [][]string{
+		{"Email", "Applicant Full Name", "Department"},
+		{"alice@example.com", "Alice Smith", "Engineering"},
+		{"not-an-address", "Carol Danvers", "Sales"},
+	})
+	taskRecord, err = server.app.FindRecordById(intake.TasksCollection, server.task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if taskRecord.GetString("selected_final_snapshot") == "" {
+		t.Fatal("final upload did not select a snapshot")
+	}
+
+	rec = do(t, server.handler, http.MethodPost, server.path("/preparation/select"), url.Values{"run": {first.ID}}, withCookie(cookie))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("select older run: status=%d body=%.300s", rec.Code, rec.Body.String())
+	}
+	taskRecord, err = server.app.FindRecordById(intake.TasksCollection, server.task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected := taskRecord.GetString("selected_preparation_run"); selected != first.ID {
+		t.Fatalf("selected_preparation_run = %q, want older run %q", selected, first.ID)
+	}
+	if snapshot := taskRecord.GetString("selected_final_snapshot"); snapshot != "" {
+		t.Fatalf("selected_final_snapshot = %q, want empty", snapshot)
+	}
+	if digest := taskRecord.GetString("final_snapshot_digest"); digest != "" {
+		t.Fatalf("final_snapshot_digest = %q, want empty", digest)
 	}
 }
 

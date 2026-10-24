@@ -27,7 +27,7 @@ func TestTaskFinalizationUploadDownloadAndTestState(t *testing.T) {
 	for _, want := range []string{
 		`id="task-finalization"`,
 		`id="final-workbook"`,
-		"Approve as-is becomes available after a completed preparation run is selected",
+		"Approve as-is becomes available after a completed preparation run and its backend review",
 	} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("pre-finalization Recipients section missing %q", want)

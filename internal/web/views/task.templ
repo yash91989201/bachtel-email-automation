@@ -803,7 +803,7 @@ templ taskRecipients(data TaskPageData) {
 						} else {
 							<h3 id="summary-heading" class="cn-card-title">Workbook received</h3>
 							<p class="text-sm">{ strconv.Itoa(data.Summary.SourceRows) } source rows are ready for data preparation.</p>
-							<p class="text-sm text-muted-foreground">Entry counts, accepted recipients and exclusions will appear after a preparation run is selected and backend validation completes.</p>
+							<p class="text-sm text-muted-foreground">Entry counts, accepted recipients and exclusions appear after a preparation run completes and backend validation finishes.</p>
 						}
 						@taskRevalidateNotice(data)
 					}
@@ -889,7 +889,7 @@ templ taskFinalization(data TaskPageData) {
 					<p class="text-sm text-muted-foreground">No final snapshot is selected yet. Sending controls stay unavailable until one is accepted.</p>
 				}
 				if data.RoleMapping && !data.Finalization.HasSelected && !data.Finalization.PreparedReview {
-					<p class="text-sm text-muted-foreground">Validation is pending. Run data preparation, then select its output to review accepted entries and held exclusions.</p>
+					<p class="text-sm text-muted-foreground">Validation is pending. Run data preparation to review accepted entries and held exclusions.</p>
 				}
 				if data.Finalization.PreparedReview && !data.Finalization.HasSelected {
 					<div class="space-y-3 rounded-md border border-border p-3" id="prepared-review">
@@ -934,7 +934,7 @@ templ taskFinalization(data TaskPageData) {
 					</div>
 				}
 				if !data.Finalization.CanApprove && data.Finalization.Required {
-					<p class="text-sm text-muted-foreground">Approve as-is becomes available after a completed preparation run is selected. You can still upload an edited final sheet.</p>
+					<p class="text-sm text-muted-foreground">Approve as-is becomes available after a completed preparation run and its backend review. You can still upload an edited final sheet.</p>
 				}
 				if data.Finalization.CanApprove {
 					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/finalization/approve" } class="space-y-2">
@@ -2415,7 +2415,7 @@ templ taskPreparation(data TaskPageData) {
 								<p class="text-sm">{ data.Finalization.PreparedCounts.SourceRows } source rows · { data.Finalization.PreparedCounts.Entries } recipient entries · { data.Finalization.PreparedCounts.Accepted } backend accepted · { data.Finalization.PreparedCounts.Excluded } backend held · { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } AI findings</p>
 							} else {
 								<p class="text-sm">{ data.Preparation.Counts.SourceRows } source rows · { data.Preparation.Counts.Entries } prepared entries · { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } AI findings</p>
-								<p class="text-sm text-muted-foreground">Backend validation is pending. Accepted and held recipient counts appear after you select a completed preparation run.</p>
+								<p class="text-sm text-muted-foreground">Backend validation is pending. Accepted and held recipient counts appear once the backend review of the prepared run completes.</p>
 							}
 						} else {
 							<p class="text-sm">{ data.Preparation.Counts.SourceRows } source rows · { data.Preparation.Counts.Entries } prepared entries · { data.Preparation.Counts.Accepted } accepted · { data.Preparation.Counts.Held } held by findings · { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } findings</p>
@@ -2469,7 +2469,7 @@ templ taskPreparation(data TaskPageData) {
 												<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/select" }>
 													<input type="hidden" name="run" value={ run.ID }/>
 													@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm}) {
-														Select for review
+														Select this run
 													}
 												</form>
 											} else {

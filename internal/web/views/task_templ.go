@@ -2586,7 +2586,7 @@ func taskRecipients(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, " source rows are ready for data preparation.</p><p class=\"text-sm text-muted-foreground\">Entry counts, accepted recipients and exclusions will appear after a preparation run is selected and backend validation completes.</p>")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 142, " source rows are ready for data preparation.</p><p class=\"text-sm text-muted-foreground\">Entry counts, accepted recipients and exclusions appear after a preparation run completes and backend validation finishes.</p>")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -3258,7 +3258,7 @@ func taskFinalization(data TaskPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				if data.RoleMapping && !data.Finalization.HasSelected && !data.Finalization.PreparedReview {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 193, "<p class=\"text-sm text-muted-foreground\">Validation is pending. Run data preparation, then select its output to review accepted entries and held exclusions.</p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 193, "<p class=\"text-sm text-muted-foreground\">Validation is pending. Run data preparation to review accepted entries and held exclusions.</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -3507,7 +3507,7 @@ func taskFinalization(data TaskPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				if !data.Finalization.CanApprove && data.Finalization.Required {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 222, "<p class=\"text-sm text-muted-foreground\">Approve as-is becomes available after a completed preparation run is selected. You can still upload an edited final sheet.</p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 222, "<p class=\"text-sm text-muted-foreground\">Approve as-is becomes available after a completed preparation run and its backend review. You can still upload an edited final sheet.</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -11819,7 +11819,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 680, " AI findings</p><p class=\"text-sm text-muted-foreground\">Backend validation is pending. Accepted and held recipient counts appear after you select a completed preparation run.</p>")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 680, " AI findings</p><p class=\"text-sm text-muted-foreground\">Backend validation is pending. Accepted and held recipient counts appear once the backend review of the prepared run completes.</p>")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -12275,7 +12275,7 @@ func taskPreparation(data TaskPageData) templ.Component {
 										}()
 									}
 									ctx = templ.InitializeContext(ctx)
-									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 719, "Select for review")
+									templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 719, "Select this run")
 									if templ_7745c5c3_Err != nil {
 										return templ_7745c5c3_Err
 									}

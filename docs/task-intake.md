@@ -80,7 +80,12 @@ records:
 
 For a current revision the source rows are the input to data preparation, and
 row eligibility is decided only from reviewed cleaned values — the selected
-completed preparation run or an edited final upload. Until that review exists the
+completed preparation run or an edited final upload. Publishing a completed run
+selects it as that reviewed preparation automatically, in the same transaction
+and only when the task is ready, unstarted, unscheduled, open and has no
+selected final snapshot, so the review exists on the next page load without a
+select action; failed, incomplete or cancelled runs and tasks in any other
+lifecycle state select nothing. Until that review exists the
 task workspace shows the source-row count and a pending-eligibility status, and
 the exclusion download is unavailable. See
 [final-sending-snapshots.md](final-sending-snapshots.md).

@@ -813,7 +813,7 @@ func TestRoleMappingPreflightPresentsPendingEligibility(t *testing.T) {
 		"Eligibility pending",
 		"Workbook received",
 		"5 source rows are ready for data preparation.",
-		"after a preparation run is selected and backend validation completes",
+		"after a preparation run completes and backend validation finishes",
 		"Validation is pending",
 	} {
 		if !strings.Contains(ready, want) {

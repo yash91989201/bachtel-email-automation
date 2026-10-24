@@ -26,8 +26,11 @@ and exclusion report are still written at validation and stay downloadable.
 ## Operator sequence
 
 1. Upload and validate the workbook. The campaign revision pins the mappings.
-2. Prepare mapped values with the confirmed AI connection, review corrections
-   and unresolved findings, and select the completed run.
+2. Prepare mapped values with the confirmed AI connection and review
+   corrections and unresolved findings. A qualifying completed run becomes the
+   selected prepared evidence automatically (see **Accepted values and
+   provenance**); explicit selection stays available for older runs and for
+   finalized datasets.
 3. Review the selected run. The backend review classifies the cleaned values
    with the same rule set approval uses, returns accepted entries and held
    entries with every applicable reason, and writes nothing: no candidate,
@@ -62,6 +65,24 @@ membership and remain visible only in the report and the review.
 
 Selecting a run for review is not approval, and a repeated approval action ID
 returns the same snapshot instead of creating a second one.
+
+Publishing a completed preparation run stores it as the task's selected
+prepared evidence in the same transaction, whenever the task is ready,
+unstarted, unscheduled, open and has no selected final snapshot. Automatic
+selection changes no candidate, membership, attempt, approval or schedule
+state and invokes no AI. On the workspace, the backend review counts,
+approve/upload controls and prepared downloads then refer to that run on the
+next page load without a select request; explicit selection remains available
+for older runs and for finalized datasets.
+
+A finalized dataset keeps its evidence: while a final snapshot is selected, a
+completing run changes neither the selected prepared evidence nor the snapshot
+with its digest. Explicitly selecting another run still replaces the evidence
+and clears the selected final snapshot, its digest and the finalization error,
+so a fresh approval is required. Failed, incomplete or cancelled runs select
+nothing; a task that is staging, started, scheduled, closing or closed selects
+nothing from a completing run, and a late publication for a closing task is
+cancelled and publishes nothing.
 
 ## Historical transition
 
