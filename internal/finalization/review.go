@@ -15,6 +15,11 @@ type Review struct {
 	Counts     Counts
 	Entries    []Entry
 	Exclusions []Exclusion
+	// Rows is the completed run's cleaned source rows with their corrections
+	// and findings.
+	Rows []preparation.RowResult
+	// Original maps each source row to the values uploaded for it.
+	Original map[int]map[string]string
 }
 
 // ReviewPrepared validates a completed run against its pinned task revision and
@@ -46,7 +51,17 @@ func (s *Service) ReviewPrepared(ctx context.Context, ownerID, taskID, runID str
 	if err != nil {
 		return nil, err
 	}
-	review := &Review{Counts: classified.counts, Entries: make([]Entry, 0, len(classified.accepted)), Exclusions: classified.exclusions}
+	original := make(map[int]map[string]string, len(rows))
+	for _, row := range rows {
+		original[row.SourceRow] = row.Original
+	}
+	review := &Review{
+		Counts:     classified.counts,
+		Entries:    make([]Entry, 0, len(classified.accepted)),
+		Exclusions: classified.exclusions,
+		Rows:       run.Output.Rows,
+		Original:   original,
+	}
 	for _, accepted := range classified.accepted {
 		review.Entries = append(review.Entries, accepted.entry)
 	}
