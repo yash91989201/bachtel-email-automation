@@ -3,13 +3,20 @@
 ## MODIFIED Requirements
 
 ### Requirement: Task preparation review separates corrections and findings
-The task workspace SHALL present successful AI corrections separately from unresolved findings, and expose the visible application instructions with optional task-specific instructions during preparation. For current role-mapping tasks it SHALL present the completed run's backend review, approve/upload controls and prepared downloads without requiring a separate selection action, keep explicit selection available for older runs, and SHALL identify that backend validation is still pending before a completed run exists.
+The task workspace SHALL present successful AI corrections separately from unresolved findings and expose the application and saved task-specific instructions. For current role-mapping tasks it SHALL present a completed run's backend review, approve/upload controls and prepared downloads without a separate selection action, keep explicit selection for older runs, and mark backend validation as pending before any run completes.
 
 #### Scenario: Review initial preparation
 - **WHEN** the operator opens a task after initial preparation
 - **THEN** the workspace shows successful corrections and unresolved findings in distinct groups
 - **AND** the visible base instructions and saved task-specific instructions are available for review
 - **AND** the operator can review mapped values and findings without authorizing any email action
+
+#### Scenario: Review follows completion without a selection step
+- **WHEN** a preparation run completes with no selected final snapshot
+- **THEN** the completed run's backend review counts, accepted and held entries and prepared downloads are available on the next page load
+- **AND** approve and upload controls refer to that run without an additional selection action
+- **WHEN** an older completed run is explicitly selected
+- **THEN** the workspace presents that run's evidence and any selected final snapshot is cleared
 
 #### Scenario: Sanitization report is offered with the review
 - **WHEN** a completed run's backend review is displayed for a current role-mapping task
