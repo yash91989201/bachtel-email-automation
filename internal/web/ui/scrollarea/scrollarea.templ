@@ -17,6 +17,12 @@ type Props struct {
 	ID         string
 	Class      string
 	Attributes templ.Attributes
+	// ViewportAttributes render on the scrollable viewport, which is the
+	// element scrollarea.js makes focusable when there is overflow. Root
+	// attributes cannot name that element.
+	ViewportAttributes templ.Attributes
+	// Horizontal adds a horizontal ScrollBar beside the vertical one.
+	Horizontal bool
 }
 
 type ScrollBarProps struct {
@@ -57,16 +63,22 @@ templ ScrollArea(props ...Props) {
 		{ p.Attributes... }
 	>
 		<div
-			role="presentation"
+			if _, ok := p.ViewportAttributes["role"]; !ok {
+				role="presentation"
+			}
 			data-id={ id + "-viewport" }
 			tabindex="-1"
 			class="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 base-ui-disable-scrollbar"
 			style="overflow:scroll"
 			data-slot="scroll-area-viewport"
+			{ p.ViewportAttributes... }
 		>
 			{ children... }
 		</div>
 		@ScrollBar()
+		if p.Horizontal {
+			@ScrollBar(ScrollBarProps{Orientation: OrientationHorizontal})
+		}
 		// ScrollAreaPrimitive.Corner, unstyled.
 		<div hidden style="position:absolute;bottom:0;inset-inline-end:0;width:0;height:0"></div>
 	</div>
