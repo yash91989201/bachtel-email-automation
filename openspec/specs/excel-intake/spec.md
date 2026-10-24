@@ -24,8 +24,7 @@ The system SHALL accept XLSX uploads and allow selection of one worksheet and he
 - **AND** no candidate submission is scheduled
 
 ### Requirement: Campaign-level preflight
-The system SHALL validate every mapped source header, including the source header selected by the revision's recipient mapping, against the selected worksheet header row before AI preparation or final-upload acceptance. Required/optional checks SHALL run after AI preparation or directly on final uploads, which SHALL NOT call AI. Missing or ambiguous mapped headers SHALL block the task, while empty or invalid recipient entries SHALL only exclude those entries.
-
+Every mapped source header SHALL be validated against the selected worksheet header row before AI preparation or final-upload acceptance; a missing or ambiguous one SHALL block the task. Current role-mapping revisions record source-row evidence only, pinning the worksheet, header row and campaign revision, and classify no row eligibility. Required/optional checks SHALL run after preparation or on a final upload, which never calls AI. Legacy revisions SHALL retain their historical snapshot.
 #### Scenario: Missing mapped column
 - **WHEN** a configured source header is absent
 - **THEN** the UI lists the missing header and the task cannot start
@@ -34,65 +33,80 @@ The system SHALL validate every mapped source header, including the source heade
 - **WHEN** two columns have the same label after surrounding whitespace is trimmed
 - **THEN** the app requests an unambiguous header selection or corrected upload before the task can start
 
+#### Scenario: Current mapping publishes no row eligibility
+- **WHEN** a task whose revision uses the role mapping has all mapped headers present
+- **THEN** the task becomes ready for data preparation with its worksheet, header row, pinned revision and source-row count
+- **AND** no candidate identity, membership, manifest, exclusion report or eligible/excluded entry count is created at that point
+
+#### Scenario: Header failure leaves the task unselected
+- **WHEN** a mapped header is missing or ambiguous during preflight
+- **THEN** the task remains awaiting worksheet selection with the stated reason and no pinned revision
+
 #### Scenario: Candidate missing a required value
-- **WHEN** all mapped columns exist but a required field is empty in one row
-- **THEN** each expanded recipient from that source row is ineligible with a reason and other valid unique recipients remain eligible
+- **WHEN** all mapped columns exist but a required field is empty in one cleaned entry
+- **THEN** each expanded recipient from that source entry is held with a reason and other valid unique recipients remain accepted
 
 #### Scenario: Empty recipient value
-- **WHEN** a source row produces an empty or invalid entry in the selected recipient mapping's source column
+- **WHEN** a cleaned entry in the selected recipient mapping's source column is empty or not one usable address
 - **THEN** only that entry is held with its source row and recipient validation reason
-- **AND** other valid unique entries, including those from the same source row, remain eligible
+- **AND** other valid unique entries, including those from the same source row, remain accepted
 
 #### Scenario: Mapped AI findings are combined with backend checks
-- **WHEN** initial preparation finishes with a mapped-field uncertainty or semantic mismatch
-- **THEN** affected entries are excluded alongside missing required values, invalid addresses, duplicates and campaign-history restrictions
+- **WHEN** a completed preparation run contains a mapped-field uncertainty or semantic mismatch
+- **THEN** affected entries are held alongside missing required values, invalid addresses, duplicates and campaign-history restrictions
 - **AND** all applicable reasons are retained, while unmapped-field problems do not affect eligibility
 
 #### Scenario: Optional empty versus optional flagged
-- **WHEN** an optional prepared or final value is empty
+- **WHEN** an optional reviewed value is empty
 - **THEN** its existing fallback or an empty replacement is used
-- **WHEN** initial preparation flags a populated optional mapped value
-- **THEN** it is excluded rather than hidden by fallback
+- **WHEN** preparation flags a populated optional mapped value
+- **THEN** it is held rather than hidden by fallback
 
 ### Requirement: Immediate duplicate detection
-The system SHALL detect duplicate recipient keys using trimmed lowercase email addresses across all expanded entries of the complete selected input before creating candidate records. Every entry in a duplicate group SHALL be excluded, including repetitions within one cell, identical source rows and entries with other validation errors.
-
+The system SHALL detect duplicate recipient keys from trimmed lowercase addresses across every expanded entry of the complete reviewed dataset before creating candidate records. The reviewed dataset SHALL be the selected preparation result or an edited final upload, and the check SHALL run again at approval. Every entry of a duplicate group SHALL be held, including repetitions within a cell and entries with other errors. Legacy revisions SHALL retain their validation-time snapshot.
 #### Scenario: Mixed-case duplicate addresses
-- **WHEN** rows 2 and 8 contain alex@example.com and an uppercase, space-padded form of that address
-- **THEN** both entries are flagged immediately as duplicates with their original worksheet row numbers and positions within their recipient cells
+- **WHEN** the reviewed dataset contains alex@example.com and an uppercase, space-padded form of that address
+- **THEN** both entries are held as duplicates with their original worksheet row numbers and positions within their recipient cells
 - **AND** neither entry is selected as the preferred copy
 
 #### Scenario: Duplicate also has missing data
-- **WHEN** two expanded entries share a recipient key and one is missing a required value
-- **THEN** both remain excluded as duplicates rather than letting the other entry bypass duplicate detection
+- **WHEN** two reviewed entries share a recipient key and one is missing a required value
+- **THEN** both remain held as duplicates rather than letting the other entry bypass duplicate detection
 
 #### Scenario: Duplicate inside one cell
-- **WHEN** one cell contains `a@example.com, A@example.com, b@example.com`
+- **WHEN** one cleaned cell contains `a@example.com, A@example.com, b@example.com`
 - **THEN** both occurrences of a@example.com are held as duplicates and neither creates a membership
-- **AND** b@example.com is evaluated independently and is eligible if its other checks pass
+- **AND** b@example.com is evaluated independently and is accepted if its other checks pass
 
 #### Scenario: Duplicate across single and multiple address cells
-- **WHEN** one row contains `a@example.com, b@example.com` and another contains `a@example.com`
-- **THEN** both occurrences of a@example.com are excluded and b@example.com proceeds independently
+- **WHEN** one reviewed row contains `a@example.com, b@example.com` and another contains `a@example.com`
+- **THEN** both occurrences of a@example.com are held and b@example.com proceeds independently
+
+#### Scenario: Duplicate detection follows cleaned values
+- **WHEN** preparation joins separator-only variants of one address into repeated occurrences in the reviewed dataset
+- **THEN** the duplicate group is determined from those cleaned values before any candidate is created
 
 ### Requirement: Duplicates excluded from candidate storage
-The system SHALL NOT insert or update candidate, task-candidate or sending-attempt records for within-upload duplicate entries. Their details SHALL remain only in the original upload and file-based validation/report artifacts; task-level duplicate counts can be retained.
+The system SHALL NOT insert or update candidate, task-candidate or sending-attempt records for duplicate entries of the reviewed dataset. Their details SHALL remain only in the selected preparation evidence, the final snapshot evidence and the downloadable reports; dataset-level duplicate counts can be retained.
 
 #### Scenario: Existing candidate matches a duplicate group
-- **WHEN** an upload contains a duplicate group for an address already stored in the campaign
-- **THEN** the upload does not modify that existing candidate or create memberships/attempts for the duplicate entries
+- **WHEN** a reviewed dataset contains a duplicate group for an address already stored in the campaign
+- **THEN** the dataset does not modify that existing candidate or create memberships/attempts for the duplicate entries
 
 ### Requirement: Immediate duplicate download
-The system SHALL offer a protected XLSX duplicate report as soon as validation finishes, containing all original columns for every duplicate entry plus its original row number, position in the recipient cell, individual address and duplicate reason.
+The system SHALL offer a protected XLSX exclusion report as soon as a reviewed dataset exists, containing all original columns for every held entry plus its original row number, position in the recipient cell, individual address and held reason. The report SHALL describe the selected final snapshot when one exists, otherwise the selected preparation review, and only legacy format-mapping tasks SHALL fall back to the validation-time report.
 
 #### Scenario: Correct while another task proceeds
-- **WHEN** the upload has duplicate groups and other eligible recipients
-- **THEN** the operator can immediately download the duplicates, finalize the eligible portion through approve as-is or an edited final upload before testing and explicitly starting it, and use corrected data in a final upload or new task
+- **WHEN** the reviewed dataset holds duplicate groups and accepts other recipients
+- **THEN** the operator can download the held entries, approve the accepted portion as-is or through an edited final upload, and use corrected data in a final upload or new task
 - **AND** the original task snapshot remains unchanged
 
-### Requirement: Review before explicit start
-The system SHALL show row counts and reasons in Recipients and fresh action scope in Sending. New tasks SHALL require approve as-is or acceptance of an edited final upload before sending controls become usable. Final-snapshot test approval and explicit start or schedule confirmation SHALL remain separate prerequisites.
+#### Scenario: No review evidence yet
+- **WHEN** a current-mapping task has no selected preparation review and no final snapshot
+- **THEN** the exclusion download is unavailable instead of returning a validation-time report
 
+### Requirement: Review before explicit start
+The system SHALL show recorded row counts and reasons in Recipients and fresh action scope in Sending. A current role-mapping task SHALL show source rows and pending eligibility until a prepared review or final snapshot exists, then reviewed counts and reasons. New tasks SHALL require approve as-is or an edited final upload before sending controls become usable. Final-snapshot test approval and explicit start or schedule confirmation SHALL remain separate prerequisites.
 #### Scenario: Configuration changes after upload
 - **WHEN** campaign content changes between upload validation and the first start
 - **THEN** the unstarted task must be explicitly revalidated and reviewed against the new current revision, finalized again, and given its own successful test and received-format approval before starting
@@ -120,6 +134,12 @@ The system SHALL show row counts and reasons in Recipients and fresh action scop
 - **THEN** the scheduled fire does not send from the stale snapshot
 - **AND** the task returns to the review state that requires revalidation and approval
 - **AND** the unified workspace explains the blocked/missed start and links to its required remedy without silently starting another schedule
+
+#### Scenario: Counts appear with their evidence
+- **WHEN** a current role-mapping task has no prepared review or final snapshot
+- **THEN** Recipients reports no entry counts and no exclusions while naming data preparation as the next step
+- **WHEN** a prepared review or final snapshot exists
+- **THEN** Recipients reports the accepted and held entry counts recorded by that evidence
 
 ### Requirement: First-start view follows the saved sending type
 The saved task `sending_type` SHALL be the source of truth for its first-start view. GET requests SHALL NOT change or override it; `sending_type=choose` may open the chooser without changing the saved value. A submitted type change SHALL be persisted before controls for the new type are shown, and only the selected form SHALL be shown.
@@ -177,21 +197,20 @@ The system SHALL retain the original workbook and row order, preserve original c
 - **AND** no original cell is overwritten
 
 ### Requirement: Comma-separated recipient expansion
-After initial AI preparation or directly on a final upload, the system SHALL split the selected recipient column on commas, trim surrounding whitespace per entry, and copy other mapped values for each entry. Every entry SHALL retain its source worksheet row and position within the cell. Commas SHALL be the only list delimiter; invalid entries SHALL NOT prevent valid unique siblings from being saved.
-
+After initial AI preparation or on a final upload, the system SHALL split the selected recipient column on commas, trim surrounding whitespace per entry, and copy other mapped values for each entry. Every entry SHALL retain its source worksheet row and position within the cell. Commas SHALL be the only delimiter; invalid entries SHALL NOT prevent valid unique siblings from being accepted. Expansion SHALL run on reviewed values and SHALL NOT repeat against raw values for the same dataset.
 #### Scenario: Two valid addresses share details
 - **WHEN** a row contains `Person 1 | a@example.com, b@example.com | Designation 1`
-- **THEN** two recipients are saved with the same name and designation, separate addresses and the same original source row
+- **THEN** two recipients are accepted with the same name and designation, separate addresses and the same original source row
 - **AND** commas with no following space or with extra surrounding spaces produce the same recipients
 - **AND** no email is sent merely by saving them
 
 #### Scenario: One invalid address among valid addresses
 - **WHEN** a recipient cell contains `a@example.com, invalid-address, b@example.com`
-- **THEN** the two valid unique entries are saved under the usual required-value and campaign-history checks
-- **AND** the invalid entry is retained only in validation/report artifacts with its own reason and source location
+- **THEN** the two valid unique entries are accepted under the usual required-value and campaign-history checks
+- **AND** the invalid entry is retained only in review/report artifacts with its own reason and source location
 
 #### Scenario: Empty list entries
-- **WHEN** a data row contains `a@example.com,, b@example.com,` in its recipient cell
+- **WHEN** a reviewed row contains `a@example.com,, b@example.com,` in its recipient cell
 - **THEN** the two empty entries are reported individually as invalid and the valid unique addresses are processed normally
 - **AND** empty entries count toward the expanded-entry limit
 - **AND** an entirely empty recipient cell on a row carrying mapped data produces one invalid entry; a row with no mapped data remains ignored
@@ -202,8 +221,8 @@ After initial AI preparation or directly on a final upload, the system SHALL spl
 - **AND** unsupported recipient lists are invalid entries rather than silently expanded
 
 #### Scenario: Exclusions do not bypass the task limit
-- **WHEN** splitting produces 1,001 entries even though duplicates or invalid values would leave fewer than 1,000 sendable recipients
-- **THEN** validation refuses the complete new snapshot and publishes no partial import
+- **WHEN** splitting a reviewed dataset produces 1,001 entries even though duplicates or invalid values would leave fewer than 1,000 sendable recipients
+- **THEN** the review refuses the complete dataset and exposes no partial acceptance
 
 #### Scenario: AI separator cleanup occurs before expansion
 - **WHEN** initial AI preparation recognizes two addresses separated by a slash
