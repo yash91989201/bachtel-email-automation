@@ -3,11 +3,13 @@ package finalizationtest
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/xuri/excelize/v2"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
+	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/preparation"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 )
@@ -133,8 +135,8 @@ func TestApproveAsIsEndToEndPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rows := readSheet(t, preparedSheet); len(rows) != 3 {
-		t.Fatalf("prepared sheet rows = %d, want header plus both prepared entries: %v", len(rows), rows)
+	if rows := readSheet(t, preparedSheet); len(rows) != 2 {
+		t.Fatalf("prepared sheet rows = %d, want header plus one backend-accepted entry: %v", len(rows), rows)
 	}
 	finalSheet, _, err := f.service.FinalSheet(context.Background(), f.owner, f.task, snapshot.ID)
 	if err != nil {
@@ -196,4 +198,96 @@ func readSheet(t *testing.T, data []byte) [][]string {
 		t.Fatal(err)
 	}
 	return rows
+}
+
+// Memberships created from prepared data store the accepted cleaned values that
+// preview, test and sending render. The uploaded original stays in the stored
+// workbook and in the held entry's review evidence, and held entries create no
+// membership at all.
+func TestPreparedMembershipsCarryCleanedValues(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	tasks := intake.NewService(f.app, f.campaigns, intake.DefaultLimits())
+	book := excelize.NewFile()
+	if err := book.SetSheetRow("Sheet1", "A1", &[]string{"Email", "Name", "Role"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := book.SetSheetRow("Sheet1", "A2", &[]string{"ada@example.com", "ADA LOVELACE", "engineer"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := book.SetSheetRow("Sheet1", "A3", &[]string{"not-an-address", "grace hopper", "engineer"}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := book.WriteToBuffer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := book.Close(); err != nil {
+		t.Fatal(err)
+	}
+	staged, err := tasks.Stage(ctx, f.owner, f.campaign, "prepared.xlsx", data.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tasks.Validate(ctx, f.owner, staged.ID, "Sheet1", 1); err != nil {
+		t.Fatal(err)
+	}
+	f.task = staged.ID
+	f.addPreparedRun(t, []preparation.RowResult{
+		{SourceRow: 2, Values: map[string]string{"candidate_email": "ada@example.com", "candidate_name": "Ada Lovelace", "role": "Principal Engineer"}},
+		{SourceRow: 3, Values: map[string]string{"candidate_email": "not-an-address", "candidate_name": "Grace Hopper", "role": "Staff Engineer"}},
+	})
+	snapshot, err := f.service.ApproveAsIs(ctx, f.owner, f.task, "cleaned-values-123456", f.owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot.Counts.Accepted != 1 || snapshot.Counts.Excluded != 1 {
+		t.Fatalf("prepared finalization = %+v", snapshot.Counts)
+	}
+	if len(snapshot.Exclusions) != 1 {
+		t.Fatalf("exclusions = %+v", snapshot.Exclusions)
+	}
+	held := snapshot.Exclusions[0]
+	if held.Original["candidate_name"] != "grace hopper" || held.Proposed["candidate_name"] != "Grace Hopper" {
+		t.Fatalf("held provenance = original %q proposed %q", held.Original["candidate_name"], held.Proposed["candidate_name"])
+	}
+
+	members, err := f.app.FindRecordsByFilter(
+		intake.TaskCandidatesCollection, "task = {:task}", "source_row,recipient_index", 0, 0,
+		map[string]any{"task": f.task},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 1 {
+		t.Fatalf("memberships = %d, want the single accepted cleaned entry", len(members))
+	}
+	member := members[0]
+	for _, field := range []string{"raw", "normalized"} {
+		var values map[string]string
+		if err := member.UnmarshalJSONField(field, &values); err != nil {
+			t.Fatal(err)
+		}
+		if values["candidate_name"] != "Ada Lovelace" || values["role"] != "Principal Engineer" {
+			t.Fatalf("membership %s = %v, want the cleaned values", field, values)
+		}
+		if values["candidate_name"] == "ADA LOVELACE" {
+			t.Fatalf("membership %s stored the uploaded original", field)
+		}
+	}
+
+	preview, err := tasks.Preview(ctx, f.owner, f.task, member.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Rendered.Subject != "Hello Ada Lovelace" {
+		t.Fatalf("preview subject = %q", preview.Rendered.Subject)
+	}
+	if !strings.Contains(preview.Rendered.Body, "Principal Engineer") {
+		t.Fatalf("preview body = %q", preview.Rendered.Body)
+	}
+	// The uploaded cell stays visible as comparison evidence only.
+	if preview.OriginalRecipient != "ada@example.com" || preview.SourceRow != 2 || preview.RecipientIndex != 1 {
+		t.Fatalf("preview provenance = %+v", preview)
+	}
 }

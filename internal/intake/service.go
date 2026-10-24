@@ -368,9 +368,9 @@ func storedPosition(position int) int {
 	return position
 }
 
-// Validate turns a staging task into a ready one by validating the selected
-// worksheet and header row against the campaign's current content revision.
-// Nothing becomes sendable: a ready task holds a published snapshot.
+// Validate pins a staging task's worksheet, headers and campaign revision.
+// Current mappings defer all row eligibility to cleaned-data finalization;
+// legacy mappings retain their historical validation snapshot behavior.
 func (s *Service) Validate(ctx context.Context, ownerID, taskID, sheet string, headerRow int) error {
 	if err := s.guard(ctx, ownerID); err != nil {
 		return err
@@ -604,6 +604,9 @@ func (s *Service) validate(ctx context.Context, ownerID string, task *Task, shee
 	}
 	if err := validateHeaders(workbook, configuration.Mappings); err != nil {
 		return s.fail(task, err)
+	}
+	if configuration.MappingVersion >= campaign.MappingVersionRole {
+		return s.publishPreflight(ctx, task, target, configuration, workbook)
 	}
 
 	admissions, err := planRows(workbook, configuration.Mappings, configuration.MappingVersion)

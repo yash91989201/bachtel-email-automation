@@ -407,7 +407,10 @@ func (t *Task) Closed() bool { return !t.ClosedAt.IsZero() }
 // Closing reports a confirmed closure still waiting for work to settle.
 func (t *Task) Closing() bool { return !t.ClosureRequestedAt.IsZero() && t.ClosedAt.IsZero() }
 
-// Admitted reports whether the task holds a published validation snapshot.
+// Admitted reports that the task's worksheet, header row and pinned revision
+// were checked, so mapped-row and finalization work may proceed. It says
+// nothing about row eligibility: a current role-mapping task has no memberships
+// until the operator approves a final dataset, and start is refused until then.
 func (t *Task) Admitted() bool { return t.Status == TaskReady }
 
 // Occurrence identifies one expanded recipient entry: its original 1-based

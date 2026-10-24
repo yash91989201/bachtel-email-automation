@@ -141,7 +141,7 @@ func (f *fixture) createTask(t *testing.T) string {
 	record.Set("configuration", f.config)
 	record.Set("content_hash", "content-hash-1")
 	record.Set("source", source)
-	record.Set("source_digest", "source-digest")
+	record.Set("source_digest", intake.WorkbookDigest(sourceBytes.Bytes()))
 	record.Set("sheet", "Candidates")
 	record.Set("header_row", 1)
 	if err := f.app.Save(record); err != nil {
@@ -183,7 +183,11 @@ func (f *fixture) addPreparedRun(t *testing.T, rows []preparation.RowResult) str
 	record.Set("credential_generation", 1)
 	record.Set("configuration", f.config)
 	record.Set("content_hash", "content-hash-1")
-	record.Set("source_digest", "source-digest")
+	taskSource, err := f.app.FindRecordById(intake.TasksCollection, f.task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Set("source_digest", taskSource.GetString("source_digest"))
 	record.Set("base_prompt_version", preparation.BasePromptVersion)
 	record.Set("base_prompt", "base prompt")
 	record.Set("input_digest", "input-digest")

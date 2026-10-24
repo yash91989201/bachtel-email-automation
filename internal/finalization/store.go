@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"strings"
 	"time"
 
@@ -66,10 +65,13 @@ func (s *Service) ApproveAsIs(ctx context.Context, ownerID, taskID, actionID, ac
 	if err != nil {
 		return nil, err
 	}
-	if run.ConfigurationID != task.ConfigurationID || run.ContentHash != task.ContentHash {
+	if run.ConfigurationID != task.ConfigurationID || run.ContentHash != task.ContentHash || run.SourceDigest != task.SourceDigest {
 		return nil, ErrStale
 	}
-	rows := rowsFromPrepared(run.Output)
+	rows, err := s.preparedRows(ctx, ownerID, taskID, run.Output)
+	if err != nil {
+		return nil, err
+	}
 	classification, err := s.classify(ctx, ownerID, configuration, task.ID, rows)
 	if err != nil {
 		return nil, err
@@ -204,18 +206,15 @@ func (s *Service) PreparedSheet(ctx context.Context, ownerID, taskID string) ([]
 	if task.SelectedPreparationRunID == "" {
 		return nil, "", ErrNoPrepared
 	}
-	run, err := s.prep.LoadRun(ctx, ownerID, taskID, task.SelectedPreparationRunID)
+	review, err := s.ReviewPrepared(ctx, ownerID, taskID, task.SelectedPreparationRunID)
 	if err != nil {
 		return nil, "", err
-	}
-	if run.State != preparation.RunCompleted || run.Output == nil {
-		return nil, "", ErrNoPrepared
 	}
 	configuration, err := s.configuration(ctx, ownerID, task)
 	if err != nil {
 		return nil, "", err
 	}
-	rows := sheetRowsFromPrepared(configuration, run.Output)
+	rows := sheetRowsFromEntries(review.Entries)
 	if len(rows) == 0 {
 		return nil, "", errors.New("the selected preparation run has no accepted entries to download")
 	}
@@ -638,39 +637,6 @@ func sheetRowsFromEntries(entries []Entry) []sheetRow {
 	rows := make([]sheetRow, 0, len(entries))
 	for _, entry := range entries {
 		rows = append(rows, sheetRow{Values: entry.Values})
-	}
-	return rows
-}
-
-// sheetRowsFromPrepared converts the accepted entries of one prepared run to
-// per-recipient sending-sheet rows: other mapped values are copied and the
-// recipient variable carries that occurrence's own prepared address.
-func sheetRowsFromPrepared(configuration *campaign.Configuration, output *preparation.Output) []sheetRow {
-	recipientVariable := ""
-	for _, mapping := range configuration.Mappings {
-		if mapping.Recipient {
-			recipientVariable = mapping.Variable
-		}
-	}
-	byRow := make(map[int]preparation.RowResult, len(output.Rows))
-	for _, row := range output.Rows {
-		byRow[row.SourceRow] = row
-	}
-	rows := make([]sheetRow, 0, len(output.Entries))
-	for _, entry := range output.Entries {
-		if entry.Outcome != preparation.OutcomeAccepted {
-			continue
-		}
-		values := byRow[entry.SourceRow].Values
-		if values == nil {
-			continue
-		}
-		copied := make(map[string]string, len(values))
-		maps.Copy(copied, values)
-		if recipientVariable != "" {
-			copied[recipientVariable] = entry.Recipient
-		}
-		rows = append(rows, sheetRow{Values: copied})
 	}
 	return rows
 }

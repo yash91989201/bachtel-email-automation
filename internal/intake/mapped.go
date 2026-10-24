@@ -16,7 +16,8 @@ type MappedRow struct {
 }
 
 // MappedRows returns the mapped values of every non-blank source row of a
-// validated task. It is the input boundary for AI preparation: only columns
+// header-checked task, including frozen historical tasks. It is the source
+// boundary for preparation and review: only columns
 // the campaign maps are read, the stored workbook is checked against its
 // recorded digest, and a row whose mapped cells are all empty is not a row of
 // the table and is omitted.
@@ -26,8 +27,8 @@ func (s *Service) MappedRows(ctx context.Context, ownerID, taskID string) ([]Map
 		return nil, err
 	}
 	task := taskFromRecord(record, "")
-	if !task.Admitted() {
-		return nil, &ValidationError{Message: "validate this task before preparing its data"}
+	if task.Status == TaskStaging {
+		return nil, &ValidationError{Message: "check this task's worksheet and mapped headers before preparing its data"}
 	}
 	if task.Sheet == "" || task.ConfigurationID == "" {
 		return nil, &ValidationError{Message: "this task has no worksheet selection or content revision to prepare"}
