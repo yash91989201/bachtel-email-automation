@@ -110,3 +110,27 @@ The system SHALL display task execution, formatting approval, schedule and artif
 - **AND** restore review is the highest-priority blocking banner, followed by mailbox authorization and content/approval problems, with every applicable blocker still discoverable
 - **AND** “Formatting: Approved” always means approval applies to the saved content and current mailbox, not merely that some campaign revision was approved
 - **AND** “Already scheduled” on a recipient is explained as claimed by another task, separate from this task's future scheduled start
+
+### Requirement: Expanded recipient review
+The system SHALL distinguish original source-row counts from expanded recipient-entry counts in every recorded validation, prepared review and final snapshot summary. Recipients SHALL identify each recorded entry by source row, position within its cell and individual address, provide independent eligible-entry previews, and expose entry-specific exclusions and protected report downloads. A current role-mapping task without review evidence SHALL report source rows only.
+
+#### Scenario: Mixed recipient cell is reviewed
+- **WHEN** one reviewed source row contains two eligible addresses and one invalid entry
+- **THEN** the task shows one source row, three recipient entries, two eligible recipients and one invalid entry
+- **AND** each eligible recipient is independently selectable for preview with its own To address and copied details
+- **AND** the invalid entry's address, source location and reason remain visible without disabling its eligible siblings
+
+#### Scenario: Duplicate siblings need attention
+- **WHEN** two duplicate entries and one eligible entry come from the same source row
+- **THEN** two entries need attention and one recipient is eligible
+- **AND** both duplicates appear with distinct positions and the eligible sibling remains selectable
+
+#### Scenario: Action scope and result guidance
+- **WHEN** the operator reviews Sending or Results for an expanded task
+- **THEN** action confirmations and progress use recipient counts rather than original row counts
+- **AND** Results explains that original worksheets are preserved and individual outcomes are in the added recipient-results worksheet
+- **AND** all start, schedule, approval and recovery prerequisites still apply
+
+#### Scenario: Source rows before review
+- **WHEN** a current role-mapping task has no prepared review or final snapshot
+- **THEN** Recipients reports its source-row count without inventing recipient-entry, eligible or excluded totals

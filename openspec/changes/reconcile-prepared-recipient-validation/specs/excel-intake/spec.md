@@ -121,3 +121,40 @@ After initial AI preparation or directly on a final upload, the system SHALL spl
 #### Scenario: Edited final upload has unsupported separators
 - **WHEN** a final email cell contains slash-separated addresses
 - **THEN** no AI is invoked to repair it and backend comma-only parsing reports the entry as invalid with a correction remedy
+
+### Requirement: Review before explicit start
+The system SHALL show recorded row counts and reasons in Recipients and fresh action scope in Sending. A current role-mapping task SHALL show its source-row count and a pending-eligibility state until a prepared review or final snapshot exists, and SHALL show reviewed counts and reasons once one does. New tasks SHALL require approve as-is or acceptance of an edited final upload before sending controls become usable. Final-snapshot test approval and explicit start or schedule confirmation SHALL remain separate prerequisites.
+
+#### Scenario: Configuration changes after upload
+- **WHEN** campaign content changes between upload validation and the first start
+- **THEN** the unstarted task must be explicitly revalidated and reviewed against the new current revision, finalized again, and given its own successful test and received-format approval before starting
+- **AND** Recipients identifies the saved/current revision difference and offers explicit revalidation; navigation alone does not update the snapshot
+
+#### Scenario: Revalidation would reuse a prior schedule authorization
+- **WHEN** the operator requests revalidation of an unstarted task with an enabled future schedule
+- **THEN** revalidation is refused until the operator explicitly clears that schedule
+- **AND** after revalidation the revised content needs applicable formatting approval and a new explicit start or schedule confirmation
+- **AND** no old schedule authorization is transferred to revised content
+
+#### Scenario: No eligible rows
+- **WHEN** every row is excluded
+- **THEN** the UI explains the exclusions, permits relevant downloads and does not offer a send action for zero emails
+- **AND** the task workspace shows No eligible recipients with a link to its row reasons and exclusion report
+
+#### Scenario: Schedule offered with fresh counts
+- **WHEN** a validated task has an approved test and eligible rows
+- **THEN** Sending uses the task's saved `sending_type` and shows only its selected form beside the same fresh eligible count, sender, saved revision, approval state and exclusions
+- **AND** a task with no eligible rows offers neither Start nor a schedule
+- **AND** Recipients continues to expose validation counts and row reasons without duplicating candidate start controls
+
+#### Scenario: Recheck at scheduled fire
+- **WHEN** a schedule was enabled and the campaign configuration, final snapshot or approval changes before its time
+- **THEN** the scheduled fire does not send from the stale snapshot
+- **AND** the task returns to the review state that requires revalidation and approval
+- **AND** the unified workspace explains the blocked/missed start and links to its required remedy without silently starting another schedule
+
+#### Scenario: Counts appear with their evidence
+- **WHEN** a current role-mapping task has no prepared review or final snapshot
+- **THEN** Recipients reports no entry counts and no exclusions while naming data preparation as the next step
+- **WHEN** a prepared review or final snapshot exists
+- **THEN** Recipients reports the accepted and held entry counts recorded by that evidence

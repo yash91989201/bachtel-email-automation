@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Immutable task snapshots
-The system SHALL retain, for every admitted task-candidate, the original and cleaned mapped values, source row location, recipient position within that row, individual recipient value and configuration revision. For current role-mapping revisions, admission SHALL occur when the operator approves a final dataset, so memberships and their personalized content come from the accepted cleaned entries and never from raw workbook text. Once sending begins, later uploads and campaign edits SHALL NOT alter that task's personalized content or prior attempts.
+The system SHALL retain, for every admitted task-candidate, the mapped values that render its personalized content, its source row location, recipient position within that row, individual recipient value and configuration revision. The stored workbook SHALL remain the record of the uploaded original values, and review evidence SHALL retain the original cell alongside any cleaned proposal. For current role-mapping revisions, admission SHALL occur when the operator approves a final dataset, so memberships and their personalized content come from the accepted cleaned entries and never from raw workbook text. Once sending begins, later uploads and campaign edits SHALL NOT alter that task's personalized content or prior attempts.
 
 #### Scenario: Corrected designation in a new upload
 - **WHEN** a later task provides different details for an existing candidate
@@ -16,7 +16,8 @@ The system SHALL retain, for every admitted task-candidate, the original and cle
 
 #### Scenario: Current mapping admits only accepted cleaned entries
 - **WHEN** a current-mapping task is approved from a prepared dataset or an edited final upload
-- **THEN** memberships are created from its accepted entries with the cleaned values and the original values retained as evidence
+- **THEN** memberships carry the accepted cleaned values that previews, tests and sending render
+- **AND** the original uploaded cell stays available in the stored workbook and in review evidence for held entries
 - **AND** held entries create no membership while remaining visible in the exclusion report
 
 #### Scenario: Existing saved tasks are not expanded automatically
