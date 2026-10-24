@@ -34,7 +34,14 @@ and exclusion report are still written at validation and stay downloadable.
 3. Review the selected run. The backend review classifies the cleaned values
    with the same rule set approval uses, returns accepted entries and held
    entries with every applicable reason, and writes nothing: no candidate,
-   membership, attempt, approval or schedule changes.
+   membership, attempt, approval or schedule changes. Beside the prepared
+   sending sheet and exclusion report, the review offers a sanitization report:
+   one row per prepared recipient occurrence, accepted and held, with its
+   source row, position, prepared recipient, backend outcome, every exclusion
+   reason, its source row's AI corrections and applicable findings, and each
+   mapped value as an original and prepared pair. It is built on request from
+   the selected run and the stored workbook only, every cell is inert text, and
+   it changes no sending state.
 4. Finalize the sending data by one of two paths:
    - **Approve as-is** reclassifies the accepted prepared values inside its
      publication transaction after fresh backend required/optional, address,

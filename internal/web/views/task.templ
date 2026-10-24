@@ -448,6 +448,7 @@ type TaskFinalizationView struct {
 	PreparedReady          bool
 	PreparedAccepted       int
 	PreparedHref           string
+	SanitizationHref       string
 	PreparedReview         bool
 	PreparedReviewSelected bool
 	PreparedCounts         TaskFinalReviewCounts
@@ -914,6 +915,12 @@ templ taskFinalization(data TaskPageData) {
 							</div>
 						}
 						@taskFinalExclusions(data.Finalization.PreparedExclusions)
+						if data.Finalization.SanitizationHref != "" {
+							<div class="app-card-actions">
+								<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ data.Finalization.SanitizationHref }>Download sanitization report</a>
+								<span class="text-sm text-muted-foreground">One row per prepared recipient entry: outcome, corrections, findings, exclusion reasons and original and prepared values.</span>
+							</div>
+						}
 					</div>
 				}
 				if data.Finalization.HasSelected {

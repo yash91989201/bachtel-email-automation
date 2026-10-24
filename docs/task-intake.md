@@ -285,6 +285,7 @@ the session-gated task pages can serve them.
 | Prepared review evidence | The selected completed preparation run's cleaned output plus its backend classification. Current revisions only. |
 | Prepared sending sheet (XLSX) | Backend-accepted cleaned entries only, one row per recipient entry. |
 | Prepared exclusion report (XLSX) | Backend-held cleaned entries with their reasons and both the original and proposed value of every mapping. |
+| Prepared sanitization report (XLSX) | Every prepared recipient occurrence, accepted and held, with its source row, position, prepared recipient, backend outcome, every exclusion reason, its source row's AI corrections and applicable findings, and each mapped value as an original and prepared pair. Built from the selected run and the stored workbook on every request; values are inert text and the download changes no sending state. |
 | Final snapshot artifacts | The accepted entries, the accepted final sheet, its exclusion report and, for an edited upload, the uploaded bytes. |
 
 The exclusion download resolves the selected final snapshot first, then the

@@ -670,3 +670,69 @@ func uploadFinalRows(t *testing.T, handler http.Handler, cookie *http.Cookie, ca
 		t.Fatalf("final upload = %d %.600s", rec.Code, rec.Body.String())
 	}
 }
+
+// The sanitization download is offered with the selected run's review, stays
+// owner-scoped and returns the report worksheet.
+func TestPreparationSanitizationReportIsGatedAndProtected(t *testing.T) {
+	server := newRolePreparationServer(t)
+	cookie := login(t, server.handler)
+
+	page := do(t, server.handler, http.MethodGet, server.pagePath(), nil, withCookie(cookie))
+	if page.Code != http.StatusOK {
+		t.Fatalf("task page before preparation: status=%d", page.Code)
+	}
+	if strings.Contains(page.Body.String(), server.path("/preparation/sanitization.xlsx")) {
+		t.Fatal("sanitization download is offered before any completed run")
+	}
+	anonymous := do(t, server.handler, http.MethodGet, server.path("/preparation/sanitization.xlsx"), nil, nil)
+	if anonymous.Code != http.StatusSeeOther || anonymous.Header().Get("Location") != "/login" {
+		t.Fatalf("anonymous download = %d location=%q", anonymous.Code, anonymous.Header().Get("Location"))
+	}
+
+	rec := do(t, server.handler, http.MethodPost, server.path("/preparation/prepare"), url.Values{}, withCookie(cookie))
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("prepare: status=%d body=%.300s", rec.Code, rec.Body.String())
+	}
+	server.latestRun(t)
+
+	page = do(t, server.handler, http.MethodGet, server.pagePath(), nil, withCookie(cookie))
+	if page.Code != http.StatusOK {
+		t.Fatalf("task page after preparation: status=%d", page.Code)
+	}
+	body := page.Body.String()
+	for _, want := range []string{
+		`href="` + server.path("/preparation/sanitization.xlsx") + `"`,
+		"One row per prepared recipient entry",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("task page is missing %q", want)
+		}
+	}
+
+	provisionOperatorAs(t, server.app, "sanitization-foreign@example.com", "correct-horse-battery-staple")
+	foreign := loginAs(t, server.handler, "sanitization-foreign@example.com", "correct-horse-battery-staple")
+	denied := do(t, server.handler, http.MethodGet, server.path("/preparation/sanitization.xlsx"), nil, withCookie(foreign))
+	if denied.Code != http.StatusNotFound || bytes.Contains(denied.Body.Bytes(), []byte(finalization.SanitizationSheetName)) {
+		t.Fatalf("foreign download = %d body=%q", denied.Code, denied.Body.String())
+	}
+
+	download := do(t, server.handler, http.MethodGet, server.path("/preparation/sanitization.xlsx"), nil, withCookie(cookie))
+	if download.Code != http.StatusOK || download.Body.Len() == 0 {
+		t.Fatalf("sanitization download: status=%d len=%d body=%.300s", download.Code, download.Body.Len(), download.Body.String())
+	}
+	if contentType := download.Header().Get("Content-Type"); contentType != xlsxContentType {
+		t.Fatalf("content type = %q", contentType)
+	}
+	book, err := excelize.OpenReader(bytes.NewReader(download.Body.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := book.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	if sheets := book.GetSheetList(); len(sheets) != 1 || sheets[0] != finalization.SanitizationSheetName {
+		t.Fatalf("report sheets = %v", sheets)
+	}
+}

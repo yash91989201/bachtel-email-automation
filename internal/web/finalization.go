@@ -23,6 +23,7 @@ func (s *server) registerFinalizationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/finalization/approve", s.requireOperator(s.handleFinalizationApprove))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/finalization/upload", s.requireOperator(s.handleFinalizationUpload))
 	mux.HandleFunc("GET /campaigns/{id}/tasks/{task}/preparation/sending.xlsx", s.requireOperator(s.handlePreparedSheet))
+	mux.HandleFunc("GET /campaigns/{id}/tasks/{task}/preparation/sanitization.xlsx", s.requireOperator(s.handleSanitizationReport))
 	mux.HandleFunc("GET /campaigns/{id}/tasks/{task}/finalization/sending.xlsx", s.requireOperator(s.handleFinalSheet))
 	mux.HandleFunc("GET /campaigns/{id}/tasks/{task}/finalization/exclusions.xlsx", s.requireOperator(s.handleFinalExclusions))
 }
@@ -135,6 +136,25 @@ func (s *server) handlePreparedSheet(w http.ResponseWriter, r *http.Request) {
 	s.writeDownload(w, xlsxContentType, filename, data)
 }
 
+// handleSanitizationReport serves the per-occurrence sanitization report of the
+// selected completed run.
+func (s *server) handleSanitizationReport(w http.ResponseWriter, r *http.Request) {
+	task, ok := s.loadCampaignTask(w, r)
+	if !ok {
+		return
+	}
+	if s.finalization == nil {
+		http.NotFound(w, r)
+		return
+	}
+	data, filename, err := s.finalization.SanitizationReport(r.Context(), recordFromContext(r).Id, task.ID)
+	if err != nil {
+		s.finalDownloadFailure(w, r, task, err, "sanitization report")
+		return
+	}
+	s.writeDownload(w, xlsxContentType, filename, data)
+}
+
 // handleFinalSheet serves one snapshot's accepted-final workbook.
 func (s *server) handleFinalSheet(w http.ResponseWriter, r *http.Request) {
 	s.serveSnapshotArtifact(w, r, true)
@@ -225,6 +245,9 @@ func (s *server) finalizationData(ctx context.Context, ownerID string, task *int
 				data.PreparedAccepted = review.Counts.Accepted
 				data.PreparedEntries = taskFinalReviewEntries(review.Entries)
 				data.PreparedExclusions = taskFinalReviewExclusions(review.Exclusions)
+				if prep.EvidenceSelected {
+					data.SanitizationHref = "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/preparation/sanitization.xlsx"
+				}
 				if prep.EvidenceSelected && review.Counts.Accepted > 0 {
 					data.PreparedHref = "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/preparation/sending.xlsx"
 				}
