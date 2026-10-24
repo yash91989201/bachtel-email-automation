@@ -141,21 +141,30 @@ func (s *Service) taskSnapshot(ctx context.Context, task *core.Record, artifact 
 	if err != nil {
 		return nil, err
 	}
-	manifestData, manifestErr := s.readField(ctx, task, "manifest")
-	if manifestErr == nil {
-		if err := json.Unmarshal(manifestData, &snapshot.Manifest); err != nil {
-			return nil, fmt.Errorf("read the validation manifest: %w", err)
-		}
-	} else if task.GetString("selected_final_snapshot") == "" {
-		return nil, manifestErr
-	}
+	// A current role-mapping task records no validation manifest: preflight
+	// publishes the selection only, so its absence is expected evidence rather
+	// than a lost artifact. Legacy revisions keep requiring it.
+	legacyManifest := true
+	var mappingsErr error
 	if configurationID := task.GetString("configuration"); configurationID != "" {
 		cfg, cfgErr := s.app.FindRecordById(campaign.ConfigurationsCollection, configurationID)
 		if cfgErr == nil {
-			if decodeErr := cfg.UnmarshalJSONField("mappings", &snapshot.Mappings); decodeErr != nil {
-				return nil, fmt.Errorf("decode the pinned mappings: %w", decodeErr)
-			}
+			legacyManifest = cfg.GetInt("mapping_version") < campaign.MappingVersionRole
+			mappingsErr = cfg.UnmarshalJSONField("mappings", &snapshot.Mappings)
 		}
+	}
+	manifestData, manifestErr := s.readField(ctx, task, "manifest")
+	switch {
+	case manifestErr == nil:
+		if err := json.Unmarshal(manifestData, &snapshot.Manifest); err != nil {
+			return nil, fmt.Errorf("read the validation manifest: %w", err)
+		}
+	case task.GetString("selected_final_snapshot") != "", !legacyManifest:
+	default:
+		return nil, manifestErr
+	}
+	if mappingsErr != nil {
+		return nil, fmt.Errorf("decode the pinned mappings: %w", mappingsErr)
 	}
 	if snapshotID := task.GetString("selected_final_snapshot"); snapshotID != "" {
 		record, findErr := s.app.FindRecordById("final_snapshots", snapshotID)
