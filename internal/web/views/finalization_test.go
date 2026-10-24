@@ -12,7 +12,7 @@ import (
 func TestTaskFinalizationStatesAreDistinct(t *testing.T) {
 	doc := parseView(t, TaskPage(TaskPageData{
 		CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic campaign",
-		StoredStatus: "ready", ActionID: "action-",
+		StoredStatus: "ready", ActionID: "action-", Section: TaskSectionRecipients,
 		FinalizationRequired: true,
 		Finalization: TaskFinalizationView{
 			Available:        true,
@@ -40,7 +40,7 @@ func TestTaskFinalizationStatesAreDistinct(t *testing.T) {
 	}
 	text := renderText(t, TaskPage(TaskPageData{
 		CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic campaign",
-		StoredStatus: "ready", ActionID: "action-", FinalizationRequired: true,
+		StoredStatus: "ready", ActionID: "action-", Section: TaskSectionRecipients, FinalizationRequired: true,
 		Finalization: TaskFinalizationView{Available: true, Required: true, CanFinalize: true, CanUpload: true, CanApprove: true, PreparedHref: "/prepared.xlsx", PreparedAccepted: 2},
 	}))
 	for _, want := range []string{
@@ -57,7 +57,7 @@ func TestTaskFinalizationStatesAreDistinct(t *testing.T) {
 	// offers no formatting approval.
 	body := renderText(t, TaskPage(TaskPageData{
 		CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic campaign",
-		StoredStatus: "ready", ActionID: "action-", FinalizationRequired: true,
+		StoredStatus: "ready", ActionID: "action-", Section: TaskSectionTest, FinalizationRequired: true,
 		Finalization: TaskFinalizationView{Available: true, Required: true, CanFinalize: true, CanUpload: true},
 		Rows:         []TaskAdmittedRow{{ID: "member-1", Row: 2, Position: 1, Recipient: "ada@example.com", State: "eligible"}},
 	}))
@@ -72,7 +72,7 @@ func TestTaskFinalizationStatesAreDistinct(t *testing.T) {
 	// the snapshot-bound test controls.
 	finalized := TaskPageData{
 		CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic campaign",
-		StoredStatus: "ready", ActionID: "action-", FinalizationRequired: true, DatasetFinalized: true,
+		StoredStatus: "ready", ActionID: "action-", Section: TaskSectionRecipients, FinalizationRequired: true, DatasetFinalized: true,
 		FinalSnapshotRef: "abcd1234",
 		Finalization: TaskFinalizationView{
 			Available: true, Required: true, CanFinalize: true, CanUpload: true,
@@ -86,15 +86,22 @@ func TestTaskFinalizationStatesAreDistinct(t *testing.T) {
 		},
 		Rows: []TaskAdmittedRow{{ID: "member-1", Row: 2, Position: 1, Recipient: "ada@example.com", State: "eligible"}},
 	}
-	body = renderText(t, TaskPage(finalized))
+	recipientsPage := finalized
+	recipientsPage.Section = TaskSectionRecipients
+	body = renderText(t, TaskPage(recipientsPage))
+	if !strings.Contains(body, "Download accepted final sheet") {
+		t.Fatal("finalized Recipients section is missing the accepted snapshot download")
+	}
+	testPage := finalized
+	testPage.Section = TaskSectionTest
+	body = renderText(t, TaskPage(testPage))
 	for _, want := range []string{
 		"Final snapshot <strong>abcd1234</strong> is accepted",
-		"Download accepted final sheet",
 		"Approve received formatting",
 		"this exact final snapshot",
 	} {
 		if !strings.Contains(body, want) {
-			t.Fatalf("finalized task page missing %q", want)
+			t.Fatalf("finalized Test & approve section missing %q", want)
 		}
 	}
 }

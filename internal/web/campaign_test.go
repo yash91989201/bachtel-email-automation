@@ -16,6 +16,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
 // validMappings is one complete mapping line in the delivered textarea
@@ -125,7 +126,7 @@ func createCampaign(t *testing.T, handler http.Handler, cookie *http.Cookie, nam
 	}
 	id := strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/")
 	id, _, _ = strings.Cut(id, "?")
-	id, _, _ = strings.Cut(id, "#")
+	id, _, _ = strings.Cut(id, "/")
 	if id == "" {
 		t.Fatalf("no campaign id in location %q", rec.Header().Get("Location"))
 	}
@@ -324,11 +325,14 @@ func TestCampaignResultLabelsUpdate(t *testing.T) {
 		if hashAfter != hashBefore {
 			t.Fatalf("content hash changed: %q -> %q", hashBefore, hashAfter)
 		}
-		// The detail page reflects both: new labels, same revision hash.
-		page := do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
-		body := page.Body.String()
-		if !strings.Contains(body, "Owner") || !strings.Contains(body, hashBefore) {
-			t.Fatalf("detail page missing updated labels or unchanged hash: %.600s", body)
+		// Each section reflects its own change: new labels, same revision hash.
+		page := do(t, handler, http.MethodGet, views.CampaignSectionPath(id, views.CampaignSectionTemplate), nil, withCookie(cookie))
+		if body := page.Body.String(); !strings.Contains(body, hashBefore) {
+			t.Fatalf("template section missing the unchanged hash: %.600s", body)
+		}
+		page = do(t, handler, http.MethodGet, views.CampaignSectionPath(id, views.CampaignSectionSettings), nil, withCookie(cookie))
+		if body := page.Body.String(); !strings.Contains(body, "Owner") {
+			t.Fatalf("settings section missing updated labels: %.600s", body)
 		}
 	})
 }
@@ -410,7 +414,7 @@ func TestCampaignDetailApprovalAndHistory(t *testing.T) {
 	}
 	secondID := currentConfigurationID(t, app, id)
 	second := configurationRecord(t, app, secondID)
-	rec := do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
+	rec := do(t, handler, http.MethodGet, views.CampaignSectionPath(id, views.CampaignSectionTemplate), nil, withCookie(cookie))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
@@ -426,11 +430,11 @@ func TestCampaignDetailApprovalAndHistory(t *testing.T) {
 			t.Fatalf("detail page missing %q: %.900s", want, body)
 		}
 	}
-	// The history is read-only: the page's forms are fixed (sign-out, revision
-	// upload, labels, sample preview, export generation, export removal and
-	// campaign deletion), never one per stored revision.
-	if forms := strings.Count(body, "<form"); forms != 7 {
-		t.Fatalf("detail page has %d forms, want 7 fixed forms", forms)
+	// The history is read-only: the template section's forms are fixed
+	// (sign-out, revision upload and sample preview), never one per stored
+	// revision.
+	if forms := strings.Count(body, "<form"); forms != 3 {
+		t.Fatalf("template section has %d forms, want 3 fixed forms", forms)
 	}
 }
 
@@ -468,13 +472,13 @@ func TestCampaignMappingDraft(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
-	id, _, _ := strings.Cut(strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/"), "#")
+	id, _, _ := strings.Cut(strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/"), "/")
 
 	draft := "candidate_name | Candidate Name | required\n" +
 		"candidate_email | Candidate Email | required\n" +
 		"expected_department_division | Expected Department/Division | required"
 
-	page := do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
+	page := do(t, handler, http.MethodGet, views.CampaignSectionPath(id, views.CampaignSectionTemplate), nil, withCookie(cookie))
 	if page.Code != http.StatusOK {
 		t.Fatalf("GET campaign: status=%d body=%.400s", page.Code, page.Body.String())
 	}
@@ -500,7 +504,7 @@ func TestCampaignMappingDraft(t *testing.T) {
 	if rec := postRevision(t, handler, cookie, id, "Hello {{candidate_name}}", validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
 		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
-	page = do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
+	page = do(t, handler, http.MethodGet, views.CampaignSectionPath(id, views.CampaignSectionTemplate), nil, withCookie(cookie))
 	if page.Code != http.StatusOK {
 		t.Fatalf("GET revision campaign: status=%d body=%.400s", page.Code, page.Body.String())
 	}
@@ -534,9 +538,9 @@ func TestCampaignMappingHelpExample(t *testing.T) {
 			if rec.Code != http.StatusSeeOther {
 				t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
 			}
-			id, _, _ := strings.Cut(strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/"), "#")
+			id, _, _ := strings.Cut(strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/"), "/")
 
-			page := do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
+			page := do(t, handler, http.MethodGet, views.CampaignSectionPath(id, views.CampaignSectionTemplate), nil, withCookie(cookie))
 			if page.Code != http.StatusOK {
 				t.Fatalf("GET campaign: status=%d body=%.400s", page.Code, page.Body.String())
 			}
@@ -604,7 +608,7 @@ func TestCampaignRecipientMapping(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("recipient without body placeholder: status=%d body=%.600s", rec.Code, rec.Body.String())
 	}
-	page := do(t, handler, http.MethodGet, "/campaigns/"+id, nil, withCookie(cookie))
+	page := do(t, handler, http.MethodGet, views.CampaignSectionPath(id, views.CampaignSectionTemplate), nil, withCookie(cookie))
 	if !strings.Contains(page.Body.String(), `name="candidate_email"`) {
 		t.Fatal("sample input for recipient-only variable is missing")
 	}

@@ -51,7 +51,7 @@ func (s *server) handlePreparationStart(w http.ResponseWriter, r *http.Request) 
 		s.renderTaskMessage(w, r, task, views.TaskSectionRecipients, preparationMessage(err), http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, taskPath(task)+"#recipients", http.StatusSeeOther)
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionRecipients), http.StatusSeeOther)
 }
 
 // handlePreparationSelect records the completed run selected for review. It is
@@ -81,7 +81,7 @@ func (s *server) handlePreparationSelect(w http.ResponseWriter, r *http.Request)
 		s.renderTaskMessage(w, r, task, views.TaskSectionRecipients, preparationMessage(err), http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, taskPath(task)+"#recipients", http.StatusSeeOther)
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionRecipients), http.StatusSeeOther)
 }
 
 // handlePreparationInstructions saves the editable task-instruction draft.
@@ -106,7 +106,7 @@ func (s *server) handlePreparationInstructions(w http.ResponseWriter, r *http.Re
 		})
 		return
 	}
-	http.Redirect(w, r, taskPath(task)+"#recipients", http.StatusSeeOther)
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionRecipients), http.StatusSeeOther)
 }
 
 // preparationMessage maps one preparation refusal to fixed operator-facing

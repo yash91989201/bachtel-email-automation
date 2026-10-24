@@ -159,8 +159,8 @@ func TestSendingPacingAndTaskOwnership(t *testing.T) {
 	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `id="sending-current-rate">17`) {
 		t.Fatalf("pacing poll: %d", page.Code)
 	}
-	// The sending page shows the operator's own mailbox and its state.
-	full := do(t, handler, http.MethodGet, base, nil, withCookie(cookie))
+	// The task overview shows the operator's own mailbox and its state.
+	full := do(t, handler, http.MethodGet, "/campaigns/"+id+"/tasks/"+taskID+"/overview", nil, withCookie(cookie))
 	if full.Code != http.StatusOK || !strings.Contains(full.Body.String(), "<dt>Sender</dt><dd><strong data-sender-status=\"connected\">sender@example.test</strong> (connected)") {
 		t.Fatalf("sending mailbox summary: %d %.400s", full.Code, full.Body.String())
 	}

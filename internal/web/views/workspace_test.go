@@ -15,28 +15,17 @@ func TestCampaignWorkspaceSections(t *testing.T) {
 		name    string
 		data    CampaignPageData
 		initial string
-		ignore  bool
 	}{
 		{name: "campaign opens on tasks", data: CampaignPageData{ID: "camp1", Name: "Hiring"}, initial: CampaignSectionTasks},
-		{name: "revision error opens template", data: CampaignPageData{ID: "camp1", Name: "Hiring", HasRevision: true, RevisionError: "Invalid mapping"}, initial: CampaignSectionTemplate, ignore: true},
-		{name: "label error opens settings", data: CampaignPageData{ID: "camp1", Name: "Hiring", LabelsError: "Duplicate labels"}, initial: CampaignSectionSettings, ignore: true},
-		{name: "delete error opens settings", data: CampaignPageData{ID: "camp1", Name: "Hiring", DeleteError: "Campaign is active"}, initial: CampaignSectionSettings, ignore: true},
-		{name: "export error opens activity", data: CampaignPageData{ID: "camp1", Name: "Hiring", ExportError: "Generation failed"}, initial: CampaignSectionActivity, ignore: true},
+		{name: "revision error opens template", data: CampaignPageData{ID: "camp1", Name: "Hiring", HasRevision: true, RevisionError: "Invalid mapping"}, initial: CampaignSectionTemplate},
+		{name: "label error opens settings", data: CampaignPageData{ID: "camp1", Name: "Hiring", LabelsError: "Duplicate labels"}, initial: CampaignSectionSettings},
+		{name: "delete error opens settings", data: CampaignPageData{ID: "camp1", Name: "Hiring", DeleteError: "Campaign is active"}, initial: CampaignSectionSettings},
+		{name: "export error opens activity", data: CampaignPageData{ID: "camp1", Name: "Hiring", ExportError: "Generation failed"}, initial: CampaignSectionActivity},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			page := renderWorkspace(t, CampaignPage(tc.data))
-			assertWorkspaceTabs(t, page, "campaign", tc.initial, 4)
-			doc, err := html.Parse(strings.NewReader(page))
-			if err != nil {
-				t.Fatal(err)
-			}
-			root := workspaceNode(doc, "data-slot", "tabs")
-			if !hasWorkspaceAttr(root, "data-workspace-tabs") {
-				t.Fatal("campaign workspace is not marked for the adapter")
-			}
-			if got := hasWorkspaceAttr(root, "data-workspace-ignore-hash"); got != tc.ignore {
-				t.Errorf("ignore-hash = %t, want %t", got, tc.ignore)
-			}
+			assertSectionNav(t, page, "Campaign sections", campaignSections("camp1"), CampaignSectionPath("camp1", tc.initial))
+			assertOnlySection(t, page, "campaign-panel-", tc.initial, []string{CampaignSectionTasks, CampaignSectionTemplate, CampaignSectionActivity, CampaignSectionSettings})
 		})
 	}
 }
@@ -52,7 +41,9 @@ func TestCampaignHeaderPrecedesSections(t *testing.T) {
 	}
 	breadcrumb := workspaceNode(doc, "data-slot", "breadcrumb")
 	heading := findViewNode(doc, func(n *html.Node) bool { return n.Data == "h1" })
-	sections := workspaceNode(doc, "data-slot", "tabs")
+	sections := findViewNode(doc, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "nav" && workspaceAttr(n, "aria-label") == "Campaign sections"
+	})
 	if breadcrumb == nil || heading == nil || sections == nil {
 		t.Fatal("campaign header, headings or sections are missing")
 	}
@@ -74,18 +65,21 @@ func TestTaskWorkspaceSections(t *testing.T) {
 		initial string
 	}{
 		{name: "staging opens overview", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "staging"}, initial: TaskSectionOverview},
-		{name: "ready opens overview despite next action", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "ready", NextHref: "#recipients", NextLabel: "Choose sending time"}, initial: TaskSectionOverview},
+		{name: "ready opens overview despite next action", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "ready", NextHref: "/campaigns/camp1/tasks/task1/recipients", NextLabel: "Choose sending time"}, initial: TaskSectionOverview},
 		{name: "running opens overview", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "running"}, initial: TaskSectionOverview},
 		{name: "finished opens overview", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "completed"}, initial: TaskSectionOverview},
 		{name: "selection error keeps recipients", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", Section: TaskSectionRecipients, ValidationError: "Missing Email column"}, initial: TaskSectionRecipients},
 		{name: "running next action is sending", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "running", Section: TaskSectionSending}, initial: TaskSectionSending},
-		{name: "results error keeps results", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "completed", Section: TaskSectionResults, IgnoreHash: true}, initial: TaskSectionResults},
+		{name: "results error keeps results", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "completed", Section: TaskSectionResults, Error: "Generation failed"}, initial: TaskSectionResults},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			page := renderWorkspace(t, TaskPage(tc.data))
-			assertWorkspaceTabs(t, page, "task", tc.initial, 5)
-			if !strings.Contains(page, `data-workspace-default="`+tc.initial+`"`) {
-				t.Fatal("task workspace must retain its initial section for Back navigation")
+			assertSectionNav(t, page, "Task navigation", taskSections("camp1", "task1"), TaskSectionPath("camp1", "task1", tc.initial))
+			assertOnlySection(t, page, "task-panel-", tc.initial, []string{TaskSectionOverview, TaskSectionRecipients, TaskSectionTest, TaskSectionSending, TaskSectionResults})
+			if doc, err := html.Parse(strings.NewReader(page)); err != nil {
+				t.Fatal(err)
+			} else if tc.initial != TaskSectionSending && workspaceNode(doc, "id", "sending-live") != nil {
+				t.Fatal("an inactive section's poller must be absent from the response")
 			}
 		})
 	}
@@ -97,7 +91,7 @@ func TestTaskOverviewKeepsHeaderCompact(t *testing.T) {
 		StatusLabel: "Ready to send", StatusExplanation: "Sending requires explicit authorization.",
 		UploadedAt: "22 Oct 2026, 11:12 AM +05:30", HasSavedRevision: true, SavedRevision: 2,
 		Worksheet: "People", HeaderRow: 1, Sender: "hr@example.test", SenderStatus: "connected", Approved: true,
-		NextLabel: "Choose sending time", NextHref: "/campaigns/camp1/tasks/task1#sending",
+		NextLabel: "Choose sending time", NextHref: "/campaigns/camp1/tasks/task1/sending",
 		Lifecycle: []LifecycleStep{
 			{Name: "Upload", State: "Stored", Complete: true},
 			{Name: "Recipients", State: "Validated", Complete: true},
@@ -138,9 +132,11 @@ func TestTaskOverviewKeepsHeaderCompact(t *testing.T) {
 	if workspaceNode(overview, "href", data.NextHref) == nil || workspaceNode(overview, "aria-label", "Task lifecycle") == nil {
 		t.Fatal("Overview must contain the next-action button and lifecycle evidence")
 	}
-	list := workspaceNode(doc, "role", "tablist")
-	first := workspaceNode(list, "data-slot", "tabs-trigger")
-	if workspaceAttr(first, "data-templ-value") != TaskSectionOverview {
+	nav := findViewNode(doc, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "nav" && workspaceAttr(n, "aria-label") == "Task navigation"
+	})
+	first := findViewNode(nav, func(n *html.Node) bool { return n.Type == html.ElementNode && n.Data == "a" })
+	if nav == nil || first == nil || workspaceAttr(first, "href") != TaskSectionPath("camp1", "task1", TaskSectionOverview) {
 		t.Fatal("Overview must be first in task navigation")
 	}
 }
@@ -148,7 +144,7 @@ func TestTaskOverviewKeepsHeaderCompact(t *testing.T) {
 func TestTaskLifecycleEvidenceAndSectionLinks(t *testing.T) {
 	data := TaskPageData{
 		CampaignID: "camp1", TaskID: "task1", SendingType: TaskSendingTypeDirect,
-		NextLabel: "Choose sending time", NextHref: "/campaigns/camp1/tasks/task1#sending",
+		NextLabel: "Choose sending time", NextHref: "/campaigns/camp1/tasks/task1/sending",
 		StatusExplanation: "Fresh recipient count needs review.",
 		Lifecycle: []LifecycleStep{
 			{Name: "Upload", State: "Stored", Complete: true},
@@ -185,7 +181,7 @@ func TestTaskLifecycleEvidenceAndSectionLinks(t *testing.T) {
 		if got := workspaceAttr(node, "data-next") == "true"; got != (index == 3) {
 			t.Errorf("stage %q has an incorrect next-action marker", step.Name)
 		}
-		localHref := "/campaigns/camp1/tasks/task1#" + sections[index]
+		localHref := TaskSectionPath("camp1", "task1", sections[index])
 		if index == 3 && workspaceNode(node, "href", localHref) == nil {
 			t.Errorf("next stage %q must link without transient sending_type state", step.Name)
 		}
@@ -217,23 +213,23 @@ func TestTaskLifecycleEvidenceAndSectionLinks(t *testing.T) {
 	if index != len(data.Lifecycle) {
 		t.Fatalf("rendered %d stages, want %d", index, len(data.Lifecycle))
 	}
-	data.NextHref, data.NextLabel = "/campaigns/camp1#template", "Create template"
+	data.NextHref, data.NextLabel = "/campaigns/camp1/template", "Create template"
 	doc, err = html.Parse(strings.NewReader(renderWorkspace(t, taskLifecycle(data))))
 	if err != nil {
 		t.Fatal(err)
 	}
 	list = workspaceNode(doc, "aria-label", "Task lifecycle")
-	recipientsLink := workspaceNode(list, "href", "/campaigns/camp1/tasks/task1#recipients")
+	recipientsLink := workspaceNode(list, "href", "/campaigns/camp1/tasks/task1/recipients")
 	recipients := viewAncestor(recipientsLink, "li")
 	if recipients == nil {
-		t.Fatal("an external #template next action must map to the Recipients stage")
+		t.Fatal("an external template next action must map to the Recipients stage")
 	}
 	primary := workspaceNode(recipients, "href", data.NextHref)
-	if primary == nil || workspaceAttr(primary, "role") != "button" || workspaceNode(recipients, "href", "/campaigns/camp1/tasks/task1#recipients") == nil {
+	if primary == nil || workspaceAttr(primary, "role") != "button" || workspaceNode(recipients, "href", "/campaigns/camp1/tasks/task1/recipients") == nil {
 		t.Fatal("external template action must keep both the primary action and canonical Recipients link")
 	}
 	if tooltip := workspaceNode(list, "id", "task-progress-help-recipients"); tooltip == nil || !strings.Contains(viewText(tooltip), data.StatusExplanation) {
-		t.Fatal("external #template action must place current status explanation in Recipients tooltip")
+		t.Fatal("external template action must place current status explanation in Recipients tooltip")
 	}
 
 	data.NextHref, data.NextLabel, data.StatusExplanation = "/account/mailbox", "Reconnect mailbox", "Connection must be restored before sending."
@@ -266,7 +262,7 @@ func TestTaskLifecycleEvidenceAndSectionLinks(t *testing.T) {
 			t.Errorf("Sending tooltip is missing %q", want)
 		}
 	}
-	if workspaceNode(sendingStep, "href", "/campaigns/camp1/tasks/task1#sending") == nil {
+	if workspaceNode(sendingStep, "href", "/campaigns/camp1/tasks/task1/sending") == nil {
 		t.Fatal("canonical Sending link contains transient sending_type state")
 	}
 }
@@ -304,7 +300,7 @@ func TestTaskShellKeepsNavigationOutsidePolling(t *testing.T) {
 	data := TaskPageData{
 		CampaignID: "camp1", TaskID: "task1", Filename: "recipients.xlsx", Reference: "abcd1234",
 		StoredStatus: "running", StatusLabel: "Sending", StatusExplanation: "Current durable progress.",
-		NextLabel: "View progress", NextHref: "/campaigns/camp1/tasks/task1#sending",
+		NextLabel: "View progress", NextHref: "/campaigns/camp1/tasks/task1/sending",
 		Lifecycle: []LifecycleStep{
 			{Name: "Upload", State: "Stored", Complete: true},
 			{Name: "Recipients", State: "Validated", Complete: true},
@@ -320,23 +316,27 @@ func TestTaskShellKeepsNavigationOutsidePolling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := workspaceNode(doc, "data-slot", "tabs")
+	panel := workspaceNode(doc, "id", "task-panel-"+TaskSectionSending)
 	live := workspaceNode(doc, "id", "sending-live")
-	if root == nil || live == nil {
-		t.Fatal("missing the tabs root or the live sending region")
+	if panel == nil || live == nil {
+		t.Fatal("missing the selected section panel or the live sending region")
 	}
-	if !isWorkspaceDescendant(root, live) {
-		t.Fatal("the live region must stay inside the tabs root so its panel keeps the active state")
+	if !isWorkspaceDescendant(panel, live) {
+		t.Fatal("the live region must stay inside the selected section panel")
 	}
 	for n := live; n != nil; n = n.Parent {
-		if workspaceAttr(n, "data-slot") == "tabs-trigger" {
-			t.Fatal("section triggers must stay outside the polling region")
+		if n.Type == html.ElementNode && n.Data == "nav" {
+			t.Fatal("section navigation must stay outside the polling region")
 		}
 	}
-	// Identity and next action are outside the replaced region.
-	for _, node := range []*html.Node{workspaceNode(doc, "aria-label", "Task lifecycle")} {
+	// Identity and section navigation are outside the replaced region.
+	for _, find := range []func(*html.Node) bool{
+		func(n *html.Node) bool { return n.Data == "h1" },
+		func(n *html.Node) bool { return n.Data == "nav" && workspaceAttr(n, "aria-label") == "Task navigation" },
+	} {
+		node := findViewNode(doc, find)
 		if node == nil || isWorkspaceDescendant(live, node) {
-			t.Fatal("lifecycle evidence must stay outside the live region")
+			t.Fatal("task identity and section navigation must stay outside the live region")
 		}
 	}
 	if got := workspaceAttr(live, "hx-get"); got != "/campaigns/camp1/tasks/task1/sending/progress" {
@@ -345,8 +345,8 @@ func TestTaskShellKeepsNavigationOutsidePolling(t *testing.T) {
 	if got := workspaceAttr(live, "hx-swap"); got != "outerHTML" {
 		t.Errorf("live region swap = %q, want outerHTML", got)
 	}
-	if workspaceNode(live, "data-slot", "tabs") != nil {
-		t.Fatal("the live region must not own the tabs root")
+	if findViewNode(live, func(n *html.Node) bool { return n.Data == "nav" }) != nil {
+		t.Fatal("the live region must not carry section navigation")
 	}
 	// Disclosures inside the live region keep their open state across swaps.
 	for _, id := range []string{"sending-settings"} {
@@ -372,13 +372,13 @@ func TestTaskSendingLiveFragmentKeepsIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if workspaceNode(doc, "data-slot", "tabs") != nil {
-		t.Fatal("the fragment must not render the tabs root")
+	if findViewNode(doc, func(n *html.Node) bool { return n.Data == "nav" }) != nil {
+		t.Fatal("the fragment must not render section navigation")
 	}
 	if workspaceNode(doc, "id", "sending-live") == nil {
 		t.Fatal("the fragment lost its live region id")
 	}
-	if workspaceNode(doc, "action", "/campaigns/camp1/tasks/task1/sending/start#sending") == nil {
+	if workspaceNode(doc, "action", "/campaigns/camp1/tasks/task1/sending/start") == nil {
 		t.Fatal("the fragment lost the start control")
 	}
 }
@@ -438,7 +438,7 @@ func TestTaskSendingTypeChooserAndSelectedControls(t *testing.T) {
 				t.Errorf("missing POST choice button for %q", typ)
 			}
 		}
-		for _, action := range []string{"/sending/start#sending", "/sending/schedule#sending"} {
+		for _, action := range []string{"/sending/start", "/sending/schedule"} {
 			if workspaceNode(doc, "action", "/campaigns/camp1/tasks/task1"+action) != nil {
 				t.Errorf("chooser exposes POST action %q", action)
 			}
@@ -454,13 +454,13 @@ func TestTaskSendingTypeChooserAndSelectedControls(t *testing.T) {
 		if workspaceNode(doc, "value", TaskSendingTypeDirect) == nil || workspaceNode(doc, "value", TaskSendingTypeScheduled) == nil {
 			t.Fatal("invalid sending type must leave the operator at the explicit chooser")
 		}
-		if workspaceNode(doc, "action", "/campaigns/camp1/tasks/task1/sending/start#sending") != nil || workspaceNode(doc, "id", "sending-schedule-"+sendingControlKey(data)) != nil {
+		if workspaceNode(doc, "action", "/campaigns/camp1/tasks/task1/sending/start") != nil || workspaceNode(doc, "id", "sending-schedule-"+sendingControlKey(data)) != nil {
 			t.Fatal("invalid sending type must not select a first-start action")
 		}
 	})
 	for _, tc := range []struct{ mode, shown, hidden string }{
-		{TaskSendingTypeDirect, "/sending/start#sending", "/sending/schedule#sending"},
-		{TaskSendingTypeScheduled, "/sending/schedule#sending", "/sending/start#sending"},
+		{TaskSendingTypeDirect, "/sending/start", "/sending/schedule"},
+		{TaskSendingTypeScheduled, "/sending/schedule", "/sending/start"},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
 			data := base
@@ -475,7 +475,7 @@ func TestTaskSendingTypeChooserAndSelectedControls(t *testing.T) {
 			if workspaceNode(doc, "action", "/campaigns/camp1/tasks/task1"+tc.hidden) != nil {
 				t.Errorf("%s mode exposes other action", tc.mode)
 			}
-			if workspaceNode(doc, "href", "/campaigns/camp1/tasks/task1?sending_type=choose#sending") == nil {
+			if workspaceNode(doc, "href", "/campaigns/camp1/tasks/task1/sending?sending_type=choose") == nil {
 				t.Errorf("%s mode is missing change-type link", tc.mode)
 			}
 		})
@@ -521,7 +521,7 @@ func TestTaskSendingTypeSavedScheduleAndStartedStateLimits(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			start := workspaceNode(doc, "action", "/campaigns/camp1/tasks/task1/sending/start#sending") != nil
+			start := workspaceNode(doc, "action", "/campaigns/camp1/tasks/task1/sending/start") != nil
 			schedule := workspaceNode(doc, "id", "sending-schedule-"+sendingControlKey(tc.data)) != nil
 			clear := findViewNode(doc, func(n *html.Node) bool {
 				return n.Data == "form" && strings.HasPrefix(workspaceAttr(n, "id"), "sending-schedule-clear-")
@@ -533,7 +533,7 @@ func TestTaskSendingTypeSavedScheduleAndStartedStateLimits(t *testing.T) {
 				t.Error("saved schedule needs a clear control")
 			}
 			if tc.name == "explicit direct wins" {
-				if workspaceNode(doc, "action", "/campaigns/camp1/tasks/task1/sending/start#sending") == nil || !strings.Contains(viewText(doc), "Send now instead") {
+				if workspaceNode(doc, "action", "/campaigns/camp1/tasks/task1/sending/start") == nil || !strings.Contains(viewText(doc), "Send now instead") {
 					t.Error("direct action must replace the stored scheduled start")
 				}
 				if strings.Contains(viewText(doc), "Schedule start") {
@@ -598,6 +598,7 @@ func TestPreservedSendingFormsHaveSelectorSafeIDs(t *testing.T) {
 			data.CampaignID, data.TaskID = "camp1", "task1"
 			data.Hash, data.Sender = "sha256:0123456789", "hr+recruiting@example.test"
 			data.Approved, data.HasSavedRevision, data.Remaining = true, true, 2
+			data.Section = TaskSectionSending
 			data.Rows = []TaskAdmittedRow{{ID: "row1", State: "definite_failure"}, {ID: "row2", State: "review_required"}}
 			doc, err := html.Parse(strings.NewReader(renderWorkspace(t, TaskPage(data))))
 			if err != nil {
@@ -678,67 +679,65 @@ func before(root, first, second *html.Node) bool {
 	return order[first] < order[second]
 }
 
-// assertWorkspaceTabs checks the owned tabs primitive contract: one tablist
-// with a vertical orientation, one trigger marked active, its panel labelled
-// by it, and one visible panel. Inactive panels carry data-hidden, not the
-// native hidden attribute.
-func assertWorkspaceTabs(t *testing.T, page, scope, initial string, count int) {
+// assertSectionNav checks that a workspace's sections are ordinary links, in
+// order, with the selected one marked as the current page.
+func assertSectionNav(t *testing.T, page, label string, sections []workspaceSection, current string) {
 	t.Helper()
 	doc, err := html.Parse(strings.NewReader(page))
 	if err != nil {
 		t.Fatal(err)
 	}
-	list := workspaceNode(doc, "role", "tablist")
-	if list == nil {
-		t.Fatal("workspace has no tablist")
+	nav := workspaceNode(doc, "aria-label", label)
+	if nav == nil || nav.Data != "nav" {
+		t.Fatalf("workspace has no %q navigation", label)
 	}
-	if got := workspaceAttr(list, "aria-orientation"); got != "vertical" {
-		t.Errorf("tablist aria-orientation = %q, want vertical", got)
-	}
-	tabs, selected, visible := 0, 0, 0
+	index := 0
 	var walk func(*html.Node)
 	walk = func(n *html.Node) {
-		if workspaceAttr(n, "data-slot") == "tabs-trigger" {
-			tabs++
-			value := workspaceAttr(n, "data-templ-value")
-			panel := workspaceNode(doc, "id", scope+"-panel-"+value)
-			if panel == nil || workspaceAttr(panel, "role") != "tabpanel" || workspaceAttr(panel, "aria-labelledby") != workspaceAttr(n, "id") {
-				t.Errorf("trigger %s has no matching labelled panel", workspaceAttr(n, "id"))
+		if n.Type == html.ElementNode && n.Data == "a" {
+			if index >= len(sections) {
+				t.Fatalf("unexpected section link %q", workspaceAttr(n, "href"))
 			}
-			if workspaceAttr(n, "id") != scope+"-tab-"+value {
-				t.Errorf("trigger id = %q, want %q", workspaceAttr(n, "id"), scope+"-tab-"+value)
+			want := sections[index]
+			if got := workspaceAttr(n, "href"); got != want.Href {
+				t.Errorf("section link %d = %q, want %q", index, got, want.Href)
 			}
-			active := hasWorkspaceAttr(n, "data-active")
-			if active != (workspaceAttr(n, "aria-selected") == "true") {
-				t.Errorf("trigger %s data-active and aria-selected disagree", workspaceAttr(n, "id"))
+			if got := viewText(n); !strings.Contains(got, want.Label) {
+				t.Errorf("section link %d text = %q, want %q", index, got, want.Label)
 			}
-			if active {
-				selected++
-				if value != initial {
-					t.Errorf("initial trigger = %q, want %q", value, initial)
-				}
-				if workspaceAttr(n, "aria-controls") != scope+"-panel-"+initial {
-					t.Errorf("active trigger controls %q", workspaceAttr(n, "aria-controls"))
-				}
+			if got := workspaceAttr(n, "aria-current") == "page"; got != (want.Href == current) {
+				t.Errorf("section link %q aria-current = %t", want.Href, got)
 			}
-		}
-		if workspaceAttr(n, "role") == "tabpanel" {
-			class := " " + workspaceAttr(n, "class") + " "
-			hidden := hasWorkspaceAttr(n, "data-hidden") || strings.Contains(class, " hidden ")
-			if !hidden {
-				visible++
-				if workspaceAttr(n, "id") != scope+"-panel-"+initial {
-					t.Errorf("visible panel = %q, want %q", workspaceAttr(n, "id"), scope+"-panel-"+initial)
-				}
-			}
+			index++
 		}
 		for child := n.FirstChild; child != nil; child = child.NextSibling {
 			walk(child)
 		}
 	}
-	walk(doc)
-	if tabs != count || selected != 1 || visible != 1 {
-		t.Errorf("tabs/selected/visible=%d/%d/%d, want %d/1/1", tabs, selected, visible, count)
+	walk(nav)
+	if index != len(sections) {
+		t.Errorf("rendered %d section links, want %d", index, len(sections))
+	}
+}
+
+// assertOnlySection checks that the response contains just the selected
+// section's content, so inactive forms and pollers are absent.
+func assertOnlySection(t *testing.T, page, idPrefix, current string, all []string) {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workspaceNode(doc, "id", idPrefix+current) == nil {
+		t.Fatalf("selected section %q is missing", current)
+	}
+	for _, section := range all {
+		if section == current {
+			continue
+		}
+		if workspaceNode(doc, "id", idPrefix+section) != nil {
+			t.Errorf("inactive section %q is rendered", section)
+		}
 	}
 }
 
@@ -813,7 +812,7 @@ func TestApprovedFormattingControlsRequireDisclosure(t *testing.T) {
 						t.Errorf("form %s is outside the gated disclosure", id)
 					}
 				}
-				if workspaceNode(review, "href", "/campaigns/campaign#template") == nil {
+				if workspaceNode(review, "href", "/campaigns/campaign/template") == nil {
 					t.Error("missing template change path")
 				}
 			} else {

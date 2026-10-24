@@ -58,7 +58,7 @@ func (s *server) handleFinalizationApprove(w http.ResponseWriter, r *http.Reques
 		s.renderTaskMessage(w, r, task, views.TaskSectionRecipients, finalizationMessage(err), http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, taskPath(task)+"#recipients", http.StatusSeeOther)
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionRecipients), http.StatusSeeOther)
 }
 
 // handleFinalizationUpload accepts an operator-edited final sheet. Its body is
@@ -114,7 +114,7 @@ func (s *server) handleFinalizationUpload(w http.ResponseWriter, r *http.Request
 		s.renderTaskMessage(w, r, task, views.TaskSectionRecipients, finalizationMessage(err), http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, taskPath(task)+"#recipients", http.StatusSeeOther)
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionRecipients), http.StatusSeeOther)
 }
 
 // handlePreparedSheet serves the prepared sending sheet of the selected run.

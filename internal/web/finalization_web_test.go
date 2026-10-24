@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
 // The task workspace exposes finalization before testing, then shows the
@@ -19,33 +21,44 @@ func TestTaskFinalizationUploadDownloadAndTestState(t *testing.T) {
 	}
 	taskID := stageTask(t, handler, cookie, campaignID, mixedWorkbook(t))
 	path := "/campaigns/" + campaignID + "/tasks/" + taskID
-	page := fetchTaskPage(t, handler, cookie, path)
+	recipientsPath := views.TaskSectionPath(campaignID, taskID, views.TaskSectionRecipients)
+	testPath := views.TaskSectionPath(campaignID, taskID, views.TaskSectionTest)
+	page := fetchTaskPage(t, handler, cookie, recipientsPath)
 	for _, want := range []string{
 		`id="task-finalization"`,
 		`id="final-workbook"`,
 		"Approve as-is becomes available after a completed preparation run is selected",
-		"Needs dataset finalization",
-		"Finalize the sending data before sending a test for approval",
 	} {
 		if !strings.Contains(page, want) {
-			t.Fatalf("pre-finalization page missing %q", want)
+			t.Fatalf("pre-finalization Recipients section missing %q", want)
 		}
 	}
-	if strings.Contains(page, "Approve received formatting") {
+	testPage := fetchTaskPage(t, handler, cookie, testPath)
+	if !strings.Contains(testPage, "Finalize the sending data before sending a test for approval") {
+		t.Fatal("pre-finalization Test & approve section is missing the prerequisite")
+	}
+	if strings.Contains(testPage, "Approve received formatting") {
 		t.Fatal("formatting approval is offered before dataset finalization")
 	}
 
 	finalizeTask(t, app, handler, cookie, campaignID, taskID)
-	page = fetchTaskPage(t, handler, cookie, path)
+	page = fetchTaskPage(t, handler, cookie, recipientsPath)
 	for _, want := range []string{
 		"Selected final snapshot",
 		"1 accepted · 4 excluded",
 		"Download accepted final sheet",
+	} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("finalized Recipients section missing %q", want)
+		}
+	}
+	testPage = fetchTaskPage(t, handler, cookie, testPath)
+	for _, want := range []string{
 		"Approve received formatting",
 		"Formatting is not approved for this exact final snapshot and current mailbox.",
 	} {
-		if !strings.Contains(page, want) {
-			t.Fatalf("finalized page missing %q", want)
+		if !strings.Contains(testPage, want) {
+			t.Fatalf("finalized Test & approve section missing %q", want)
 		}
 	}
 	link := regexp.MustCompile(`href="([^"]*finalization/sending\.xlsx[^"]*)"`).FindStringSubmatch(page)

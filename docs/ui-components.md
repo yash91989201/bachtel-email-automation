@@ -8,13 +8,14 @@ content and operator workflows remain unchanged.
 
 ## Structure
 
-- `internal/web/views`: page view models and page templates. Workspaces use the
-  owned `tabs` and `collapsible` primitives; no page keeps its own tab state.
-- `web/js/workspace.js`: the tracked workspace adapter. `scripts/copy-assets.mjs`
+- `internal/web/views`: page view models and page templates. A campaign or task
+  section is an ordinary page at its own path; `workspaceNav` renders those
+  destinations as links and only the selected section is rendered.
+- `web/js/workspace.js`: the tracked section-local adapter. `scripts/copy-assets.mjs`
   copies it to `internal/web/static/`, and `layout.templ` loads it once with a
-  deferred `<script>` after `@ui.Scripts()`. It reads the URL fragment, writes it
-  when the operator selects a tab, restores disclosure state, and re-applies the
-  active tab and disclosure after htmx swaps.
+  deferred `<script>` after `@ui.Scripts()`. It holds no URL or history state:
+  it restores disclosure state across htmx swaps and invalidates a
+  history-restored sending confirmation.
 - `internal/web/ui`: component packages copied from shadcn-templ, plus shared class utilities and its MIT license.
 - `web/css/theme.css`: resolved preset tokens and application status colors.
 - `web/css/vendor`: pinned upstream Luma, Tailwind variants and animation styles.
@@ -34,17 +35,19 @@ only for the sample-preview gating and the dismissible preview result.
 
 Workspace markup:
 
-- A workspace root is `@tabs.Tabs` with `OrientationVertical`, an id equal to its
-  scope (`campaign`, `task`, `sending`), and `data-workspace-tabs` passed through
-  `Attributes`. The same root carries `data-workspace-ignore-hash` when the page
-  renders a validation error, so the server-selected panel wins over the URL.
-- `@tabs.List` holds the triggers; the sidebar styling targets
-  `[data-slot="tabs-trigger"]`. A `workspace-group-separator` marks a group break.
-- The sending polling fragment renders only panels. `tabs.Panels` supplies the
-  root's identity so panel ids and labels stay stable, and the adapter re-applies
-  the active tab after each swap. A persisted disclosure is a `collapsible` with
-  a stable id and `data-workspace-persist`; the refresh link carries
-  `data-workspace-hash-link`.
+- Campaign sections live at `/campaigns/{id}/{tasks,template,activity,settings}`
+  and task sections at `/campaigns/{id}/tasks/{task}/{overview,recipients,test,sending,results}`.
+  `views.CampaignSectionPath` and `views.TaskSectionPath` build those URLs for
+  links and redirects; the campaign and task roots render their default section.
+- `views.workspaceNav` renders the sidebar as ordinary links with
+  `aria-current="page"` on the selected destination. Click, new tab, reload and
+  Back/Forward are native browser behaviour: no route interception, `hx-boost`,
+  `pushState` or `popstate` handler exists for section navigation, and the
+  inactive sections' forms and pollers are absent from the response.
+- A persisted disclosure is a `collapsible`/`accordion` with a stable id and
+  `data-workspace-persist`; the adapter restores it after htmx swaps. Disclosure
+  and draft state are section-local: a full-page section change does not carry
+  them.
 - `hx-preserve` element ids must be selector-safe (letters, digits, `-`, `_`):
   htmx restores them with a selector built from the id, so a content hash with
   `:` is sanitized (`approvalFormID`).

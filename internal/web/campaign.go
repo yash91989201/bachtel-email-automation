@@ -33,7 +33,10 @@ func (s *server) registerCampaignRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /campaigns", s.requireOperator(s.handleCampaignList))
 	mux.HandleFunc("GET /campaigns/new", s.requireOperator(s.handleCampaignNew))
 	mux.HandleFunc("POST /campaigns", s.requireOperator(s.handleCampaignCreate))
-	mux.HandleFunc("GET /campaigns/{id}", s.requireOperator(s.handleCampaignDetail))
+	mux.HandleFunc("GET /campaigns/{id}", s.requireOperator(s.handleCampaignSection(views.CampaignSectionTasks)))
+	for _, section := range []string{views.CampaignSectionTemplate, views.CampaignSectionActivity, views.CampaignSectionSettings} {
+		mux.HandleFunc("GET /campaigns/{id}/"+section, s.requireOperator(s.handleCampaignSection(section)))
+	}
 	mux.HandleFunc("POST /campaigns/{id}/revisions", s.requireOperator(s.handleCampaignRevision))
 	mux.HandleFunc("POST /campaigns/{id}/labels", s.requireOperator(s.handleCampaignLabels))
 	mux.HandleFunc("POST /campaigns/{id}/preview", s.requireOperator(s.handleCampaignPreview))
@@ -121,22 +124,26 @@ func (s *server) handleCampaignCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to create campaign", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+created.ID+"#template", http.StatusSeeOther)
+	http.Redirect(w, r, views.CampaignSectionPath(created.ID, views.CampaignSectionTemplate), http.StatusSeeOther)
 }
 
-func (s *server) handleCampaignDetail(w http.ResponseWriter, r *http.Request) {
-	data, err := s.campaignPageData(r, r.PathValue("id"), "", r.URL.Query()["warning"])
-	if err != nil {
-		s.campaignLoadFailure(w, r, err)
-		return
+// handleCampaignSection renders one campaign workspace section path. The
+// root path shows Tasks; every other section has its own path.
+func (s *server) handleCampaignSection(section string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		data, err := s.campaignPageData(r, r.PathValue("id"), section, r.URL.Query()["warning"])
+		if err != nil {
+			s.campaignLoadFailure(w, r, err)
+			return
+		}
+		s.renderWithStatus(w, r, http.StatusOK, views.CampaignPage(data))
 	}
-	s.renderWithStatus(w, r, http.StatusOK, views.CampaignPage(data))
 }
 
 // handleCampaignExportsGenerate rebuilds the campaign report and ZIP from one
 // consistent snapshot. Export generation never touches email state.
 func (s *server) handleCampaignExportsGenerate(w http.ResponseWriter, r *http.Request) {
-	page, err := s.campaignPageData(r, r.PathValue("id"), "", nil)
+	page, err := s.campaignPageData(r, r.PathValue("id"), views.CampaignSectionActivity, nil)
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
@@ -152,7 +159,7 @@ func (s *server) handleCampaignExportsGenerate(w http.ResponseWriter, r *http.Re
 		s.renderWithStatus(w, r, http.StatusInternalServerError, views.CampaignPage(page))
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+page.ID+"#activity", http.StatusSeeOther)
+	http.Redirect(w, r, views.CampaignSectionPath(page.ID, views.CampaignSectionActivity), http.StatusSeeOther)
 }
 
 // handleCampaignExportsDelete removes only the generated report and package.
@@ -160,7 +167,7 @@ func (s *server) handleCampaignExportsGenerate(w http.ResponseWriter, r *http.Re
 func (s *server) handleCampaignExportsDelete(w http.ResponseWriter, r *http.Request) {
 	target := r.PathValue("id")
 	if err := s.exports.DeleteCampaign(r.Context(), recordFromContext(r).Id, target); err != nil {
-		page, dataErr := s.campaignPageData(r, target, "", nil)
+		page, dataErr := s.campaignPageData(r, target, views.CampaignSectionActivity, nil)
 		if dataErr != nil {
 			s.campaignLoadFailure(w, r, dataErr)
 			return
@@ -170,7 +177,7 @@ func (s *server) handleCampaignExportsDelete(w http.ResponseWriter, r *http.Requ
 		s.renderWithStatus(w, r, http.StatusInternalServerError, views.CampaignPage(page))
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+target+"#activity", http.StatusSeeOther)
+	http.Redirect(w, r, views.CampaignSectionPath(target, views.CampaignSectionActivity), http.StatusSeeOther)
 }
 
 func (s *server) handleCampaignReportDownload(w http.ResponseWriter, r *http.Request) {
@@ -220,7 +227,7 @@ func (s *server) handleAttemptHTML(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleCampaignDelete(w http.ResponseWriter, r *http.Request) {
 	target := r.PathValue("id")
 	if strings.TrimSpace(r.FormValue("confirm")) != "delete" {
-		page, err := s.campaignPageData(r, target, "", nil)
+		page, err := s.campaignPageData(r, target, views.CampaignSectionSettings, nil)
 		if err != nil {
 			s.campaignLoadFailure(w, r, err)
 			return
@@ -235,7 +242,7 @@ func (s *server) handleCampaignDelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if errors.Is(err, retention.ErrCampaignActive) {
-			page, dataErr := s.campaignPageData(r, target, "", nil)
+			page, dataErr := s.campaignPageData(r, target, views.CampaignSectionSettings, nil)
 			if dataErr != nil {
 				s.campaignLoadFailure(w, r, dataErr)
 				return
@@ -265,7 +272,7 @@ func (s *server) handleCampaignRevision(w http.ResponseWriter, r *http.Request) 
 	// One 10 MiB document plus ~1 MiB of multipart framing: the body is
 	// bounded before any part is read into memory.
 	r.Body = http.MaxBytesReader(w, r.Body, campaign.MaxDocumentBytes+(1<<20))
-	page, err := s.campaignPageData(r, r.PathValue("id"), "", nil)
+	page, err := s.campaignPageData(r, r.PathValue("id"), views.CampaignSectionTemplate, nil)
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
@@ -334,16 +341,16 @@ func (s *server) handleCampaignRevision(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	// The warnings travel through the redirect so the refreshed page shows
-	// what the conversion dropped; the fragment opens Template & preview.
-	target := "/campaigns/" + page.ID
+	// what the conversion dropped; the path opens Template & preview.
+	target := views.CampaignSectionPath(page.ID, views.CampaignSectionTemplate)
 	if len(warnings) > 0 {
 		target += "?" + url.Values{"warning": warnings}.Encode()
 	}
-	http.Redirect(w, r, target+"#template", http.StatusSeeOther)
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 func (s *server) handleCampaignLabels(w http.ResponseWriter, r *http.Request) {
-	page, err := s.campaignPageData(r, r.PathValue("id"), "", nil)
+	page, err := s.campaignPageData(r, r.PathValue("id"), views.CampaignSectionSettings, nil)
 	if err != nil {
 		s.campaignLoadFailure(w, r, err)
 		return
@@ -362,7 +369,7 @@ func (s *server) handleCampaignLabels(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to save result labels", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/campaigns/"+page.ID+"#settings", http.StatusSeeOther)
+	http.Redirect(w, r, views.CampaignSectionPath(page.ID, views.CampaignSectionSettings), http.StatusSeeOther)
 }
 
 // handleCampaignPreview renders one in-memory sample row through the current

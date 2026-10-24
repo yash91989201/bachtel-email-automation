@@ -32,6 +32,9 @@ func (s *server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /campaigns/{id}/tasks/new", s.requireOperator(s.handleTaskNew))
 	mux.HandleFunc("POST /campaigns/{id}/tasks", s.requireOperator(s.handleTaskCreate))
 	mux.HandleFunc("GET /campaigns/{id}/tasks/{task}", s.requireOperator(s.handleTaskDetail))
+	for _, section := range []string{views.TaskSectionOverview, views.TaskSectionRecipients, views.TaskSectionTest, views.TaskSectionResults} {
+		mux.HandleFunc("GET /campaigns/{id}/tasks/{task}/"+section, s.requireOperator(s.handleTaskSection(section)))
+	}
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/sending-type", s.requireOperator(s.handleTaskSendingType))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/select", s.requireOperator(s.handleTaskSelect))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/revalidate", s.requireOperator(s.handleTaskRevalidate))
@@ -139,21 +142,33 @@ func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 		uploadError("the workbook could not be uploaded; try again")
 		return
 	}
-	http.Redirect(w, r, taskPath(task)+"#recipients", http.StatusSeeOther)
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionRecipients), http.StatusSeeOther)
 }
 
-// handleTaskDetail renders the one task workspace. Without a recognized
-// fragment the selected section is Overview.
+// handleTaskDetail opens the task root on Overview; every other section has
+// its own path.
 func (s *server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
+	s.renderTaskSection(w, r, views.TaskSectionOverview)
+}
+
+// handleTaskSection renders one task section path with the shared shell.
+func (s *server) handleTaskSection(section string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.renderTaskSection(w, r, section)
+	}
+}
+
+func (s *server) renderTaskSection(w http.ResponseWriter, r *http.Request, section string) {
 	task, ok := s.loadCampaignTask(w, r)
 	if !ok {
 		return
 	}
-	data, err := s.taskPageData(r, task, "")
+	data, err := s.taskPageData(r, task, section)
 	if err != nil {
 		s.taskLoadFailure(w, r, err)
 		return
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	s.renderWithStatus(w, r, http.StatusOK, views.TaskPage(data))
 }
 
@@ -177,7 +192,7 @@ func (s *server) handleTaskSendingType(w http.ResponseWriter, r *http.Request) {
 		s.taskLoadFailure(w, r, err)
 		return
 	}
-	http.Redirect(w, r, taskPath(task)+"#sending", http.StatusSeeOther)
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionSending), http.StatusSeeOther)
 }
 
 // handleTaskSelect confirms the worksheet and header row of a staging task.
@@ -206,7 +221,7 @@ func (s *server) handleTaskSelect(w http.ResponseWriter, r *http.Request) {
 		s.taskLoadFailure(w, r, err)
 		return
 	}
-	http.Redirect(w, r, taskPath(task)+"#recipients", http.StatusSeeOther)
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionRecipients), http.StatusSeeOther)
 }
 
 // handleTaskRevalidate rebuilds the snapshot against the campaign's current
@@ -225,7 +240,7 @@ func (s *server) handleTaskRevalidate(w http.ResponseWriter, r *http.Request) {
 		s.taskLoadFailure(w, r, err)
 		return
 	}
-	http.Redirect(w, r, taskPath(task)+"#recipients", http.StatusSeeOther)
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionRecipients), http.StatusSeeOther)
 }
 
 // handleTaskPreview renders one admitted row through the saved revision as an
@@ -349,7 +364,7 @@ func (s *server) handleTaskResultsGenerate(w http.ResponseWriter, r *http.Reques
 	err := s.exports.GenerateTask(r.Context(), recordFromContext(r).Id, task.ID, true)
 	switch {
 	case err == nil:
-		http.Redirect(w, r, taskPath(task)+"#results", http.StatusSeeOther)
+		http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionResults), http.StatusSeeOther)
 	case errors.Is(err, exports.ErrInProgress):
 		s.renderTaskMessage(w, r, task, views.TaskSectionResults, "result generation is already in progress; reload this page shortly", http.StatusConflict)
 	case errors.Is(err, exports.ErrNotTerminal):
@@ -377,7 +392,7 @@ func (s *server) handleTaskResultsDelete(w http.ResponseWriter, r *http.Request)
 		s.renderTaskMessage(w, r, task, views.TaskSectionResults, "the generated workbook could not be removed; retry", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, taskPath(task)+"#results", http.StatusSeeOther)
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionResults), http.StatusSeeOther)
 }
 
 // loadCampaignTask loads the path's task and confirms it belongs to the
@@ -445,7 +460,7 @@ func (s *server) handleTaskClose(w http.ResponseWriter, r *http.Request) {
 		s.renderTaskMessageWith(w, r, task, views.TaskSectionSending, s.sendingRefusalMessage(err), http.StatusBadRequest, nil)
 		return
 	}
-	http.Redirect(w, r, taskPath(task)+"#overview", http.StatusSeeOther)
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionOverview), http.StatusSeeOther)
 }
 
 func (s *server) taskLoadFailure(w http.ResponseWriter, r *http.Request, err error) {
@@ -801,11 +816,6 @@ func taskPreviewData(preview *intake.Preview) views.TaskPreviewData {
 	return data
 }
 
-// taskPath is the canonical task page root.
-func taskPath(task *intake.Task) string {
-	return "/campaigns/" + task.CampaignID + "/tasks/" + task.ID
-}
-
 // sendingTypeNextLabel specializes first-start navigation without replacing
 // prerequisite, progress, saved-schedule or recovery actions.
 func sendingTypeNextLabel(label, sendingType string) string {
@@ -816,20 +826,20 @@ func sendingTypeNextLabel(label, sendingType string) string {
 }
 
 // nextHref resolves a next action to a navigable destination. External
-// remedies leave the task workspace; internal ones select a task section.
+// remedies leave the task workspace; internal ones open their task section.
 func nextHref(task *intake.Task, next presentation.NextLink) string {
 	switch next.Destination {
 	case presentation.DestCampaignTemplate:
-		return "/campaigns/" + task.CampaignID + "#template"
+		return views.CampaignSectionPath(task.CampaignID, views.CampaignSectionTemplate)
 	case presentation.DestCampaignTasks:
-		return "/campaigns/" + task.CampaignID + "#tasks"
+		return views.CampaignSectionPath(task.CampaignID, views.CampaignSectionTasks)
 	case presentation.DestMailbox:
 		return "/account/mailbox"
 	}
 	if next.Section != "" {
-		return taskPath(task) + "#" + next.Section
+		return views.TaskSectionPath(task.CampaignID, task.ID, next.Section)
 	}
-	return taskPath(task) + "#" + views.TaskSectionRecipients
+	return views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionRecipients)
 }
 
 // blockerHref resolves a blocker remedy to its destination.
@@ -838,7 +848,7 @@ func blockerHref(task *intake.Task, blocker presentation.Blocker) string {
 		return "/account/mailbox"
 	}
 	if blocker.Section != "" {
-		return taskPath(task) + "#" + blocker.Section
+		return views.TaskSectionPath(task.CampaignID, task.ID, blocker.Section)
 	}
 	return ""
 }
@@ -862,7 +872,6 @@ func (s *server) renderTaskMessageWith(w http.ResponseWriter, r *http.Request, t
 		return
 	}
 	data.Section = section
-	data.IgnoreHash = true
 	data.Error = message
 	if adjust != nil {
 		adjust(&data)

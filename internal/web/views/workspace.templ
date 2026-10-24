@@ -1,0 +1,68 @@
+package views
+
+// CampaignSectionPath is the canonical URL of one campaign workspace section.
+func CampaignSectionPath(campaignID, section string) string {
+	return "/campaigns/" + campaignID + "/" + section
+}
+
+// TaskSectionPath is the canonical URL of one task workspace section.
+func TaskSectionPath(campaignID, taskID, section string) string {
+	return "/campaigns/" + campaignID + "/tasks/" + taskID + "/" + section
+}
+
+// workspaceSection is one destination in a workspace's section navigation.
+type workspaceSection struct {
+	Label  string
+	Detail string
+	Href   string
+}
+
+func campaignSections(campaignID string) []workspaceSection {
+	return []workspaceSection{
+		{Label: "Tasks", Detail: "One workbook per task", Href: CampaignSectionPath(campaignID, CampaignSectionTasks)},
+		{Label: "Template & preview", Detail: "Subject, document & mappings", Href: CampaignSectionPath(campaignID, CampaignSectionTemplate)},
+		{Label: "Activity & downloads", Detail: "Reports & recorded emails", Href: CampaignSectionPath(campaignID, CampaignSectionActivity)},
+		{Label: "Settings", Detail: "Result labels & deletion", Href: CampaignSectionPath(campaignID, CampaignSectionSettings)},
+	}
+}
+
+func taskSections(campaignID, taskID string) []workspaceSection {
+	return []workspaceSection{
+		{Label: "Overview", Detail: "Progress & task details", Href: TaskSectionPath(campaignID, taskID, TaskSectionOverview)},
+		{Label: "Recipients", Detail: "Validate & preview rows", Href: TaskSectionPath(campaignID, taskID, TaskSectionRecipients)},
+		{Label: "Test & approve", Detail: "Formatting test", Href: TaskSectionPath(campaignID, taskID, TaskSectionTest)},
+		{Label: "Sending", Detail: "Start, stop & recover", Href: TaskSectionPath(campaignID, taskID, TaskSectionSending)},
+		{Label: "Results", Detail: "Workbook & history", Href: TaskSectionPath(campaignID, taskID, TaskSectionResults)},
+	}
+}
+
+// workspaceNav is a workspace's section navigation as ordinary links. Each
+// section is a full page request, so copy link, new tab, reload and browser
+// history all work natively and the selected destination is the current page.
+templ workspaceNav(label string, sections []workspaceSection, current string) {
+	<nav aria-label={ label } class="grid grid-cols-1 gap-[.6rem] max-[760px]:grid-cols-2">
+		for _, section := range sections {
+			{{ selected := section.Href == current }}
+			<a
+				class={ workspaceSectionClass(selected) }
+				href={ section.Href }
+				if selected {
+					aria-current="page"
+				}
+			>
+				<span>{ section.Label }</span>
+				<small>{ section.Detail }</small>
+			</a>
+		}
+	</nav>
+}
+
+// workspaceSectionClass mirrors the sidebar styling the section tabs used, so
+// navigation looks unchanged while it is a normal link.
+func workspaceSectionClass(selected bool) string {
+	const base = "block w-full h-auto cursor-pointer whitespace-normal wrap-anywhere rounded-[.5rem] border border-transparent p-[.9rem_.75rem] text-left [&>span]:block [&>span]:text-[.84rem] [&>span]:font-bold [&>small]:mt-[.2rem] [&>small]:block [&>small]:text-[.7rem] [&:is(:hover,[aria-current=page])>small]:text-inherit focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+	if selected {
+		return base + " bg-accent text-accent-foreground"
+	}
+	return base + " text-foreground hover:bg-accent hover:text-accent-foreground"
+}

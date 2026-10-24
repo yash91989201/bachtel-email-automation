@@ -249,10 +249,19 @@ func TestPublicSurface(t *testing.T) {
 		if rec.Code != http.StatusOK || rec.Body.Len() == 0 {
 			t.Fatalf("%s: status=%d", path, rec.Code)
 		}
-		// The adapter ships through the asset pipeline and is embedded, so a
-		// production build serves the same file the workspace markup expects.
-		if path == "/static/workspace.js" && !strings.Contains(rec.Body.String(), "data-workspace-tabs") {
-			t.Fatal("/static/workspace.js is served but does not contain the workspace adapter")
+		// The section-local adapter ships through the asset pipeline and is
+		// embedded, so a production build serves the same file the workspace
+		// markup expects.
+		if path == "/static/workspace.js" {
+			body := rec.Body.String()
+			if !strings.Contains(body, "data-workspace-persist") {
+				t.Fatal("/static/workspace.js is served but does not contain the workspace adapter")
+			}
+			for _, unwanted := range []string{"pushState", "hashchange", "popstate", "data-workspace-tabs", "LEGACY"} {
+				if strings.Contains(body, unwanted) {
+					t.Errorf("/static/workspace.js still carries section routing: %s", unwanted)
+				}
+			}
 		}
 	}
 

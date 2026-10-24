@@ -47,10 +47,10 @@ func TestTaskUploadPersistsSendingTypeWithoutStarting(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	wantLocation := "/campaigns/" + campaignID + "/tasks/"
-	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), wantLocation) || !strings.HasSuffix(rec.Header().Get("Location"), "#recipients") {
+	if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), wantLocation) || !strings.HasSuffix(rec.Header().Get("Location"), "/recipients") {
 		t.Fatalf("upload redirect: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
-	taskID := strings.TrimSuffix(strings.TrimPrefix(rec.Header().Get("Location"), wantLocation), "#recipients")
+	taskID := strings.TrimSuffix(strings.TrimPrefix(rec.Header().Get("Location"), wantLocation), "/recipients")
 	if taskID == "" || strings.Contains(taskID, "/") {
 		t.Fatalf("invalid task id in redirect %q", rec.Header().Get("Location"))
 	}
@@ -79,7 +79,7 @@ func TestSendingModeURLStateCannotChangeSavedType(t *testing.T) {
 	beforeAttempts := sendingModeRecordCount(t, f, sending.AttemptsCollection)
 	beforeActions := sendingModeRecordCount(t, f, sending.ActionsCollection)
 	for _, mode := range []string{views.TaskSendingTypeDirect, views.TaskSendingTypeScheduled, views.TaskSendingTypeChoose, "invalid"} {
-		page := do(t, f.handler, http.MethodGet, baseTask+"?sending_type="+url.QueryEscape(mode), nil, withCookie(f.cookie))
+		page := do(t, f.handler, http.MethodGet, f.base+"?sending_type="+url.QueryEscape(mode), nil, withCookie(f.cookie))
 		if page.Code != http.StatusOK {
 			t.Fatalf("GET sending_type=%q: %d", mode, page.Code)
 		}
@@ -88,9 +88,9 @@ func TestSendingModeURLStateCannotChangeSavedType(t *testing.T) {
 			sendingModeAssertChoices(t, doc)
 		} else {
 			sendingModeAssertChoicesAbsent(t, doc)
-			if !strings.Contains(page.Body.String(), "Choose sending time") {
-				t.Errorf("GET sending_type=%q did not retain saved scheduled mode", mode)
-			}
+			// The query is view-only: the saved scheduled mode still owns the
+			// first-start controls.
+			sendingModeAssertScheduleEditor(t, doc, true)
 		}
 	}
 	poll := do(t, f.handler, http.MethodGet, f.base+"/progress?sending_type=choose", nil, withCookie(f.cookie))
@@ -104,7 +104,7 @@ func TestSendingModeURLStateCannotChangeSavedType(t *testing.T) {
 	if got := task.GetString("sending_type"); got != views.TaskSendingTypeScheduled {
 		t.Errorf("GET navigation changed saved sending type to %q", got)
 	}
-	page := do(t, f.handler, http.MethodGet, baseTask, nil, withCookie(f.cookie))
+	page := do(t, f.handler, http.MethodGet, f.base, nil, withCookie(f.cookie))
 	pageDoc := sendingModeDocument(t, page.Body.String())
 	live := sendingModeNode(pageDoc, func(n *html.Node) bool {
 		return n.Type == html.ElementNode && sendingModeAttr(n, "id") == "sending-live"
@@ -124,14 +124,14 @@ func TestSendingModeURLStateCannotChangeSavedType(t *testing.T) {
 	}
 	// A later change must replace the shared task value, not just this URL.
 	changed := do(t, f.handler, http.MethodPost, baseTask+"/sending-type", url.Values{"sending_type": {views.TaskSendingTypeDirect}}, withCookie(f.cookie))
-	if changed.Code != http.StatusSeeOther || changed.Header().Get("Location") != baseTask+"#sending" {
+	if changed.Code != http.StatusSeeOther || changed.Header().Get("Location") != baseTask+"/sending" {
 		t.Fatalf("change to direct: status=%d location=%q", changed.Code, changed.Header().Get("Location"))
 	}
 	if got := taskSendingTypeStored(t, f); got != views.TaskSendingTypeDirect {
 		t.Fatalf("changed saved type = %q", got)
 	}
-	reloaded := do(t, f.handler, http.MethodGet, baseTask, nil, withCookie(f.cookie))
-	sendingModeAssertAction(t, sendingModeDocument(t, reloaded.Body.String()), f.base+"/start#sending", true)
+	reloaded := do(t, f.handler, http.MethodGet, f.base, nil, withCookie(f.cookie))
+	sendingModeAssertAction(t, sendingModeDocument(t, reloaded.Body.String()), f.base+"/start", true)
 	if got := sendingModeRecordCount(t, f, sending.ActionsCollection); got != beforeActions {
 		t.Errorf("saving a type created sending actions: got %d, before %d", got, beforeActions)
 	}
@@ -165,14 +165,14 @@ func TestSendingModeSavedScheduleSurvivesChooserAndReload(t *testing.T) {
 	if selected.Code != http.StatusSeeOther {
 		t.Fatalf("save scheduled mode: %d", selected.Code)
 	}
-	scheduled := do(t, f.handler, http.MethodGet, "/campaigns/"+f.campaignID+"/tasks/"+f.taskID+"?sending_type=direct", nil, withCookie(f.cookie))
+	scheduled := do(t, f.handler, http.MethodGet, f.base+"?sending_type=direct", nil, withCookie(f.cookie))
 	if scheduled.Code != http.StatusOK {
 		t.Fatalf("open scheduled mode: %d", scheduled.Code)
 	}
 	scheduledDoc := sendingModeDocument(t, scheduled.Body.String())
-	sendingModeAssertAction(t, scheduledDoc, f.base+"/start#sending", false)
+	sendingModeAssertAction(t, scheduledDoc, f.base+"/start", false)
 	sendingModeAssertScheduleEditor(t, scheduledDoc, true)
-	scheduleFormNode := sendingModeForm(scheduledDoc, f.base+"/schedule#sending")
+	scheduleFormNode := sendingModeForm(scheduledDoc, f.base+"/schedule")
 	if scheduleFormNode == nil {
 		t.Fatal("scheduled mode has no schedule editor")
 	}
@@ -274,7 +274,7 @@ func TestSendingModeClearDirectRedirectsWithoutStarting(t *testing.T) {
 		"sending_type":    {views.TaskSendingTypeDirect},
 	}
 	cleared := do(t, f.handler, http.MethodPost, f.base+"/schedule", fields, withCookie(f.cookie))
-	wantLocation := "/campaigns/" + f.campaignID + "/tasks/" + f.taskID + "#sending"
+	wantLocation := "/campaigns/" + f.campaignID + "/tasks/" + f.taskID + "/sending"
 	if cleared.Code != http.StatusSeeOther || cleared.Header().Get("Location") != wantLocation {
 		t.Fatalf("clear redirect: status=%d location=%q, want %q", cleared.Code, cleared.Header().Get("Location"), wantLocation)
 	}
@@ -322,9 +322,9 @@ func TestSendingModeStartedTaskIgnoresForgedChoice(t *testing.T) {
 		}
 		doc := sendingModeDocument(t, page.Body.String())
 		sendingModeAssertChoicesAbsent(t, doc)
-		sendingModeAssertActionAbsent(t, doc, f.base+"/start#sending")
+		sendingModeAssertActionAbsent(t, doc, f.base+"/start")
 		sendingModeAssertScheduleEditor(t, doc, false)
-		if sendingModeForm(doc, f.base+"/stop#sending") == nil {
+		if sendingModeForm(doc, f.base+"/stop") == nil {
 			t.Error("forged mode hid the existing stop control")
 		}
 	}

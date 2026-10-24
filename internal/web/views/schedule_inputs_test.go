@@ -11,7 +11,7 @@ func TestScheduleInputsUseNativeDateAndTimeControls(t *testing.T) {
 		ActionID: "schedule-key-", Remaining: 1, Approved: true, Controls: TaskControls{Schedule: true},
 		ScheduleDraftDate: "2026-10-22", ScheduleDraftTime: "09:05",
 	}))
-	form := workspaceNode(doc, "action", "/campaigns/campaign-1/tasks/task-1/sending/schedule#sending")
+	form := workspaceNode(doc, "action", "/campaigns/campaign-1/tasks/task-1/sending/schedule")
 	if form == nil {
 		t.Fatal("scheduled sending form is missing")
 	}

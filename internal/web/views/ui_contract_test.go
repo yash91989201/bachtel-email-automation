@@ -45,8 +45,9 @@ func TestLoginFormNativeContract(t *testing.T) {
 func TestCampaignRevisionFormNativeContract(t *testing.T) {
 	doc := parseView(t, CampaignPage(CampaignPageData{
 		ID: "campaign-1", Name: "Synthetic campaign", MappingDraft: "recipient | Contact Email | recipient",
+		Section: CampaignSectionTemplate,
 	}))
-	form := workspaceNode(doc, "action", "/campaigns/campaign-1/revisions#template")
+	form := workspaceNode(doc, "action", "/campaigns/campaign-1/revisions")
 	if form == nil || form.Data != "form" || workspaceAttr(form, "method") != "post" || workspaceAttr(form, "enctype") != "multipart/form-data" {
 		t.Fatal("revision form must post multipart data to the campaign revision route")
 	}
@@ -89,10 +90,10 @@ func TestCampaignRevisionFormNativeContract(t *testing.T) {
 func TestTaskWorksheetSelectionNativeContract(t *testing.T) {
 	doc := parseView(t, TaskPage(TaskPageData{
 		CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic campaign", StoredStatus: "staging",
-		HasCurrentRevision: true, DefaultSheet: "Recipients", HeaderRow: 4,
+		Section: TaskSectionRecipients, HasCurrentRevision: true, DefaultSheet: "Recipients", HeaderRow: 4,
 		Sheets: []TaskSheetOption{{Name: "Archive"}, {Name: "Recipients", Selected: true}},
 	}))
-	form := workspaceNode(doc, "action", "/campaigns/campaign-1/tasks/task-1/select#recipients")
+	form := workspaceNode(doc, "action", "/campaigns/campaign-1/tasks/task-1/select")
 	if form == nil || workspaceAttr(form, "method") != "post" {
 		t.Fatal("worksheet selection form must post to its task route")
 	}
@@ -115,7 +116,7 @@ func TestTaskWorksheetSelectionNativeContract(t *testing.T) {
 }
 
 func TestCampaignDeleteConfirmationContract(t *testing.T) {
-	doc := parseView(t, CampaignPage(CampaignPageData{ID: "campaign-1", Name: "Synthetic campaign"}))
+	doc := parseView(t, CampaignPage(CampaignPageData{ID: "campaign-1", Name: "Synthetic campaign", Section: CampaignSectionSettings}))
 	form := workspaceNode(doc, "id", "campaign-delete-form")
 	if form == nil || workspaceAttr(form, "method") != "post" {
 		t.Fatal("campaign delete form is missing")
@@ -160,7 +161,7 @@ func TestSendingDiagnosticTestFormContract(t *testing.T) {
 		Rows: []TaskAdmittedRow{{ID: "candidate-1", Row: 2, State: "eligible"}},
 	}))
 	form := workspaceNode(doc, "id", "sending-diagnostic-test")
-	if form == nil || form.Data != "form" || workspaceAttr(form, "method") != "post" || workspaceAttr(form, "action") != "/campaigns/campaign-1/tasks/task-1/sending/test#test" || !hasViewAttr(form, "hx-preserve") {
+	if form == nil || form.Data != "form" || workspaceAttr(form, "method") != "post" || workspaceAttr(form, "action") != "/campaigns/campaign-1/tasks/task-1/sending/test" || !hasViewAttr(form, "hx-preserve") {
 		t.Fatal("diagnostic test form must retain its POST route and polling preservation")
 	}
 	selectNode := workspaceNode(form, "id", "sending-sample-row")
@@ -222,7 +223,7 @@ func TestSendingStartAndRecoveryConfirmations(t *testing.T) {
 		StoredStatus: "ready", SendingType: TaskSendingTypeDirect, Section: TaskSectionSending, ActionID: "actions-", Approved: false,
 		Remaining: 2, Controls: TaskControls{Start: true},
 	}))
-	start := workspaceNode(doc, "action", base+"/start#sending")
+	start := workspaceNode(doc, "action", base+"/start")
 	if start == nil || !hasViewAttr(start, "hx-preserve") {
 		t.Fatal("candidate start form must preserve state across progress updates")
 	}
@@ -237,8 +238,8 @@ func TestSendingStartAndRecoveryConfirmations(t *testing.T) {
 	for _, tc := range []struct {
 		name, state, action, expectedButton string
 	}{
-		{name: "definite failure retry", state: "definite_failure", action: "/retry#sending", expectedButton: "Retry"},
-		{name: "uncertain outcome resend", state: "review_required", action: "/resend#sending", expectedButton: "Send again — duplicate risk"},
+		{name: "definite failure retry", state: "definite_failure", action: "/retry", expectedButton: "Retry"},
+		{name: "uncertain outcome resend", state: "review_required", action: "/resend", expectedButton: "Send again — duplicate risk"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			page := renderWorkspace(t, taskRecovery(TaskPageData{
@@ -313,9 +314,9 @@ func TestRecoveryTableBulkSelectionContract(t *testing.T) {
 		}
 	}
 	for _, tc := range []struct{ action, submit string }{
-		{action: "/retry#sending", submit: "Retry selected"},
-		{action: "/resend#sending", submit: "Send again selected"},
-		{action: "/resolve#sending", submit: "Mark selected already submitted"},
+		{action: "/retry", submit: "Retry selected"},
+		{action: "/resend", submit: "Send again selected"},
+		{action: "/resolve", submit: "Mark selected already submitted"},
 	} {
 		form := workspaceNode(doc, "action", base+tc.action)
 		if form == nil || !hasViewAttr(form, "hx-preserve") {

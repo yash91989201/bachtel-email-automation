@@ -22,7 +22,6 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/nativeselect"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/scrollarea"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/table"
-	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tabs"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/textarea"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tooltip"
 )
@@ -61,7 +60,7 @@ type TaskUploadData struct {
 templ TaskUpload(data TaskUploadData) {
 	@Layout("New task", true, "campaigns") {
 		<header class="space-y-3 pt-1 pb-2.5">
-			@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Tasks", Href: "/campaigns/" + data.CampaignID + "#tasks"}, breadcrumbEntry{Label: "Upload workbook"})
+			@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Tasks", Href: CampaignSectionPath(data.CampaignID, CampaignSectionTasks)}, breadcrumbEntry{Label: "Upload workbook"})
 			<h1>Upload a task workbook</h1>
 			<p class="max-w-170 text-muted-foreground text-[.9375rem]">Uploading stores the workbook as a staging task for <strong>{ data.CampaignName }</strong>. Next, confirm the worksheet and header row before validation.</p>
 			<p class="text-sm text-muted-foreground">
@@ -84,7 +83,7 @@ templ TaskUpload(data TaskUploadData) {
 				}
 				@alert.Description(alert.DescriptionProps{}) {
 					<p>The upload is stored, but mapped header names and validation are only available once the campaign has a template.</p>
-					<a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "#template" }>Add template</a>
+					<a class="app-link text-primary" href={ CampaignSectionPath(data.CampaignID, CampaignSectionTemplate) }>Add template</a>
 				}
 			}
 		}
@@ -123,7 +122,7 @@ templ TaskUpload(data TaskUploadData) {
 						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
 							Upload workbook
 						}
-						<a class={ button.Variants(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "#tasks" }>Cancel</a>
+						<a class={ button.Variants(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault}) } href={ CampaignSectionPath(data.CampaignID, CampaignSectionTasks) }>Cancel</a>
 					</div>
 				}
 			}
@@ -151,11 +150,10 @@ type TaskPageData struct {
 	CampaignName string
 	TaskID       string
 
-	// Section selects the rendered panel; IgnoreHash makes the server's choice
-	// win over an obsolete URL fragment after an error.
-	Section    string
-	IgnoreHash bool
-	Error      string
+	// Section selects the rendered panel; the section path sets it, and an
+	// error keeps the section its message belongs to.
+	Section string
+	Error   string
 
 	Filename  string
 	Reference string
@@ -481,7 +479,7 @@ type TaskPreparationHeld struct {
 templ TaskPage(data TaskPageData) {
 	@Layout("Task", true, "campaigns") {
 		<header class="space-y-3 pt-1 pb-2.5">
-			@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Tasks", Href: "/campaigns/" + data.CampaignID + "#tasks"}, breadcrumbEntry{Label: data.Filename})
+			@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Tasks", Href: CampaignSectionPath(data.CampaignID, CampaignSectionTasks)}, breadcrumbEntry{Label: data.Filename})
 			<div class="flex flex-wrap items-center gap-3">
 				<h1 class="min-w-0 wrap-anywhere">{ data.Filename }</h1>
 				<div class="shrink-0">
@@ -508,44 +506,26 @@ templ TaskPage(data TaskPageData) {
 				}
 			}
 		</header>
-		@tabs.Tabs(tabs.Props{ID: "task", Class: "grid grid-cols-[240px_minmax(0,1fr)] gap-8 items-start max-[760px]:grid-cols-1 max-[760px]:gap-5", Orientation: tabs.OrientationVertical, DefaultValue: taskInitialSection(data), Attributes: taskTabAttributes(data)}) {
-			<aside class="sticky top-6 max-[760px]:static **:data-[slot=tabs-list]:grid! **:data-[slot=tabs-list]:grid-cols-1 **:data-[slot=tabs-list]:w-full! **:data-[slot=tabs-list]:gap-[.6rem] **:data-[slot=tabs-list]:p-0! **:data-[slot=tabs-list]:bg-transparent **:data-[slot=tabs-list]:rounded-none! **:data-[slot=tabs-trigger]:w-full! **:data-[slot=tabs-trigger]:h-auto! **:data-[slot=tabs-trigger]:whitespace-normal! **:data-[slot=tabs-trigger]:wrap-anywhere **:data-[slot=tabs-trigger]:p-[.9rem_.75rem]! **:data-[slot=tabs-trigger]:rounded-[.5rem]! **:data-[slot=tabs-trigger]:border-transparent **:data-[slot=tabs-trigger]:text-left **:data-[slot=tabs-trigger]:block! **:data-[slot=tabs-trigger]:cursor-pointer **:data-[slot=tabs-trigger]:text-foreground! **:data-[slot=tabs-trigger]:bg-transparent! [&_[data-slot=tabs-trigger]:hover]:bg-accent! [&_[data-slot=tabs-trigger]:hover]:text-accent-foreground! [&_[data-slot=tabs-trigger][data-active]]:bg-accent! [&_[data-slot=tabs-trigger][data-active]]:text-accent-foreground! [&_[data-slot=tabs-trigger]>span]:block [&_[data-slot=tabs-trigger]>span]:text-[.84rem] [&_[data-slot=tabs-trigger]>span]:font-bold [&_[data-slot=tabs-trigger]>small]:block [&_[data-slot=tabs-trigger]>small]:text-[.7rem] [&_[data-slot=tabs-trigger]>small]:mt-[.2rem] [&_[data-slot=tabs-trigger]>small]:text-muted-foreground [&_[data-slot=tabs-trigger]:is(:hover,[data-active])>small]:text-inherit max-[760px]:**:data-[slot=tabs-list]:grid-cols-2" aria-label="Task navigation">
-				@tabs.List(tabs.ListProps{Attributes: templ.Attributes{"aria-label": "Task sections"}}) {
-					@tabs.Trigger(tabs.TriggerProps{Value: TaskSectionOverview}) {
-						<span>Overview</span><small>Progress & task details</small>
-					}
-					@tabs.Trigger(tabs.TriggerProps{Value: TaskSectionRecipients}) {
-						<span>Recipients</span><small>Validate & preview rows</small>
-					}
-					@tabs.Trigger(tabs.TriggerProps{Value: TaskSectionTest}) {
-						<span>Test & approve</span><small>Formatting test</small>
-					}
-					@tabs.Trigger(tabs.TriggerProps{Value: TaskSectionSending}) {
-						<span>Sending</span><small>Start, stop & recover</small>
-					}
-					@tabs.Trigger(tabs.TriggerProps{Value: TaskSectionResults}) {
-						<span>Results</span><small>Workbook & history</small>
-					}
-				}
+		{{ section := taskInitialSection(data) }}
+		<div class="grid grid-cols-[240px_minmax(0,1fr)] gap-8 items-start max-[760px]:grid-cols-1 max-[760px]:gap-5">
+			<aside class="sticky top-6 max-[760px]:static">
+				@workspaceNav("Task navigation", taskSections(data.CampaignID, data.TaskID), TaskSectionPath(data.CampaignID, data.TaskID, section))
 			</aside>
-			<div class="min-w-0 **:data-[slot=tabs-content]:min-w-0">
-				@tabs.Content(tabs.ContentProps{Value: TaskSectionOverview, Class: "space-y-6"}) {
-					@taskOverview(data)
-				}
-				@tabs.Content(tabs.ContentProps{Value: TaskSectionRecipients, Class: "space-y-6"}) {
-					@taskRecipients(data)
-				}
-				@tabs.Content(tabs.ContentProps{Value: TaskSectionTest, Class: "space-y-6"}) {
-					@taskTest(data)
-				}
-				@tabs.Content(tabs.ContentProps{Value: TaskSectionSending, Class: "space-y-6"}) {
-					@TaskSendingLive(data)
-				}
-				@tabs.Content(tabs.ContentProps{Value: TaskSectionResults, Class: "space-y-6"}) {
-					@taskResults(data)
+			<div class="min-w-0" id={ "task-panel-" + section }>
+				switch section {
+					case TaskSectionRecipients:
+						@taskRecipients(data)
+					case TaskSectionTest:
+						@taskTest(data)
+					case TaskSectionSending:
+						@TaskSendingLive(data)
+					case TaskSectionResults:
+						@taskResults(data)
+					default:
+						@taskOverview(data)
 				}
 			</div>
-		}
+		</div>
 	}
 }
 
@@ -558,7 +538,7 @@ templ taskOverview(data TaskPageData) {
 				<h3 id="task-details-heading" class="cn-card-title">Task details</h3>
 				<dl class="grid grid-cols-2 gap-4 text-sm *:min-w-0 [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:wrap-anywhere max-[760px]:grid-cols-1">
 					<div><dt>Uploaded</dt><dd>{ data.UploadedAt }</dd></div>
-					<div><dt>Campaign</dt><dd><a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "#tasks" }>{ data.CampaignName }</a></dd></div>
+					<div><dt>Campaign</dt><dd><a class="app-link text-primary" href={ CampaignSectionPath(data.CampaignID, CampaignSectionTasks) }>{ data.CampaignName }</a></dd></div>
 					<div>
 						<dt>Saved revision</dt>
 						<dd>
@@ -604,7 +584,7 @@ templ taskLifecycle(data TaskPageData) {
 			for index, step := range data.Lifecycle {
 				{{ section := taskLifecycleSection(step.Name) }}
 				{{ current := section == taskLifecycleNextSection(data) }}
-				{{ href := "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "#" + section }}
+				{{ href := TaskSectionPath(data.CampaignID, data.TaskID, section) }}
 				<li class="group relative min-w-0" data-complete={ strconv.FormatBool(step.Complete) } data-next={ strconv.FormatBool(!step.Complete && current) }>
 					if index < len(data.Lifecycle)-1 {
 						<span aria-hidden="true" class="absolute top-4 left-8 -right-4 h-px bg-border group-data-[complete=true]:bg-primary/40 max-[1100px]:top-8 max-[1100px]:left-4 max-[1100px]:right-auto max-[1100px]:-bottom-4 max-[1100px]:h-auto max-[1100px]:w-px"></span>
@@ -666,11 +646,11 @@ templ taskLifecycle(data TaskPageData) {
 // External prerequisites still belong to the stage they prevent.
 func taskLifecycleNextSection(data TaskPageData) string {
 	for _, section := range []string{TaskSectionOverview, TaskSectionRecipients, TaskSectionTest, TaskSectionSending, TaskSectionResults} {
-		if strings.HasSuffix(data.NextHref, "#"+section) {
+		if strings.HasSuffix(data.NextHref, "/"+section) {
 			return section
 		}
 	}
-	if strings.HasSuffix(data.NextHref, "#template") {
+	if strings.HasSuffix(data.NextHref, "/template") {
 		return TaskSectionRecipients
 	}
 	return TaskSectionSending
@@ -730,7 +710,7 @@ templ taskRecipients(data TaskPageData) {
 					<h3 id="selection-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Choose the worksheet and header row</h3>
 					<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Confirm which worksheet contains recipients and which row names its columns. Current selection: <code>{ data.DefaultSheet }</code>, row { data.HeaderRow }.</p>
 					if data.HasCurrentRevision {
-						<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/select#recipients" } class="grid grid-cols-2 gap-4 *:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1">
+						<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/select" } class="grid grid-cols-2 gap-4 *:min-w-0 max-[960px]:grid-cols-1 max-[760px]:grid-cols-1">
 							@field.Field(field.Props{}) {
 								@field.Label(field.LabelProps{For: "select-sheet"}) {
 									Worksheet
@@ -777,7 +757,7 @@ templ taskRecipients(data TaskPageData) {
 							}
 							@alert.Description(alert.DescriptionProps{}) {
 								<p>The workbook is stored and its worksheet choices stay recorded. Validation is unavailable until the campaign has a template.</p>
-								<a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "#template" }>Add template</a>
+								<a class="app-link text-primary" href={ CampaignSectionPath(data.CampaignID, CampaignSectionTemplate) }>Add template</a>
 							}
 						}
 					}
@@ -802,7 +782,7 @@ templ taskRecipients(data TaskPageData) {
 								} else {
 									<p>Revalidate this task to rebuild the snapshot against Revision { data.CurrentRevision }.</p>
 								}
-								<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate#recipients" }>
+								<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate" }>
 									@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeSm, Disabled: data.ScheduleState == "scheduled"}) {
 										Revalidate with current template
 									}
@@ -888,7 +868,7 @@ templ taskFinalization(data TaskPageData) {
 					<p class="text-sm text-muted-foreground">Approve as-is becomes available after a completed preparation run is selected. You can still upload an edited final sheet.</p>
 				}
 				if data.Finalization.CanApprove {
-					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/finalization/approve#recipients" } class="space-y-2">
+					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/finalization/approve" } class="space-y-2">
 						<input type="hidden" name="action_id" value={ data.ActionID + "finalize" }/>
 						@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
 							@checkbox.Checkbox(checkbox.Props{ID: "finalize-approve", Name: "confirm_approve", Value: "yes", Required: true})
@@ -900,7 +880,7 @@ templ taskFinalization(data TaskPageData) {
 					</form>
 				}
 				if data.Finalization.CanUpload {
-					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/finalization/upload#recipients" } enctype="multipart/form-data" class="space-y-3">
+					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/finalization/upload" } enctype="multipart/form-data" class="space-y-3">
 						<input type="hidden" name="action_id" value={ data.ActionID + "finalupload" }/>
 						@field.Field(field.Props{}) {
 							@field.Label(field.LabelProps{For: "final-workbook"}) {
@@ -948,7 +928,7 @@ templ taskPreview(data TaskPageData) {
 				<h3 id="preview-heading" class="cn-card-title">Recipient preview</h3>
 				if len(data.Rows) > 0 {
 					<p class="text-sm text-muted-foreground">Select an admitted row to render its saved revision. Nothing is stored and nothing is sent.</p>
-					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview#recipients" } hx-post={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-target="#task-preview-result" hx-swap="innerHTML" hx-trigger="change, submit" hx-indicator="#task-preview-loading" class="space-y-3">
+					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-post={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preview" } hx-target="#task-preview-result" hx-swap="innerHTML" hx-trigger="change, submit" hx-indicator="#task-preview-loading" class="space-y-3">
 						@field.Field(field.Props{}) {
 							@field.Label(field.LabelProps{For: "preview-row"}) {
 								Row
@@ -1057,11 +1037,11 @@ templ taskTest(data TaskPageData) {
 	<section class="space-y-6" id="task-test" aria-labelledby="test-heading">
 		<h2 id="test-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Test & approve</h2>
 		if data.StoredStatus == "staging" {
-			<p class="text-muted-foreground">Validate the workbook in <a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "#recipients" }>Recipients</a> first. Candidate tests and approval are unavailable until the workbook has a validation snapshot.</p>
+			<p class="text-muted-foreground">Validate the workbook in <a class="app-link text-primary" href={ TaskSectionPath(data.CampaignID, data.TaskID, TaskSectionRecipients) }>Recipients</a> first. Candidate tests and approval are unavailable until the workbook has a validation snapshot.</p>
 		} else if !data.DatasetFinalized && data.FinalizationRequired {
 			@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
 				<p>Finalize the sending data before sending a test for approval. A pre-finalization diagnostic cannot approve a final snapshot or authorize sending.</p>
-				<a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "#recipients" }>Review and finalize data</a>
+				<a class="app-link text-primary" href={ TaskSectionPath(data.CampaignID, data.TaskID, TaskSectionRecipients) }>Review and finalize data</a>
 			}
 		} else {
 			@taskApprovalSummary(data)
@@ -1070,7 +1050,7 @@ templ taskTest(data TaskPageData) {
 					<details id="formatting-review" class="space-y-6" open?={ data.Error != "" }>
 						<summary class={ "list-none cursor-pointer [&::-webkit-details-marker]:hidden", button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) }>Change formatting</summary>
 						<div class="space-y-6">
-							<p class="text-sm text-muted-foreground">Your current approval stays valid while you review. To change the content, <a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "#template" }>create a template revision</a>, then revalidate an unstarted task and test the new configuration. Tasks that have started keep their saved revision.</p>
+							<p class="text-sm text-muted-foreground">Your current approval stays valid while you review. To change the content, <a class="app-link text-primary" href={ CampaignSectionPath(data.CampaignID, CampaignSectionTemplate) }>create a template revision</a>, then revalidate an unstarted task and test the new configuration. Tasks that have started keep their saved revision.</p>
 							@taskDiagnostics(data)
 							@taskApprovalForm(data)
 						</div>
@@ -1116,7 +1096,7 @@ templ taskDiagnostics(data TaskPageData) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
 			<h3 id="sending-test-heading" class="cn-card-title">Send formatting test</h3>
 			<p class="text-muted-foreground max-w-[75ch] text-[.875rem]">Choose a valid sample row and enter the test address. Tests use a separate attempt and never submit a candidate or resume work.</p>
-			<form id="sending-diagnostic-test" hx-preserve method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending/test#test" } class="space-y-3">
+			<form id="sending-diagnostic-test" hx-preserve method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending/test" } class="space-y-3">
 				<input type="hidden" name="action_id" value={ data.ActionID + "test" }/>
 				@field.Field(field.Props{}) {
 					@field.Label(field.LabelProps{For: "sending-sample-row"}) {
@@ -1153,7 +1133,7 @@ templ taskApprovalForm(data TaskPageData) {
 		@card.Content(card.ContentProps{Class: "gap-4"}) {
 			<h3 id="sending-approval-heading" class="cn-card-title">Approve received formatting</h3>
 			<p>Select the qualifying submitted test, then confirm you received and checked its formatting.</p>
-			<form id={ approvalFormID(data) } hx-preserve method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending/approve#test" } class="space-y-3">
+			<form id={ approvalFormID(data) } hx-preserve method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending/approve" } class="space-y-3">
 				<input type="hidden" name="action_id" value={ data.ActionID + "approve" }/>
 				<input type="hidden" name="content_hash" value={ data.Hash }/>
 				@field.Field(field.Props{}) {
@@ -1204,7 +1184,7 @@ templ TaskSendingLive(data TaskPageData) {
 				<p class="mt-2 text-xs text-muted-foreground">Exclusions: invalid { data.Invalid }, duplicate { data.Duplicate }, ineligible { data.Ineligible }. Counts refresh before each action; changed exclusions require another confirmation.</p>
 			</div>
 			if data.StoredStatus == "staging" {
-				<p class="text-muted-foreground">Validate the workbook in <a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "#recipients" }>Recipients</a> first. Candidate actions and scheduling are unavailable until then.</p>
+				<p class="text-muted-foreground">Validate the workbook in <a class="app-link text-primary" href={ TaskSectionPath(data.CampaignID, data.TaskID, TaskSectionRecipients) }>Recipients</a> first. Candidate actions and scheduling are unavailable until then.</p>
 			} else {
 				@taskSendingControls(data)
 				@taskRecovery(data)
@@ -1247,7 +1227,7 @@ templ taskSendingControls(data TaskPageData) {
 					}
 				</h3>
 				if taskCanChooseSendingType(data) && mode != "" {
-					<a class="app-link text-primary text-sm" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "?sending_type=choose#sending" }>Change sending type</a>
+					<a class="app-link text-primary text-sm" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/sending?sending_type=choose" }>Change sending type</a>
 				}
 			</div>
 			switch  {
@@ -1319,7 +1299,7 @@ templ taskSendingActions(data TaskPageData) {
 			@sendingAction(data, "retry_all", "Retry failed recipients", data.RetryableFailed)
 		}
 		if data.Controls.Stop {
-			<form id={ "sending-stop-" + data.StoredStatus + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/stop#sending" }>
+			<form id={ "sending-stop-" + data.StoredStatus + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/stop" }>
 				<input type="hidden" name="action_id" value={ data.ActionID + "stop" }/>
 				<input type="hidden" name="expected_count" value="0"/>
 				<input type="hidden" name="confirmed" value="yes"/>
@@ -1333,7 +1313,7 @@ templ taskSendingActions(data TaskPageData) {
 		}
 	</div>
 	if data.Controls.Revalidate {
-		<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate#sending" } class="space-y-2">
+		<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate" } class="space-y-2">
 			<p class="text-sm status-warning">The saved snapshot differs from the current template.</p>
 			@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantSecondary, Disabled: data.ScheduleState == "scheduled"}) {
 				Revalidate with current template
@@ -1384,7 +1364,7 @@ templ taskSendingActions(data TaskPageData) {
 }
 
 templ sendingAction(data TaskPageData, kind string, label string, count int) {
-	<form id={ "sending-action-" + kind + "-" + strconv.Itoa(count) + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/" + kind + "#sending" } class="space-y-2">
+	<form id={ "sending-action-" + kind + "-" + strconv.Itoa(count) + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/" + kind } class="space-y-2">
 		<input type="hidden" name="action_id" value={ data.ActionID + kind }/>
 		<input type="hidden" name="expected_count" value={ strconv.Itoa(count) }/>
 		<label class="block">
@@ -1418,7 +1398,7 @@ templ taskSchedule(data TaskPageData) {
 			<p class="text-sm status-warning">This scheduled start was missed. Clear it before choosing a new schedule or switching to Direct sending.</p>
 		}
 		if data.Controls.Schedule || data.Controls.EditSchedule {
-			<form id={ "sending-schedule-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/schedule#sending" } x-data={ "{ confirmed: false, eligible: " + strconv.FormatBool(data.Approved && data.Remaining > 0) + " }" } x-on:change="if ($event.target.matches('input[name=confirmed]')) confirmed = $event.target.checked" class="space-y-4">
+			<form id={ "sending-schedule-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/schedule" } x-data={ "{ confirmed: false, eligible: " + strconv.FormatBool(data.Approved && data.Remaining > 0) + " }" } x-on:change="if ($event.target.matches('input[name=confirmed]')) confirmed = $event.target.checked" class="space-y-4">
 				<input type="hidden" name="action_id" value={ data.ActionID + "schedule" }/>
 				<input type="hidden" name="expected_count" value={ strconv.Itoa(data.Remaining) }/>
 				<div class="flex flex-wrap items-start gap-4">
@@ -1453,7 +1433,7 @@ templ taskSchedule(data TaskPageData) {
 }
 
 templ taskClearSchedule(data TaskPageData) {
-	<form id={ "sending-schedule-clear-" + data.ScheduleState + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/schedule#sending" } class="space-y-2 border-t border-border pt-4">
+	<form id={ "sending-schedule-clear-" + data.ScheduleState + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/schedule" } class="space-y-2 border-t border-border pt-4">
 		<input type="hidden" name="action_id" value={ data.ActionID + "scheduleclear" }/>
 		@button.Button(button.Props{Variant: button.VariantSecondary, Type: button.TypeSubmit, Attributes: templ.Attributes{"name": "schedule_action", "value": "clear"}}) {
 			if taskCanChooseSendingType(data) && taskSendingType(data) == TaskSendingTypeDirect {
@@ -1523,7 +1503,7 @@ templ taskRecoveryBulk(data TaskPageData) {
 			<p class="text-sm text-muted-foreground"><span x-text="retry.length + review.length">0</span> selected. Counts refresh before each action; a changed selection is refused.</p>
 		</div>
 		if data.Controls.RetryRow {
-			<form id={ "sending-retry-selected-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/retry#sending" } x-bind:hidden="retry.length === 0" class="space-y-3 border-t border-border pt-3">
+			<form id={ "sending-retry-selected-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/retry" } x-bind:hidden="retry.length === 0" class="space-y-3 border-t border-border pt-3">
 				<input type="hidden" name="action_id" value={ data.ActionID + "retryselected" }/>
 				<input type="hidden" name="expected_count" x-bind:value="retry.length"/>
 				<template x-for="id in retry" x-bind:key="id">
@@ -1540,7 +1520,7 @@ templ taskRecoveryBulk(data TaskPageData) {
 			</form>
 		}
 		if data.Controls.ResendRow {
-			<form id={ "sending-resend-selected-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resend#sending" } x-bind:hidden="review.length === 0" class="space-y-3 border-t border-border pt-3">
+			<form id={ "sending-resend-selected-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resend" } x-bind:hidden="review.length === 0" class="space-y-3 border-t border-border pt-3">
 				<input type="hidden" name="action_id" value={ data.ActionID + "resendselected" }/>
 				<input type="hidden" name="expected_count" x-bind:value="review.length"/>
 				<template x-for="id in review" x-bind:key="id">
@@ -1561,7 +1541,7 @@ templ taskRecoveryBulk(data TaskPageData) {
 			</form>
 		}
 		if data.Controls.ResolveRow {
-			<form id={ "sending-resolve-selected-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resolve#sending" } x-bind:hidden="review.length === 0" class="space-y-3 border-t border-border pt-3">
+			<form id={ "sending-resolve-selected-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resolve" } x-bind:hidden="review.length === 0" class="space-y-3 border-t border-border pt-3">
 				<input type="hidden" name="action_id" value={ data.ActionID + "resolvesselected" }/>
 				<input type="hidden" name="expected_count" x-bind:value="review.length"/>
 				<template x-for="id in review" x-bind:key="id">
@@ -1664,7 +1644,7 @@ templ recoveryRetryDialog(data TaskPageData, row TaskAdmittedRow) {
 				}
 			}
 			@recoveryPriorAttempt(row)
-			<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/retry#sending" } class="space-y-3">
+			<form id={ "sending-retry-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/retry" } class="space-y-3">
 				@sendingRowFields(data, row)
 				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
 					@checkbox.Checkbox(checkbox.Props{ID: "sending-retry-confirm-" + row.ID, Name: "confirmed", Value: "yes", Required: true})
@@ -1695,7 +1675,7 @@ templ recoveryResendDialog(data TaskPageData, row TaskAdmittedRow) {
 				}
 			}
 			@recoveryPriorAttempt(row)
-			<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resend#sending" } class="space-y-3">
+			<form id={ "sending-resend-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resend" } class="space-y-3">
 				@sendingRowFields(data, row)
 				@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
 					@checkbox.Checkbox(checkbox.Props{ID: "sending-resend-duplicate-" + row.ID, Name: "duplicate_risk", Value: "yes", Required: true})
@@ -1730,7 +1710,7 @@ templ recoveryResolveDialog(data TaskPageData, row TaskAdmittedRow) {
 				}
 			}
 			@recoveryPriorAttempt(row)
-			<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resolve#sending" } class="space-y-3">
+			<form id={ "sending-resolve-" + row.ID + "-" + row.State + "-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/resolve" } class="space-y-3">
 				@sendingRowFields(data, row)
 				@field.Field(field.Props{}) {
 					@field.Label(field.LabelProps{For: "sending-resolution-basis-" + row.ID}) {
@@ -1802,7 +1782,7 @@ templ taskPacing(data TaskPageData) {
 						}
 					</div>
 				</dl>
-				<form id={ "sending-rate-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/rate#sending" } class="flex flex-col items-start gap-3">
+				<form id={ "sending-rate-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/rate" } class="flex flex-col items-start gap-3">
 					<input type="hidden" name="action_id" value={ data.ActionID + "rate" }/>
 					<div class="min-w-0 w-full max-w-sm space-y-2">
 						@field.Field(field.Props{}) {
@@ -1842,13 +1822,13 @@ templ taskResults(data TaskPageData) {
 					<div class="app-card-actions">
 						<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results.xlsx" }>Download results workbook</a>
 						if data.ResultEligible {
-							<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results" }>
+							<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results" }>
 								@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantGhost, Size: button.SizeDefault}) {
 									Regenerate results
 								}
 							</form>
 						}
-						<form id="task-results-delete-form" method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results/delete#results" }>
+						<form id="task-results-delete-form" method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results/delete" }>
 							@alertdialog.AlertDialog(alertdialog.Props{ID: "task-results-delete"}) {
 								@button.Button(button.Props{Variant: button.VariantGhost, Size: button.SizeDefault, Attributes: alertdialog.Trigger(ctx)}) {
 									Remove generated file
@@ -1888,7 +1868,7 @@ templ taskResults(data TaskPageData) {
 					}
 					<p>The last generation did not finish. Retrying rebuilds the file from retained records and never sends or retries email.</p>
 					if data.Controls.RetryResult {
-						<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results" }>
+						<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results" }>
 							@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
 								Retry result generation
 							}
@@ -1897,7 +1877,7 @@ templ taskResults(data TaskPageData) {
 				} else if data.ResultEligible {
 					<p>No workbook is published yet. Generate it from retained records; this never sends or retries email.</p>
 					if data.Controls.GenerateResult {
-						<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results#results" }>
+						<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/results" }>
 							@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
 								Generate results workbook
 							}
@@ -2047,8 +2027,8 @@ templ TaskPreviewResult(data TaskPreviewData) {
 	</div>
 }
 
-// taskInitialSection selects the rendered panel. An error wins over the URL so
-// the message can never be hidden behind another section.
+// taskInitialSection selects the rendered panel. An error keeps its own
+// section so the message can never be hidden behind another one.
 func taskInitialSection(data TaskPageData) string {
 	switch {
 	case data.Error != "" || data.ValidationError != "":
@@ -2061,16 +2041,6 @@ func taskInitialSection(data TaskPageData) string {
 	default:
 		return TaskSectionOverview
 	}
-}
-
-// taskTabAttributes marks the workspace for the adapter. An error keeps the
-// server-selected panel, so the fragment cannot hide it.
-func taskTabAttributes(data TaskPageData) templ.Attributes {
-	attrs := templ.Attributes{"data-workspace-tabs": true, "data-workspace-default": taskInitialSection(data)}
-	if data.IgnoreHash || data.Error != "" || data.ValidationError != "" {
-		attrs["data-workspace-ignore-hash"] = true
-	}
-	return attrs
 }
 
 // taskCanChooseSendingType limits the chooser to existing first-start controls.

@@ -16,7 +16,6 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/label"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/separator"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/table"
-	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tabs"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/textarea"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tooltip"
 )
@@ -218,10 +217,9 @@ type CampaignPageData struct {
 	Variables []PreviewVariable
 	History   []RevisionRow
 
-	// Section selects the rendered panel; IgnoreHash makes the server's
-	// choice win over an obsolete URL fragment after a validation error.
-	Section    string
-	IgnoreHash bool
+	// Section selects the rendered panel; the section path sets it, and a
+	// validation error picks the section its message belongs to.
+	Section string
 
 	RevisionError string
 	LabelsError   string
@@ -305,7 +303,7 @@ templ CampaignPage(data CampaignPageData) {
 					<h1 class="wrap-anywhere">{ data.Name }</h1>
 				</div>
 				if !data.HasRevision {
-					<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href={ "/campaigns/" + data.ID + "#template" }>Add template</a>
+					<a class={ button.Variants(button.Props{Variant: button.VariantDefault, Size: button.SizeDefault}) } href={ CampaignSectionPath(data.ID, CampaignSectionTemplate) }>Add template</a>
 				}
 			</div>
 			if len(data.Warnings) > 0 {
@@ -348,38 +346,24 @@ templ CampaignPage(data CampaignPageData) {
 				}
 			}
 		</header>
-		@tabs.Tabs(tabs.Props{ID: "campaign", Class: "grid grid-cols-[240px_minmax(0,1fr)] gap-8 items-start max-[760px]:grid-cols-1 max-[760px]:gap-5", Orientation: tabs.OrientationVertical, DefaultValue: campaignInitialSection(data), Attributes: campaignTabAttributes(data)}) {
-			<aside class="sticky top-6 max-[760px]:static **:data-[slot=tabs-list]:grid! **:data-[slot=tabs-list]:grid-cols-1 **:data-[slot=tabs-list]:w-full! **:data-[slot=tabs-list]:gap-[.6rem] **:data-[slot=tabs-list]:p-0! **:data-[slot=tabs-list]:bg-transparent **:data-[slot=tabs-list]:rounded-none! **:data-[slot=tabs-trigger]:w-full! **:data-[slot=tabs-trigger]:h-auto! **:data-[slot=tabs-trigger]:whitespace-normal! **:data-[slot=tabs-trigger]:wrap-anywhere **:data-[slot=tabs-trigger]:p-[.9rem_.75rem]! **:data-[slot=tabs-trigger]:rounded-[.5rem]! **:data-[slot=tabs-trigger]:border-transparent **:data-[slot=tabs-trigger]:text-left **:data-[slot=tabs-trigger]:block! **:data-[slot=tabs-trigger]:cursor-pointer **:data-[slot=tabs-trigger]:text-foreground! **:data-[slot=tabs-trigger]:bg-transparent! [&_[data-slot=tabs-trigger]:hover]:bg-accent! [&_[data-slot=tabs-trigger]:hover]:text-accent-foreground! [&_[data-slot=tabs-trigger][data-active]]:bg-accent! [&_[data-slot=tabs-trigger][data-active]]:text-accent-foreground! [&_[data-slot=tabs-trigger]>span]:block [&_[data-slot=tabs-trigger]>span]:text-[.84rem] [&_[data-slot=tabs-trigger]>span]:font-bold [&_[data-slot=tabs-trigger]>small]:block [&_[data-slot=tabs-trigger]>small]:text-[.7rem] [&_[data-slot=tabs-trigger]>small]:mt-[.2rem] [&_[data-slot=tabs-trigger]>small]:text-muted-foreground [&_[data-slot=tabs-trigger]:is(:hover,[data-active])>small]:text-inherit max-[760px]:**:data-[slot=tabs-list]:grid-cols-2" aria-label="Campaign navigation">
-				@tabs.List(tabs.ListProps{Attributes: templ.Attributes{"aria-label": "Campaign sections"}}) {
-					@tabs.Trigger(tabs.TriggerProps{Value: CampaignSectionTasks}) {
-						<span>Tasks</span><small>One workbook per task</small>
-					}
-					@tabs.Trigger(tabs.TriggerProps{Value: CampaignSectionTemplate}) {
-						<span>Template & preview</span><small>Subject, document & mappings</small>
-					}
-					@tabs.Trigger(tabs.TriggerProps{Value: CampaignSectionActivity}) {
-						<span>Activity & downloads</span><small>Reports & recorded emails</small>
-					}
-					@tabs.Trigger(tabs.TriggerProps{Value: CampaignSectionSettings}) {
-						<span>Settings</span><small>Result labels & deletion</small>
-					}
-				}
+		{{ section := campaignInitialSection(data) }}
+		<div class="grid grid-cols-[240px_minmax(0,1fr)] gap-8 items-start max-[760px]:grid-cols-1 max-[760px]:gap-5">
+			<aside class="sticky top-6 max-[760px]:static">
+				@workspaceNav("Campaign sections", campaignSections(data.ID), CampaignSectionPath(data.ID, section))
 			</aside>
-			<div class="min-w-0 **:data-[slot=tabs-content]:min-w-0">
-				@tabs.Content(tabs.ContentProps{Value: CampaignSectionTasks, Class: "space-y-6"}) {
-					@campaignTasks(data)
-				}
-				@tabs.Content(tabs.ContentProps{Value: CampaignSectionTemplate, Class: "space-y-6"}) {
-					@campaignTemplate(data)
-				}
-				@tabs.Content(tabs.ContentProps{Value: CampaignSectionActivity, Class: "space-y-6"}) {
-					@campaignActivity(data)
-				}
-				@tabs.Content(tabs.ContentProps{Value: CampaignSectionSettings, Class: "space-y-6"}) {
-					@campaignSettings(data)
+			<div class="min-w-0 max-[760px]:min-w-0" id={ "campaign-panel-" + section }>
+				switch section {
+					case CampaignSectionTemplate:
+						@campaignTemplate(data)
+					case CampaignSectionActivity:
+						@campaignActivity(data)
+					case CampaignSectionSettings:
+						@campaignSettings(data)
+					default:
+						@campaignTasks(data)
 				}
 			</div>
-		}
+		</div>
 	}
 }
 
@@ -401,7 +385,7 @@ templ campaignTasks(data CampaignPageData) {
 				}
 				@alert.Description(alert.DescriptionProps{}) {
 					<p>You can upload a workbook now and it will be stored as a staging task. Validation needs a valid template first.</p>
-					<a class="app-link text-primary" href={ "/campaigns/" + data.ID + "#template" }>Add template</a>
+					<a class="app-link text-primary" href={ CampaignSectionPath(data.ID, CampaignSectionTemplate) }>Add template</a>
 				}
 			}
 		}
@@ -507,16 +491,16 @@ func campaignTaskLink(campaignID string, row CampaignTaskRow) string {
 	base := "/campaigns/" + campaignID + "/tasks/" + row.ID
 	switch row.NextDestination {
 	case "campaign-template":
-		return "/campaigns/" + campaignID + "#template"
+		return CampaignSectionPath(campaignID, CampaignSectionTemplate)
 	case "campaign-tasks":
-		return "/campaigns/" + campaignID + "#tasks"
+		return CampaignSectionPath(campaignID, CampaignSectionTasks)
 	case "mailbox":
 		return "/account/mailbox"
 	}
 	if row.NextSection == "" {
 		return base
 	}
-	return base + "#" + row.NextSection
+	return base + "/" + row.NextSection
 }
 
 templ campaignTemplate(data CampaignPageData) {
@@ -609,7 +593,7 @@ templ campaignRevisionForm(data CampaignPageData) {
 			@accordion.Content(accordion.ContentProps{}) {
 				<div class="space-y-4">
 					<p class="text-sm text-muted-foreground">{ hint }</p>
-					<form method="post" action={ "/campaigns/" + data.ID + "/revisions#template" } enctype="multipart/form-data" class="space-y-4">
+					<form method="post" action={ "/campaigns/" + data.ID + "/revisions" } enctype="multipart/form-data" class="space-y-4">
 						@field.Group(field.GroupProps{}) {
 							<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 1 · Email content</p>
 							@field.Field(field.Props{}) {
@@ -678,7 +662,7 @@ templ campaignSamplePreview(data CampaignPageData) {
 			{{ hasRequired := previewHasRequired(data.Variables) }}
 			<form
 				method="post"
-				action={ "/campaigns/" + data.ID + "/preview#template" }
+				action={ "/campaigns/" + data.ID + "/preview" }
 				hx-post={ "/campaigns/" + data.ID + "/preview" }
 				hx-target="#preview-result"
 				hx-swap="innerHTML"
@@ -745,7 +729,7 @@ templ campaignActivity(data CampaignPageData) {
 			@card.Content(card.ContentProps{Class: "gap-4"}) {
 				<h3 id="campaign-downloads-heading" class="cn-card-title">Campaign downloads</h3>
 				<p>Download a candidate summary and complete attempt history. Each export records its as-of time. Generating downloads never sends or retries email. Tests stay separate from candidate totals.</p>
-				<form method="post" action={ "/campaigns/" + data.ID + "/exports#activity" }>
+				<form method="post" action={ "/campaigns/" + data.ID + "/exports" }>
 					@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
 						Generate or refresh downloads
 					}
@@ -784,7 +768,7 @@ templ campaignActivity(data CampaignPageData) {
 						}
 					</div>
 				</div>
-				<form method="post" action={ "/campaigns/" + data.ID + "/exports/delete#activity" }>
+				<form method="post" action={ "/campaigns/" + data.ID + "/exports/delete" }>
 					@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantGhost, Size: button.SizeSm}) {
 						Remove generated downloads
 					}
@@ -842,7 +826,7 @@ templ campaignSettings(data CampaignPageData) {
 		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "labels-heading"}}) {
 			@card.Content(card.ContentProps{Class: "gap-4"}) {
 				<h3 id="labels-heading" class="cn-card-title">Result column labels</h3>
-				<form method="post" action={ "/campaigns/" + data.ID + "/labels#settings" } class="space-y-4">
+				<form method="post" action={ "/campaigns/" + data.ID + "/labels" } class="space-y-4">
 					@field.Field(field.Props{}) {
 						@field.Label(field.LabelProps{For: "labels-input"}) {
 							Labels
@@ -866,7 +850,7 @@ templ campaignSettings(data CampaignPageData) {
 				<p>Deleting this campaign removes its revisions and uploaded documents, tasks and retained workbooks, candidate identities, attempts, approvals, manual resolutions and generated downloads. Deleting it also removes its duplicate-prevention history, so a future campaign can send to the same recipients again. There is no automatic expiry: nothing is removed until you confirm here.</p>
 				<p>Deleting live records never rewrites backups that already exist. Any backup retains its own copy until you remove that backup separately.</p>
 				<p>Deletion is refused while a task is running or stopping, while a candidate is reserved or in flight, or while an attempt is queued or in flight.</p>
-				<form id="campaign-delete-form" method="post" action={ "/campaigns/" + data.ID + "/delete#settings" } class="flex flex-col gap-4">
+				<form id="campaign-delete-form" method="post" action={ "/campaigns/" + data.ID + "/delete" } class="flex flex-col gap-4">
 					@alertdialog.AlertDialog(alertdialog.Props{ID: "campaign-delete-dialog"}) {
 						@button.Button(button.Props{Variant: button.VariantDestructive, Size: button.SizeDefault, Class: "self-start", Attributes: alertdialog.Trigger(ctx)}) {
 							Delete campaign
@@ -909,8 +893,8 @@ func revisionFormOpen(data CampaignPageData) []string {
 	return []string{"revision-form"}
 }
 
-// campaignInitialSection selects the panel to render. A validation error wins
-// over the URL so the message can never be hidden behind another section.
+// campaignInitialSection selects the rendered panel. A validation error wins
+// over the path so the message can never be hidden behind another section.
 func campaignInitialSection(data CampaignPageData) string {
 	switch {
 	case data.RevisionError != "":
@@ -924,16 +908,6 @@ func campaignInitialSection(data CampaignPageData) string {
 	default:
 		return CampaignSectionTasks
 	}
-}
-
-// campaignTabAttributes marks the workspace for the adapter. A validation
-// error keeps the server-selected panel, so the fragment cannot hide it.
-func campaignTabAttributes(data CampaignPageData) templ.Attributes {
-	attrs := templ.Attributes{"data-workspace-tabs": true}
-	if data.IgnoreHash || data.RevisionError != "" || data.LabelsError != "" || data.DeleteError != "" || data.ExportError != "" {
-		attrs["data-workspace-ignore-hash"] = true
-	}
-	return attrs
 }
 
 // previewReadyState is the Alpine scope of the sample preview form. sync keeps

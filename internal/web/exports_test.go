@@ -16,6 +16,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
 type exportWebFixture struct {
@@ -166,7 +167,7 @@ func TestCampaignDeleteRequiresConfirmationAndIsScoped(t *testing.T) {
 		t.Fatalf("prepare exports: status=%d", rec.Code)
 	}
 
-	page := do(t, f.handler, http.MethodGet, "/campaigns/"+f.campaignID, nil, withCookie(f.cookie))
+	page := do(t, f.handler, http.MethodGet, views.CampaignSectionPath(f.campaignID, views.CampaignSectionSettings), nil, withCookie(f.cookie))
 	for _, want := range []string{"duplicate-prevention history", "no automatic expiry", "backups that already exist"} {
 		if !strings.Contains(page.Body.String(), want) {
 			t.Fatalf("deletion page does not state %q before confirmation", want)

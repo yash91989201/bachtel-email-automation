@@ -18,8 +18,8 @@ func TestPageBreadcrumbs(t *testing.T) {
 	}{
 		{"campaign list", CampaignList(CampaignListData{}), "Campaigns", []string{"/"}},
 		{"campaign", CampaignPage(CampaignPageData{ID: "camp1", Name: "Hiring"}), "Hiring", []string{"/campaigns"}},
-		{"task workspace", TaskPage(TaskPageData{CampaignID: "camp1", CampaignName: "Hiring", Filename: "recipients.xlsx", Reference: "abcd1234", StoredStatus: "ready"}), "recipients.xlsx", []string{"/campaigns", "/campaigns/camp1", "/campaigns/camp1#tasks"}},
-		{"upload", TaskUpload(TaskUploadData{CampaignID: "camp1", CampaignName: "Hiring"}), "Upload workbook", []string{"/campaigns", "/campaigns/camp1", "/campaigns/camp1#tasks"}},
+		{"task workspace", TaskPage(TaskPageData{CampaignID: "camp1", CampaignName: "Hiring", Filename: "recipients.xlsx", Reference: "abcd1234", StoredStatus: "ready"}), "recipients.xlsx", []string{"/campaigns", "/campaigns/camp1", "/campaigns/camp1/tasks"}},
+		{"upload", TaskUpload(TaskUploadData{CampaignID: "camp1", CampaignName: "Hiring"}), "Upload workbook", []string{"/campaigns", "/campaigns/camp1", "/campaigns/camp1/tasks"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var rendered strings.Builder

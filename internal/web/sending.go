@@ -26,7 +26,7 @@ type Dispatcher interface {
 
 func (s *server) registerSendingRoutes(mux *http.ServeMux) {
 	base := "/campaigns/{id}/tasks/{task}/sending"
-	mux.HandleFunc("GET "+base, s.requireOperator(s.handleSending))
+	mux.HandleFunc("GET "+base, s.requireOperator(s.handleTaskSection(views.TaskSectionSending)))
 	mux.HandleFunc("GET "+base+"/progress", s.requireOperator(s.handleSendingProgress))
 	for _, action := range []string{"test", "approve", "start", "resume", "stop", "retry", "retry_all", "resend", "resolve", "rate", "schedule", "artifacts"} {
 		mux.HandleFunc("POST "+base+"/"+action, s.requireOperator(s.handleSendingMutation(action)))
@@ -49,22 +49,6 @@ func (s *server) mailboxSummary(ctx context.Context, ownerID string) (sender, st
 		return "No mailbox connected", string(mailbox.StatusDisconnected)
 	}
 	return connection.Sender, string(connection.Status)
-}
-
-// handleSending opens the one task workspace on its Sending section. The old
-// sending route stays as a bookmark-compatible entry point.
-func (s *server) handleSending(w http.ResponseWriter, r *http.Request) {
-	task, ok := s.loadCampaignTask(w, r)
-	if !ok {
-		return
-	}
-	data, err := s.taskPageData(r, task, views.TaskSectionSending)
-	if err != nil {
-		s.taskLoadFailure(w, r, err)
-		return
-	}
-	w.Header().Set("Cache-Control", "no-store")
-	s.renderWithStatus(w, r, http.StatusOK, views.TaskPage(data))
 }
 
 // handleSendingProgress returns only the Sending section's live evidence. The
@@ -214,13 +198,13 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 				s.app.Logger().Error("generate task results after request", "task", task.ID, "error", err)
 			}
 			s.exports.Trigger()
-			http.Redirect(w, r, taskPath(task)+"#results", http.StatusSeeOther)
+			http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionResults), http.StatusSeeOther)
 			return
 		}
 		if s.dispatcher != nil {
 			s.dispatcher.Wake()
 		}
-		http.Redirect(w, r, taskPath(task)+"#"+sendingSection(kind), http.StatusSeeOther)
+		http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, sendingSection(kind)), http.StatusSeeOther)
 	}
 }
 

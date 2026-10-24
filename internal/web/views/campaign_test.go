@@ -23,6 +23,7 @@ func TestCampaignTemplateSectionOrderAndGuidance(t *testing.T) {
 		Subject:         "Hello {{candidate_name}}",
 		Approved:        true,
 		Variables:       []PreviewVariable{{Name: "candidate_name", Required: true}},
+		Section:         CampaignSectionTemplate,
 	}
 	doc := parseView(t, CampaignPage(data))
 
@@ -54,7 +55,7 @@ func TestCampaignTemplateSectionOrderAndGuidance(t *testing.T) {
 	if !hasWorkspaceAttr(form, "data-closed") {
 		t.Error("the later-revision form must not be open by default")
 	}
-	draft := parseView(t, CampaignPage(CampaignPageData{ID: "camp1", Name: "Draft", MappingDraft: data.MappingDraft}))
+	draft := parseView(t, CampaignPage(CampaignPageData{ID: "camp1", Name: "Draft", MappingDraft: data.MappingDraft, Section: CampaignSectionTemplate}))
 	openForm := findCard(draft, "upload-heading")
 	if !hasWorkspaceAttr(openForm, "data-open") {
 		t.Error("the first-revision form must open by default")
@@ -63,11 +64,11 @@ func TestCampaignTemplateSectionOrderAndGuidance(t *testing.T) {
 		t.Errorf("first-revision draft = %q, want the derived mapping draft", got)
 	}
 	// A later revision starts empty: only an operator's rejected draft is kept.
-	later := parseView(t, CampaignPage(CampaignPageData{ID: "camp2", Name: "Later", HasRevision: true}))
+	later := parseView(t, CampaignPage(CampaignPageData{ID: "camp2", Name: "Later", HasRevision: true, Section: CampaignSectionTemplate}))
 	if got := textOf(workspaceNode(later, "id", "revision-mappings")); got != "" {
 		t.Errorf("later revision form carried %q, want an empty form", got)
 	}
-	rejected := parseView(t, CampaignPage(CampaignPageData{ID: "camp1", Name: "Edit", HasRevision: true, MappingDraft: "bad draft"}))
+	rejected := parseView(t, CampaignPage(CampaignPageData{ID: "camp1", Name: "Edit", HasRevision: true, MappingDraft: "bad draft", Section: CampaignSectionTemplate}))
 	if got := textOf(workspaceNode(rejected, "id", "revision-mappings")); got != "bad draft" {
 		t.Errorf("rejected mapping draft = %q, want the supplied text preserved", got)
 	}
@@ -99,7 +100,7 @@ func TestCampaignTemplateSectionOrderAndGuidance(t *testing.T) {
 }
 
 func TestCampaignHintButtonsStayInertAndDescribed(t *testing.T) {
-	doc := parseView(t, CampaignPage(CampaignPageData{ID: "campaign-1", Name: "Synthetic campaign"}))
+	doc := parseView(t, CampaignPage(CampaignPageData{ID: "campaign-1", Name: "Synthetic campaign", Section: CampaignSectionTemplate}))
 	for _, id := range []string{"revision-subject-help", "revision-document-help", "revision-mappings-help"} {
 		button := workspaceNode(doc, "aria-describedby", id)
 		if button == nil || button.Data != "button" || workspaceAttr(button, "type") != "button" {
@@ -158,13 +159,13 @@ func TestCampaignTasksSectionShowsOperationalContext(t *testing.T) {
 	}
 	// The workbook name is the task's identity: it opens the task at its
 	// Overview, while only the next action deep-links into a section.
-	if link := workspaceNode(doc, "href", "/campaigns/camp1/tasks/task-1"); link == nil || workspaceAttr(link, "href") == "/campaigns/camp1/tasks/task-1#sending" {
+	if link := workspaceNode(doc, "href", "/campaigns/camp1/tasks/task-1"); link == nil || workspaceAttr(link, "href") == "/campaigns/camp1/tasks/task-1/sending" {
 		t.Error("the workbook name does not open the task overview")
 	}
-	if link := workspaceNode(doc, "href", "/campaigns/camp1/tasks/task-1#sending"); link == nil {
+	if link := workspaceNode(doc, "href", "/campaigns/camp1/tasks/task-1/sending"); link == nil {
 		t.Error("the next action does not link to the task's Sending section")
 	}
-	if link := workspaceNode(doc, "href", "/campaigns/camp1/tasks/task-2#recipients"); link == nil {
+	if link := workspaceNode(doc, "href", "/campaigns/camp1/tasks/task-2/recipients"); link == nil {
 		t.Error("the staging row does not link to Recipients")
 	}
 	// Each tooltip trigger describes content that exists in the page.
@@ -211,14 +212,14 @@ func TestCampaignTasksEmptyAndNoTemplateStates(t *testing.T) {
 			t.Errorf("no-template Tasks section is missing %q", want)
 		}
 	}
-	if workspaceNode(noTemplate, "href", "/campaigns/camp1#template") == nil {
+	if workspaceNode(noTemplate, "href", "/campaigns/camp1/template") == nil {
 		t.Error("the no-template guidance does not link to Template & preview")
 	}
 }
 
 func TestCampaignActivityAndSettingsHaveDistinctPurposes(t *testing.T) {
 	doc := parseView(t, CampaignPage(CampaignPageData{
-		ID: "camp1", Name: "Hiring", HasRevision: true, Revision: 1,
+		ID: "camp1", Name: "Hiring", HasRevision: true, Revision: 1, Section: CampaignSectionActivity,
 		Attempts: []AttemptRow{{ID: "attempt-1", Kind: "candidate", Recipient: "a@example.test", State: "submitted", FinishedAt: "22 Oct 2026, 11:12 AM +05:30"}},
 	}))
 	activity := workspaceNode(doc, "id", "campaign-activity")
@@ -234,6 +235,9 @@ func TestCampaignActivityAndSettingsHaveDistinctPurposes(t *testing.T) {
 	if strings.Contains(activityText, "Revision history") {
 		t.Error("revision history belongs to Template & preview, not activity")
 	}
+	doc = parseView(t, CampaignPage(CampaignPageData{
+		ID: "camp1", Name: "Hiring", HasRevision: true, Revision: 1, Section: CampaignSectionSettings,
+	}))
 	settings := workspaceNode(doc, "id", "campaign-settings-workspace")
 	if settings == nil {
 		t.Fatal("settings section is missing")
@@ -263,9 +267,9 @@ func TestCampaignSamplePreviewGatesOnRequiredValues(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := parseView(t, CampaignPage(CampaignPageData{
-				ID: "camp1", Name: "Test campaign", HasRevision: true, Variables: tc.variables,
+				ID: "camp1", Name: "Test campaign", HasRevision: true, Variables: tc.variables, Section: CampaignSectionTemplate,
 			}))
-			form := workspaceNode(doc, "action", "/campaigns/camp1/preview#template")
+			form := workspaceNode(doc, "action", "/campaigns/camp1/preview")
 			if form == nil || form.Data != "form" {
 				t.Fatal("the campaign page has no sample preview form")
 			}

@@ -20,6 +20,7 @@ import (
 
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
 // taskSubject is the content revision the task fixtures validate against.
@@ -115,7 +116,7 @@ func taskIDFromRedirect(t *testing.T, rec *httptest.ResponseRecorder, campaignID
 	t.Helper()
 	prefix := "/campaigns/" + campaignID + "/tasks/"
 	id := strings.TrimPrefix(rec.Header().Get("Location"), prefix)
-	id, _, _ = strings.Cut(id, "#")
+	id, _, _ = strings.Cut(id, "/")
 	if rec.Code != http.StatusSeeOther || id == "" || strings.Contains(id, "/") {
 		t.Fatalf("upload redirect: status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
@@ -223,10 +224,11 @@ func TestTaskRoutesBehindSession(t *testing.T) {
 
 // TestTaskUploadReviewFlow covers behaviour 2: the full journey from upload to
 // review to preview, with counts, the exclusion link, and the pinned render.
-func assertTaskOverviewSelected(t *testing.T, body string) {
+func assertTaskOverviewSelected(t *testing.T, body, campaignID, taskID string) {
 	t.Helper()
-	tag := regexp.MustCompile(`<button[^>]*id="task-tab-overview"[^>]*>`).FindString(body)
-	if !strings.Contains(tag, `aria-selected="true"`) {
+	href := views.TaskSectionPath(campaignID, taskID, views.TaskSectionOverview)
+	tag := regexp.MustCompile(`aria-current="page"[^<]*`).FindString(body)
+	if !strings.Contains(body, href) || tag == "" {
 		t.Fatal("an unsectioned task request must select Overview")
 	}
 }
@@ -252,7 +254,7 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 		".xls",
 		`name="workbook"`,
 		`accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"`,
-		`href="/campaigns/` + id + `#tasks"`,
+		`href="/campaigns/` + id + `/tasks"`,
 	} {
 		if !strings.Contains(upload, want) {
 			t.Errorf("upload page missing %q: %.600s", want, upload)
@@ -266,16 +268,17 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 	}
 	taskID := taskIDFromRedirect(t, rec, id)
 
-	staging := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
-	assertTaskOverviewSelected(t, staging)
+	staging := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
+	assertTaskOverviewSelected(t, staging, id, taskID)
+	stagingRecipients := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
 	for _, want := range []string{
 		"Sheet1",
 		`name="sheet"`,
 		`name="header_row"`,
 		"Current selection:",
 	} {
-		if !strings.Contains(staging, want) {
-			t.Errorf("staging page missing %q: %.600s", want, staging)
+		if !strings.Contains(stagingRecipients, want) {
+			t.Errorf("staging Recipients section missing %q: %.600s", want, stagingRecipients)
 		}
 	}
 
@@ -286,17 +289,13 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 		t.Fatalf("select: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
 
-	ready := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
-	assertTaskOverviewSelected(t, ready)
+	ready := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
 	for _, want := range []string{
 		`href="/campaigns/` + id + `/tasks/` + taskID + `/excluded.xlsx"`,
-		"Result columns:",
-		"Email Status, Submitted At, Email Error",
 		"Content hash:",
 		"duplicate recipient address in this upload",
 		"not a single usable email address",
 		"missing required value(s): candidate_name",
-		"Finalize the sending data before sending a test for approval.",
 		`hx-post="/campaigns/` + id + `/tasks/` + taskID + `/preview"`,
 		`hx-target="#task-preview-result"`,
 	} {
@@ -311,6 +310,17 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 	assertCategory(t, ready, "Ineligible or missing data", 1)
 	assertCategory(t, ready, "Duplicate", 2)
 	assertCategory(t, ready, "Invalid address", 1)
+
+	results := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionResults))
+	for _, want := range []string{"Result columns:", "Email Status, Submitted At, Email Error"} {
+		if !strings.Contains(results, want) {
+			t.Errorf("Results section missing %q: %.600s", want, results)
+		}
+	}
+	testSection := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionTest))
+	if !strings.Contains(testSection, "Finalize the sending data before sending a test for approval.") {
+		t.Errorf("Test & approve section missing the pre-finalization prerequisite: %.600s", testSection)
+	}
 
 	// The list page reports both tasks' status, selection and counts.
 	list := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks")
@@ -621,7 +631,7 @@ func TestAllHeldTaskOffersDownloadOnly(t *testing.T) {
 			}
 			taskID := stageTask(t, handler, cookie, id, taskWorkbook(t, "Sheet1", rows))
 
-			body := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
+			body := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
 			for _, want := range []string{
 				`href="/campaigns/` + id + `/tasks/` + taskID + `/excluded.xlsx"`,
 				"No eligible recipients",
@@ -655,7 +665,7 @@ func TestTaskRevalidation(t *testing.T) {
 	if rec := postRevision(t, handler, cookie, id, "Interview with {{candidate_name}}", validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
 		t.Fatalf("second revision: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
-	stale := fetchTaskPage(t, handler, cookie, path)
+	stale := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
 	if !strings.Contains(stale, "The campaign content changed after this task was validated") {
 		t.Fatalf("stale warning missing: %.600s", stale)
 	}
@@ -665,7 +675,7 @@ func TestTaskRevalidation(t *testing.T) {
 		t.Fatalf("revalidate: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
 
-	fresh := fetchTaskPage(t, handler, cookie, path)
+	fresh := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
 	if strings.Contains(fresh, "The campaign content changed after this task was validated") {
 		t.Fatalf("stale warning persists after revalidate: %.600s", fresh)
 	}
@@ -751,7 +761,7 @@ func TestStagedWorkbookValidatesAfterTemplateCreation(t *testing.T) {
 		t.Fatalf("upload: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
 	taskID := taskIDFromRedirect(t, rec, id)
-	staged := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
+	staged := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
 	for _, want := range []string{"Add a template before validating this workbook", "Validation is unavailable", "Add template"} {
 		if !strings.Contains(staged, want) {
 			t.Errorf("staged page missing %q: %.600s", want, staged)
@@ -766,7 +776,7 @@ func TestStagedWorkbookValidatesAfterTemplateCreation(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("select after template: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
-	ready := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
+	ready := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
 	if !strings.Contains(ready, "5 source rows · 5 recipient entries · 1 eligible at validation · 4 excluded at validation") {
 		t.Fatalf("staged workbook did not validate after template creation: %.600s", ready)
 	}
@@ -782,7 +792,7 @@ func TestTaskPreviewCreatesNoAttempt(t *testing.T) {
 		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
 	taskID := stageTask(t, handler, cookie, id, mixedWorkbook(t))
-	ready := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
+	ready := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
 	rowID := previewRowID(t, ready, 6)
 
 	rec := do(t, handler, http.MethodPost, "/campaigns/"+id+"/tasks/"+taskID+"/preview",
@@ -831,7 +841,7 @@ func TestExpandedRecipientReview(t *testing.T) {
 		t.Fatalf("select: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
 
-	page := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/"+taskID)
+	page := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
 	if !strings.Contains(page, "2 source rows · 5 recipient entries · 2 eligible at validation · 3 excluded at validation") {
 		t.Fatalf("summary does not distinguish source rows from entries: %.1200s", page)
 	}

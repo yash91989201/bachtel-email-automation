@@ -14,6 +14,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
 // TestAcceptanceCampaignAuthoringFlow drives the whole authoring journey over
@@ -41,9 +42,10 @@ func TestAcceptanceCampaignAuthoringFlow(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("create campaign: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
-	detail, _, _ := strings.Cut(rec.Header().Get("Location"), "#")
-	if !strings.HasPrefix(detail, "/campaigns/") {
-		t.Fatalf("create campaign location = %q", detail)
+	id, _, _ := strings.Cut(strings.TrimPrefix(rec.Header().Get("Location"), "/campaigns/"), "/")
+	detail := "/campaigns/" + id
+	if id == "" {
+		t.Fatalf("create campaign location = %q", rec.Header().Get("Location"))
 	}
 
 	// Upload the body document and the mapping table in one multipart form.
@@ -60,7 +62,7 @@ func TestAcceptanceCampaignAuthoringFlow(t *testing.T) {
 		t.Fatalf("create revision: status=%d body=%.600s", rec.Code, rec.Body.String())
 	}
 
-	page := env.request(http.MethodGet, detail, cookies, nil)
+	page := env.request(http.MethodGet, detail+"/"+views.CampaignSectionTemplate, cookies, nil)
 	if page.Code != http.StatusOK {
 		t.Fatalf("campaign page: status=%d", page.Code)
 	}

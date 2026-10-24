@@ -24,6 +24,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	_ "github.com/yash91989201/bachtel-email-automation/internal/migrations"
 	"github.com/yash91989201/bachtel-email-automation/internal/preparation"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
 // preparationModel simulates the Responses API for the web workflow.
@@ -184,6 +185,11 @@ func (s *preparationServer) path(suffix string) string {
 	return "/campaigns/" + s.campaign + "/tasks/" + s.task.ID + suffix
 }
 
+// pagePath is the Recipients section, where preparation controls live.
+func (s *preparationServer) pagePath() string {
+	return s.path("/" + views.TaskSectionRecipients)
+}
+
 func (s *preparationServer) latestRun(t *testing.T) *preparation.Run {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
@@ -219,7 +225,7 @@ func TestPreparationWorkflowInTaskWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	page := do(t, server.handler, http.MethodGet, server.path(""), nil, withCookie(cookie))
+	page := do(t, server.handler, http.MethodGet, server.pagePath(), nil, withCookie(cookie))
 	if page.Code != http.StatusOK {
 		t.Fatalf("task page: status=%d", page.Code)
 	}
@@ -245,7 +251,7 @@ func TestPreparationWorkflowInTaskWorkspace(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("save instructions: status=%d body=%.300s", rec.Code, rec.Body.String())
 	}
-	page = do(t, server.handler, http.MethodGet, server.path(""), nil, withCookie(cookie))
+	page = do(t, server.handler, http.MethodGet, server.pagePath(), nil, withCookie(cookie))
 	if !strings.Contains(page.Body.String(), instructions) {
 		t.Fatal("saved instructions are not displayed")
 	}
@@ -261,7 +267,7 @@ func TestPreparationWorkflowInTaskWorkspace(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("select run: status=%d body=%.300s", rec.Code, rec.Body.String())
 	}
-	page = do(t, server.handler, http.MethodGet, server.path(""), nil, withCookie(cookie))
+	page = do(t, server.handler, http.MethodGet, server.pagePath(), nil, withCookie(cookie))
 	if !strings.Contains(page.Body.String(), "selected") {
 		t.Fatal("selected run is not identified on the page")
 	}
@@ -336,7 +342,7 @@ func TestPreparationShowsStoredFindings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	page := do(t, server.handler, http.MethodGet, server.path(""), nil, withCookie(cookie))
+	page := do(t, server.handler, http.MethodGet, server.pagePath(), nil, withCookie(cookie))
 	body := page.Body.String()
 	for _, want := range []string{
 		"compensation in a department column",

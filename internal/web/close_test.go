@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
 
 func TestCloseTaskAfterConfirmationIsTerminal(t *testing.T) {
@@ -44,7 +45,7 @@ func TestCloseTaskAfterConfirmationIsTerminal(t *testing.T) {
 	if closed.Code != http.StatusSeeOther {
 		t.Fatalf("close status = %d body=%.400s", closed.Code, closed.Body.String())
 	}
-	if closed.Header().Get("Location") != "/campaigns/"+campaignID+"/tasks/"+taskID+"#overview" {
+	if closed.Header().Get("Location") != "/campaigns/"+campaignID+"/tasks/"+taskID+"/overview" {
 		t.Fatalf("close location = %q", closed.Header().Get("Location"))
 	}
 	record, err = app.FindRecordById(intake.TasksCollection, taskID)
@@ -55,7 +56,7 @@ func TestCloseTaskAfterConfirmationIsTerminal(t *testing.T) {
 		t.Fatalf("closure not durable: %+v", record)
 	}
 
-	page := fetchTaskPage(t, handler, cookie, "/campaigns/"+campaignID+"/tasks/"+taskID)
+	page := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(campaignID, taskID, views.TaskSectionOverview))
 	if !strings.Contains(page, "Closed") || strings.Contains(page, "Close task") {
 		t.Fatalf("closed task page wrong: %.600s", page)
 	}
