@@ -68,10 +68,35 @@ A failed validation leaves the task in staging with the reason recorded on the
 task: nothing is published, no candidate exists and no manifest or report is
 written. Correct the workbook or the selection and validate again.
 
+### What validation records
+
+The selected revision's mapping version decides what a successful validation
+records:
+
+| Revision | Validation records |
+| --- | --- |
+| Current (role/fallback mapping, mapping version 2) | The worksheet, header row, pinned revision, content hash and source-row count only. It creates no candidate, membership, manifest, exclusion report, category count or selected dataset, and it does not judge row eligibility. |
+| Legacy (format-bearing mapping, mapping version 1) | Its historical snapshot: candidate memberships, duplicate and invalid-address exclusions, category counts, manifest and exclusion report. |
+
+For a current revision the source rows are the input to data preparation, and
+row eligibility is decided only from reviewed cleaned values — the selected
+completed preparation run or an edited final upload. Until that review exists the
+task workspace shows the source-row count and a pending-eligibility status, and
+the exclusion download is unavailable. See
+[final-sending-snapshots.md](final-sending-snapshots.md).
+
+Revalidating a current task repeats this preflight against the campaign's current
+revision: it re-pins the selection, recounts source rows and clears the previously
+selected preparation run, final snapshot, finalization error and memberships, so
+a stale reviewed dataset can never be approved or sent.
+
 ## Recipient expansion
 
 The selected `recipient` mapping's cell is split on **commas only**, and each
-token becomes its own recipient entry:
+token becomes its own recipient entry. For a current revision the split runs on
+the reviewed cleaned cell — AI may first turn a `/`-joined cell into a
+comma-and-space list — and the raw uploaded cell is never expanded a second time.
+A legacy revision expands its uploaded cell during validation.
 
 - Surrounding whitespace is trimmed per entry. `a@example.com,b@example.com`,
   `a@example.com, b@example.com` and ` a@example.com ,  b@example.com ` produce
@@ -92,11 +117,14 @@ token becomes its own recipient entry:
   the same cell are saved under the usual required-value and campaign-history
   checks.
 - Every expanded entry — valid, invalid, duplicate or empty — counts toward the
-  1,000-entry bound. Exceeding it refuses the whole validation and publishes no
-  candidate memberships or snapshot.
+  1,000-entry bound. Exceeding it refuses the complete dataset with no partial
+  acceptance. For a legacy revision the refusal happens during validation; for a
+  current revision it happens at the prepared review or the edited final upload,
+  because that is where the reviewed entries are expanded.
 
 To correct an entry, fix the mapped recipient cell in the workbook and upload it
-as a new task. The saved task snapshot is never edited or re-split.
+as a new task, or upload an edited final sheet for the current dataset. A saved
+legacy snapshot is never edited or re-split.
 
 ## Recipient key matching
 
@@ -120,40 +148,51 @@ headers are draft hints and do not select or validate the recipient.
 
 ## Duplicate handling
 
-Duplicate detection runs over **every expanded entry of the complete selected
-input before any candidate is created**, using each entry's raw recipient token
-trimmed of surrounding whitespace and lowercased. It is deliberately not a
-validity check first, so an entry that is both duplicated and otherwise wrong is
-still reported as a duplicate.
+Duplicate detection runs over **every expanded entry of the complete reviewed
+dataset before any candidate membership is created**, using each entry's recipient
+token trimmed of surrounding whitespace and lowercased. The reviewed dataset is
+the selected completed preparation run's cleaned values or an operator-edited
+final upload; a legacy revision's reviewed dataset is its uploaded workbook, which
+is classified at validation. The check is deliberately not a validity check
+first, so an entry that is both duplicated and otherwise wrong is still reported
+as a duplicate, and it runs again when the dataset is approved.
 
 - Every entry of a duplicate group is excluded, including identical copies,
   repetitions inside one cell, and an entry that is also missing a required
   value. No entry is chosen as the preferred copy.
 - Duplicate entries never create or update a candidate, never create a task
   membership and never create a sending attempt. Their details live only in the
-  stored workbook, the validation manifest and the exclusion report; the task
+  stored workbook, the review evidence and the downloadable report; the dataset
   keeps a duplicate **count**.
 - That holds when the duplicated address already exists in the campaign: the
   existing candidate is not modified.
+- Preparation can create a duplicate the upload did not have, because joining
+  separator-only variants produces repeated occurrences of one address. Those
+  are duplicates of the reviewed dataset and are held before any candidate is
+  created.
 
-**Correct it by uploading a new workbook.** Fix the duplicate entries — or
-remove the addresses you do not want to send — and upload the corrected file as
-a new task. The earlier task keeps its snapshot and its counts; the unique
-entries of the corrected upload are validated independently, so a duplicate
-report can be downloaded while the eligible entries of the same task still
-proceed.
+**Correct it by uploading a new workbook or an edited final sheet.** Fix the
+duplicate entries — or remove the addresses you do not want to send — and upload
+the corrected file. The earlier task keeps its snapshot and its counts; the unique
+entries of the corrected dataset are classified independently, so a report can be
+downloaded while the accepted entries of the same task still proceed.
 
 ## Row outcomes
 
+These outcomes describe the reviewed dataset. For a current revision they are
+recorded by the prepared review and the final snapshot; for a legacy revision
+they are recorded by the validation snapshot.
+
 | Outcome | Meaning | Where it is recorded |
 | --- | --- | --- |
-| Eligible | Unique, valid address with every required value | Membership snapshot; claimable |
-| Ineligible | Unique, valid address missing a required value | Membership snapshot; never claimable |
-| Duplicate | Same recipient key as another row of this upload | Report and manifest only |
-| Invalid address | One entry's token is empty or not one usable address | Report and manifest only |
-| Already submitted | The address was already submitted in this campaign | Membership snapshot |
-| Already scheduled | The address is reserved by another task of this campaign | Membership snapshot |
-| Review required | An earlier attempt has an uncertain outcome and needs review | Membership snapshot |
+| Eligible | Unique, valid address with every required value | Accepted entry; membership after dataset approval; claimable |
+| Ineligible | Unique, valid address missing a required value | Held entry; never claimable |
+| Duplicate | Same recipient key as another entry of the reviewed dataset | Held entry, report only |
+| Invalid address | One entry's token is empty or not one usable address | Held entry, report only |
+| Already submitted | The address was already submitted in this campaign | Held entry; never claimable |
+| Already scheduled | The address is reserved by another task of this campaign | Held entry; never claimable |
+| Review required | An earlier attempt has an uncertain outcome and needs review | Held entry; never claimable |
+| Held by a finding | Preparation left an unresolved finding in a mapped field | Held entry with every applicable reason |
 
 The operator-facing wording is:
 
@@ -166,26 +205,30 @@ The operator-facing wording is:
 - review required — "an earlier attempt has an uncertain outcome and needs review"
 
 A valid address that is missing a required value keeps its campaign-scoped
-identity and an ineligible membership, so a corrected upload reuses that
-identity instead of creating a second one. A row with an unusable address never
-gets an identity at all.
+identity and an ineligible entry, so a corrected upload reuses that identity
+instead of creating a second one. A row with an unusable address never gets an
+identity at all.
 
 ## Immutable snapshots
 
-Validation publishes one task snapshot:
+The task keeps one immutable record of the uploaded source and one immutable
+sending dataset:
 
 - The original workbook bytes, unmodified, with their SHA-256 digest. Results can
   reproduce source cells and original worksheet row numbers exactly.
 - The selected worksheet, header row and source header labels.
 - The renamed result column labels (see below).
-- One membership row per unique valid expanded entry holding the **raw** value
-  and the **normalized** replacement value per mapped variable, its original
-  worksheet row, its position inside the recipient cell, the full original
-  recipient cell, its outcome and its reason.
-- The content revision the task was validated against, pinned by its content
-  hash.
+- The content revision the task was pinned to, with its content hash.
+- For a legacy revision, one membership row per unique valid expanded entry
+  holding the **raw** value and the **normalized** replacement value per mapped
+  variable, its original worksheet row, its position inside the recipient cell,
+  the full original recipient cell, its outcome and its reason.
+- For a current revision, memberships are created only when a final dataset is
+  approved, and each stores the **accepted cleaned values** in both the raw and
+  normalized field. The uploaded original cell stays in the stored workbook and,
+  for a held entry, in the review evidence.
 
-Rendering a row is a pure function of that pinned revision and the stored raw
+Rendering a row is a pure function of the pinned revision and the stored raw
 values, so previews, and later the emails themselves, reproduce exactly what was
 reviewed. Once a task has started, a later upload or a campaign edit cannot
 change its content or its earlier history.
@@ -195,9 +238,11 @@ change its content or its earlier history.
 Changing campaign content creates a new revision, which makes a task validated
 against the older revision **stale**: it can be reviewed, but it cannot start.
 Revalidate it to rebuild the snapshot — counts, labels and previews — against the
-current revision. Revalidation is allowed only while a task has not started;
-a running or finished task keeps its snapshot, and the fresh counts that are
-shown when starting a task come from the same preflight check.
+current revision. Revalidation is allowed only while a task has not started; a
+running or finished task keeps its snapshot, and the fresh counts that are shown
+when starting a task come from the same preflight check. For a current revision
+revalidation clears the selected preparation run and final snapshot with their
+memberships, so the reviewed dataset must be produced again.
 
 ### Result column labels
 
@@ -230,18 +275,32 @@ the session-gated task pages can serve them.
 | Artifact | Content |
 | --- | --- |
 | Original workbook | The uploaded bytes, unchanged |
-| Validation manifest (JSON) | Layout below |
-| Exclusion report (XLSX) | Every held entry: the source columns in their original order, then `Source worksheet row`, `Recipient position`, `Recipient` and `Reason` (metadata labels are collision-safe; an unnamed source column is labelled `Column N`) |
+| Validation manifest (JSON) | Layout below. Written for a legacy revision only. |
+| Exclusion report (XLSX) | Every held entry: the source columns in their original order, then `Source worksheet row`, `Recipient position`, `Recipient` and `Reason` (metadata labels are collision-safe; an unnamed source column is labelled `Column N`). Written for a legacy revision only. |
+| Prepared review evidence | The selected completed preparation run's cleaned output plus its backend classification. Current revisions only. |
+| Prepared sending sheet (XLSX) | Backend-accepted cleaned entries only, one row per recipient entry. |
+| Prepared exclusion report (XLSX) | Backend-held cleaned entries with their reasons and both the original and proposed value of every mapping. |
+| Final snapshot artifacts | The accepted entries, the accepted final sheet, its exclusion report and, for an edited upload, the uploaded bytes. |
 
-The exclusion report includes every entry that is not eligible — duplicates,
-unusable addresses, missing values, already submitted, already scheduled and
-review-required entries — in source-row and position order, with the original
-columns so the row can be corrected in place. Multiple held entries from one
-source row produce multiple report rows. It is written as soon as validation
-finishes, even when no entry is eligible: a task with zero eligible entries
-still offers its report and no send action. Re-uploading a corrected report never
-overrides the original recipient column: correct the mapped recipient cell
-itself. The appended columns are informational.
+The exclusion download resolves the selected final snapshot first, then the
+selected prepared review, then the legacy validation report. A current-revision
+task with no review evidence has no exclusion download at all; a legacy task
+offers its validation report immediately after validation.
+
+The legacy exclusion report includes every entry that is not eligible —
+duplicates, unusable addresses, missing values, already submitted, already
+scheduled and review-required entries — in source-row and position order, with
+the original columns so the row can be corrected in place. Multiple held entries
+from one source row produce multiple report rows. It is written as soon as
+validation finishes, even when no entry is eligible: a task with zero eligible
+entries still offers its report and no send action. Re-uploading a corrected
+report never overrides the original recipient column: correct the mapped
+recipient cell itself. The appended columns are informational.
+
+For a current revision the same rule applies to the prepared or final report:
+every held entry keeps its source row, its position in the cell, its individual
+address, every applicable reason and the uploaded original value beside the
+cleaned proposal.
 
 ### Manifest layout
 
@@ -292,7 +351,9 @@ Source documentation: [Excelize cell and row APIs](https://xuri.me/excelize/en/c
 
 ## Final sending data
 
-A validated task is not yet a final sending dataset. Prepared values or an
-operator-edited final sheet become one immutable snapshot; preview, test and
-candidate work read that snapshot directly. See
+A validated task is not yet a final sending dataset. For a current revision the
+validation records source rows only, and no candidate exists until the operator
+reviews prepared values or uploads an edited final sheet and approves it. That
+approval creates one immutable snapshot; preview, test and candidate work read
+that snapshot directly, and start or schedule stays refused until it exists. See
 [final-sending-snapshots.md](final-sending-snapshots.md).

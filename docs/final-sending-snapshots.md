@@ -4,33 +4,77 @@ A task does not send the raw uploaded workbook and does not send AI output
 directly. The operator reviews prepared values and accepts one immutable final
 dataset. Preview, test content and candidate work all read that same dataset.
 
+## Validation is a preflight
+
+For a revision that uses the current role mapping, validation pins the worksheet,
+header row and campaign revision and records the source-row count. It creates no
+candidate, membership, validation manifest, exclusion report, category count or
+selected dataset, and it does not judge row eligibility: duplicate, address,
+required/optional, campaign-history and safety outcomes belong to the reviewed
+cleaned dataset. A missing or ambiguous mapped header still blocks the task, and
+the task then stays in staging with no pinned revision.
+
+A task in that state has no memberships, so nothing is claimable and an explicit
+start or schedule is refused with the finalization remedy. The workspace reports
+**Eligibility pending** with the source-row count — never "No eligible
+recipients", which describes a dataset whose entries were all held.
+
+Legacy format-mapping revisions keep their historical validation snapshot:
+memberships, duplicate and invalid-address exclusions, category counts, manifest
+and exclusion report are still written at validation and stay downloadable.
+
 ## Operator sequence
 
 1. Upload and validate the workbook. The campaign revision pins the mappings.
 2. Prepare mapped values with the confirmed AI connection, review corrections
    and unresolved findings, and select the completed run.
-3. Finalize the sending data by one of two paths:
-   - **Approve as-is** seals the accepted prepared values after fresh backend
-     required/optional, address, duplicate, campaign-history and rendering
-     safety checks.
+3. Review the selected run. The backend review classifies the cleaned values
+   with the same rule set approval uses, returns accepted entries and held
+   entries with every applicable reason, and writes nothing: no candidate,
+   membership, attempt, approval or schedule changes.
+4. Finalize the sending data by one of two paths:
+   - **Approve as-is** reclassifies the accepted prepared values inside its
+     publication transaction after fresh backend required/optional, address,
+     duplicate, campaign-history and rendering safety checks. It refuses a run
+     whose source digest no longer matches the task's pinned digest, so a
+     re-uploaded or tampered workbook cannot be approved through old evidence.
    - **Edited final upload** accepts a downloaded sending sheet with edits,
      removals, additions or restored entries. It runs deterministic backend
      validation only: no AI, no recasing and no list normalization. Commas are
      the only email-list delimiter.
-4. Download the accepted final sheet or its exclusion report. A replacement
+5. Download the accepted final sheet or its exclusion report. A replacement
    upload always creates a new snapshot identity, even when its bytes match.
-5. Send a formatting test from a row of that exact snapshot and approve the
+   The exclusion download resolves the selected final snapshot first, then the
+   selected prepared review, then the legacy validation report.
+6. Send a formatting test from a row of that exact snapshot and approve the
    received formatting. Dataset approval is not formatting approval and is not
    sending authorization.
-6. Start or schedule explicitly. An enabled schedule freezes the dataset until
+7. Start or schedule explicitly. An enabled schedule freezes the dataset until
    it is cleared.
+
+## Accepted values and provenance
+
+Approval publishes one membership per accepted entry, and each membership stores
+the accepted cleaned values that preview, test and sending render. The uploaded
+original cell is never rewritten: it stays in the stored workbook and, for a held
+entry, in the review evidence beside the cleaned proposal. Held entries create no
+membership and remain visible only in the report and the review.
+
+Selecting a run for review is not approval, and a repeated approval action ID
+returns the same snapshot instead of creating a second one.
 
 ## Historical transition
 
 - Revisions written before mapping versions keep their recorded format
-  behavior. Their stored hashes and rendered evidence are not rewritten.
+  behavior. Their stored hashes and rendered evidence are not rewritten, and
+  their validation-time memberships, counts, rows and exclusion report stay
+  exactly as published.
 - New revisions use `variable | source header | role | fallback` and no format
   choice. A legacy-shaped submission is rejected with a remedy.
+- A current-revision task that was already validated before this workflow keeps
+  its existing evidence until an explicit revalidation. Revalidation repeats the
+  preflight and clears the previously selected preparation run, final snapshot,
+  finalization error and memberships; navigation alone changes nothing.
 - Unstarted legacy tasks can enter the snapshot workflow by preparing data or
   uploading an edited final sheet. Nothing calls AI and no approval is
   manufactured during migration.
