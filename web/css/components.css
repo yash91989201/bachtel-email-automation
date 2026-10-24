@@ -302,6 +302,7 @@ input[type="checkbox"] {
 .cn-table th { vertical-align: middle; }
 .cn-table thead tr :is(td, th) { border-bottom: 1px solid color-mix(in oklch, var(--color-foreground) 5%, transparent); }
 .cn-table tbody tr:not(:last-child) :is(td, th) { border-bottom: 1px solid var(--color-border); }
+.cn-table-sticky :is(thead, tfoot) :is(td, th) { position: sticky; top: 0; z-index: 1; background: var(--color-muted); }
 .cn-table-compact :not(thead, tfoot) tr { font-size: .75rem; }
 
 .app-checkbox-error {

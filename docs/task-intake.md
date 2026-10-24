@@ -95,6 +95,41 @@ revision: it re-pins the selection, recounts source rows and clears the previous
 selected preparation run, final snapshot, finalization error and memberships, so
 a stale reviewed dataset can never be approved or sent.
 
+## Review presentation
+
+The Recipients workspace keeps the review compact and server-rendered; every
+control is an ordinary form or link, and opening a disclosure never starts an AI
+run, selects a dataset, approves, uploads or sends anything.
+
+- Backend outcomes appear once. The final review shows source rows, recipient
+  entries, accepted and held counts; the preparation summary shows only the AI
+  totals (`corrections`, `unresolved AI findings`) and says explicitly that they
+  are not admissions. The role-mapping summary names the current stage
+  (`Workbook received` or `Prepared review ready`) without repeating counts.
+- Held entries are the actionable list: they are shown before accepted
+  recipients, open by default when nonzero, and keep every recorded reason. While
+  backend validation is pending, the provisional preparation-held list is shown
+  instead; once the backend review exists it is the canonical list and the
+  provisional table is not repeated. A review with no held entries shows a
+  concise no-held state rather than an empty table.
+- Accepted recipients, resolved corrections and unresolved AI findings each sit
+  behind a count-bearing disclosure and are collapsed by default. Preparation
+  settings, the instruction draft and run history share one secondary disclosure;
+  a queued, running or failed latest run, its error and the retry action remain
+  visible outside it. Before the first completed run the settings stay inline.
+- Every long review list — accepted recipients, held entries, findings,
+  corrections, preparation runs and final exclusions — scrolls inside one
+  content-height `ScrollArea` bounded by `min(20rem, 60vh)`, with sticky table
+  headings, horizontal scrolling for wide tables and an accessible name on the
+  focusable viewport. Short lists use their content height instead of a large
+  empty panel. Summaries, counts, blockers and next actions stay in the ordinary
+  page flow.
+- The server-side evidence preview is still capped at 100 findings, 100
+  corrections and 100 held entries. Omitted rows are labelled with shown and
+  total counts (`Showing 40 of 212 corrections`), the page never fetches more
+  while scrolling, and the selected run's sanitization report download carries
+  the complete evidence.
+
 ## Recipient expansion
 
 The selected `recipient` mapping's cell is split on **commas only**, and each

@@ -1,7 +1,10 @@
 package web
 
 import (
+	"bytes"
+	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strings"
@@ -9,6 +12,76 @@ import (
 
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
 )
+
+// A refused structural final upload renders the page with the edit path open,
+// the error visible and the previously accepted snapshot still selected.
+func TestFinalUploadRejectionOpensEditPathAndKeepsSnapshot(t *testing.T) {
+	app, handler := newTaskServer(t)
+	cookie := login(t, handler)
+	campaignID := createCampaign(t, handler, cookie, "Engineers")
+	if rec := postRevision(t, handler, cookie, campaignID, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
+		t.Fatalf("revision: %d %.400s", rec.Code, rec.Body.String())
+	}
+	taskID := stageTask(t, handler, cookie, campaignID, mixedWorkbook(t))
+	finalizeTask(t, app, handler, cookie, campaignID, taskID)
+	recipientsPath := views.TaskSectionPath(campaignID, taskID, views.TaskSectionRecipients)
+	page := fetchTaskPage(t, handler, cookie, recipientsPath)
+	selected := regexp.MustCompile(`Selected final snapshot</strong> <code>([a-z0-9]+)</code>`).FindStringSubmatch(page)
+	if len(selected) != 2 {
+		t.Fatalf("selected final snapshot missing before the refused upload: %.600s", page)
+	}
+
+	// The source workbook has none of the mapped final-sheet columns, so the
+	// upload fails structurally before any entry is classified.
+	sheet := taskWorkbook(t, "Sheet1", [][]string{{"Name"}, {"Ada"}})
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	if err := writer.WriteField("action_id", "rejected-final-upload-123456"); err != nil {
+		t.Fatal(err)
+	}
+	part, err := writer.CreateFormFile("workbook", "broken.xlsx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(sheet); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/campaigns/"+campaignID+"/tasks/"+taskID+"/finalization/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("structural final upload: status=%d %.600s", rec.Code, rec.Body.String())
+	}
+	rejected := rec.Body.String()
+	for _, want := range []string{
+		"missing required mapped column(s)",
+		"Selected final snapshot",
+		"Download accepted final sheet",
+		`id="finalization-edit-trigger"`,
+	} {
+		if !strings.Contains(rejected, want) {
+			t.Fatalf("refused upload page is missing %q: %.1200s", want, rejected)
+		}
+	}
+	if !regexp.MustCompile(`id="finalization-edit-trigger"[\s\S]{0,800}?aria-expanded="true"`).MatchString(rejected) {
+		t.Fatal("refused upload did not open the edit path")
+	}
+
+	// The prior snapshot survives the refusal and nothing was partially
+	// accepted or replaced.
+	page = fetchTaskPage(t, handler, cookie, recipientsPath)
+	if !strings.Contains(page, "<code>"+selected[1]+"</code>") {
+		t.Fatalf("refused upload replaced the selected snapshot %q", selected[1])
+	}
+	if !strings.Contains(page, "Download accepted final sheet") {
+		t.Fatal("refused upload removed the prior snapshot download")
+	}
+}
 
 // The task workspace exposes finalization before testing, then shows the
 // selected snapshot, its protected download and snapshot-bound approval state.

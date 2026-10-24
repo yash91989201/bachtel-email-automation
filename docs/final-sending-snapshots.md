@@ -62,6 +62,43 @@ and exclusion report are still written at validation and stay downloadable.
 7. Start or schedule explicitly. An enabled schedule freezes the dataset until
    it is cleared.
 
+## Workspace paths and reports
+
+The Recipients workspace presents the two finalization paths in a fixed order:
+prepared data first, editing second.
+
+- **Use prepared data** is the primary area. It holds the review confirmation and
+  **Approve prepared data as-is**, refers to the reviewed selected run, and
+  states that dataset approval does not send a test, approve received formatting
+  or authorize candidate sending or scheduling.
+- **Edit data before approval** is a secondary disclosure that presents the
+  prepared sending-sheet download, the edit guidance and the labeled final-sheet
+  upload in that order. It opens by default after a refused upload, when editing
+  is the available remedy before the backend review, or when the review has no
+  accepted entries; otherwise it stays collapsed. A refused upload keeps its
+  error visible outside the disclosure and leaves the prior final snapshot
+  selected.
+- **Review reports** is one secondary report area for the displayed dataset. It
+  groups the selected run's sanitization report (one row per prepared recipient
+  entry: outcome, corrections, findings, exclusion reasons and original and
+  prepared values) with the applicable exclusion report (backend-held prepared
+  entries, or the selected final snapshot's excluded entries), each with a short
+  purpose description. A report that does not apply is omitted.
+- The accepted final sheet stays beside the selected-final summary; the prepared
+  sending sheet exists only in the edit path. Each link has one canonical
+  location, resolved by the same selected-run/final-snapshot precedence as the
+  downloads themselves.
+- Backend accepted/held totals appear once in the final review. Held entries are
+  listed before accepted recipients and open by default when nonzero; accepted
+  recipients, corrections and unresolved AI findings sit behind count-bearing
+  disclosures, and every long review list scrolls inside a bounded area with
+  sticky headings. Opening, closing or scrolling any disclosure performs no
+  selection, approval, upload or sending operation.
+
+Direct API or non-browser access is unchanged: the routes, action IDs,
+confirmation fields and availability guards are the same as the rendered
+controls.
+
 ## Accepted values and provenance
 
 Approval publishes one membership per accepted entry, and each membership stores

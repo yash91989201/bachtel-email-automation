@@ -380,7 +380,7 @@ func TestPreparationShowsStoredFindings(t *testing.T) {
 		"compensation in a department column",
 		"restored spacing",
 		"Prepared entries held by findings",
-		"Unresolved findings",
+		"Unresolved AI findings",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("page is missing %q", want)

@@ -24,6 +24,7 @@ import (
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/table"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/textarea"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/ui/tooltip"
+	"slices"
 )
 
 // Task workspace sections. Their order is the navigation order.
@@ -801,6 +802,9 @@ templ taskRecipients(data TaskPageData) {
 						if data.DatasetFinalized {
 							<h3 id="summary-heading" class="cn-card-title">Selected final snapshot</h3>
 							<p class="text-sm">{ data.Finalization.Selected.Counts.SourceRows } source rows · { data.Finalization.Selected.Counts.Entries } recipient entries · { data.Finalization.Selected.Counts.Accepted } accepted · { data.Finalization.Selected.Counts.Excluded } excluded</p>
+						} else if data.Finalization.PreparedReview {
+							<h3 id="summary-heading" class="cn-card-title">Prepared review ready</h3>
+							<p class="text-sm">Review the accepted recipients and held entries in the final review below, then approve the prepared data or upload an edited sheet.</p>
 						} else {
 							<h3 id="summary-heading" class="cn-card-title">Workbook received</h3>
 							<p class="text-sm">{ strconv.Itoa(data.Summary.SourceRows) } source rows are ready for data preparation.</p>
@@ -858,7 +862,7 @@ templ taskFinalization(data TaskPageData) {
 			@card.Content(card.ContentProps{Class: "gap-4"}) {
 				<p class="text-[.68rem] tracking-[.13em] font-[750] uppercase text-primary mb-[.6rem]">Step 2 · Final sending data</p>
 				<h3 id="finalization-heading" class="cn-card-title">Approve the exact data used for sending</h3>
-				<p class="text-sm text-muted-foreground max-w-[75ch]">Dataset approval freezes the accepted recipient values. It does not send a test, approve received formatting, or authorize candidate sending or scheduling. A new final upload always replaces the selection and needs a fresh test and received-format approval, even when its values look identical.</p>
+				<p class="text-sm text-muted-foreground max-w-[75ch]">Dataset approval freezes the accepted recipient values. A new final upload always replaces the selection and needs a fresh test and received-format approval, even when its values look identical.</p>
 				if data.Finalization.BlockedReason != "" {
 					@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
 						<p>{ data.Finalization.BlockedReason }</p>
@@ -876,9 +880,6 @@ templ taskFinalization(data TaskPageData) {
 						<p class="text-xs text-muted-foreground wrap-anywhere">Digest <code>{ data.Finalization.Selected.Digest }</code> · finalized by { data.Finalization.Selected.Actor }</p>
 						<div class="app-card-actions">
 							<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ data.Finalization.Selected.SheetHref }>Download accepted final sheet</a>
-							if data.Finalization.Selected.Excluded > 0 {
-								<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ data.Finalization.Selected.ReportHref }>Download final exclusions</a>
-							}
 						</div>
 						if data.Finalization.Selected.Accepted == 0 {
 							@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
@@ -902,73 +903,110 @@ templ taskFinalization(data TaskPageData) {
 							}
 						</h4>
 						<p class="text-sm">{ data.Finalization.PreparedCounts.SourceRows } source rows · { data.Finalization.PreparedCounts.Entries } recipient entries · { data.Finalization.PreparedCounts.Accepted } accepted · { data.Finalization.PreparedCounts.Excluded } held</p>
-						if len(data.Finalization.PreparedEntries) > 0 {
-							<div class="table-scroll">
-								<table class="cn-table-compact">
-									<thead><tr><th>Source row</th><th>Position</th><th>Accepted recipient</th></tr></thead>
-									<tbody>
-										for _, entry := range data.Finalization.PreparedEntries {
-											<tr><td>{ entry.Row }</td><td>{ entry.Position }</td><td>{ entry.Recipient }</td></tr>
-										}
-									</tbody>
-								</table>
-							</div>
+						if data.Finalization.PreparedCounts.Excluded > 0 {
+							<p class="text-sm text-muted-foreground">Held entries stay out of the final sending data. Correct them in the source workbook or in an edited sheet; approval uses the accepted entries only.</p>
+							@taskEvidenceDisclosure("finalization-held", "Held entries", data.Finalization.PreparedCounts.Excluded, true) {
+								@taskHeldEntries("Prepared held entries", data.Finalization.PreparedExclusions)
+								@taskTruncation(len(data.Finalization.PreparedExclusions), data.Finalization.PreparedCounts.Excluded, "held entries", "The review reports below contain the complete list.")
+							}
+						} else {
+							<p class="text-sm text-muted-foreground">No entries are held in this review.</p>
 						}
-						@taskFinalExclusions(data.Finalization.PreparedExclusions)
-						if data.Finalization.SanitizationHref != "" {
+						if data.Finalization.PreparedCounts.Accepted > 0 {
+							@taskEvidenceDisclosure("finalization-accepted", "Accepted recipients", data.Finalization.PreparedCounts.Accepted, false) {
+								@taskAcceptedEntries(data.Finalization.PreparedEntries)
+								@taskTruncation(len(data.Finalization.PreparedEntries), data.Finalization.PreparedCounts.Accepted, "accepted recipients", "The review reports below contain the complete list.")
+							}
+						} else {
+							<p class="text-sm text-muted-foreground">No entries are accepted in this review. Correct the data and upload an edited final sheet.</p>
+						}
+					</div>
+				}
+				if data.Finalization.HasSelected {
+					if data.Finalization.Selected.Excluded > 0 {
+						@taskEvidenceDisclosure("finalization-excluded", "Held entries", data.Finalization.Selected.Excluded, true) {
+							@taskHeldEntries("Final exclusions", data.Finalization.Selected.Exclusions)
+							@taskTruncation(len(data.Finalization.Selected.Exclusions), data.Finalization.Selected.Excluded, "excluded entries", "The exclusion report below contains the complete list.")
+						}
+					}
+				}
+				{{ reportCount := finalReviewReportCount(data) }}
+				if reportCount > 0 {
+					@taskEvidenceDisclosure("finalization-reports", "Download review reports", reportCount, false) {
+						<p class="text-sm text-muted-foreground">Complete audit downloads for the displayed dataset; every link stays owner-scoped.</p>
+						if !data.Finalization.HasSelected && data.Finalization.PreparedReview && data.Finalization.SanitizationHref != "" {
 							<div class="app-card-actions">
 								<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ data.Finalization.SanitizationHref }>Download sanitization report</a>
 								<span class="text-sm text-muted-foreground">One row per prepared recipient entry: outcome, corrections, findings, exclusion reasons and original and prepared values.</span>
 							</div>
 						}
-					</div>
-				}
-				if data.Finalization.HasSelected {
-					@taskFinalExclusions(data.Finalization.Selected.Exclusions)
-					if data.Finalization.Selected.Excluded > 0 {
-						<a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download selected final exclusions</a>
+						if !data.Finalization.HasSelected && data.Finalization.PreparedReview && data.Finalization.PreparedReviewSelected && len(data.Finalization.PreparedExclusions) > 0 {
+							<div class="app-card-actions">
+								<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download prepared exclusions</a>
+								<span class="text-sm text-muted-foreground">Backend-held prepared entries with every exclusion reason.</span>
+							</div>
+						}
+						if data.Finalization.HasSelected && data.Finalization.Selected.Excluded > 0 {
+							<div class="app-card-actions">
+								<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ data.Finalization.Selected.ReportHref }>Download final exclusions</a>
+								<span class="text-sm text-muted-foreground">Entries excluded from the selected final snapshot with every reason.</span>
+							</div>
+						}
 					}
-				}
-				if data.Finalization.PreparedReview && len(data.Finalization.PreparedExclusions) > 0 {
-					if data.Finalization.PreparedReviewSelected && !data.Finalization.HasSelected {
-						<a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download prepared exclusions</a>
-					}
-				}
-				if data.Finalization.PreparedHref != "" {
-					<div class="app-card-actions">
-						<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ data.Finalization.PreparedHref }>Download prepared sending sheet</a>
-						<span class="text-sm text-muted-foreground">Edit it in Excel, then upload it below for a deterministic final check.</span>
-					</div>
-				}
-				if !data.Finalization.CanApprove && data.Finalization.Required {
-					<p class="text-sm text-muted-foreground">Approve as-is becomes available after a completed preparation run and its backend review. You can still upload an edited final sheet.</p>
 				}
 				if data.Finalization.CanApprove {
-					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/finalization/approve" } class="space-y-2">
-						<input type="hidden" name="action_id" value={ data.ActionID + "finalize" }/>
-						@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
-							@checkbox.Checkbox(checkbox.Props{ID: "finalize-approve", Name: "confirm_approve", Value: "yes", Required: true})
-							I reviewed the selected prepared values and accept them as this task's final sending data.
-						}
-						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault}) {
-							Approve prepared data as-is
-						}
-					</form>
-				}
-				if data.Finalization.CanUpload {
-					<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/finalization/upload" } enctype="multipart/form-data" class="space-y-3">
-						<input type="hidden" name="action_id" value={ data.ActionID + "finalupload" }/>
-						@field.Field(field.Props{}) {
-							@field.Label(field.LabelProps{For: "final-workbook"}) {
-								Edited final sheet (XLSX)
+					<div class="space-y-2 rounded-md border border-border p-3" id="finalize-primary">
+						<h4 class="font-semibold">Use prepared data</h4>
+						<p class="text-sm text-muted-foreground">It does not send a test, approve received formatting, or authorize candidate sending or scheduling.</p>
+						<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/finalization/approve" } class="space-y-2">
+							<input type="hidden" name="action_id" value={ data.ActionID + "finalize" }/>
+							@uilabel.Label(uilabel.Props{Class: "cn-label"}) {
+								@checkbox.Checkbox(checkbox.Props{ID: "finalize-approve", Name: "confirm_approve", Value: "yes", Required: true})
+								I reviewed the selected prepared values and accept them as this task's final sending data.
 							}
-							@input.Input(input.Props{ID: "final-workbook", Name: "workbook", Type: "file", Accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Required: true, Attributes: templ.Attributes{"aria-describedby": "final-workbook-hint"}})
-							<p id="final-workbook-hint" class="text-xs text-muted-foreground">Validation is deterministic: no AI runs and populated values are preserved apart from recipient trim/lowercase and optional fallbacks. Commas are the only email-list separator. Added, removed, reordered and restored entries are allowed.</p>
+							@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault}) {
+								Approve prepared data as-is
+							}
+						</form>
+					</div>
+				}
+				if !data.Finalization.HasSelected && !data.Finalization.CanApprove && data.Finalization.Required {
+					<p class="text-sm text-muted-foreground">Approve as-is becomes available after a completed preparation run and its backend review. You can still upload an edited final sheet.</p>
+				}
+				{{ editLabel := "Edit data before approval" }}
+				if data.Finalization.HasSelected {
+					{{ editLabel = "Edit and upload a replacement" }}
+				}
+				if data.Finalization.PreparedHref != "" || data.Finalization.CanUpload {
+					@taskEvidenceDisclosure("finalization-edit", editLabel, -1, finalEditOpen(data)) {
+						<ol class="list-inside list-decimal space-y-2 text-sm">
+							<li>
+								if data.Finalization.PreparedHref != "" {
+									<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeSm}) } href={ data.Finalization.PreparedHref }>Download prepared sending sheet</a>
+								} else {
+									<span class="text-muted-foreground">The prepared sending sheet is unavailable; correct the source workbook and upload a full final sheet instead.</span>
+								}
+							</li>
+							<li>Edit recipients and mapped values in Excel. Keep the header row.</li>
+							<li>Upload and validate the edited final sheet below.</li>
+						</ol>
+						<p class="text-sm text-muted-foreground">Validation is deterministic: no AI runs and populated values are preserved apart from recipient trim/lowercase and optional fallbacks. Commas are the only email-list separator. Added, removed, reordered and restored entries are allowed.</p>
+						if data.Finalization.CanUpload {
+							<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/finalization/upload" } enctype="multipart/form-data" class="space-y-3">
+								<input type="hidden" name="action_id" value={ data.ActionID + "finalupload" }/>
+								@field.Field(field.Props{}) {
+									@field.Label(field.LabelProps{For: "final-workbook"}) {
+										Edited final sheet (XLSX)
+									}
+									@input.Input(input.Props{ID: "final-workbook", Name: "workbook", Type: "file", Accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Required: true, Attributes: templ.Attributes{"aria-describedby": "final-workbook-hint"}})
+									<p id="final-workbook-hint" class="text-xs text-muted-foreground">Deterministic validation only: no AI, no recasing and no list normalization. A new upload always needs a fresh test and received-format approval.</p>
+								}
+								@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline}) {
+									Upload and validate final sheet
+								}
+							</form>
 						}
-						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline}) {
-							Upload and validate final sheet
-						}
-					</form>
+					}
 				}
 				if len(data.Finalization.History) > 1 {
 					<details class="text-sm">
@@ -1138,18 +1176,32 @@ templ taskRevalidateNotice(data TaskPageData) {
 	}
 }
 
-templ taskFinalExclusions(rows []TaskFinalReviewExclusion) {
-	if len(rows) > 0 {
-		<div class="table-scroll">
-			@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Final data exclusions"}}) {
-				<thead><tr><th>Source row</th><th>Position</th><th>Recipient</th><th>Reason</th></tr></thead>
-				<tbody>
-					for _, row := range rows {
-						<tr><td>{ row.Row }</td><td>{ row.Position }</td><td>{ row.Recipient }</td><td>{ row.Reason }</td></tr>
-					}
-				</tbody>
-			}
-		</div>
+// taskHeldEntries is the canonical actionable list of held entries with every
+// recorded reason.
+templ taskHeldEntries(label string, rows []TaskFinalReviewExclusion) {
+	@taskReviewList(label) {
+		@table.Table(table.Props{Class: "cn-table-compact cn-table-sticky", Attributes: templ.Attributes{"aria-label": label}}) {
+			<thead><tr><th>Source row</th><th>Position</th><th>Recipient</th><th>Reason</th></tr></thead>
+			<tbody>
+				for _, row := range rows {
+					<tr><td>{ row.Row }</td><td>{ row.Position }</td><td>{ row.Recipient }</td><td>{ row.Reason }</td></tr>
+				}
+			</tbody>
+		}
+	}
+}
+
+// taskAcceptedEntries is the routine accepted list behind its disclosure.
+templ taskAcceptedEntries(rows []TaskFinalReviewEntry) {
+	@taskReviewList("Accepted recipients") {
+		@table.Table(table.Props{Class: "cn-table-compact cn-table-sticky", Attributes: templ.Attributes{"aria-label": "Accepted recipients"}}) {
+			<thead><tr><th>Source row</th><th>Position</th><th>Accepted recipient</th></tr></thead>
+			<tbody>
+				for _, entry := range rows {
+					<tr><td>{ entry.Row }</td><td>{ entry.Position }</td><td>{ entry.Recipient }</td></tr>
+				}
+			</tbody>
+		}
 	}
 }
 
@@ -1890,7 +1942,7 @@ templ taskPacing(data TaskPageData) {
 					</div>
 					<div class="rounded-2xl bg-muted p-4">
 						<dt class="text-xs text-muted-foreground">Mailbox cooldown</dt>
-						<dd class="mt-1 text-sm font-semibold break-words">
+						<dd class="mt-1 text-sm font-semibold wrap-break-word">
 							if data.Cooldown != "" {
 								Until { data.Cooldown }
 							} else {
@@ -2310,12 +2362,7 @@ func recoveryStateBadge(state string) badge.Props {
 // sendingHasRecovery reports whether any row or recorded outcome needs a
 // recovery action or detail.
 func sendingHasRecovery(rows []TaskAdmittedRow) bool {
-	for _, row := range rows {
-		if taskRowNeedsRecovery(row) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(rows, taskRowNeedsRecovery)
 }
 
 // taskStatusBadge renders the derived main status, with a non-color text label.
@@ -2382,6 +2429,17 @@ templ taskPreparation(data TaskPageData) {
 						<p>No AI connection is confirmed for this account. <a class="app-link text-primary" href="/account/ai">Set up the AI connection</a> before preparing data.</p>
 					}
 				}
+				if len(data.Preparation.Runs) > 0 {
+					{{ latest := data.Preparation.Runs[0] }}
+					if latest.State != "completed" {
+						<div class="rounded-md border border-border p-3 text-sm" id="preparation-latest-run">
+							<p>Latest run <code>{ latest.State }</code> · { latest.Kind } · { latest.CreatedAt }</p>
+							if latest.Error != "" {
+								<p class="text-sm status-danger wrap-anywhere">{ latest.Error }</p>
+							}
+						</div>
+					}
+				}
 				if data.Preparation.CanPrepare || data.Preparation.CanRetry || data.Preparation.CanRerun {
 					<div class="app-card-actions items-center">
 						if data.Preparation.CanPrepare {
@@ -2408,7 +2466,7 @@ templ taskPreparation(data TaskPageData) {
 					</div>
 				}
 				if data.Preparation.EvidenceRunID != "" {
-					<div class="space-y-2">
+					<div class="space-y-2" id="preparation-evidence">
 						<h4 class="text-sm font-semibold">
 							Prepared dataset evidence
 							if data.Preparation.EvidenceSelected {
@@ -2416,146 +2474,246 @@ templ taskPreparation(data TaskPageData) {
 							}
 						</h4>
 						if data.RoleMapping && data.DatasetFinalized {
-							<p class="text-sm text-muted-foreground">Preparation history: { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } AI findings. The selected final snapshot below supplies accepted and excluded rows.</p>
+							<p class="text-sm"><strong>Preparation history</strong> · { strconv.Itoa(data.Preparation.Counts.Corrections) } corrections · { strconv.Itoa(data.Preparation.Counts.Findings) } AI findings. The selected final snapshot supplies accepted and excluded rows.</p>
+						} else if data.RoleMapping && data.Finalization.PreparedReview {
+							<p class="text-sm">
+								if data.Preparation.EvidenceSelected {
+									Selected run
+								} else {
+									Prepared run
+								}
+								· { strconv.Itoa(data.Preparation.Counts.Corrections) } corrections · { strconv.Itoa(data.Preparation.Counts.Findings) } unresolved AI findings
+							</p>
+							<p class="text-sm text-muted-foreground">Backend acceptance and held counts appear once in the final review below.</p>
 						} else if data.RoleMapping {
-							if data.Finalization.PreparedReview {
-								<p class="text-sm">{ data.Finalization.PreparedCounts.SourceRows } source rows · { data.Finalization.PreparedCounts.Entries } recipient entries · { data.Finalization.PreparedCounts.Accepted } backend accepted · { data.Finalization.PreparedCounts.Excluded } backend held · { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } AI findings</p>
-							} else {
-								<p class="text-sm">{ data.Preparation.Counts.SourceRows } source rows · { data.Preparation.Counts.Entries } prepared entries · { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } AI findings</p>
-								<p class="text-sm text-muted-foreground">Backend validation is pending. Accepted and held recipient counts appear once the backend review of the prepared run completes.</p>
+							<p class="text-sm">{ strconv.Itoa(data.Preparation.Counts.SourceRows) } source rows · { strconv.Itoa(data.Preparation.Counts.Entries) } prepared entries · { strconv.Itoa(data.Preparation.Counts.Corrections) } corrections · { strconv.Itoa(data.Preparation.Counts.Findings) } AI findings</p>
+							<p class="text-sm text-muted-foreground">Backend validation is pending. Accepted and held recipient counts appear once the backend review of the prepared run completes.</p>
+						} else {
+							<p class="text-sm">{ strconv.Itoa(data.Preparation.Counts.SourceRows) } source rows · { strconv.Itoa(data.Preparation.Counts.Entries) } prepared entries · { strconv.Itoa(data.Preparation.Counts.Accepted) } provisionally accepted · { strconv.Itoa(data.Preparation.Counts.Held) } held by findings · { strconv.Itoa(data.Preparation.Counts.Corrections) } corrections · { strconv.Itoa(data.Preparation.Counts.Findings) } AI findings</p>
+							<p class="text-sm text-muted-foreground">Held entries are preparation evidence only. Required/optional, address and duplicate checks still run in the backend when this evidence is finalized.</p>
+						}
+						{{ provisionalHeld := len(data.Preparation.Held) > 0 && !data.Finalization.PreparedReview }}
+						if provisionalHeld {
+							@taskEvidenceDisclosure("preparation-held", "Prepared entries held by findings", data.Preparation.Counts.Held, true) {
+								@taskReviewList("Prepared entries held by findings") {
+									@table.Table(table.Props{Class: "cn-table-compact cn-table-sticky", Attributes: templ.Attributes{"aria-label": "Prepared entries held by findings"}}) {
+										<thead><tr><th>Row</th><th>Position</th><th>Recipient</th><th>Reason</th></tr></thead>
+										<tbody>
+											for _, held := range data.Preparation.Held {
+												<tr><td>{ held.Row }</td><td>{ held.Position }</td><td>{ held.Recipient }</td><td>{ held.Reasons }</td></tr>
+											}
+										</tbody>
+									}
+								}
+								@taskTruncation(len(data.Preparation.Held), data.Preparation.Counts.Held, "held entries", "The complete evidence is in the selected run's sanitization report.")
+							}
+						} else if !data.Finalization.PreparedReview {
+							<p class="text-sm text-muted-foreground">No entries are held by preparation findings.</p>
+						}
+						if data.Preparation.Counts.Findings > 0 {
+							@taskEvidenceDisclosure("preparation-findings", "Unresolved AI findings", data.Preparation.Counts.Findings, false) {
+								@taskReviewList("Unresolved AI findings") {
+									@table.Table(table.Props{Class: "cn-table-compact cn-table-sticky", Attributes: templ.Attributes{"aria-label": "Unresolved preparation findings"}}) {
+										<thead><tr><th>Row</th><th>Position</th><th>Field</th><th>Scope</th><th>Finding</th></tr></thead>
+										<tbody>
+											for _, finding := range data.Preparation.Findings {
+												<tr>
+													<td>{ finding.Row }</td>
+													<td>
+														if finding.Position > 0 {
+															{ finding.Position }
+														} else {
+															—
+														}
+													</td>
+													<td>{ finding.Field }</td>
+													<td><code>{ finding.Scope }</code></td>
+													<td>{ finding.Note }</td>
+												</tr>
+											}
+										</tbody>
+									}
+								}
+								@taskTruncation(len(data.Preparation.Findings), data.Preparation.Counts.Findings, "findings", "The complete evidence is in the selected run's sanitization report.")
 							}
 						} else {
-							<p class="text-sm">{ data.Preparation.Counts.SourceRows } source rows · { data.Preparation.Counts.Entries } prepared entries · { data.Preparation.Counts.Accepted } accepted · { data.Preparation.Counts.Held } held by findings · { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } findings</p>
-							<p class="text-sm text-muted-foreground">Held entries are part of the preparation exclusion evidence. Required/optional, address and duplicate checks still run in the backend when this evidence is later finalized.</p>
+							<p class="text-sm text-muted-foreground">No unresolved AI findings in this run.</p>
 						}
-					</div>
-				}
-				<details class="text-sm">
-					<summary class="cursor-pointer">Application base prompt · version { data.Preparation.PromptVersion }</summary>
-					<pre class="mt-2 max-h-96 overflow-auto rounded-md border border-border bg-muted/40 p-3 text-xs wrap-anywhere whitespace-pre-wrap">{ data.Preparation.Prompt }</pre>
-				</details>
-				<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/instructions" } class="space-y-3">
-					@field.Field(field.Props{}) {
-						@field.Label(field.LabelProps{For: "preparation-instructions"}) {
-							Task instructions (optional)
-						}
-						@textarea.Textarea(textarea.Props{ID: "preparation-instructions", Name: "instructions", Rows: 6, Value: data.Preparation.Instructions, Disabled: !data.Preparation.CanManage, Attributes: templ.Attributes{"aria-describedby": "preparation-instructions-hint"}})
-						<p id="preparation-instructions-hint" class="text-xs text-muted-foreground">Instructions extend or override the cleanup defaults for this task only. They never bypass output validation, recipient integrity or sending authorization. Editing them does not change a completed run; only an explicit new run captures the new text.</p>
-					}
-					<div class="app-card-actions">
-						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm, Disabled: !data.Preparation.CanManage}) {
-							Save instructions
-						}
-					</div>
-				</form>
-				if len(data.Preparation.Runs) > 0 {
-					<div class="table-scroll">
-						@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Preparation runs"}}) {
-							<thead>
-								<tr><th>Created</th><th>Run</th><th>State</th><th>Model</th><th>Batches</th><th>Result</th><th>Action</th></tr>
-							</thead>
-							<tbody>
-								for _, run := range data.Preparation.Runs {
-									<tr>
-										<td>{ run.CreatedAt }</td>
-										<td>
-											<code>{ run.Kind }</code>
-											if run.Selected {
-												<span class="ml-1 text-xs text-primary">selected</span>
+						if data.Preparation.Counts.Corrections > 0 {
+							@taskEvidenceDisclosure("preparation-corrections", "Resolved corrections", data.Preparation.Counts.Corrections, false) {
+								@taskReviewList("Resolved corrections") {
+									@table.Table(table.Props{Class: "cn-table-compact cn-table-sticky", Attributes: templ.Attributes{"aria-label": "Resolved preparation corrections"}}) {
+										<thead><tr><th>Row</th><th>Field</th><th>Correction</th></tr></thead>
+										<tbody>
+											for _, correction := range data.Preparation.Corrections {
+												<tr><td>{ correction.Row }</td><td>{ correction.Field }</td><td>{ correction.Note }</td></tr>
 											}
-											if run.Error != "" {
-												<p class="text-xs status-danger wrap-anywhere">{ run.Error }</p>
-											}
-										</td>
-										<td><code>{ run.State }</code></td>
-										<td class="wrap-anywhere">{ run.Provider } · { run.APIFormat } · { run.Model }</td>
-										<td>{ run.Batches }</td>
-										<td>{ run.Accepted } accepted · { run.Held } held · { run.Corrections } corrections · { run.Findings } findings</td>
-										<td>
-											if run.CanSelect {
-												<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/select" }>
-													<input type="hidden" name="run" value={ run.ID }/>
-													@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm}) {
-														Select this run
-													}
-												</form>
-											} else {
-												<span class="text-sm text-muted-foreground">—</span>
-											}
-										</td>
-									</tr>
+										</tbody>
+									}
 								}
-							</tbody>
+								@taskTruncation(len(data.Preparation.Corrections), data.Preparation.Counts.Corrections, "corrections", "The complete evidence is in the selected run's sanitization report.")
+							}
+						} else {
+							<p class="text-sm text-muted-foreground">No resolved corrections in this run. Corrections alone never hold an entry.</p>
 						}
 					</div>
 				}
-				if data.Preparation.EvidenceRunID != "" {
-					<h4 class="text-sm font-semibold">Unresolved findings</h4>
-					if len(data.Preparation.Findings) == 0 {
-						<p class="text-sm text-muted-foreground">No unresolved findings in this run.</p>
-					} else {
-						<div class="table-scroll">
-							@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Unresolved preparation findings"}}) {
-								<thead><tr><th>Row</th><th>Position</th><th>Field</th><th>Scope</th><th>Finding</th></tr></thead>
-								<tbody>
-									for _, finding := range data.Preparation.Findings {
-										<tr>
-											<td>{ finding.Row }</td>
-											<td>
-												if finding.Position > 0 {
-													{ finding.Position }
-												} else {
-													—
-												}
-											</td>
-											<td>{ finding.Field }</td>
-											<td><code>{ finding.Scope }</code></td>
-											<td>{ finding.Note }</td>
-										</tr>
-									}
-								</tbody>
-							}
-						</div>
-						if data.Preparation.FindingsHidden > 0 {
-							<p class="text-sm text-muted-foreground">{ data.Preparation.FindingsHidden } more findings are stored in the run evidence.</p>
-						}
-					}
-					<h4 class="text-sm font-semibold">Resolved corrections</h4>
-					if len(data.Preparation.Corrections) == 0 {
-						<p class="text-sm text-muted-foreground">No resolved corrections in this run. Corrections alone never hold an entry.</p>
-					} else {
-						<div class="table-scroll">
-							@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Resolved preparation corrections"}}) {
-								<thead><tr><th>Row</th><th>Field</th><th>Correction</th></tr></thead>
-								<tbody>
-									for _, correction := range data.Preparation.Corrections {
-										<tr><td>{ correction.Row }</td><td>{ correction.Field }</td><td>{ correction.Note }</td></tr>
-									}
-								</tbody>
-							}
-						</div>
-						if data.Preparation.CorrectionsHidden > 0 {
-							<p class="text-sm text-muted-foreground">{ data.Preparation.CorrectionsHidden } more corrections are stored in the run evidence.</p>
-						}
-					}
-					if len(data.Preparation.Held) > 0 {
-						<h4 class="text-sm font-semibold">Prepared entries held by findings</h4>
-						<div class="table-scroll">
-							@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Prepared entries held by findings"}}) {
-								<thead><tr><th>Row</th><th>Position</th><th>Recipient</th><th>Reason</th></tr></thead>
-								<tbody>
-									for _, held := range data.Preparation.Held {
-										<tr><td>{ held.Row }</td><td>{ held.Position }</td><td>{ held.Recipient }</td><td>{ held.Reasons }</td></tr>
-									}
-								</tbody>
-							}
-						</div>
-						if data.Preparation.HeldHidden > 0 {
-							<p class="text-sm text-muted-foreground">{ data.Preparation.HeldHidden } more held entries are stored in the run evidence.</p>
-						}
+				if data.Preparation.EvidenceRunID == "" {
+					@taskPreparationSettings(data)
+				} else {
+					@taskEvidenceDisclosure("preparation-settings", "Preparation settings and run history", len(data.Preparation.Runs), false) {
+						@taskPreparationSettings(data)
 					}
 				}
 			}
 		}
 	</section>
+}
+
+// taskPreparationSettings is the secondary configuration and run history of the
+// preparation card. It stays inline until a run completes, because the
+// instruction editor and the connection remedy are the first-run guidance.
+templ taskPreparationSettings(data TaskPageData) {
+	<div class="space-y-3">
+		<details class="text-sm">
+			<summary class="cursor-pointer">Application base prompt · version { data.Preparation.PromptVersion }</summary>
+			<pre class="mt-2 max-h-96 overflow-auto rounded-md border border-border bg-muted/40 p-3 text-xs wrap-anywhere whitespace-pre-wrap">{ data.Preparation.Prompt }</pre>
+		</details>
+		<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/instructions" } class="space-y-3">
+			@field.Field(field.Props{}) {
+				@field.Label(field.LabelProps{For: "preparation-instructions"}) {
+					Task instructions (optional)
+				}
+				@textarea.Textarea(textarea.Props{ID: "preparation-instructions", Name: "instructions", Rows: 6, Value: data.Preparation.Instructions, Disabled: !data.Preparation.CanManage, Attributes: templ.Attributes{"aria-describedby": "preparation-instructions-hint"}})
+				<p id="preparation-instructions-hint" class="text-xs text-muted-foreground">Instructions extend or override the cleanup defaults for this task only. They never bypass output validation, recipient integrity or sending authorization. Editing them does not change a completed run; only an explicit new run captures the new text.</p>
+			}
+			<div class="app-card-actions">
+				@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm, Disabled: !data.Preparation.CanManage}) {
+					Save instructions
+				}
+			</div>
+		</form>
+		if len(data.Preparation.Runs) > 0 {
+			@taskReviewList("Preparation runs") {
+				@table.Table(table.Props{Class: "cn-table-compact cn-table-sticky", Attributes: templ.Attributes{"aria-label": "Preparation runs"}}) {
+					<thead>
+						<tr><th>Created</th><th>Run</th><th>State</th><th>Model</th><th>Batches</th><th>Result</th><th>Action</th></tr>
+					</thead>
+					<tbody>
+						for _, run := range data.Preparation.Runs {
+							<tr>
+								<td>{ run.CreatedAt }</td>
+								<td>
+									<code>{ run.Kind }</code>
+									if run.Selected {
+										<span class="ml-1 text-xs text-primary">selected</span>
+									}
+									if run.Error != "" {
+										<p class="text-xs status-danger wrap-anywhere">{ run.Error }</p>
+									}
+								</td>
+								<td><code>{ run.State }</code></td>
+								<td class="wrap-anywhere">{ run.Provider } · { run.APIFormat } · { run.Model }</td>
+								<td>{ run.Batches }</td>
+								<td>{ run.Accepted } accepted · { run.Held } held · { run.Corrections } corrections · { run.Findings } findings</td>
+								<td>
+									if run.CanSelect {
+										<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/preparation/select" }>
+											<input type="hidden" name="run" value={ run.ID }/>
+											@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantOutline, Size: button.SizeSm}) {
+												Select this run
+											}
+										</form>
+									} else {
+										<span class="text-sm text-muted-foreground">—</span>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				}
+			}
+		}
+	</div>
+}
+
+// taskEvidenceDisclosure is a count-bearing, keyboard-operable disclosure for
+// one evidence list. Counts and guidance stay outside the bounded viewport.
+templ taskEvidenceDisclosure(id, label string, count int, open bool) {
+	{{ values := []string{id} }}
+	if !open {
+		{{ values = nil }}
+	}
+	@accordion.Accordion(accordion.Props{ID: id, DefaultValue: values}) {
+		@accordion.Item(accordion.ItemProps{ID: id + "-item", Value: id}) {
+			@accordion.Trigger(accordion.TriggerProps{ID: id + "-trigger"}) {
+				<span>
+					{ label }
+					if count >= 0 {
+						<span>· { strconv.Itoa(count) }</span>
+					}
+				</span>
+			}
+			@accordion.Content(accordion.ContentProps{Class: "space-y-2"}) {
+				{ children... }
+			}
+		}
+	}
+}
+
+// taskReviewList bounds one review list: the scrollarea viewport keeps the
+// content height up to min(20rem, 60vh), sticky headings stay visible, wide
+// tables scroll horizontally and the named viewport is what becomes focusable
+// when there is overflow.
+templ taskReviewList(label string) {
+	@scrollarea.ScrollArea(scrollarea.Props{
+		Horizontal: true,
+		Class:      "[&_[data-slot=scroll-area-viewport]]:h-auto [&_[data-slot=scroll-area-viewport]]:max-h-[min(20rem,60vh)]",
+		ViewportAttributes: templ.Attributes{
+			"role":       "region",
+			"aria-label": label,
+		},
+	}) {
+		<div class="p-1 pr-3 pb-2">
+			{ children... }
+		</div>
+	}
+}
+
+// taskTruncation states what a preview omits; scrolling never fetches more.
+templ taskTruncation(shown, total int, noun, hint string) {
+	if total > shown {
+		<p class="text-xs text-muted-foreground" data-slot="truncation-note">Showing { strconv.Itoa(shown) } of { strconv.Itoa(total) } { noun }. { hint }</p>
+	}
+}
+
+// finalReviewReportCount counts the report links the displayed dataset offers.
+func finalReviewReportCount(data TaskPageData) int {
+	finalization := data.Finalization
+	count := 0
+	if !finalization.HasSelected && finalization.PreparedReview {
+		if finalization.SanitizationHref != "" {
+			count++
+		}
+		if finalization.PreparedReviewSelected && len(finalization.PreparedExclusions) > 0 {
+			count++
+		}
+	}
+	if finalization.HasSelected && finalization.Selected.Excluded > 0 {
+		count++
+	}
+	return count
+}
+
+// finalEditOpen reports when the secondary edit path starts expanded: a refused
+// upload, the available remedy before review, or a review with no accepted rows.
+func finalEditOpen(data TaskPageData) bool {
+	finalization := data.Finalization
+	if finalization.Error != "" {
+		return true
+	}
+	if finalization.HasSelected {
+		return finalization.Selected.Accepted == 0
+	}
+	return finalization.Required && (!finalization.CanApprove || finalization.PreparedAccepted == 0)
 }
