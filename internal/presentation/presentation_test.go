@@ -1,6 +1,7 @@
 package presentation_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -48,6 +49,9 @@ func TestMainStatusPrecedence(t *testing.T) {
 		{"completed", presentation.Facts{Status: "completed"}, "Finished"},
 		{"no eligible", presentation.Facts{Status: statusReady, HasRevision: true, Approved: true}, "No eligible recipients"},
 		{"needs approval", presentation.Facts{Status: statusReady, HasRevision: true, Eligible: 2, Remaining: 2}, "Needs formatting approval"},
+		{"eligibility pending", presentation.Facts{Status: statusReady, HasRevision: true, Approved: true, FinalizationRequired: true, EligibilityPending: true}, "Eligibility pending"},
+		{"pending eligibility never reads as no eligible recipients", presentation.Facts{Status: statusReady, HasRevision: true, Approved: true, FinalizationRequired: true, EligibilityPending: true, Stale: true}, "Needs revalidation"},
+		{"finalized without eligible recipients", presentation.Facts{Status: statusReady, HasRevision: true, Approved: true, FinalizationRequired: true, Finalized: true}, "No eligible recipients"},
 		{"ready", readyFacts(), "Ready to send"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -58,6 +62,26 @@ func TestMainStatusPrecedence(t *testing.T) {
 				t.Fatal("a main status must carry its required explanation")
 			}
 		})
+	}
+}
+
+func TestPendingEligibilityIsNotExclusion(t *testing.T) {
+	facts := presentation.Facts{
+		Status: statusReady, HasRevision: true, Approved: true,
+		FinalizationRequired: true, EligibilityPending: true,
+	}
+	status := presentation.MainStatus(facts)
+	if status.Label != "Eligibility pending" || !status.Warning {
+		t.Fatalf("pending status = %+v", status)
+	}
+	if !strings.Contains(status.Explanation, "preparation") || !strings.Contains(status.Explanation, "accepted and held") {
+		t.Fatalf("pending explanation does not name the next step: %q", status.Explanation)
+	}
+	// Once a final snapshot exists the zero count is real admission evidence.
+	facts.Finalized = true
+	facts.EligibilityPending = false
+	if got := presentation.MainStatus(facts).Label; got != "No eligible recipients" {
+		t.Fatalf("finalized zero-eligible status = %q", got)
 	}
 }
 

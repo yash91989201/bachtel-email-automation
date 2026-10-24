@@ -316,7 +316,36 @@ func (s *server) handleTaskExcluded(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data, filename, err := s.tasks.ExclusionReport(r.Context(), recordFromContext(r).Id, task.ID)
+	ownerID := recordFromContext(r).Id
+	if task.SelectedFinalSnapshotID != "" && s.finalization != nil {
+		data, filename, err := s.finalization.ExclusionSheet(r.Context(), ownerID, task.ID, task.SelectedFinalSnapshotID)
+		if err != nil {
+			s.finalDownloadFailure(w, r, task, err, "exclusion report")
+			return
+		}
+		s.writeDownload(w, xlsxContentType, filename, data)
+		return
+	}
+	roleMapping := false
+	if task.ConfigurationID != "" {
+		if configuration, err := s.campaigns.LoadConfiguration(r.Context(), ownerID, task.ConfigurationID); err == nil {
+			roleMapping = configuration.MappingVersion >= campaign.MappingVersionRole
+		}
+	}
+	if roleMapping {
+		if task.SelectedPreparationRunID == "" || s.finalization == nil {
+			http.NotFound(w, r)
+			return
+		}
+		data, filename, err := s.finalization.PreparedExclusionSheet(r.Context(), ownerID, task.ID, task.SelectedPreparationRunID)
+		if err != nil {
+			s.finalDownloadFailure(w, r, task, err, "exclusion report")
+			return
+		}
+		s.writeDownload(w, xlsxContentType, filename, data)
+		return
+	}
+	data, filename, err := s.tasks.ExclusionReport(r.Context(), ownerID, task.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.NotFound(w, r)
@@ -509,6 +538,7 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 	data.Finalization = s.finalizationData(ctx, ownerID, task, data.Preparation)
 	data.FinalizationRequired = data.Finalization.Required
 	data.DatasetFinalized = task.SelectedFinalSnapshotID != ""
+	data.RoleMapping = data.Finalization.RoleMapping
 	data.FinalSnapshotRef = data.Finalization.Selected.Reference
 	if task.ScheduleState == intake.ScheduleScheduled || task.ScheduleState == intake.ScheduleMissed {
 		data.SendingType = views.TaskSendingTypeScheduled
@@ -592,6 +622,7 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 		Closing:              data.Closing,
 		Finalized:            data.DatasetFinalized,
 		FinalizationRequired: data.FinalizationRequired,
+		EligibilityPending:   data.RoleMapping && !data.DatasetFinalized && !data.Finalization.PreparedReviewSelected,
 	}
 	facts.Stale = task.Status == intake.TaskReady && (current == nil || task.ContentHash != current.ContentHash)
 	data.Stale = facts.Stale
@@ -671,7 +702,7 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 		facts.ResultReady = artifact.Ready
 	}
 
-	if task.Status != intake.TaskStaging {
+	if task.Status != intake.TaskStaging && !data.RoleMapping {
 		manifest, err := s.tasks.Manifest(ctx, ownerID, task.ID)
 		if err != nil {
 			return data, err
@@ -691,6 +722,8 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 				Reason:    strings.Join(reasons, "; "),
 			})
 		}
+	}
+	if task.Status != intake.TaskStaging {
 		if progress != nil {
 			for _, member := range progress.Members {
 				row := views.TaskAdmittedRow{

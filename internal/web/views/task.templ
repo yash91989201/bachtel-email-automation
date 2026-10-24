@@ -244,6 +244,7 @@ type TaskPageData struct {
 	DatasetFinalized bool
 	// FinalizationRequired reports the snapshot workflow for this revision.
 	FinalizationRequired bool
+	RoleMapping          bool
 	FinalSnapshotRef     string
 }
 
@@ -436,21 +437,27 @@ type TaskPreparationNote struct {
 // approval is deliberately separate from test formatting approval and dispatch
 // authorization.
 type TaskFinalizationView struct {
-	Available bool
+	Available   bool
+	RoleMapping bool
 	// CanFinalize covers the lifecycle: open, validated, unstarted, no
 	// enabled schedule.
-	CanFinalize      bool
-	BlockedReason    string
-	Error            string
-	Required         bool
-	PreparedReady    bool
-	PreparedAccepted int
-	PreparedHref     string
-	Selected         TaskFinalSnapshot
-	HasSelected      bool
-	CanApprove       bool
-	CanUpload        bool
-	History          []TaskFinalSnapshot
+	CanFinalize            bool
+	BlockedReason          string
+	Error                  string
+	Required               bool
+	PreparedReady          bool
+	PreparedAccepted       int
+	PreparedHref           string
+	PreparedReview         bool
+	PreparedReviewSelected bool
+	PreparedCounts         TaskFinalReviewCounts
+	PreparedEntries        []TaskFinalReviewEntry
+	PreparedExclusions     []TaskFinalReviewExclusion
+	Selected               TaskFinalSnapshot
+	HasSelected            bool
+	CanApprove             bool
+	CanUpload              bool
+	History                []TaskFinalSnapshot
 }
 
 // TaskFinalSnapshot is one immutable accepted dataset row.
@@ -466,6 +473,29 @@ type TaskFinalSnapshot struct {
 	Selected   bool
 	SheetHref  string
 	ReportHref string
+	Counts     TaskFinalReviewCounts
+	Entries    []TaskFinalReviewEntry
+	Exclusions []TaskFinalReviewExclusion
+}
+
+type TaskFinalReviewCounts struct {
+	SourceRows int
+	Entries    int
+	Accepted   int
+	Excluded   int
+}
+
+type TaskFinalReviewEntry struct {
+	Row       int
+	Position  int
+	Recipient string
+}
+
+type TaskFinalReviewExclusion struct {
+	Row       int
+	Position  int
+	Recipient string
+	Reason    string
 }
 
 // TaskPreparationHeld is one prepared entry held by an unresolved finding.
@@ -764,59 +794,59 @@ templ taskRecipients(data TaskPageData) {
 				}
 			}
 		} else {
-			@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "summary-heading"}}) {
-				@card.Content(card.ContentProps{Class: "gap-4"}) {
-					<h3 id="summary-heading" class="cn-card-title">Validation summary</h3>
-					<p class="text-sm">
-						{ strconv.Itoa(data.Summary.SourceRows) } source rows · { strconv.Itoa(data.Summary.Total) } recipient entries · { strconv.Itoa(data.Summary.Eligible) } eligible at validation · { strconv.Itoa(data.Summary.ExcludedAtValidation) } excluded at validation
-					</p>
-					<p class="text-sm text-muted-foreground">Current eligible/safe remaining: <strong>{ data.Summary.CurrentEligible }</strong>. Rechecked before sending.</p>
-					if data.Stale {
-						@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
-							@alert.Title(alert.TitleProps{}) {
-								The campaign content changed after this task was validated
-							}
-							@alert.Description(alert.DescriptionProps{}) {
-								if data.ScheduleState == "scheduled" {
-									<p>Clear the scheduled start first, then revalidate against Revision { data.CurrentRevision }. The old schedule must not authorize revised content.</p>
-								} else {
-									<p>Revalidate this task to rebuild the snapshot against Revision { data.CurrentRevision }.</p>
-								}
-								<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate" }>
-									@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeSm, Disabled: data.ScheduleState == "scheduled"}) {
-										Revalidate with current template
+			if data.RoleMapping {
+				@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "summary-heading"}}) {
+					@card.Content(card.ContentProps{Class: "gap-4"}) {
+						if data.DatasetFinalized {
+							<h3 id="summary-heading" class="cn-card-title">Selected final snapshot</h3>
+							<p class="text-sm">{ data.Finalization.Selected.Counts.SourceRows } source rows · { data.Finalization.Selected.Counts.Entries } recipient entries · { data.Finalization.Selected.Counts.Accepted } accepted · { data.Finalization.Selected.Counts.Excluded } excluded</p>
+						} else {
+							<h3 id="summary-heading" class="cn-card-title">Workbook received</h3>
+							<p class="text-sm">{ strconv.Itoa(data.Summary.SourceRows) } source rows are ready for data preparation.</p>
+							<p class="text-sm text-muted-foreground">Entry counts, accepted recipients and exclusions will appear after a preparation run is selected and backend validation completes.</p>
+						}
+						@taskRevalidateNotice(data)
+					}
+				}
+			} else {
+				@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "summary-heading"}}) {
+					@card.Content(card.ContentProps{Class: "gap-4"}) {
+						<h3 id="summary-heading" class="cn-card-title">Validation summary</h3>
+						<p class="text-sm">
+							{ strconv.Itoa(data.Summary.SourceRows) } source rows · { strconv.Itoa(data.Summary.Total) } recipient entries · { strconv.Itoa(data.Summary.Eligible) } eligible at validation · { strconv.Itoa(data.Summary.ExcludedAtValidation) } excluded at validation
+						</p>
+						<p class="text-sm text-muted-foreground">Current eligible/safe remaining: <strong>{ data.Summary.CurrentEligible }</strong>. Rechecked before sending.</p>
+						@taskRevalidateNotice(data)
+						@collapsible.Collapsible(collapsible.Props{ID: "validation-breakdown", Attributes: templ.Attributes{"data-workspace-persist": true}}) {
+							<button class="cursor-pointer text-sm font-semibold text-muted-foreground bg-transparent border-0 p-0" { collapsible.Trigger(ctx)... }>Validation breakdown</button>
+							@collapsible.Content(collapsible.ContentProps{Class: "mt-2"}) {
+								<div class="table-scroll">
+									@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Validation categories"}}) {
+										<thead><tr><th>Category</th><th>Rows</th></tr></thead>
+										<tbody>
+											for _, category := range data.Categories {
+												<tr><td>{ category.Label }</td><td>{ category.Count }</td></tr>
+											}
+										</tbody>
 									}
-								</form>
+								</div>
 							}
 						}
-					}
-					@collapsible.Collapsible(collapsible.Props{ID: "validation-breakdown", Attributes: templ.Attributes{"data-workspace-persist": true}}) {
-						<button class="cursor-pointer text-sm font-semibold text-muted-foreground bg-transparent border-0 p-0" { collapsible.Trigger(ctx)... }>Validation breakdown</button>
-						@collapsible.Content(collapsible.ContentProps{Class: "mt-2"}) {
-							<div class="table-scroll">
-								@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Validation categories"}}) {
-									<thead><tr><th>Category</th><th>Rows</th></tr></thead>
-									<tbody>
-										for _, category := range data.Categories {
-											<tr><td>{ category.Label }</td><td>{ category.Count }</td></tr>
-										}
-									</tbody>
-								}
-							</div>
+						if data.Counts.AlreadyScheduled > 0 {
+							<p class="text-sm text-muted-foreground">“Already scheduled” means another task claimed the recipient. That is separate from this task's future scheduled start.</p>
 						}
+						<div class="app-card-actions">
+							<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download exclusion report</a>
+						</div>
 					}
-					if data.Counts.AlreadyScheduled > 0 {
-						<p class="text-sm text-muted-foreground">“Already scheduled” means another task claimed the recipient. That is separate from this task's future scheduled start.</p>
-					}
-					<div class="app-card-actions">
-						<a class={ button.Variants(button.Props{Variant: button.VariantOutline, Size: button.SizeDefault}) } href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download exclusion report</a>
-					</div>
 				}
 			}
 			@taskPreparation(data)
 			@taskFinalization(data)
-			@taskPreview(data)
-			@taskRowReasons(data)
+			if !data.RoleMapping {
+				@taskPreview(data)
+				@taskRowReasons(data)
+			}
 		}
 	</section>
 }
@@ -857,6 +887,45 @@ templ taskFinalization(data TaskPageData) {
 					</div>
 				} else if data.Finalization.Required {
 					<p class="text-sm text-muted-foreground">No final snapshot is selected yet. Sending controls stay unavailable until one is accepted.</p>
+				}
+				if data.RoleMapping && !data.Finalization.HasSelected && !data.Finalization.PreparedReview {
+					<p class="text-sm text-muted-foreground">Validation is pending. Run data preparation, then select its output to review accepted entries and held exclusions.</p>
+				}
+				if data.Finalization.PreparedReview && !data.Finalization.HasSelected {
+					<div class="space-y-3 rounded-md border border-border p-3" id="prepared-review">
+						<h4 class="font-semibold">
+							if data.Finalization.PreparedReviewSelected {
+								Selected prepared data · backend validation
+							} else {
+								Prepared data review · select this run to finalize
+							}
+						</h4>
+						<p class="text-sm">{ data.Finalization.PreparedCounts.SourceRows } source rows · { data.Finalization.PreparedCounts.Entries } recipient entries · { data.Finalization.PreparedCounts.Accepted } accepted · { data.Finalization.PreparedCounts.Excluded } held</p>
+						if len(data.Finalization.PreparedEntries) > 0 {
+							<div class="table-scroll">
+								<table class="cn-table-compact">
+									<thead><tr><th>Source row</th><th>Position</th><th>Accepted recipient</th></tr></thead>
+									<tbody>
+										for _, entry := range data.Finalization.PreparedEntries {
+											<tr><td>{ entry.Row }</td><td>{ entry.Position }</td><td>{ entry.Recipient }</td></tr>
+										}
+									</tbody>
+								</table>
+							</div>
+						}
+						@taskFinalExclusions(data.Finalization.PreparedExclusions)
+					</div>
+				}
+				if data.Finalization.HasSelected {
+					@taskFinalExclusions(data.Finalization.Selected.Exclusions)
+					if data.Finalization.Selected.Excluded > 0 {
+						<a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download selected final exclusions</a>
+					}
+				}
+				if data.Finalization.PreparedReview && len(data.Finalization.PreparedExclusions) > 0 {
+					if data.Finalization.PreparedReviewSelected && !data.Finalization.HasSelected {
+						<a class="app-link text-primary" href={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/excluded.xlsx" }>Download prepared exclusions</a>
+					}
 				}
 				if data.Finalization.PreparedHref != "" {
 					<div class="app-card-actions">
@@ -1027,10 +1096,54 @@ templ taskRowReasons(data TaskPageData) {
 						}
 					</div>
 				}
-				<p class="text-sm text-muted-foreground">Corrected data is uploaded as a new task; this saved snapshot is never edited in place.</p>
+				if data.RoleMapping {
+					<p class="text-sm text-muted-foreground">Review and correct the selected prepared data, then upload an edited final sheet or prepare a new version.</p>
+				} else {
+					<p class="text-sm text-muted-foreground">Corrected data is uploaded as a new task; this saved snapshot is never edited in place.</p>
+				}
 			}
 		}
 	</section>
+}
+
+// taskRevalidateNotice states the saved/current revision difference for any
+// task whose pinned revision no longer matches the campaign's current content.
+// Recipients owns the remedy: navigation alone never rebuilds the snapshot.
+templ taskRevalidateNotice(data TaskPageData) {
+	if data.Stale {
+		@alert.Alert(alert.Props{Variant: alert.VariantDefault, Class: "status-warning"}) {
+			@alert.Title(alert.TitleProps{}) {
+				The campaign content changed after this task was validated
+			}
+			@alert.Description(alert.DescriptionProps{}) {
+				if data.ScheduleState == "scheduled" {
+					<p>Clear the scheduled start first, then revalidate against Revision { data.CurrentRevision }. The old schedule must not authorize revised content.</p>
+				} else {
+					<p>Revalidate this task to rebuild the snapshot against Revision { data.CurrentRevision }.</p>
+				}
+				<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/revalidate" }>
+					@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeSm, Disabled: data.ScheduleState == "scheduled"}) {
+						Revalidate with current template
+					}
+				</form>
+			}
+		}
+	}
+}
+
+templ taskFinalExclusions(rows []TaskFinalReviewExclusion) {
+	if len(rows) > 0 {
+		<div class="table-scroll">
+			@table.Table(table.Props{Class: "cn-table-compact", Attributes: templ.Attributes{"aria-label": "Final data exclusions"}}) {
+				<thead><tr><th>Source row</th><th>Position</th><th>Recipient</th><th>Reason</th></tr></thead>
+				<tbody>
+					for _, row := range rows {
+						<tr><td>{ row.Row }</td><td>{ row.Position }</td><td>{ row.Recipient }</td><td>{ row.Reason }</td></tr>
+					}
+				</tbody>
+			}
+		</div>
+	}
 }
 
 templ taskTest(data TaskPageData) {
@@ -2295,8 +2408,19 @@ templ taskPreparation(data TaskPageData) {
 								<span class="text-xs text-primary">(selected)</span>
 							}
 						</h4>
-						<p class="text-sm">{ data.Preparation.Counts.SourceRows } source rows · { data.Preparation.Counts.Entries } prepared entries · { data.Preparation.Counts.Accepted } accepted · { data.Preparation.Counts.Held } held by findings · { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } findings</p>
-						<p class="text-sm text-muted-foreground">Held entries are part of the preparation exclusion evidence. Required/optional, address and duplicate checks still run in the backend when this evidence is later finalized.</p>
+						if data.RoleMapping && data.DatasetFinalized {
+							<p class="text-sm text-muted-foreground">Preparation history: { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } AI findings. The selected final snapshot below supplies accepted and excluded rows.</p>
+						} else if data.RoleMapping {
+							if data.Finalization.PreparedReview {
+								<p class="text-sm">{ data.Finalization.PreparedCounts.SourceRows } source rows · { data.Finalization.PreparedCounts.Entries } recipient entries · { data.Finalization.PreparedCounts.Accepted } backend accepted · { data.Finalization.PreparedCounts.Excluded } backend held · { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } AI findings</p>
+							} else {
+								<p class="text-sm">{ data.Preparation.Counts.SourceRows } source rows · { data.Preparation.Counts.Entries } prepared entries · { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } AI findings</p>
+								<p class="text-sm text-muted-foreground">Backend validation is pending. Accepted and held recipient counts appear after you select a completed preparation run.</p>
+							}
+						} else {
+							<p class="text-sm">{ data.Preparation.Counts.SourceRows } source rows · { data.Preparation.Counts.Entries } prepared entries · { data.Preparation.Counts.Accepted } accepted · { data.Preparation.Counts.Held } held by findings · { data.Preparation.Counts.Corrections } corrections · { data.Preparation.Counts.Findings } findings</p>
+							<p class="text-sm text-muted-foreground">Held entries are part of the preparation exclusion evidence. Required/optional, address and duplicate checks still run in the backend when this evidence is later finalized.</p>
+						}
 					</div>
 				}
 				<details class="text-sm">

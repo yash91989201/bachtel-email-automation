@@ -106,6 +106,55 @@ func TestTaskFinalizationStatesAreDistinct(t *testing.T) {
 	}
 }
 
+func TestRoleMappingTaskHidesIntakeRowsUntilPreparedReview(t *testing.T) {
+	preflight := TaskPageData{
+		CampaignID: "campaign-1", TaskID: "task-1", CampaignName: "Synthetic campaign",
+		StoredStatus: "ready", ActionID: "action-", Section: TaskSectionRecipients,
+		RoleMapping: true, FinalizationRequired: true,
+		StatusLabel:       "Eligibility pending",
+		StatusExplanation: "Run data preparation, select its output, and review accepted and held entries.",
+		Summary:           TaskSummaryView{SourceRows: 4},
+		Counts:            TaskCounts{Total: 9, Eligible: 8, Invalid: 1},
+		Rows:              []TaskAdmittedRow{{ID: "old", Row: 2, Position: 1, Recipient: "stale@example.com", State: "eligible"}},
+		HeldRows:          []TaskHeldRow{{Row: 4, Position: 1, Recipient: "held-stale@example.com", Reason: "old validation"}},
+		Finalization:      TaskFinalizationView{Available: true, Required: true, CanFinalize: true, CanUpload: true},
+	}
+	body := renderText(t, TaskPage(preflight))
+	for _, forbidden := range []string{"stale@example.com", "held-stale@example.com", "9 recipient entries", "8 eligible at validation"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("preflight page exposed raw intake value %q", forbidden)
+		}
+	}
+	if !strings.Contains(body, "Validation is pending") || !strings.Contains(body, "4 source rows") {
+		t.Fatal("role-mapping preflight does not explain pending validation and source rows")
+	}
+	for _, want := range []string{
+		"Eligibility pending",
+		"Workbook received",
+		"after a preparation run is selected and backend validation completes",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("preflight page missing %q", want)
+		}
+	}
+	// Before review there is no exclusion evidence to download.
+	if strings.Contains(body, "/excluded.xlsx") {
+		t.Fatal("preflight page offers an exclusion download without evidence")
+	}
+
+	prepared := preflight
+	prepared.Finalization.PreparedReview = true
+	prepared.Finalization.PreparedCounts = TaskFinalReviewCounts{SourceRows: 4, Entries: 3, Accepted: 2, Excluded: 1}
+	prepared.Finalization.PreparedEntries = []TaskFinalReviewEntry{{Row: 2, Position: 1, Recipient: "accepted@example.com"}}
+	prepared.Finalization.PreparedExclusions = []TaskFinalReviewExclusion{{Row: 3, Position: 2, Recipient: "held@example.com", Reason: "missing mapped value"}}
+	body = renderText(t, TaskPage(prepared))
+	for _, want := range []string{"2 accepted", "accepted@example.com", "held@example.com", "missing mapped value"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("prepared backend review missing %q", want)
+		}
+	}
+}
+
 func renderText(t *testing.T, component interface {
 	Render(ctx context.Context, w io.Writer) error
 }) string {

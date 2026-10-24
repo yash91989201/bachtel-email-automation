@@ -5,6 +5,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -16,8 +17,10 @@ import (
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/xuri/excelize/v2"
 
+	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
 	"github.com/yash91989201/bachtel-email-automation/internal/web/views"
@@ -25,6 +28,28 @@ import (
 
 // taskSubject is the content revision the task fixtures validate against.
 const taskSubject = "Application for {{candidate_name}}"
+
+// postLegacyRevision stores a format-mapping (version 1) revision through the
+// service. The web form always creates current role-mapping revisions, and the
+// legacy validation snapshot, its counts, rows and exclusion report remain
+// supported for tasks pinned to an older revision.
+func postLegacyRevision(t *testing.T, app core.App, campaignID, subject string) {
+	t.Helper()
+	campaigns := campaign.NewService(app, stubPandoc(t))
+	_, _, err := campaigns.CreateRevision(context.Background(), operatorID(t, app), campaignID, campaign.RevisionInput{
+		Subject:      subject,
+		Document:     docxUpload(t),
+		DocumentName: "body.docx",
+		Mappings: []campaign.Mapping{
+			{Variable: "candidate_name", Header: "Applicant Full Name", Required: true, Format: campaign.FormatName},
+			{Variable: "candidate_email", Header: "Email", Recipient: true, Format: campaign.FormatEmail},
+		},
+		MappingVersion: campaign.MappingVersionLegacy,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 
 // newTaskServer boots the UI behind a stub converter with the documented
 // intake limits resolved, so the upload page renders real byte counts.
@@ -234,12 +259,10 @@ func assertTaskOverviewSelected(t *testing.T, body, campaignID, taskID string) {
 }
 
 func TestTaskUploadReviewFlow(t *testing.T) {
-	_, handler := newTaskServer(t)
+	app, handler := newTaskServer(t)
 	cookie := login(t, handler)
 	id := createCampaign(t, handler, cookie, "Engineers")
-	if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
-		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
-	}
+	postLegacyRevision(t, app, id, taskSubject)
 
 	// Upload page: documented constraints, literal numbers, workbook input.
 	upload := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks/new")
@@ -317,9 +340,12 @@ func TestTaskUploadReviewFlow(t *testing.T) {
 			t.Errorf("Results section missing %q: %.600s", want, results)
 		}
 	}
+	// A legacy revision needs no dataset finalization, so Test & approve is
+	// available from the validation snapshot; the role-mapping prerequisite is
+	// covered by TestTaskFinalizationUploadDownloadAndTestState.
 	testSection := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionTest))
-	if !strings.Contains(testSection, "Finalize the sending data before sending a test for approval.") {
-		t.Errorf("Test & approve section missing the pre-finalization prerequisite: %.600s", testSection)
+	if strings.Contains(testSection, "Finalize the sending data before sending a test for approval.") {
+		t.Errorf("legacy revision asks for dataset finalization: %.600s", testSection)
 	}
 
 	// The list page reports both tasks' status, selection and counts.
@@ -377,9 +403,7 @@ func TestTaskUploadRejection(t *testing.T) {
 	app, handler := newTaskServer(t)
 	cookie := login(t, handler)
 	id := createCampaign(t, handler, cookie, "Engineers")
-	if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
-		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
-	}
+	postLegacyRevision(t, app, id, taskSubject)
 
 	t.Run("missing file", func(t *testing.T) {
 		body := &bytes.Buffer{}
@@ -528,9 +552,7 @@ func TestExclusionReportDownload(t *testing.T) {
 	app, handler := newTaskServer(t)
 	cookie := login(t, handler)
 	id := createCampaign(t, handler, cookie, "Engineers")
-	if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
-		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
-	}
+	postLegacyRevision(t, app, id, taskSubject)
 	taskID := stageTask(t, handler, cookie, id, mixedWorkbook(t))
 	path := "/campaigns/" + id + "/tasks/" + taskID + "/excluded.xlsx"
 
@@ -623,12 +645,10 @@ func TestAllHeldTaskOffersDownloadOnly(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, handler := newTaskServer(t)
+			app, handler := newTaskServer(t)
 			cookie := login(t, handler)
 			id := createCampaign(t, handler, cookie, "Engineers")
-			if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
-				t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
-			}
+			postLegacyRevision(t, app, id, taskSubject)
 			taskID := stageTask(t, handler, cookie, id, taskWorkbook(t, "Sheet1", rows))
 
 			body := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
@@ -652,19 +672,15 @@ func TestAllHeldTaskOffersDownloadOnly(t *testing.T) {
 // TestTaskRevalidation covers behaviour 7: a second revision marks the task
 // stale, revalidate returns 303, and previews then render the new subject.
 func TestTaskRevalidation(t *testing.T) {
-	_, handler := newTaskServer(t)
+	app, handler := newTaskServer(t)
 	cookie := login(t, handler)
 	id := createCampaign(t, handler, cookie, "Engineers")
-	if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
-		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
-	}
+	postLegacyRevision(t, app, id, taskSubject)
 	taskID := stageTask(t, handler, cookie, id, mixedWorkbook(t))
 	path := "/campaigns/" + id + "/tasks/" + taskID
 
 	// A second revision changes the content hash: the task is stale.
-	if rec := postRevision(t, handler, cookie, id, "Interview with {{candidate_name}}", validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
-		t.Fatalf("second revision: status=%d body=%.400s", rec.Code, rec.Body.String())
-	}
+	postLegacyRevision(t, app, id, "Interview with {{candidate_name}}")
 	stale := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
 	if !strings.Contains(stale, "The campaign content changed after this task was validated") {
 		t.Fatalf("stale warning missing: %.600s", stale)
@@ -752,7 +768,7 @@ func TestTaskPagesAvoidInternalDetail(t *testing.T) {
 // A staged workbook survives the campaign having no template yet: after a
 // revision is created the same upload validates without another upload.
 func TestStagedWorkbookValidatesAfterTemplateCreation(t *testing.T) {
-	_, handler := newTaskServer(t)
+	app, handler := newTaskServer(t)
 	cookie := login(t, handler)
 	id := createCampaign(t, handler, cookie, "No template yet")
 
@@ -768,9 +784,7 @@ func TestStagedWorkbookValidatesAfterTemplateCreation(t *testing.T) {
 		}
 	}
 
-	if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
-		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
-	}
+	postLegacyRevision(t, app, id, taskSubject)
 	rec = do(t, handler, http.MethodPost, "/campaigns/"+id+"/tasks/"+taskID+"/select",
 		url.Values{"sheet": {"Sheet1"}, "header_row": {"1"}}, withCookie(cookie))
 	if rec.Code != http.StatusSeeOther {
@@ -782,15 +796,75 @@ func TestStagedWorkbookValidatesAfterTemplateCreation(t *testing.T) {
 	}
 }
 
-// Rendering a recipient preview is read-only: it creates no attempt and
-// changes no task state.
-func TestTaskPreviewCreatesNoAttempt(t *testing.T) {
+// A current role-mapping task records no row eligibility at validation: the
+// workspace shows source rows and pending eligibility, and never a
+// validation-time total, exclusion link or pre-AI row.
+func TestRoleMappingPreflightPresentsPendingEligibility(t *testing.T) {
 	app, handler := newTaskServer(t)
 	cookie := login(t, handler)
 	id := createCampaign(t, handler, cookie, "Engineers")
 	if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
 		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
 	}
+	taskID := stageTask(t, handler, cookie, id, mixedWorkbook(t))
+
+	ready := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
+	for _, want := range []string{
+		"Eligibility pending",
+		"Workbook received",
+		"5 source rows are ready for data preparation.",
+		"after a preparation run is selected and backend validation completes",
+		"Validation is pending",
+	} {
+		if !strings.Contains(ready, want) {
+			t.Errorf("preflight Recipients section missing %q: %.800s", want, ready)
+		}
+	}
+	for _, forbidden := range []string{
+		"No eligible recipients",
+		"eligible at validation",
+		"excluded at validation",
+		"Download exclusion report",
+		"/excluded.xlsx",
+		"duplicate recipient address in this upload",
+		"not a single usable email address",
+		`hx-target="#task-preview-result"`,
+	} {
+		if strings.Contains(ready, forbidden) {
+			t.Errorf("preflight Recipients section still shows %q: %.800s", forbidden, ready)
+		}
+	}
+
+	// The campaign task list derives the same status for the same facts.
+	list := fetchTaskPage(t, handler, cookie, "/campaigns/"+id+"/tasks")
+	for _, want := range []string{"Eligibility pending", "Review and finalize data"} {
+		if !strings.Contains(list, want) {
+			t.Errorf("task list missing %q: %.800s", want, list)
+		}
+	}
+	if strings.Contains(list, "No eligible recipients") {
+		t.Errorf("task list reports an excluded dataset before any review: %.800s", list)
+	}
+
+	// Review evidence, once accepted, replaces the pending state with the
+	// snapshot's own accepted and excluded counts.
+	finalizeTask(t, app, handler, cookie, id, taskID)
+	finalized := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
+	if strings.Contains(finalized, "Eligibility pending") {
+		t.Errorf("finalized task still reports pending eligibility: %.800s", finalized)
+	}
+	if !strings.Contains(finalized, "Selected final snapshot") {
+		t.Errorf("finalized task does not report its snapshot: %.800s", finalized)
+	}
+}
+
+// Rendering a recipient preview is read-only: it creates no attempt and
+// changes no task state.
+func TestTaskPreviewCreatesNoAttempt(t *testing.T) {
+	app, handler := newTaskServer(t)
+	cookie := login(t, handler)
+	id := createCampaign(t, handler, cookie, "Engineers")
+	postLegacyRevision(t, app, id, taskSubject)
 	taskID := stageTask(t, handler, cookie, id, mixedWorkbook(t))
 	ready := fetchTaskPage(t, handler, cookie, views.TaskSectionPath(id, taskID, views.TaskSectionRecipients))
 	rowID := previewRowID(t, ready, 6)
@@ -823,9 +897,7 @@ func TestExpandedRecipientReview(t *testing.T) {
 	app, handler := newTaskServer(t)
 	cookie := login(t, handler)
 	id := createCampaign(t, handler, cookie, "Expanded review")
-	if rec := postRevision(t, handler, cookie, id, taskSubject, validMappings, docxUpload(t)); rec.Code != http.StatusSeeOther {
-		t.Fatalf("create revision: status=%d body=%.400s", rec.Code, rec.Body.String())
-	}
+	postLegacyRevision(t, app, id, taskSubject)
 	rec := uploadWorkbook(t, handler, cookie, id, taskWorkbook(t, "Sheet1", [][]string{
 		{"Email", "Applicant Full Name", "Location"},
 		{"a@example.com, b@example.com, invalid", "Shared Person", "Remote"},

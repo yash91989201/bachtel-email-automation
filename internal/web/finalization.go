@@ -201,6 +201,7 @@ func (s *server) finalizationData(ctx context.Context, ownerID string, task *int
 	if task.ConfigurationID != "" {
 		if configuration, err := s.campaigns.LoadConfiguration(ctx, ownerID, task.ConfigurationID); err == nil {
 			data.Required = configuration.MappingVersion >= campaign.MappingVersionRole
+			data.RoleMapping = data.Required
 		}
 	}
 	if data.Required || task.SelectedFinalSnapshotID != "" || prep.EvidenceRunID != "" {
@@ -212,12 +213,30 @@ func (s *server) finalizationData(ctx context.Context, ownerID string, task *int
 	data.Error = task.FinalizationError
 	if prep.EvidenceRunID != "" {
 		data.PreparedReady = true
-		data.PreparedAccepted = prep.Counts.Accepted
-		if prep.EvidenceSelected && prep.Counts.Accepted > 0 {
-			data.PreparedHref = "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/preparation/sending.xlsx"
+		if data.RoleMapping {
+			data.PreparedReviewSelected = prep.EvidenceSelected
+			review, err := s.finalization.ReviewPrepared(ctx, ownerID, task.ID, prep.EvidenceRunID)
+			if err != nil {
+				s.app.Logger().Error("review prepared sending data", "task", task.ID, "run", prep.EvidenceRunID, "error", err)
+				data.BlockedReason = "Prepared validation evidence is unavailable; reload this page."
+			} else {
+				data.PreparedReview = true
+				data.PreparedCounts = taskFinalReviewCounts(review.Counts)
+				data.PreparedAccepted = review.Counts.Accepted
+				data.PreparedEntries = taskFinalReviewEntries(review.Entries)
+				data.PreparedExclusions = taskFinalReviewExclusions(review.Exclusions)
+				if prep.EvidenceSelected && review.Counts.Accepted > 0 {
+					data.PreparedHref = "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/preparation/sending.xlsx"
+				}
+			}
+		} else if prep.EvidenceSelected {
+			data.PreparedAccepted = prep.Counts.Accepted
+			if prep.Counts.Accepted > 0 {
+				data.PreparedHref = "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/preparation/sending.xlsx"
+			}
 		}
 	}
-	data.CanApprove = data.CanFinalize && prep.EvidenceSelected && prep.Counts.Accepted >= 0 && prep.EvidenceRunID != ""
+	data.CanApprove = data.CanFinalize && prep.EvidenceSelected && (!data.RoleMapping || (data.PreparedReview && data.PreparedCounts.Accepted >= 0)) && prep.EvidenceRunID != ""
 	snapshots, err := s.finalization.List(ctx, ownerID, task.ID)
 	if err != nil {
 		s.app.Logger().Error("list final snapshots", "task", task.ID, "error", err)
@@ -239,6 +258,9 @@ func (s *server) finalizationData(ctx context.Context, ownerID string, task *int
 			Selected:   snapshot.ID == task.SelectedFinalSnapshotID,
 			SheetHref:  "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/finalization/sending.xlsx?snapshot=" + snapshot.ID,
 			ReportHref: "/campaigns/" + task.CampaignID + "/tasks/" + task.ID + "/finalization/exclusions.xlsx?snapshot=" + snapshot.ID,
+			Counts:     taskFinalReviewCounts(snapshot.Counts),
+			Entries:    taskFinalReviewEntries(snapshot.Entries),
+			Exclusions: taskFinalReviewExclusions(snapshot.Exclusions),
 		}
 		data.History = append(data.History, row)
 		if row.Selected {
@@ -250,6 +272,45 @@ func (s *server) finalizationData(ctx context.Context, ownerID string, task *int
 		data.CanApprove = false
 	}
 	return data
+}
+
+func taskFinalReviewCounts(counts finalization.Counts) views.TaskFinalReviewCounts {
+	return views.TaskFinalReviewCounts{SourceRows: counts.SourceRows, Entries: counts.Entries, Accepted: counts.Accepted, Excluded: counts.Excluded}
+}
+
+func taskFinalReviewEntries(entries []finalization.Entry) []views.TaskFinalReviewEntry {
+	rows := make([]views.TaskFinalReviewEntry, 0, len(entries))
+	for _, entry := range entries {
+		row := entry.SourceRow
+		if row <= 0 {
+			row = entry.FinalRow
+		}
+		rows = append(rows, views.TaskFinalReviewEntry{Row: row, Position: entry.Position, Recipient: entry.Recipient})
+	}
+	return rows
+}
+
+func taskFinalReviewExclusions(exclusions []finalization.Exclusion) []views.TaskFinalReviewExclusion {
+	rows := make([]views.TaskFinalReviewExclusion, 0, len(exclusions))
+	for _, exclusion := range exclusions {
+		reasons := make([]string, 0, len(exclusion.Reasons))
+		for _, reason := range exclusion.Reasons {
+			text := reason.Text
+			if len(reason.Fields) > 0 {
+				text += " (" + strings.Join(reason.Fields, ", ") + ")"
+			}
+			reasons = append(reasons, text)
+		}
+		row := exclusion.SourceRow
+		if row <= 0 {
+			row = exclusion.FinalRow
+		}
+		rows = append(rows, views.TaskFinalReviewExclusion{
+			Row: row, Position: exclusion.Position, Recipient: exclusion.Recipient,
+			Reason: strings.Join(reasons, "; "),
+		})
+	}
+	return rows
 }
 
 // finalizationAvailable reports whether final data may change right now.

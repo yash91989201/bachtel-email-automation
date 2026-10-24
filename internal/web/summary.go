@@ -38,8 +38,8 @@ type taskOverview struct {
 }
 
 // loadCampaignOverview builds the campaign summary with a bounded number of
-// queries: one campaign, one revision, one task list, one batched sending
-// metadata query, one artifact query and one mailbox lookup.
+// queries: one campaign, one revision, one revision list, one task list, one
+// batched sending metadata query, one artifact query and one mailbox lookup.
 func (s *server) loadCampaignOverview(ctx context.Context, ownerID, campaignID string) (*campaignOverview, error) {
 	loaded, err := s.campaigns.LoadCampaign(ctx, ownerID, campaignID)
 	if err != nil {
@@ -86,6 +86,17 @@ func (s *server) loadCampaignOverview(ctx context.Context, ownerID, campaignID s
 	}
 	_, senderStatus := s.mailboxSummary(ctx, ownerID)
 	mailboxUsable := senderStatus == string(mailbox.StatusConnected)
+	// One revision query tells the list which pinned revision each task uses,
+	// so a role-mapping task's preflight state is not read as "no eligible
+	// recipients" before any cleaned dataset was reviewed.
+	roleMapping := map[string]bool{}
+	if revisions, err := s.campaigns.Revisions(ctx, ownerID, campaignID); err == nil {
+		for _, revision := range revisions {
+			roleMapping[revision.ID] = revision.MappingVersion >= campaign.MappingVersionRole
+		}
+	} else {
+		s.app.Logger().Error("load campaign revisions", "campaign", campaignID, "error", err)
+	}
 	for _, task := range tasks {
 		summary := summaries[task.ID]
 		artifact, hasArtifact := artifacts[task.ID]
@@ -97,6 +108,9 @@ func (s *server) loadCampaignOverview(ctx context.Context, ownerID, campaignID s
 			Closed:        task.Closed(),
 			Closing:       task.Closing(),
 		}
+		facts.Finalized = task.SelectedFinalSnapshotID != ""
+		facts.FinalizationRequired = roleMapping[task.ConfigurationID] || facts.Finalized
+		facts.EligibilityPending = roleMapping[task.ConfigurationID] && !facts.Finalized && task.SelectedPreparationRunID == ""
 		facts.ValidationError = task.ValidationError
 		facts.ScheduleState = task.ScheduleState
 		facts.Stale = task.Status == intake.TaskReady && currentContentChanged(overview, task)

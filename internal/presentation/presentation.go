@@ -70,6 +70,12 @@ type Facts struct {
 	// FinalizationRequired reports that this task's pinned revision uses the
 	// snapshot workflow, so it cannot be tested or sent before finalization.
 	FinalizationRequired bool
+	// EligibilityPending reports a current role-mapping task whose cleaned
+	// dataset has not been reviewed yet: no final snapshot exists and no
+	// completed preparation run supplies reviewed accepted/held entries.
+	// Intake deliberately records no row eligibility for such a task, so zero
+	// eligible rows there is missing evidence, not an excluded dataset.
+	EligibilityPending bool
 	// Approved reports applicable mailbox-scoped approval for the saved
 	// content and, when finalized, its exact final snapshot.
 	Approved bool
@@ -232,6 +238,11 @@ func MainStatus(f Facts) TaskStatus {
 		return TaskStatus{Label: "Needs revalidation", Explanation: "The campaign content changed after this workbook was validated.", Warning: true}
 	}
 	if f.Status == StatusReady && f.FinalizationRequired && !f.Finalized {
+		if f.EligibilityPending {
+			// Preflight records source rows only, so a zero count here is
+			// absent evidence rather than an excluded dataset.
+			return TaskStatus{Label: "Eligibility pending", Explanation: "Run data preparation, select its output, and review accepted and held entries.", Warning: true}
+		}
 		if f.Eligible == 0 && f.Remaining == 0 {
 			return TaskStatus{Label: "No eligible recipients", Explanation: "Every input row was excluded or already handled; the row reasons and exclusion report explain why. An edited final upload can still add corrected entries.", Warning: true}
 		}
