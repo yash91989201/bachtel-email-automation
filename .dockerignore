@@ -9,4 +9,5 @@ tmp
 .env.*
 internal/web/static/*.css
 internal/web/static/*.js
+.codegraph
 internal/web/static/fonts/
