@@ -515,7 +515,12 @@ templ campaignTemplate(data CampaignPageData) {
 				if data.HasRevision {
 					<dl class="grid gap-2 text-sm md:grid-cols-2">
 						<div><dt class="font-semibold">Revision</dt><dd>{ data.Revision }</dd></div>
-						<div><dt class="font-semibold">Formatting approval</dt><dd>@revisionState(true, data.Approved)</dd></div>
+						<div>
+							<dt class="font-semibold">Formatting approval</dt>
+							<dd>
+								@revisionState(true, data.Approved)
+							</dd>
+						</div>
 						<div class="md:col-span-2"><dt class="font-semibold">Subject</dt><dd class="wrap-anywhere">{ data.Subject }</dd></div>
 					</dl>
 					if len(data.Variables) > 0 {
@@ -686,7 +691,7 @@ templ campaignSamplePreview(data CampaignPageData) {
 						</div>
 					}
 				</div>
-				<div class="app-card-actions">
+				<div class="space-y-1.5">
 					if hasRequired {
 						<p class="text-muted-foreground" x-show="!ready">Fill every required sample value to render the preview.</p>
 					}
@@ -964,7 +969,12 @@ templ PreviewResult(data PreviewData) {
 				<dl class="space-y-1 text-sm">
 					<div class="flex gap-2"><dt class="font-semibold">Revision:</dt><dd>{ data.Revision }</dd></div>
 					<div class="flex gap-2"><dt class="font-semibold">Content hash:</dt><dd><code class="break-all">{ data.ContentHash }</code></dd></div>
-					<div class="flex gap-2"><dt class="font-semibold">Approval:</dt><dd>@revisionState(true, data.Approved)</dd></div>
+					<div class="flex gap-2">
+						<dt class="font-semibold">Approval:</dt>
+						<dd>
+							@revisionState(true, data.Approved)
+						</dd>
+					</div>
 				</dl>
 			}
 			if data.Error != "" {
