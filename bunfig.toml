@@ -1,0 +1,5 @@
+# Checks and asset builds must not load application secrets.
+env = false
+
+[run]
+bun = true

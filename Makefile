@@ -1,20 +1,40 @@
-.PHONY: setup generate assets dev build test test-race fmt verify-converter
+.PHONY: setup tools check-lint-version generate assets dev build test test-race fmt verify-converter
 
 # Narrow these during implementation, e.g. make test PACKAGES=./internal/intake
 # TEST_FLAGS accepts normal go test flags such as -run and -count=1.
 PACKAGES ?= ./...
 TEST_FLAGS ?=
+GOLANGCI_LINT_VERSION := $(shell cat .golangci-lint-version)
+TOOLS_DIR ?= $(shell go env GOPATH)/bin
 
-setup:
-	npm ci
+setup: tools
+	bun install --frozen-lockfile
 	go mod download
 	$(MAKE) generate assets
+
+# Install a normal release binary so editors and assistants use it through PATH.
+tools:
+	@if [ "$$("$(TOOLS_DIR)/golangci-lint" version --short 2>/dev/null)" != "$(patsubst v%,%,$(GOLANGCI_LINT_VERSION))" ]; then \
+		installer=$$(mktemp) || exit 1; \
+		trap 'rm -f "$$installer"' EXIT; \
+		curl --fail --silent --show-error --location https://golangci-lint.run/install.sh --output "$$installer" && \
+		sh "$$installer" -b "$(TOOLS_DIR)" "$(GOLANGCI_LINT_VERSION)" || exit 1; \
+	fi
+	@$(MAKE) --no-print-directory check-lint-version
+
+check-lint-version:
+	@expected="$(patsubst v%,%,$(GOLANGCI_LINT_VERSION))"; \
+	actual=$$(golangci-lint version --short) || { echo 'Install the pinned linter with make tools and put its directory on PATH.' >&2; exit 1; }; \
+	if [ "$$actual" != "$$expected" ]; then \
+		printf 'golangci-lint %s required; found %s at %s. Run make tools and check PATH.\n' "$$expected" "$$actual" "$$(command -v golangci-lint)" >&2; \
+		exit 1; \
+	fi
 
 generate:
 	go generate ./internal/web
 assets:
 	go tool shadcn-templ bundle
-	npm run build
+	bun run build
 
 # Local dev reads .env (copy .env.example) into the server process. Shell
 # syntax applies: no spaces around "=", no inline comments after a value.
@@ -44,10 +64,10 @@ fmt:
 .PHONY: check check-format check-generated lint lint-tailwind fix-tailwind vulncheck
 
 lint-tailwind:
-	npm run lint:tailwind
+	bun run lint:tailwind
 
 fix-tailwind:
-	npm run fix:tailwind
+	bun run fix:tailwind
 
 check-format:
 	bash scripts/check-format.sh
@@ -57,14 +77,14 @@ check-generated: generate
 	git diff --exit-code -- ':(glob)internal/web/**/*_templ.go'
 	@test -z "$$(git ls-files --others --exclude-standard -- ':(glob)internal/web/**/*_templ.go')" || { echo 'Untracked generated templates: stage the generated output.' >&2; exit 1; }
 
-lint: generate assets
-	bash scripts/golangci-lint.sh config verify
-	bash scripts/golangci-lint.sh run --config .golangci.yml ./...
+lint: check-lint-version generate assets
+	golangci-lint config verify
+	golangci-lint run --config .golangci.yml ./...
 
 # One dependency graph generates templates/assets once, including with make -j.
 # The final gate always checks every package, regardless of focused test flags.
-check: check-format check-generated lint build
-	npm run test:js
+check: check-format check-generated lint lint-tailwind build
+	bun run test:js
 	go test -race -timeout 20m ./...
 
 # Pin the analysis tool independently; do not change application dependencies.

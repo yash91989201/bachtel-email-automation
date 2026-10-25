@@ -9,7 +9,7 @@ Before editing, read `AGENTS.md`, the applicable OpenSpec requirements and the
 selected change's design/tasks. For an OpenSpec implementation, use its apply
 workflow alongside this skill; this skill does not authorize unrelated scope or
 turn an exploration into implementation. Check the current Go version in
-`go.mod` and lint policy in `.golangci.yml` and `.golangci-version`.
+`go.mod` and lint policy in `.golangci.yml` and `.golangci-lint-version`.
 
 Trace the affected code and callers using CodeGraph when this checkout is
 indexed, otherwise source reads. Reuse existing patterns and dependencies.
@@ -20,8 +20,9 @@ that can act on them; returning an error or ending a failed response can be more
 appropriate than logging it repeatedly. Never expose credentials or candidate
 content in diagnostics.
 
-Use `make lint` for feedback while coding. It generates templates/assets and uses
-the pinned linter wrapper; no global linter installation is needed. Edit `.templ`
+Use `make lint` for feedback while coding. It generates templates/assets and
+requires the pinned `golangci-lint` executable on `PATH`; run `make tools` to
+install or update it in the Go user bin directory. Edit `.templ`
 sources and regenerate output. Keep formatting and mechanical modernization
 separate from behavioral fixes when reviewing the diff.
 

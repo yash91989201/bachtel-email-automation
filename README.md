@@ -15,12 +15,21 @@ connected mailbox.
 
 ## Run locally
 
-Prerequisites: Go 1.27.2+, Node.js 26+, npm, and Make.
+Prerequisites: Go 1.27.2+, Bun 1.4.4, and Make. The project pins Bun with
+`.bun-version`; install that version using Bun's official installer or your
+preferred version manager.
 
 ```sh
 make setup
 make dev
 ```
+
+`make setup` installs pinned project tools, restores Bun dependencies, and
+generates templates and frontend assets. `make tools` installs the pinned
+`golangci-lint` executable in `$(go env GOPATH)/bin` when that installed binary
+does not match the repository pin. That directory must be on the `PATH` used by
+your shell and editor. After changing tool versions, rerun `make tools` and
+restart editor clients. There is no automatic per-project tool switching.
 
 Open <http://127.0.0.1:8090/login> to sign in to the operator workspace. The
 application provides campaign setup, workbook intake, sending review and
@@ -362,29 +371,31 @@ During implementation, batch edits and run the affected tests. Run the full
 final checks once after integration, rather than after each OpenSpec task.
 See [testing and test inventory](docs/testing.md) for coverage and timing.
 
-Run `npm ci` first to install the pinned development tools. `npm run lint:tailwind`
-is equivalent to `make lint-tailwind` and needs no editor. It uses Tailwind's
-language server with `web/css/app.css`, including canonical-class suggestions,
-and prints `file:line:column` diagnostics. It checks source without changing it.
-For the npm command, exit 0 means clean, 1 means diagnostics were found, and 2
-means the check could not complete. Run `npm run test:tailwind` to verify it against temporary
-clean and warning-producing templates. This is a separate check from `make check`.
+Run `make setup` first to install pinned tools and Bun dependencies.
+`bun run lint:tailwind` is equivalent to `make lint-tailwind` and needs no editor.
+It uses Tailwind's language server with `web/css/app.css`, including
+canonical-class suggestions, and prints `file:line:column` diagnostics. It
+checks source without changing it.
+For the Bun command, exit 0 means clean, 1 means diagnostics were found, and 2
+means the check could not complete. `make check` runs the JavaScript checks,
+including Tailwind's temporary clean and warning-producing template cases.
 
-Use `npm run fix:tailwind` (or `npm run lint:tailwind -- --fix`) to apply the
+Use `bun run fix:tailwind` (or `bun run lint:tailwind -- --fix`) to apply the
 language server's canonical-class code actions, as an editor would. It only
 applies canonical suggestions with one replacement, then checks the changed
 text again; other warnings remain visible and keep the exit code nonzero.
 Review the diff, format changed `.templ` sources and regenerate their committed
 `*_templ.go` output before running `make check`.
 
-Node.js is build tooling only. The binary can be copied to another compatible
-machine and run from any working directory; use an absolute `--dir` path to
-keep the database location stable. The default data directory is `./pb_data`.
-All frontend libraries are served locally, with no runtime CDN dependencies.
+Bun is build tooling only. The binary can be copied to another compatible
+machine and run from any working directory; it needs no Bun or Node.js runtime.
+Use an absolute `--dir` path to keep the database location stable. The default
+data directory is `./pb_data`. All frontend libraries are served locally, with
+no runtime CDN dependencies.
 
 The templ CLI is pinned with Go's `tool` directive so its generator matches
 the runtime library. Tailwind and its CLI are pinned in `package.json` and
-`package-lock.json`. UI component sources are pinned to shadcn-templ
+`bun.lock`. UI component sources are pinned to shadcn-templ
 `v2.0.0-beta.15`, copied into `internal/web/ui` and adapted to preserve application structure and workflows. Workspaces use the owned
 `tabs`/`collapsible` primitives with the tracked `web/js/workspace.js` adapter, and confirmations use `checkbox` and `alertdialog`. The active theme is
 shadcn-templ preset `b870VEw0in` (Luma, Mist/Cyan, Noto Sans and EB Garamond). See [UI component maintenance](docs/ui-components.md)
@@ -441,11 +452,11 @@ proxy in front and configure trusted proxy headers in PocketBase settings.
 Set `APP_HOST=0.0.0.0` only when direct external access is intended. The
 container health check probes the public minimal `GET /health` endpoint.
 
-The Docker build context must include `package.json`, `package-lock.json`,
+The Docker build context must include `package.json`, `bun.lock`, `bunfig.toml`,
 `scripts/`, `web/` (including local fonts and their licenses),
 `internal/web/views/`, and `internal/web/ui/`. The image builds the frontend
-with Node in a build stage, embeds the generated CSS, JavaScript and fonts in
-the Go binary, and runs without Node, a component CLI or CDN access. This UI
+with Bun in a build stage, embeds the generated CSS, JavaScript and fonts in
+the Go binary, and runs without Bun, Node.js, a component CLI or CDN access. This UI
 migration changes no database schema; deploy it by rebuilding and replacing
 the image while retaining the `pb_data` volume. Follow the separate release
 checklist before enabling candidate sending.

@@ -20,8 +20,11 @@
 - For Go implementation, fixes, and refactoring, use the `go-development` skill
   alongside the selected OpenSpec workflow. Its canonical instructions live in
   `.agents/skills/go-development/SKILL.md`.
-- `.golangci.yml` is the shared executable Go policy; `.golangci-version` pins
-  its runner. Use the same wrapper/config in the editor, local checks, and CI.
+- `.golangci.yml` is the shared executable Go policy; `.golangci-lint-version`
+  pins its runner. Use the ordinary `golangci-lint` command with this config in
+  the editor, local checks, and CI. `make tools` installs the pinned executable
+  in the Go user bin directory; shells and GUI-launched editor clients need that
+  directory on their effective `PATH`.
   Upgrade tools and review new rules in a dedicated change, not during a fix.
 
 - Follow existing package boundaries, naming, and error handling. Reuse existing
@@ -62,7 +65,7 @@
   after the change is integrated, not after every task or checkbox. After a
   failure, rerun the failed check; repeat passed checks only when subsequent
   edits affect their results. Do not run overlapping full suites in subagents.
-- Run `npm ci` on a fresh checkout, then `make check` and `make vulncheck`.
+- Run `bun install --frozen-lockfile` on a fresh checkout, then `make check` and `make vulncheck`.
   `make check` covers formatting, generation consistency, lint (including vet),
   race tests, and the production binary build. Stage intentional regenerated
   output before checking generation consistency; do not stage unrelated work.

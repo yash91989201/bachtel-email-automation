@@ -2,6 +2,12 @@
 
 Research date: 2026-10-25. Status: recommendation, not an implemented migration.
 
+Decision update, 2026-10-25: the mise recommendation below was rejected. The
+implemented setup keeps Make, native Go tools and Bun; installs the pinned
+golangci-lint release as a normal PATH executable; and uses standard editor
+settings. See `docs/development-checks.md` for the current setup. The remaining
+text records the original research and alternatives, not active instructions.
+
 ## Conclusion
 
 Keep the existing Go/templ/htmx application and Make-based workflow. Adopt a

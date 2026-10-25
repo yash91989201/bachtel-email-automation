@@ -10,9 +10,20 @@ Oh My Pi discovers the same skills through `.omp/skills/` symlinks.
 
 ## Local checks
 
-Use the Go version in `go.mod`, Node 26.10.0 (matching the Docker asset stage),
-npm, Git, Make, and a C compiler for Go's race detector. Start a fresh checkout
-with `npm ci`, then run:
+Use the Go version in `go.mod`, Bun 1.4.4 (from `.bun-version` and matching the
+Docker asset stage), Git, Make, and a C compiler for Go's race detector.
+`make setup` installs tools and dependencies and generates templates and assets.
+It runs `make tools`, `bun install --frozen-lockfile`, `go mod download`, and
+generation. The pinned `golangci-lint` executable is installed in
+`$(go env GOPATH)/bin`; ensure the
+effective `PATH` used by shells and GUI-launched editor clients includes this
+directory before any other linter installation. After changing tool versions,
+rerun `make tools` and restart clients. If another binary still shadows the
+installed one, `make tools` fails its final version check and prints the active
+path; correct the normal PATH ordering rather than adding a runner wrapper.
+This setup does not automatically switch versions when entering a project.
+
+Start a fresh checkout with `make setup`, then run:
 
 ```sh
 make check
@@ -21,16 +32,19 @@ make verify-converter
 ```
 
 `make check` verifies Go/templ formatting without rewriting source, regenerates
-committed templates, builds assets, runs the shared linter and race tests, and
-builds the production binary. Stage intentional generated `*_templ.go` changes alongside
+committed templates, builds assets, checks Tailwind diagnostics, runs `bun test
+./scripts`, runs the shared linter and race tests, and builds the production
+binary. Tailwind warnings remain failures; the check does not apply fixes. Stage
+intentional generated `*_templ.go` changes alongside
 `.templ` edits before checking: generated output is compared with the Git index,
 and new untracked generated files fail the check. Generated CSS/JS and copied fonts stay ignored.
-The asset build copies Alpine and htmx from `node_modules`, plus licensed fonts
-from `web/fonts`, into `internal/web/static`. It then compiles `web/css/app.css`
-to the embedded CSS.
-Air watches `.templ`, CSS, JS and WOFF2 source changes and reruns generation,
-asset copying and the server build; generated files under `internal/web/static`
-are excluded from its watch list.
+The asset build copies Alpine and htmx from `node_modules` installed by Bun,
+plus licensed fonts from `web/fonts`, into `internal/web/static`. It then
+compiles `web/css/app.css` to the embedded CSS.
+Air watches `.templ`, CSS, JS and WOFF2 source changes, along with `bun.lock`,
+`bunfig.toml` and `.bun-version`, and reruns generation, asset copying and the
+server build; generated files under `internal/web/static` are excluded from its
+watch list.
 
 `make vulncheck` uses a pinned govulncheck version and the live Go vulnerability
 database. Findings fail the check; assess and update affected code/dependencies
@@ -63,16 +77,21 @@ selects govet, staticcheck, unused, ineffassign, errcheck, modernize, and nolint
 Generated output is excluded using Go's strict generated-file convention; it is
 still compiled and checked for consistency with its `.templ` sources.
 
-Run `make lint` while coding. Both it and `make check` use
-`bash scripts/golangci-lint.sh`, which reads `.golangci-version` and installs the
-upstream release binary into the ignored `bin/` directory on first use. The
-linter has no effect on application module dependencies. Installation needs curl
-and network access; subsequent runs reuse the pinned binary.
+Run `make lint` while coding. It first checks that the ordinary `golangci-lint`
+on `PATH` matches `.golangci-lint-version`, then runs it with the shared config.
+If it is missing or mismatched, the check prints guidance to run `make tools`.
+That target installs the upstream binary at the exact pinned version in
+`$(go env GOPATH)/bin` when that installed binary does not match the pin. The linter does not affect application
+module dependencies.
 
-For editor integration, configure your lint runner to execute
-`bash scripts/golangci-lint.sh run --config .golangci.yml ./...` from the project
-root, or point it at the pinned binary under `bin/golangci-lint/`. Keep gopls for
-interactive feedback; its extra suggestions are not automatically CI policy.
+For editor integration, use a native linter integration such as nvim-lint and
+run `golangci-lint run --config .golangci.yml ./...` from the project root.
+Keep the selected Go tools and OMP on the effective `PATH`; where Mason offers
+`PATH='append'`, use it so project tools on `PATH` take precedence. Keep gopls
+for interactive feedback; its extra suggestions are not automatically CI
+policy. `gofmt` is authoritative for Go formatting; disable extra gofumpt
+formatting in editor settings. Use `go tool templ fmt` for templates and
+`go tool templ lsp` for their language server, from the module directory.
 Do not maintain another enabled-rule list in editor settings or skills.
 
 Errors assigned to `_` and unchecked type assertions are checked too. The only
@@ -83,8 +102,9 @@ the safe contract; generic error swallowing, blanket test exclusions, and
 hand-editing generated files are not acceptable fixes. Modernization must
 preserve behavior, especially loop-bound evaluation and serialization formats.
 
-Upgrade `.golangci-version` and inspect the new diagnostics in a reviewed change;
-keep local/editor/CI versions aligned instead of following `latest` on every run.
+Upgrade `.golangci-lint-version` and inspect the new diagnostics in a reviewed
+change; keep local/editor/CI versions aligned instead of following `latest` on
+every run. CI reads this pin and uses the same `make check` as local development.
 
 ## Required checks on GitHub
 

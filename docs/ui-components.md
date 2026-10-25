@@ -83,7 +83,7 @@ shadcn-templ add --all
 
 The CLI resolves registry dependencies, rewrites imports to this module, and
 rebuilds the component JavaScript bundle. `make assets` reruns
-`go tool shadcn-templ bundle` before the npm CSS/font build; the hashed bundle
+`go tool shadcn-templ bundle` before the Bun CSS/font build; the hashed bundle
 under `internal/web/static/` stays git-ignored and is rebuilt in Docker too.
 Every page renders it once via `@ui.Scripts()` in the layout `<head>`.
 Run `templ generate` (via `make generate`) and `go mod tidy` after adding.

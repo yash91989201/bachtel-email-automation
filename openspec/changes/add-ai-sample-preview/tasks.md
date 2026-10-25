@@ -23,5 +23,5 @@
 ## 4. Integrated verification
 
 - [ ] 4.1 Run focused affected-package tests and `make lint` after related edits are integrated; confirm existing task final preview/test/send use accepted snapshots without AI and worker regressions pass using simulated providers and isolated data, never local `.env` or real mailbox credentials.
-- [ ] 4.2 Run `npm ci` if implementation uses a fresh checkout, stage only intentional generated output for generation consistency, then run `make check`, `make vulncheck` and `make verify-converter` once on the integrated campaign change; resolve failures without weakening checks and record actual results or limitations.
+- [ ] 4.2 Run `bun install --frozen-lockfile` if implementation uses a fresh checkout, stage only intentional generated output for generation consistency, then run `make check`, `make vulncheck` and `make verify-converter` once on the integrated campaign change; resolve failures without weakening checks and record actual results or limitations.
 - [ ] 4.3 Run `openspec validate --all --strict --json --no-interactive`, review implementation against every delta scenario and update task evidence only for verified behavior; keep deployment and real email outside this change's automated checks.

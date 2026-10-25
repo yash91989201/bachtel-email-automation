@@ -58,7 +58,7 @@ Run `make check` and `make vulncheck` once after integration. Run
 `make verify-converter` for converter, campaign, dependency, Docker or release
 changes. After fixing a failure, rerun that check; repeat passed checks only
 when later edits affect them. Do not have multiple agents run the full suite.
-Run `npm run test:tailwind` when changing the Tailwind tooling. Strict OpenSpec
+Run `bun run test:tailwind` when changing the Tailwind tooling. Strict OpenSpec
 validation is also required when OpenSpec artifacts change.
 
 ## What changed

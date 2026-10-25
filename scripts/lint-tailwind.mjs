@@ -141,7 +141,7 @@ export async function lintTailwind(files, cwd = root, { fix = false } = {}) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     const args = process.argv.slice(2);
-    if (args.some(arg => arg !== '--fix')) throw new Error('Usage: npm run lint:tailwind -- [--fix]');
+    if (args.some(arg => arg !== '--fix')) throw new Error('Usage: bun run lint:tailwind [--fix]');
     const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', '*.templ'], { cwd: root })
       .toString().split('\0').filter(Boolean).sort();
     const { diagnostics, fixedFiles } = await lintTailwind(files, root, { fix: args.includes('--fix') });
