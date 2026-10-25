@@ -2397,14 +2397,7 @@ func readableBytes(value int64) string {
 
 // joinList renders names as one readable line.
 func joinList(items []string) string {
-	result := ""
-	for index, item := range items {
-		if index > 0 {
-			result += ", "
-		}
-		result += item
-	}
-	return result
+	return strings.Join(items, ", ")
 }
 
 templ taskPreparation(data TaskPageData) {
