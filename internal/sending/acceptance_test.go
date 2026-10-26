@@ -199,7 +199,7 @@ func (f *acceptanceFixture) taskFor(t *testing.T, ownerID, campaignID string, co
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err := f.intake.Stage(context.Background(), ownerID, campaignID, "acceptance.xlsx", data.Bytes())
+	task, err := f.intake.Stage(context.Background(), ownerID, campaignID, "acceptance.xlsx", data.Bytes(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -671,7 +671,7 @@ func (f *acceptanceFixture) taskWithRows(t *testing.T, campaignID string, rows [
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err := f.intake.Stage(context.Background(), f.ownerID, campaignID, "expanded.xlsx", data.Bytes())
+	task, err := f.intake.Stage(context.Background(), f.ownerID, campaignID, "expanded.xlsx", data.Bytes(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

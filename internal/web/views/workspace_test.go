@@ -71,11 +71,13 @@ func TestTaskWorkspaceSections(t *testing.T) {
 		{name: "selection error keeps recipients", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", Section: TaskSectionRecipients, ValidationError: "Missing Email column"}, initial: TaskSectionRecipients},
 		{name: "running next action is sending", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "running", Section: TaskSectionSending}, initial: TaskSectionSending},
 		{name: "results error keeps results", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "completed", Section: TaskSectionResults, Error: "Generation failed"}, initial: TaskSectionResults},
+		{name: "settings opens settings", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "staging", Section: TaskSectionSettings, NameDraft: "October outreach"}, initial: TaskSectionSettings},
+		{name: "save error keeps settings", data: TaskPageData{CampaignID: "camp1", TaskID: "task1", StoredStatus: "ready", Section: TaskSectionSettings, Error: "The task name could not be saved", NameDraft: "Draft name"}, initial: TaskSectionSettings},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			page := renderWorkspace(t, TaskPage(tc.data))
 			assertSectionNav(t, page, "Task navigation", taskSections("camp1", "task1"), TaskSectionPath("camp1", "task1", tc.initial))
-			assertOnlySection(t, page, "task-panel-", tc.initial, []string{TaskSectionOverview, TaskSectionRecipients, TaskSectionTest, TaskSectionSending, TaskSectionResults})
+			assertOnlySection(t, page, "task-panel-", tc.initial, []string{TaskSectionOverview, TaskSectionRecipients, TaskSectionTest, TaskSectionSending, TaskSectionResults, TaskSectionSettings})
 			if doc, err := html.Parse(strings.NewReader(page)); err != nil {
 				t.Fatal(err)
 			} else if tc.initial != TaskSectionSending && workspaceNode(doc, "id", "sending-live") != nil {
@@ -87,7 +89,7 @@ func TestTaskWorkspaceSections(t *testing.T) {
 
 func TestTaskOverviewKeepsHeaderCompact(t *testing.T) {
 	data := TaskPageData{
-		CampaignID: "camp1", CampaignName: "Hiring", TaskID: "task1", Reference: "abcd1234", Filename: "recipients.xlsx",
+		CampaignID: "camp1", CampaignName: "Hiring", TaskID: "task1", Reference: "abcd1234", Name: "October outreach", Filename: "recipients.xlsx",
 		StatusLabel: "Ready to send", StatusExplanation: "Sending requires explicit authorization.",
 		UploadedAt: "22 Oct 2026, 11:12 AM +05:30", HasSavedRevision: true, SavedRevision: 2,
 		Worksheet: "People", HeaderRow: 1, Sender: "hr@example.test", SenderStatus: "connected", Approved: true,
@@ -107,8 +109,8 @@ func TestTaskOverviewKeepsHeaderCompact(t *testing.T) {
 		t.Fatal(err)
 	}
 	heading := findViewNode(doc, func(n *html.Node) bool { return n.Data == "h1" })
-	if heading == nil || viewText(heading) != data.Filename {
-		t.Fatal("task heading must contain only the workbook name")
+	if heading == nil || viewText(heading) != data.Name {
+		t.Fatal("task heading must contain only the saved task name")
 	}
 	header := heading.Parent.Parent
 	if badge := workspaceNode(header, "data-slot", "badge"); badge == nil || viewText(badge) != data.StatusLabel {
@@ -121,7 +123,7 @@ func TestTaskOverviewKeepsHeaderCompact(t *testing.T) {
 	if overview == nil {
 		t.Fatal("missing Overview content")
 	}
-	for _, want := range []string{data.NextLabel, data.StatusExplanation, "Mailbox unavailable", "Task details", data.UploadedAt, "Saved revision", data.Worksheet, data.Sender, "Approved for current mailbox", data.Reference, data.TaskID} {
+	for _, want := range []string{data.NextLabel, data.StatusExplanation, "Mailbox unavailable", "Task details", "Workbook", data.Filename, data.UploadedAt, "Saved revision", data.Worksheet, data.Sender, "Approved for current mailbox", data.Reference, data.TaskID} {
 		if !strings.Contains(viewText(overview), want) {
 			t.Errorf("Overview is missing %q", want)
 		}

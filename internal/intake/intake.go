@@ -66,6 +66,11 @@ const (
 // validation before any candidate is admitted.
 const MaxRecipientEntries = 1000
 
+// MaxTaskNameLength is the supported editable task-name length in Unicode code
+// points. The same bound applies to creation and renaming; longer input is
+// refused rather than silently truncated.
+const MaxTaskNameLength = 255
+
 // MaxUploadBytes is the hard ceiling for one uploaded workbook, in bytes. It is
 // also the storage bound of the task's source file field, so a configured limit
 // can only ever be lower.
@@ -361,8 +366,12 @@ type Task struct {
 	ResultLabels    []string
 	Counts          Counts
 	ValidationError string
-	SourceName      string
-	SourceDigest    string
+	// Name is the editable task name shown in lists, headings and
+	// breadcrumbs. It starts as the workbook filename or a supplied name and
+	// never replaces SourceName, which stays the source evidence.
+	Name         string
+	SourceName   string
+	SourceDigest string
 	// UploadedAt is the stored creation time of the task record. It is
 	// immutable: a later validation, revalidation or status change never
 	// rewrites it, so two uploads of the same filename stay distinguishable.

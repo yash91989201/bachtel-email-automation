@@ -159,7 +159,7 @@ func (e *env) approve() {
 
 func (e *env) stage(data []byte, name string) *intake.Task {
 	e.t.Helper()
-	task, err := e.service.Stage(context.Background(), e.owner, e.campaign, name, data)
+	task, err := e.service.Stage(context.Background(), e.owner, e.campaign, name, data, "")
 	if err != nil {
 		e.t.Fatalf("stage %s: %v", name, err)
 	}
@@ -585,7 +585,7 @@ func TestCorruptAndUnsupportedUploadsAreRejectedBeforeStorage(t *testing.T) {
 		"empty":      {},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := env.service.Stage(ctx, env.owner, env.campaign, name+".xls", data); err == nil {
+			if _, err := env.service.Stage(ctx, env.owner, env.campaign, name+".xls", data, ""); err == nil {
 				t.Fatal("a non-XLSX upload was staged")
 			}
 		})
@@ -593,7 +593,7 @@ func TestCorruptAndUnsupportedUploadsAreRejectedBeforeStorage(t *testing.T) {
 	// An oversized upload is refused before storage even when it is a workbook.
 	workbook := buildWorkbook(t, sheetSpec{name: "Candidates", rows: [][]string{{"Email", "Applicant Full Name"}, {"carol@example.com", "Carol"}}})
 	tiny := intake.NewService(env.app, env.campaigns, intake.Limits{MaxUploadBytes: 128})
-	if _, err := tiny.Stage(ctx, env.owner, env.campaign, "big.xlsx", workbook); !errors.Is(err, intake.ErrUploadTooLarge) {
+	if _, err := tiny.Stage(ctx, env.owner, env.campaign, "big.xlsx", workbook, ""); !errors.Is(err, intake.ErrUploadTooLarge) {
 		t.Fatalf("oversized stage error = %v, want ErrUploadTooLarge", err)
 	}
 	tasks, err := env.service.ListTasks(ctx, env.owner, env.campaign)
@@ -1284,7 +1284,7 @@ func TestTwoOperatorsAreIsolated(t *testing.T) {
 	if _, err := bob.service.ListTasks(ctx, bob.owner, env.campaign); !errors.Is(err, campaign.ErrNotFound) {
 		t.Fatalf("foreign ListTasks = %v, want ErrNotFound", err)
 	}
-	if _, err := bob.service.Stage(ctx, bob.owner, env.campaign, "evil.xlsx", bob.workbook(t)); !errors.Is(err, campaign.ErrNotFound) {
+	if _, err := bob.service.Stage(ctx, bob.owner, env.campaign, "evil.xlsx", bob.workbook(t), ""); !errors.Is(err, campaign.ErrNotFound) {
 		t.Fatalf("foreign Stage = %v, want ErrNotFound", err)
 	}
 
@@ -1348,7 +1348,7 @@ func TestTwoOperatorsAreIsolated(t *testing.T) {
 func (e *env) validateFor(o *secondOperator, data []byte) *intake.Task {
 	e.t.Helper()
 	ctx := context.Background()
-	task, err := o.service.Stage(ctx, o.owner, o.campaign, "book.xlsx", data)
+	task, err := o.service.Stage(ctx, o.owner, o.campaign, "book.xlsx", data, "")
 	if err != nil {
 		e.t.Fatalf("stage for %s: %v", o.owner, err)
 	}
@@ -1389,7 +1389,7 @@ func TestWriteGuardBlocksNewSendingDataWrites(t *testing.T) {
 		return guardErr
 	})
 
-	if _, err := env.service.Stage(ctx, env.owner, env.campaign, "blocked.xlsx", mixedWorkbook(t)); !errors.Is(err, guardErr) {
+	if _, err := env.service.Stage(ctx, env.owner, env.campaign, "blocked.xlsx", mixedWorkbook(t), ""); !errors.Is(err, guardErr) {
 		t.Fatalf("stage under guard = %v, want the guard error unchanged", err)
 	}
 	if err := env.service.Validate(ctx, env.owner, task.ID, "Candidates", 1); !errors.Is(err, guardErr) {

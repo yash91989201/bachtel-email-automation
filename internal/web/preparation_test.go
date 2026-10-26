@@ -175,7 +175,7 @@ func newPreparationServerFor(t *testing.T, mappingVersion int, rows [][]string) 
 	if _, err := services.AI.Confirm(ctx, owner, draft.ID, 0); err != nil {
 		t.Fatal(err)
 	}
-	task, err := tasks.Stage(ctx, owner, created.ID, "book.xlsx", taskWorkbook(t, "Sheet1", rows))
+	task, err := tasks.Stage(ctx, owner, created.ID, "book.xlsx", taskWorkbook(t, "Sheet1", rows), "")
 	if err != nil {
 		t.Fatal(err)
 	}

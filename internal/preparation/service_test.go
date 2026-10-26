@@ -782,7 +782,7 @@ func TestPreparationRefusesStagingAndEmptyRows(t *testing.T) {
 	task, err := e.tasks.Stage(ctx, e.owner, e.campaignID, "book.xlsx", workbook(t, [][]string{
 		{"Email", "Applicant Full Name", "Department", "Certificate", "Status"},
 		{"alice@example.com", "Alice", "", "", ""},
-	}))
+	}), "")
 	if err != nil {
 		t.Fatal(err)
 	}

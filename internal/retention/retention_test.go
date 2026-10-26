@@ -151,7 +151,7 @@ func (f *retentionFixture) task(t *testing.T, campaignID string, count int) stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err := f.intake.Stage(context.Background(), f.ownerID, campaignID, "retention.xlsx", data.Bytes())
+	task, err := f.intake.Stage(context.Background(), f.ownerID, campaignID, "retention.xlsx", data.Bytes(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

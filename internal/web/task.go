@@ -32,9 +32,10 @@ func (s *server) registerTaskRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /campaigns/{id}/tasks/new", s.requireOperator(s.handleTaskNew))
 	mux.HandleFunc("POST /campaigns/{id}/tasks", s.requireOperator(s.handleTaskCreate))
 	mux.HandleFunc("GET /campaigns/{id}/tasks/{task}", s.requireOperator(s.handleTaskDetail))
-	for _, section := range []string{views.TaskSectionOverview, views.TaskSectionRecipients, views.TaskSectionTest, views.TaskSectionResults} {
+	for _, section := range []string{views.TaskSectionOverview, views.TaskSectionRecipients, views.TaskSectionTest, views.TaskSectionResults, views.TaskSectionSettings} {
 		mux.HandleFunc("GET /campaigns/{id}/tasks/{task}/"+section, s.requireOperator(s.handleTaskSection(section)))
 	}
+	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/name", s.requireOperator(s.handleTaskName))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/sending-type", s.requireOperator(s.handleTaskSendingType))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/select", s.requireOperator(s.handleTaskSelect))
 	mux.HandleFunc("POST /campaigns/{id}/tasks/{task}/revalidate", s.requireOperator(s.handleTaskRevalidate))
@@ -88,9 +89,11 @@ func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, s.cfg.Intake.MaxUploadBytes+(1<<20))
 
 	sendingType := ""
+	name := ""
 	uploadError := func(message string) {
 		data := s.taskUploadData(ctx, ownerID, loaded.ID, loaded.Name, message)
 		data.SendingType = sendingType
+		data.Name = name
 		s.renderWithStatus(w, r, http.StatusBadRequest, views.TaskUpload(data))
 	}
 
@@ -103,6 +106,7 @@ func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sendingType = r.FormValue("sending_type")
+	name = strings.TrimSpace(r.FormValue("name"))
 	if sendingType != intake.TaskSendingTypeDirect && sendingType != intake.TaskSendingTypeScheduled {
 		uploadError("choose Direct or Scheduled sending")
 		return
@@ -132,7 +136,7 @@ func (s *server) handleTaskCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	task, err := s.tasks.StageWithSendingType(ctx, ownerID, id, header.Filename, data, sendingType)
+	task, err := s.tasks.StageWithSendingType(ctx, ownerID, id, header.Filename, data, sendingType, name)
 	if err != nil {
 		if message := intakeErrorMessage(err); message != "" {
 			uploadError(message)
@@ -168,8 +172,47 @@ func (s *server) renderTaskSection(w http.ResponseWriter, r *http.Request, secti
 		s.taskLoadFailure(w, r, err)
 		return
 	}
+	if section == views.TaskSectionSettings && r.URL.Query().Get("saved") == "1" {
+		data.NameSaved = true
+	}
 	w.Header().Set("Cache-Control", "no-store")
 	s.renderWithStatus(w, r, http.StatusOK, views.TaskPage(data))
+}
+
+// handleTaskName saves the editable task name from Settings. The form is
+// bounded, owner and campaign membership are rechecked by the load and by the
+// intake transaction, and success uses POST/Redirect/GET so a refresh cannot
+// replay the save. A refused save keeps the submitted text and changes nothing.
+func (s *server) handleTaskName(w http.ResponseWriter, r *http.Request) {
+	task, ok := s.loadCampaignTask(w, r)
+	if !ok {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid task name form", http.StatusBadRequest)
+		return
+	}
+	draft := r.PostForm.Get("name")
+	ownerID := recordFromContext(r).Id
+	if err := s.tasks.RenameTask(r.Context(), ownerID, task.ID, draft); err != nil {
+		if validation, ok := errors.AsType[*intake.ValidationError](err); ok {
+			s.renderTaskMessageWith(w, r, task, views.TaskSectionSettings, validation.Message, http.StatusBadRequest, func(data *views.TaskPageData) {
+				data.NameDraft = draft
+			})
+			return
+		}
+		if errors.Is(err, intake.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		s.app.Logger().Error("rename task", "task", task.ID, "error", err)
+		s.renderTaskMessageWith(w, r, task, views.TaskSectionSettings, "The task name could not be saved; check the name and try again.", http.StatusInternalServerError, func(data *views.TaskPageData) {
+			data.NameDraft = draft
+		})
+		return
+	}
+	http.Redirect(w, r, views.TaskSectionPath(task.CampaignID, task.ID, views.TaskSectionSettings)+"?saved=1", http.StatusSeeOther)
 }
 
 // handleTaskSendingType persists the shared task preference. GET navigation
@@ -513,6 +556,8 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 		CampaignName:    task.CampaignName,
 		TaskID:          task.ID,
 		Section:         section,
+		Name:            task.Name,
+		NameDraft:       task.Name,
 		Filename:        task.SourceName,
 		Reference:       presentation.ShortRef(task.ID),
 		UploadedAt:      presentation.Timestamp(task.UploadedAt),
@@ -554,6 +599,9 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 	}
 	if data.Filename == "" {
 		data.Filename = "Workbook"
+	}
+	if data.Name == "" {
+		data.Name = data.Filename
 	}
 	for _, sheet := range task.Sheets {
 		data.Sheets = append(data.Sheets, views.TaskSheetOption{

@@ -113,17 +113,31 @@ func mixedWorkbook(t *testing.T) []byte {
 // uploadWorkbook posts one workbook to the campaign's task upload route.
 func uploadWorkbook(t *testing.T, handler http.Handler, cookie *http.Cookie, campaignID string, data []byte) *httptest.ResponseRecorder {
 	t.Helper()
+	return uploadSubmission(t, handler, cookie, campaignID,
+		url.Values{"sending_type": {"direct"}}, "book.xlsx", data)
+}
+
+// uploadSubmission posts the multipart upload form with the given non-file
+// fields. An empty filename omits the workbook part.
+func uploadSubmission(t *testing.T, handler http.Handler, cookie *http.Cookie, campaignID string, fields url.Values, filename string, data []byte) *httptest.ResponseRecorder {
+	t.Helper()
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	if err := writer.WriteField("sending_type", "direct"); err != nil {
-		t.Fatal(err)
+	for key, values := range fields {
+		for _, value := range values {
+			if err := writer.WriteField(key, value); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
-	part, err := writer.CreateFormFile("workbook", "book.xlsx")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := part.Write(data); err != nil {
-		t.Fatal(err)
+	if filename != "" {
+		part, err := writer.CreateFormFile("workbook", filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := part.Write(data); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
@@ -134,6 +148,17 @@ func uploadWorkbook(t *testing.T, handler http.Handler, cookie *http.Cookie, cam
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	return rec
+}
+
+// taskCount reads the stored task count, so a refused creation can be proven
+// to have written nothing.
+func taskCount(t *testing.T, app core.App) int {
+	t.Helper()
+	var count int
+	if err := app.DB().NewQuery("SELECT count(*) FROM send_tasks").Row(&count); err != nil {
+		t.Fatal(err)
+	}
+	return count
 }
 
 // taskIDFromRedirect extracts the staged task id from an upload redirect.

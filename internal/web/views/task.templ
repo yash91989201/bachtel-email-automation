@@ -34,6 +34,7 @@ const (
 	TaskSectionTest       = "test"
 	TaskSectionSending    = "sending"
 	TaskSectionResults    = "results"
+	TaskSectionSettings   = "settings"
 )
 
 // Sending types select a first-start view; they never authorize dispatch.
@@ -47,6 +48,7 @@ const (
 // context, readable bounds and the mapped-column prerequisite.
 type TaskUploadData struct {
 	SendingType       string
+	Name              string
 	CampaignID        string
 	CampaignName      string
 	Error             string
@@ -97,6 +99,15 @@ templ TaskUpload(data TaskUploadData) {
 							Workbook (XLSX)
 						}
 						@input.Input(input.Props{ID: "task-workbook", Name: "workbook", Type: "file", Accept: ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Required: true, Attributes: templ.Attributes{"aria-describedby": "workbook-guidance"}})
+					}
+					@field.Field(field.Props{}) {
+						@field.Label(field.LabelProps{For: "task-name"}) {
+							Task name (optional)
+						}
+						@input.Input(input.Props{ID: "task-name", Name: "name", Type: "text", Value: data.Name, Attributes: templ.Attributes{"aria-describedby": "task-name-help"}})
+						@field.Description(field.DescriptionProps{ID: "task-name-help"}) {
+							Leave blank to use the workbook filename, for example <code>recipients.xlsx</code>. Names can be up to 255 characters.
+						}
 					}
 					<div id="workbook-guidance" class="space-y-2 text-sm text-muted-foreground">
 						<p>Format: <code>.xlsx</code> · upload size limit: { readableBytes(data.MaxUploadBytes) } · support bound: 1,000 recipient entries per task after splitting. Split larger lists across several tasks.</p>
@@ -156,7 +167,15 @@ type TaskPageData struct {
 	Section string
 	Error   string
 
-	Filename  string
+	// Name is the editable task name used by the heading and breadcrumb.
+	Name string
+	// Filename is the original workbook filename, kept as source detail.
+	Filename string
+	// NameDraft is the editable Settings value: the current name on a plain
+	// visit, or the submitted text after a refused save.
+	NameDraft string
+	// NameSaved reports the POST/Redirect/GET save feedback.
+	NameSaved bool
 	Reference string
 
 	UploadedAt         string
@@ -511,9 +530,9 @@ type TaskPreparationHeld struct {
 templ TaskPage(data TaskPageData) {
 	@Layout("Task", true, "campaigns") {
 		<header class="space-y-3 pt-1 pb-2.5">
-			@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Tasks", Href: CampaignSectionPath(data.CampaignID, CampaignSectionTasks)}, breadcrumbEntry{Label: data.Filename})
+			@pageBreadcrumbs(breadcrumbEntry{Label: "Campaigns", Href: "/campaigns"}, breadcrumbEntry{Label: data.CampaignName, Href: "/campaigns/" + data.CampaignID}, breadcrumbEntry{Label: "Tasks", Href: CampaignSectionPath(data.CampaignID, CampaignSectionTasks)}, breadcrumbEntry{Label: data.Name})
 			<div class="flex flex-wrap items-center gap-3">
-				<h1 class="min-w-0 wrap-anywhere">{ data.Filename }</h1>
+				<h1 class="min-w-0 wrap-anywhere">{ data.Name }</h1>
 				<div class="shrink-0">
 					@taskStatusBadge(data.StatusLabel, data.StatusClass)
 				</div>
@@ -553,6 +572,8 @@ templ TaskPage(data TaskPageData) {
 						@TaskSendingLive(data)
 					case TaskSectionResults:
 						@taskResults(data)
+					case TaskSectionSettings:
+						@taskSettings(data)
 					default:
 						@taskOverview(data)
 				}
@@ -569,6 +590,7 @@ templ taskOverview(data TaskPageData) {
 			@card.Content(card.ContentProps{Class: "gap-4"}) {
 				<h3 id="task-details-heading" class="cn-card-title">Task details</h3>
 				<dl class="grid grid-cols-2 gap-4 text-sm *:min-w-0 [&_dt]:text-muted-foreground [&_dd]:mt-1 [&_dd]:wrap-anywhere max-[760px]:grid-cols-1">
+					<div><dt>Workbook</dt><dd>{ data.Filename }</dd></div>
 					<div><dt>Uploaded</dt><dd>{ data.UploadedAt }</dd></div>
 					<div><dt>Campaign</dt><dd><a class="app-link text-primary" href={ CampaignSectionPath(data.CampaignID, CampaignSectionTasks) }>{ data.CampaignName }</a></dd></div>
 					<div>
@@ -604,6 +626,44 @@ templ taskOverview(data TaskPageData) {
 					<p class="mt-1">Reference: { data.Reference }</p>
 					<p class="mt-1">Task ID: <code class="break-all">{ data.TaskID }</code> · Stored status: <code>{ data.StoredStatus }</code></p>
 				</details>
+			}
+		}
+	</section>
+}
+
+// taskSettings edits only the task name. It stays outside the lifecycle
+// tracker and offers no processing control.
+templ taskSettings(data TaskPageData) {
+	<section class="space-y-6" id="task-settings" aria-labelledby="task-settings-heading">
+		<h2 id="task-settings-heading" class="font-bold text-[1.2rem] tracking-[-.02em]">Settings</h2>
+		if data.NameSaved {
+			@alert.Alert(alert.Props{Class: "status-success"}) {
+				@alert.Title(alert.TitleProps{}) {
+					Task name saved
+				}
+				@alert.Description(alert.DescriptionProps{}) {
+					<p>The new name appears in the campaign task list and in every task section. Renaming changes no processing state.</p>
+				}
+			}
+		}
+		@card.Card(card.Props{Attributes: templ.Attributes{"aria-labelledby": "task-name-heading"}}) {
+			@card.Content(card.ContentProps{Class: "gap-4"}) {
+				<h3 id="task-name-heading" class="cn-card-title">Task name</h3>
+				<form method="post" action={ "/campaigns/" + data.CampaignID + "/tasks/" + data.TaskID + "/name" } class="space-y-4">
+					@field.Field(field.Props{}) {
+						@field.Label(field.LabelProps{For: "task-settings-name"}) {
+							Task name
+						}
+						@input.Input(input.Props{ID: "task-settings-name", Name: "name", Type: "text", Value: data.NameDraft, Attributes: templ.Attributes{"aria-describedby": "task-settings-name-help"}})
+						@field.Description(field.DescriptionProps{ID: "task-settings-name-help"}) {
+							Leave blank to use the workbook filename, <code>{ data.Filename }</code>. Names can be up to 255 characters.
+						}
+					}
+					@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault, Class: "w-fit"}) {
+						Save changes
+					}
+				</form>
+				<p class="text-sm text-muted-foreground">The original workbook filename stays recorded. Renaming does not change approvals, schedules, processing state or history.</p>
 			}
 		}
 	</section>

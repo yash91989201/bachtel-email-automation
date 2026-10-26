@@ -214,7 +214,7 @@ func workbook(t *testing.T, rows [][]string) []byte {
 func (e *env) validate(rows [][]string) *intake.Task {
 	e.t.Helper()
 	ctx := context.Background()
-	task, err := e.tasks.Stage(ctx, e.owner, e.campaignID, "book.xlsx", workbook(e.t, rows))
+	task, err := e.tasks.Stage(ctx, e.owner, e.campaignID, "book.xlsx", workbook(e.t, rows), "")
 	if err != nil {
 		e.t.Fatalf("stage workbook: %v", err)
 	}

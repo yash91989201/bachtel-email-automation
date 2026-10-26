@@ -41,6 +41,7 @@ func taskSections(campaignID, taskID string) []workspaceSection {
 		{Label: "Test & approve", Detail: "Formatting test", Href: TaskSectionPath(campaignID, taskID, TaskSectionTest)},
 		{Label: "Sending", Detail: "Start, stop & recover", Href: TaskSectionPath(campaignID, taskID, TaskSectionSending)},
 		{Label: "Results", Detail: "Workbook & history", Href: TaskSectionPath(campaignID, taskID, TaskSectionResults)},
+		{Label: "Settings", Detail: "Task name", Href: TaskSectionPath(campaignID, taskID, TaskSectionSettings)},
 	}
 }
 
@@ -75,7 +76,7 @@ func workspaceNav(label string, sections []workspaceSection, current string) tem
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/workspace.templ`, Line: 43, Col: 24}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/workspace.templ`, Line: 44, Col: 24}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
@@ -112,7 +113,7 @@ func workspaceNav(label string, sections []workspaceSection, current string) tem
 			var templ_7745c5c3_Var5 templ.SafeURL
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinURLErrs(section.Href)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/workspace.templ`, Line: 48, Col: 23}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/workspace.templ`, Line: 49, Col: 23}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -135,7 +136,7 @@ func workspaceNav(label string, sections []workspaceSection, current string) tem
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(section.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/workspace.templ`, Line: 53, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/workspace.templ`, Line: 54, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -148,7 +149,7 @@ func workspaceNav(label string, sections []workspaceSection, current string) tem
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(section.Detail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/workspace.templ`, Line: 54, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `views/workspace.templ`, Line: 55, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {

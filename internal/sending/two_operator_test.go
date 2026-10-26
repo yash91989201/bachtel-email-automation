@@ -185,7 +185,7 @@ func (f *acceptanceFixture) taskWithDuplicates(t *testing.T, ownerID, campaignID
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err := f.intake.Stage(context.Background(), ownerID, campaignID, "duplicates.xlsx", data.Bytes())
+	task, err := f.intake.Stage(context.Background(), ownerID, campaignID, "duplicates.xlsx", data.Bytes(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

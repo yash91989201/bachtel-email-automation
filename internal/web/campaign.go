@@ -550,9 +550,14 @@ func campaignTaskRow(overview *campaignOverview, task taskOverview, revisions ma
 	if filename == "" {
 		filename = "Workbook"
 	}
+	name := task.Task.Name
+	if name == "" {
+		name = filename
+	}
 	row := views.CampaignTaskRow{
 		ID:               task.Task.ID,
 		Reference:        presentation.ShortRef(task.Task.ID),
+		Name:             name,
 		Filename:         filename,
 		UploadedAt:       presentation.Timestamp(task.Task.UploadedAt),
 		Status:           status.Label,

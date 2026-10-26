@@ -119,6 +119,7 @@ func TestTaskSectionPathsRenderTheirOwnSection(t *testing.T) {
 		views.TaskSectionTest:       `id="task-test"`,
 		views.TaskSectionSending:    `id="sending-live"`,
 		views.TaskSectionResults:    `id="task-results"`,
+		views.TaskSectionSettings:   `id="task-settings"`,
 	}
 	for section, marker := range markers {
 		path := views.TaskSectionPath(id, taskID, section)
@@ -186,6 +187,7 @@ func TestSectionPathsRefuseUnknownForeignAndAnonymousNavigation(t *testing.T) {
 		views.CampaignSectionPath(own, views.CampaignSectionSettings),
 		views.TaskSectionPath(own, taskID, views.TaskSectionOverview),
 		views.TaskSectionPath(own, taskID, views.TaskSectionSending),
+		views.TaskSectionPath(own, taskID, views.TaskSectionSettings),
 	} {
 		if rec := do(t, handler, http.MethodGet, path, nil, withCookie(foreign)); rec.Code != http.StatusNotFound {
 			t.Errorf("foreign %s = %d, want 404", path, rec.Code)
@@ -198,6 +200,7 @@ func TestSectionPathsRefuseUnknownForeignAndAnonymousNavigation(t *testing.T) {
 		views.CampaignSectionPath(own, views.CampaignSectionActivity),
 		views.TaskSectionPath(own, taskID, views.TaskSectionRecipients),
 		views.TaskSectionPath(own, taskID, views.TaskSectionTest),
+		views.TaskSectionPath(own, taskID, views.TaskSectionSettings),
 	} {
 		rec := do(t, handler, http.MethodGet, path, nil, nil)
 		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {

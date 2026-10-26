@@ -247,8 +247,11 @@ type CampaignPageData struct {
 // revision, status explanation and the remaining recipient counts — is
 // disclosed through the cell's tooltip.
 type CampaignTaskRow struct {
-	ID               string
-	Reference        string
+	ID        string
+	Reference string
+	// Name is the editable task name shown as the row link; Filename stays
+	// the original workbook filename and is disclosed in the tooltip.
+	Name             string
 	Filename         string
 	UploadedAt       string
 	HasSavedRevision bool
@@ -406,7 +409,7 @@ templ campaignTasks(data CampaignPageData) {
 				@table.Table(table.Props{Attributes: templ.Attributes{"aria-label": "Tasks"}}) {
 					<thead>
 						<tr>
-							<th class="min-w-56">Workbook</th>
+							<th class="min-w-56">Task</th>
 							<th class="min-w-40">Status</th>
 							<th class="min-w-48">Recipients</th>
 							<th class="min-w-40">Next action</th>
@@ -417,8 +420,9 @@ templ campaignTasks(data CampaignPageData) {
 							<tr>
 								<td>
 									@tooltip.Tooltip(tooltip.Props{ID: "task-workbook-detail-" + row.ID}) {
-										<a class="app-link text-primary font-semibold wrap-anywhere" href={ "/campaigns/" + data.ID + "/tasks/" + row.ID } aria-describedby={ "task-workbook-detail-" + row.ID } { tooltip.Trigger(ctx)... }>{ row.Filename }</a>
+										<a class="app-link text-primary font-semibold wrap-anywhere" href={ "/campaigns/" + data.ID + "/tasks/" + row.ID } aria-describedby={ "task-workbook-detail-" + row.ID } { tooltip.Trigger(ctx)... }>{ campaignTaskName(row) }</a>
 										@tooltip.Content(tooltip.ContentProps{Class: "block max-w-70! space-y-1 px-2! py-1.5! text-[.7rem]! leading-snug", Attributes: templ.Attributes{"role": "tooltip"}}) {
+											<p>Workbook { row.Filename }</p>
 											<p>Reference { row.Reference }</p>
 											<p>Uploaded { row.UploadedAt }</p>
 											if row.HasSavedRevision {
@@ -483,6 +487,18 @@ templ campaignTaskStatus(row CampaignTaskRow) {
 			{ row.Status }
 		}
 	}
+}
+
+// campaignTaskName is the row's linked label: the saved task name, with the
+// workbook filename as the fallback for a record without one.
+func campaignTaskName(row CampaignTaskRow) string {
+	if row.Name != "" {
+		return row.Name
+	}
+	if row.Filename != "" {
+		return row.Filename
+	}
+	return "Workbook"
 }
 
 // campaignTaskLink is the next action's destination: the task section the

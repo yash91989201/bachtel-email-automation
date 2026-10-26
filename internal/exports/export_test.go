@@ -212,7 +212,7 @@ func (f *exportFixture) stageFor(t *testing.T, ownerID, campaignID string, rows 
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err := f.intake.Stage(context.Background(), ownerID, campaignID, "export.xlsx", data.Bytes())
+	task, err := f.intake.Stage(context.Background(), ownerID, campaignID, "export.xlsx", data.Bytes(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -697,7 +697,7 @@ func TestTaskResultsSheetNameCollision(t *testing.T) {
 	if err := book.Close(); err != nil {
 		t.Fatal(err)
 	}
-	task, err := f.intake.Stage(context.Background(), f.ownerID, f.campaignID, "collision.xlsx", data.Bytes())
+	task, err := f.intake.Stage(context.Background(), f.ownerID, f.campaignID, "collision.xlsx", data.Bytes(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

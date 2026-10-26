@@ -34,7 +34,7 @@ func TestHeaderPreflightDefersEligibilityUntilCleanedReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err := tasks.Stage(ctx, f.owner, f.campaign, "raw.xlsx", data)
+	task, err := tasks.Stage(ctx, f.owner, f.campaign, "raw.xlsx", data, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestHeaderPreflightRejectsMissingAndAmbiguousMappings(t *testing.T) {
 			if err := book.Close(); err != nil {
 				t.Fatal(err)
 			}
-			task, err := tasks.Stage(context.Background(), f.owner, f.campaign, "headers.xlsx", data.Bytes())
+			task, err := tasks.Stage(context.Background(), f.owner, f.campaign, "headers.xlsx", data.Bytes(), "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -207,7 +207,7 @@ func TestPreflightReportsPinnedTaskWithoutMemberships(t *testing.T) {
 	if err := book.Close(); err != nil {
 		t.Fatal(err)
 	}
-	task, err := tasks.Stage(ctx, f.owner, f.campaign, "waiting.xlsx", data.Bytes())
+	task, err := tasks.Stage(ctx, f.owner, f.campaign, "waiting.xlsx", data.Bytes(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,7 +420,7 @@ func TestMappedRowsRefusesStagingAndChangedWorkbook(t *testing.T) {
 	if err := book.Close(); err != nil {
 		t.Fatal(err)
 	}
-	staged, err := tasks.Stage(ctx, f.owner, f.campaign, "staging.xlsx", data.Bytes())
+	staged, err := tasks.Stage(ctx, f.owner, f.campaign, "staging.xlsx", data.Bytes(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

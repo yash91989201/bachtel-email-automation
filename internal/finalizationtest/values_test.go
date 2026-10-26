@@ -225,7 +225,7 @@ func TestPreparedMembershipsCarryCleanedValues(t *testing.T) {
 	if err := book.Close(); err != nil {
 		t.Fatal(err)
 	}
-	staged, err := tasks.Stage(ctx, f.owner, f.campaign, "prepared.xlsx", data.Bytes())
+	staged, err := tasks.Stage(ctx, f.owner, f.campaign, "prepared.xlsx", data.Bytes(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

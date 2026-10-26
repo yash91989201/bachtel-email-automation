@@ -33,6 +33,7 @@ func taskSections(campaignID, taskID string) []workspaceSection {
 		{Label: "Test & approve", Detail: "Formatting test", Href: TaskSectionPath(campaignID, taskID, TaskSectionTest)},
 		{Label: "Sending", Detail: "Start, stop & recover", Href: TaskSectionPath(campaignID, taskID, TaskSectionSending)},
 		{Label: "Results", Detail: "Workbook & history", Href: TaskSectionPath(campaignID, taskID, TaskSectionResults)},
+		{Label: "Settings", Detail: "Task name", Href: TaskSectionPath(campaignID, taskID, TaskSectionSettings)},
 	}
 }
 

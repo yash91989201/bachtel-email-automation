@@ -12,10 +12,12 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
+	"github.com/pocketbase/pocketbase/tools/types"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 )
@@ -108,17 +110,17 @@ type Preview struct {
 	Rendered          campaign.Rendered
 }
 
-// Stage stores one uploaded workbook as a staging task. The workbook is opened
-// first: an unsupported, corrupt, oversized or password-protected file is
-// rejected here, before any record exists. A staged task is never sendable.
-func (s *Service) Stage(ctx context.Context, ownerID, campaignID, filename string, data []byte) (*Task, error) {
-	return s.StageWithSendingType(ctx, ownerID, campaignID, filename, data, "")
+// Stage stores one uploaded workbook as a staging task without a custom name,
+// so the workbook filename becomes its name.
+func (s *Service) Stage(ctx context.Context, ownerID, campaignID, filename string, data []byte, name string) (*Task, error) {
+	return s.StageWithSendingType(ctx, ownerID, campaignID, filename, data, "", name)
 }
 
-// StageWithSendingType stores the optional first-start preference atomically
-// with the staged upload. The preference selects future page state only; it
-// does not validate, schedule or start candidate sending.
-func (s *Service) StageWithSendingType(ctx context.Context, ownerID, campaignID, filename string, data []byte, sendingType string) (*Task, error) {
+// StageWithSendingType stores the optional first-start preference and the
+// optional task name atomically with the staged upload. The preference selects
+// future page state only: it does not validate, schedule or start candidate
+// sending.
+func (s *Service) StageWithSendingType(ctx context.Context, ownerID, campaignID, filename string, data []byte, sendingType, name string) (*Task, error) {
 	switch sendingType {
 	case "", TaskSendingTypeDirect, TaskSendingTypeScheduled:
 	default:
@@ -138,6 +140,11 @@ func (s *Service) StageWithSendingType(ctx context.Context, ownerID, campaignID,
 		return nil, err
 	}
 
+	source := sourceName(filename)
+	resolved, err := resolveTaskName(name, source)
+	if err != nil {
+		return nil, err
+	}
 	workbook, err := OpenWorkbook(data, s.limits)
 	if err != nil {
 		return nil, err
@@ -148,7 +155,7 @@ func (s *Service) StageWithSendingType(ctx context.Context, ownerID, campaignID,
 		}
 	}()
 
-	source, err := filesystem.NewFileFromBytes(data, sourceName(filename))
+	stored, err := filesystem.NewFileFromBytes(data, source)
 	if err != nil {
 		return nil, fmt.Errorf("store the uploaded workbook: %w", err)
 	}
@@ -158,11 +165,12 @@ func (s *Service) StageWithSendingType(ctx context.Context, ownerID, campaignID,
 	}
 	record := core.NewRecord(collection)
 	record.Set("campaign", campaignID)
+	record.Set("name", resolved)
 	record.Set("status", TaskStaging)
 	record.Set("schedule_state", ScheduleNone)
 	record.Set("sending_type", sendingType)
-	record.Set("source", source)
-	record.Set("source_name", sourceName(filename))
+	record.Set("source", stored)
+	record.Set("source_name", source)
 	record.Set("source_digest", WorkbookDigest(data))
 	record.Set("sheets", workbook.Sheets)
 	record.Set("sheet", workbook.Sheet)
@@ -201,6 +209,34 @@ func (s *Service) SetSendingType(ctx context.Context, ownerID, taskID, sendingTy
 		}
 		record.Set("sending_type", sendingType)
 		return txApp.Save(record)
+	})
+}
+
+// RenameTask updates only the task's editable name metadata in every lifecycle
+// state. It resolves the blank default from the stored workbook filename and
+// applies the same length rule as creation. The transaction and column-scoped
+// update leave concurrent preparation, schedule, approval, closure and dispatch
+// state untouched.
+func (s *Service) RenameTask(ctx context.Context, ownerID, taskID, name string) error {
+	return s.app.RunInTransaction(func(txApp core.App) error {
+		txService := *s
+		txService.app = txApp
+		record, err := txService.ownedTask(ctx, ownerID, taskID)
+		if err != nil {
+			return err
+		}
+		resolved, err := resolveTaskName(name, record.GetString("source_name"))
+		if err != nil {
+			return err
+		}
+		_, err = txApp.DB().NewQuery("UPDATE send_tasks SET name = {:name}, updated = {:updated} WHERE id = {:id}").
+			Bind(dbx.Params{
+				"name":    resolved,
+				"updated": types.NowDateTime().String(),
+				"id":      record.Id,
+			}).
+			Execute()
+		return err
 	})
 }
 
@@ -1163,6 +1199,7 @@ func taskFromRecord(record *core.Record, campaignName string) *Task {
 		ConfigurationID:    record.GetString("configuration"),
 		ContentHash:        record.GetString("content_hash"),
 		ValidationError:    record.GetString("validation_error"),
+		Name:               record.GetString("name"),
 		SourceName:         record.GetString("source_name"),
 		SourceDigest:       record.GetString("source_digest"),
 		UploadedAt:         record.GetDateTime("created").Time().UTC().Truncate(time.Millisecond),
@@ -1197,10 +1234,31 @@ func taskFromRecord(record *core.Record, campaignName string) *Task {
 	return task
 }
 
+// resolveTaskName trims an explicit name and falls back to the stored workbook
+// filename when it is omitted or whitespace-only. The resolved name is capped
+// at MaxTaskNameLength Unicode code points; a longer name is refused, never
+// truncated.
+func resolveTaskName(explicit, source string) (string, error) {
+	name := strings.TrimSpace(explicit)
+	if name == "" {
+		name = source
+	}
+	if name == "" {
+		name = "task.xlsx"
+	}
+	if utf8.RuneCountInString(name) > MaxTaskNameLength {
+		return "", &ValidationError{Message: fmt.Sprintf("task names can be at most %d characters; shorten the name and try again", MaxTaskNameLength)}
+	}
+	return name, nil
+}
+
 // sourceName keeps the uploaded name but forces an XLSX extension, so the
 // stored private file never advertises a format the intake cannot read.
 func sourceName(name string) string {
-	base := filepath.Base(strings.TrimSpace(name))
+	// Browsers may submit a platform path. Both separators are stripped so no
+	// directory component becomes part of the stored name or the default task
+	// name.
+	base := filepath.Base(strings.ReplaceAll(strings.TrimSpace(name), `\`, "/"))
 	switch {
 	case base == "", base == ".", base == "/":
 		return "task.xlsx"
