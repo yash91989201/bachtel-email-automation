@@ -39,8 +39,8 @@ type WorkerOptions struct {
 
 // Dispatcher is the single owner of the datastore's sending state. It resolves
 // each work item's mailbox connection to a concrete sender, paces that mailbox
-// independently, and keeps at most four simultaneous requests per mailbox
-// connection. There is no application-wide submission cap.
+// independently, and keeps at most its saved concurrency of simultaneous
+// requests per connection. There is no application-wide submission cap.
 type Dispatcher struct {
 	store                     DispatchStore
 	resolver                  Resolver
@@ -249,10 +249,10 @@ func (d *Dispatcher) launch() (time.Duration, error) {
 	return d.launchPrepared(nil, nil, false)
 }
 
-// nextWork selects the next opportunity, skipping mailboxes that already have
-// four requests in flight. A saturated mailbox therefore never delays another
-// mailbox's launch; saturated reports that only full mailboxes were skipped, so
-// the caller waits for a completion instead of rescanning.
+// nextWork selects the next opportunity, skipping mailboxes whose saved
+// concurrency is already fully in flight. A saturated mailbox therefore never
+// delays another mailbox's launch; saturated reports that only full mailboxes
+// were skipped, so the caller waits for a completion instead of rescanning.
 func (d *Dispatcher) nextWork(ctx context.Context) (work *Work, saturated bool, err error) {
 	var exhausted []string
 	seen := make(map[string]bool)
@@ -261,17 +261,32 @@ func (d *Dispatcher) nextWork(ctx context.Context) (work *Work, saturated bool, 
 		if err != nil || work == nil {
 			return work, len(exhausted) > 0, err
 		}
-		if seen[work.ConnectionID] {
-			// The store cannot offer another connection; report the work and let
-			// the caller keep the single per-mailbox bound.
-			return work, false, nil
+		capacity, err := d.connectionCapacity(ctx, work)
+		if err != nil {
+			return nil, false, err
 		}
-		if d.inflightByConnection[work.ConnectionID] < 4 {
+		if seen[work.ConnectionID] || d.inflightByConnection[work.ConnectionID] < capacity {
+			// Either the store cannot offer another connection, or this one has a
+			// free slot. Keep the single per-mailbox bound so the caller cannot spin.
 			return work, false, nil
 		}
 		seen[work.ConnectionID] = true
 		exhausted = append(exhausted, work.ConnectionID)
 	}
+}
+
+// connectionCapacity returns the mailbox's saved submission capacity after
+// validating both persisted settings. An unreadable or out-of-range value stops
+// the launch instead of falling back to a default limit.
+func (d *Dispatcher) connectionCapacity(ctx context.Context, work *Work) (int, error) {
+	settings, err := d.store.DispatcherState(ctx, work.ConnectionID, work.OwnerID)
+	if err != nil {
+		return 0, err
+	}
+	if err := ValidateSettings(settings); err != nil {
+		return 0, err
+	}
+	return settings.Concurrency, nil
 }
 
 // launchPrepared launches one opportunity. A prepared sender skips the
@@ -296,8 +311,8 @@ func (d *Dispatcher) launchPrepared(sender Sender, work *Work, prepared bool) (t
 	}
 	if work == nil {
 		if saturated {
-			// Every selectable mailbox already holds four requests; wait for one
-			// of them to complete instead of rescanning due work.
+			// Every selectable mailbox already holds its configured requests; wait
+			// for one of them to complete instead of rescanning due work.
 			return 0, nil
 		}
 		deadline, err := d.store.NextWorkDeadline(ctx)
@@ -318,10 +333,7 @@ func (d *Dispatcher) launchPrepared(sender Sender, work *Work, prepared bool) (t
 	if err != nil {
 		return 0, err
 	}
-	if settings.Rate == 0 {
-		settings.Rate = DefaultRate
-	}
-	if err = ValidateRate(settings.Rate); err != nil {
+	if err = ValidateSettings(settings); err != nil {
 		return 0, err
 	}
 	now := d.options.Now()
@@ -332,9 +344,10 @@ func (d *Dispatcher) launchPrepared(sender Sender, work *Work, prepared bool) (t
 	if next := nextStart(now, settings); next.After(now) {
 		return next.Sub(now), nil
 	}
-	if d.inflightByConnection[work.ConnectionID] >= 4 {
-		// This is the only submission bound: each mailbox connection owns four
-		// slots, and another connection's requests never consume them.
+	if d.inflightByConnection[work.ConnectionID] >= settings.Concurrency {
+		// This is the only submission bound: each mailbox connection owns its
+		// saved number of slots, and another connection's requests never consume
+		// them. A limit below the current count drains existing work first.
 		return 0, nil
 	}
 

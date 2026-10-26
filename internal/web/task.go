@@ -734,6 +734,9 @@ func (s *server) taskPageData(r *http.Request, task *intake.Task, section string
 				return data, e
 			}
 			data.Rate = settings.Rate
+			data.Concurrency = settings.Concurrency
+			data.RateDraft = strconv.Itoa(settings.Rate)
+			data.ConcurrencyDraft = strconv.Itoa(settings.Concurrency)
 			data.Cooldown = presentation.Timestamp(settings.CooldownUntil)
 			data.CooldownReason = settings.Reason
 		}

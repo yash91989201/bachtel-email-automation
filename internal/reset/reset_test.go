@@ -110,7 +110,7 @@ func ownedWorkspace(t *testing.T, app core.App, ownerID, name string) (campaignI
 		"state": "ready", "file": mustFile(t, "results.xlsx", "artifact-bytes"),
 	})
 	create(t, app, sending.DispatcherCollection, map[string]any{
-		"connection": connection.Id, "owner": ownerID, "rate": 25,
+		"connection": connection.Id, "owner": ownerID, "rate": 25, "concurrency": sending.DefaultConcurrency,
 	})
 	return target.Id, task.Id
 }

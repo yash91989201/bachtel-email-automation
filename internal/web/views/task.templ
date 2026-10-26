@@ -247,10 +247,18 @@ type TaskPageData struct {
 	Duplicate       int
 	Ineligible      int
 	Rate            int
-	Cooldown        string
-	CooldownReason  string
-	ActionID        string
-	Controls        TaskControls
+	// Concurrency is the mailbox's saved submission capacity, shown beside the
+	// form. The drafts are the operator's submitted values, so a refused save
+	// can re-render them while the summary keeps the saved pair.
+	Concurrency      int
+	RateDraft        string
+	ConcurrencyDraft string
+	// SettingsOpen reopens the settings disclosure after a refused save.
+	SettingsOpen   bool
+	Cooldown       string
+	CooldownReason string
+	ActionID       string
+	Controls       TaskControls
 
 	ResultsState   string
 	ResultsError   string
@@ -1984,21 +1992,21 @@ templ sendingRowFields(data TaskPageData, row TaskAdmittedRow) {
 }
 
 templ taskPacing(data TaskPageData) {
-	@accordion.Accordion(accordion.Props{ID: "sending-settings", Class: "rounded-4xl", Attributes: templ.Attributes{"data-workspace-persist": true}}) {
+	@accordion.Accordion(accordion.Props{ID: "sending-settings", Class: "rounded-4xl", Attributes: templ.Attributes{"data-workspace-persist": true}, DefaultValue: sendingSettingsValues(data)}) {
 		@accordion.Item(accordion.ItemProps{ID: "sending-settings-item", Value: "pacing", Class: "data-open:bg-transparent"}) {
 			@accordion.Trigger(accordion.TriggerProps{Class: "p-5 font-semibold hover:no-underline"}) {
 				Sending settings
 			}
 			@accordion.Content(accordion.ContentProps{Class: "space-y-5 px-1 pb-5"}) {
-				<p class="text-sm text-muted-foreground">Control how quickly this mailbox starts emails across all tasks, formatting tests and retries.</p>
+				<p class="text-sm text-muted-foreground">Concurrency and pacing are shared by all tasks, formatting tests and retries using this mailbox. Concurrency limits how many emails may be in flight; pacing limits how often emails start.</p>
 				<dl class="grid grid-cols-3 gap-3 max-[760px]:grid-cols-1">
+					<div class="rounded-2xl bg-muted p-4">
+						<dt class="text-xs text-muted-foreground">Current concurrency</dt>
+						<dd class="mt-1 font-semibold"><span id="sending-current-concurrency">{ data.Concurrency }</span> <span class="text-sm font-normal text-muted-foreground">emails in flight</span></dd>
+					</div>
 					<div class="rounded-2xl bg-muted p-4">
 						<dt class="text-xs text-muted-foreground">Current pacing</dt>
 						<dd class="mt-1 font-semibold"><span id="sending-current-rate">{ data.Rate }</span> <span class="text-sm font-normal text-muted-foreground">starts / minute</span></dd>
-					</div>
-					<div class="rounded-2xl bg-muted p-4">
-						<dt class="text-xs text-muted-foreground">Concurrent submissions</dt>
-						<dd class="mt-1 font-semibold">Up to 4 <span class="text-sm font-normal text-muted-foreground">in flight</span></dd>
 					</div>
 					<div class="rounded-2xl bg-muted p-4">
 						<dt class="text-xs text-muted-foreground">Mailbox cooldown</dt>
@@ -2014,22 +2022,33 @@ templ taskPacing(data TaskPageData) {
 						}
 					</div>
 				</dl>
-				<form id={ "sending-rate-" + sendingControlKey(data) } hx-preserve method="post" action={ sendingBase(data) + "/rate" } class="flex flex-col items-start gap-3">
+				<form id="sending-settings-form" hx-preserve method="post" action={ sendingBase(data) + "/rate" } class="flex flex-col items-start gap-4">
 					<input type="hidden" name="action_id" value={ data.ActionID + "rate" }/>
-					<div class="min-w-0 w-full max-w-sm space-y-2">
-						@field.Field(field.Props{}) {
-							@field.Label(field.LabelProps{For: "sending-rate"}) {
-								Starts per minute
+					<div class="grid w-full gap-4 sm:grid-cols-2">
+						<div class="min-w-0 w-full max-w-sm space-y-2">
+							@field.Field(field.Props{}) {
+								@field.Label(field.LabelProps{For: "sending-concurrency"}) {
+									Concurrent emails
+								}
+								<p id="sending-concurrency-help" class="text-xs text-muted-foreground">Whole number 1–10. Default: 2. Applies to this mailbox.</p>
+								@input.Input(input.Props{ID: "sending-concurrency", Name: "concurrency", Type: "number", Class: "w-full", Value: sendingDraft(data.ConcurrencyDraft, data.Concurrency), Required: true, Attributes: templ.Attributes{"min": "1", "max": "10", "step": "1", "inputmode": "numeric", "aria-describedby": "sending-concurrency-help"}})
 							}
-							<p id="sending-rate-help" class="text-xs text-muted-foreground">Choose 1–30. Default: 25. Applies to this mailbox.</p>
-							@input.Input(input.Props{ID: "sending-rate", Name: "rate", Type: "number", Class: "w-full", Value: strconv.Itoa(data.Rate), Required: true, Attributes: templ.Attributes{"min": "1", "max": "30", "step": "1", "aria-describedby": "sending-rate-help"}})
-						}
+						</div>
+						<div class="min-w-0 w-full max-w-sm space-y-2">
+							@field.Field(field.Props{}) {
+								@field.Label(field.LabelProps{For: "sending-rate"}) {
+									Pacing
+								}
+								<p id="sending-rate-help" class="text-xs text-muted-foreground">Whole number 1–30 emails per minute. Default: 15. Applies to this mailbox.</p>
+								@input.Input(input.Props{ID: "sending-rate", Name: "rate", Type: "number", Class: "w-full", Value: sendingDraft(data.RateDraft, data.Rate), Required: true, Attributes: templ.Attributes{"min": "1", "max": "30", "step": "1", "inputmode": "numeric", "aria-describedby": "sending-rate-help"}})
+							}
+						</div>
 					</div>
 					@button.Button(button.Props{Type: button.TypeSubmit, Class: "shrink-0"}) {
-						Update pacing
+						Update sending settings
 					}
 				</form>
-				<p class="text-xs text-muted-foreground">Pacing and cooldown are shared by this mailbox only. Other mail clients also consume provider capacity, which this app cannot track.</p>
+				<p class="text-xs text-muted-foreground">Both settings and any cooldown apply to this mailbox only. Other mail clients also consume provider capacity, which this app cannot track.</p>
 				<div class="grid grid-cols-2 gap-4 border-t border-border pt-4 text-xs text-muted-foreground max-[760px]:grid-cols-1">
 					<p><strong class="font-medium text-foreground">Delivery status:</strong> Submitted means the provider accepted the request; it does not confirm delivery.</p>
 					<p><strong class="font-medium text-foreground">Background sending:</strong> Closing the browser does not stop server work.</p>
@@ -2037,6 +2056,23 @@ templ taskPacing(data TaskPageData) {
 			}
 		}
 	}
+}
+
+// sendingSettingsValues reopens Sending settings after a refused save.
+func sendingSettingsValues(data TaskPageData) []string {
+	if data.SettingsOpen {
+		return []string{"pacing"}
+	}
+	return nil
+}
+
+// sendingDraft prefers the operator's submitted value so a refused save keeps
+// their readable input instead of restoring the saved pair.
+func sendingDraft(draft string, saved int) string {
+	if draft != "" {
+		return draft
+	}
+	return strconv.Itoa(saved)
 }
 
 templ taskResults(data TaskPageData) {

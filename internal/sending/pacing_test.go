@@ -20,7 +20,7 @@ func TestPacingLoweringRateRetainsRollingHistory(t *testing.T) {
 
 func TestPacingRestartCooldownAndDefault(t *testing.T) {
 	now := time.Now().UTC()
-	for _, n := range []int{1, 25, 30} {
+	for _, n := range []int{1, DefaultRate, 30} {
 		s := Settings{Rate: n, Starts: []time.Time{now}, NextEligible: now.Add(time.Minute / time.Duration(n))}
 		if got := nextStart(now, s); !got.Equal(s.NextEligible) {
 			t.Fatalf("rate %d: %v", n, got)
@@ -30,13 +30,17 @@ func TestPacingRestartCooldownAndDefault(t *testing.T) {
 			t.Fatalf("cooldown lost: %v", got)
 		}
 	}
-	if got := nextStart(now, Settings{Starts: []time.Time{now}}); !got.Equal(now.Add(time.Minute / 25)) {
+	// The documented default is 15 starts per minute, four seconds apart.
+	if DefaultRate != 15 {
+		t.Fatalf("default rate = %d, want 15", DefaultRate)
+	}
+	if got := nextStart(now, Settings{Starts: []time.Time{now}}); !got.Equal(now.Add(4 * time.Second)) {
 		t.Fatal(got)
 	}
 }
 
 func TestPacingNoRollingMinuteExceedsRate(t *testing.T) {
-	for _, n := range []int{1, 25, 30} {
+	for _, n := range []int{1, DefaultRate, 30} {
 		now := time.Now().UTC()
 		s := Settings{Rate: n}
 		for i := range 1000 {
@@ -60,6 +64,27 @@ func TestRateValidation(t *testing.T) {
 	for n := -1; n <= 31; n++ {
 		if (ValidateRate(n) == nil) != (n >= 1 && n <= 30) {
 			t.Fatal(n)
+		}
+	}
+}
+
+func TestConcurrencyValidation(t *testing.T) {
+	if DefaultConcurrency != 2 {
+		t.Fatalf("default concurrency = %d, want 2", DefaultConcurrency)
+	}
+	for n := -1; n <= 11; n++ {
+		if (ValidateConcurrency(n) == nil) != (n >= 1 && n <= 10) {
+			t.Fatal(n)
+		}
+	}
+	// The persisted pair is validated together, so neither value can hide
+	// behind the other's default.
+	if err := ValidateSettings(Settings{Rate: DefaultRate, Concurrency: DefaultConcurrency}); err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []Settings{{Rate: 0, Concurrency: 2}, {Rate: 15, Concurrency: 0}, {Rate: 31, Concurrency: 2}, {Rate: 15, Concurrency: 11}} {
+		if ValidateSettings(invalid) == nil {
+			t.Fatalf("invalid settings accepted: %+v", invalid)
 		}
 	}
 }

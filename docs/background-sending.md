@@ -125,9 +125,14 @@ design.
 ## Pacing and provider responses
 
 Each mailbox has one coordinator using `golang.org/x/time/rate` with burst 1.
-At most four submission requests run at once per mailbox; there is no
-application-wide cap. A mailbox defaults to 25 starts per minute; browser,
-server and stored settings accept only integers 1 through 30. Starts are evenly
+It launches only while fewer requests are in flight than the mailbox's saved
+concurrency (integer 1 through 10, default 2); there is no application-wide
+cap. A mailbox defaults to 15 starts per minute, and browser, server and stored
+settings accept only integer rates 1 through 30. Concurrency and pacing are
+saved together and shared by that mailbox's tasks, formatting tests and
+retries. Lowering concurrency lets requests already in flight finish and holds
+new starts until the count is below the new limit; a sender preparing
+authorization rechecks the saved limit before transmission. Starts are evenly
 spaced, and persisted recent starts enforce the rolling allowance after rate
 changes and restarts. When there is no eligible work, the coordinator waits for
 an operator action, a submission result or the earliest persisted retry time.

@@ -261,11 +261,14 @@ approve that exact content hash. A successful Graph response alone does not
 approve a campaign. Starting or resuming a task requires a fresh recipient
 count and confirmation; browser closure and logout do not stop accepted work.
 
-Pacing is per mailbox with a default rate of 25 starts per minute (integer
-settings 1–30), persisted pacing and provider cooldowns. At most four
-submission requests run at once per mailbox; there is no application-wide cap.
-Cooldowns, throttling, authorization failures and service pauses affect only
-the affected mailbox; a shared storage failure stops all launches.
+Sending settings are per mailbox and saved together in **Sending settings**:
+**Concurrent emails** (integer 1–10, default 2) bounds in-flight submission
+requests and **Pacing** (integer 1–30 emails per minute, default 15) bounds how
+often starts occur. Defaults apply when a mailbox first sends; saved values,
+pacing history and provider cooldowns persist across restarts. There is no
+application-wide cap. Cooldowns, throttling, authorization failures and service
+pauses affect only the affected mailbox; a shared storage failure stops all
+launches.
 **SUBMITTED** means the provider accepted the request, not that it was
 delivered. Uncertain
 attempts are held for review and never automatically resent. Stop drains

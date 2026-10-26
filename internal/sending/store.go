@@ -46,6 +46,7 @@ func stateRecord(app core.App, connectionID, ownerID string) (*core.Record, erro
 	record.Set("connection", connectionID)
 	record.Set("owner", ownerID)
 	record.Set("rate", DefaultRate)
+	record.Set("concurrency", DefaultConcurrency)
 	if err := app.Save(record); err != nil {
 		// A concurrent create lost the unique constraint race; read the winner.
 		if existing, findErr := app.FindFirstRecordByFilter(DispatcherCollection, "connection = {:connection}", dbx.Params{"connection": connectionID}); findErr == nil {
@@ -57,7 +58,7 @@ func stateRecord(app core.App, connectionID, ownerID string) (*core.Record, erro
 }
 
 func settings(r *core.Record) (Settings, error) {
-	v := Settings{Rate: r.GetInt("rate"), NextEligible: stamp(r, "next_eligible"), CooldownUntil: stamp(r, "cooldown_until"), Reason: r.GetString("reason")}
+	v := Settings{Rate: r.GetInt("rate"), Concurrency: r.GetInt("concurrency"), NextEligible: stamp(r, "next_eligible"), CooldownUntil: stamp(r, "cooldown_until"), Reason: r.GetString("reason")}
 	if err := r.UnmarshalJSONField("starts", &v.Starts); err != nil {
 		return Settings{}, fmt.Errorf("decode sending pacing history: %w", err)
 	}
@@ -75,18 +76,29 @@ func (s *Store) DispatcherState(ctx context.Context, connectionID, ownerID strin
 	if e != nil {
 		return Settings{}, e
 	}
-	if v.Rate < 1 || v.Rate > 30 || r.GetFloat("rate") != float64(v.Rate) {
-		return v, errors.New("stored sending rate must be an integer from 1 through 30")
+	if r.GetFloat("rate") != float64(v.Rate) || r.GetFloat("concurrency") != float64(v.Concurrency) {
+		return v, errors.New("stored sending settings must be whole numbers")
+	}
+	if err := ValidateSettings(v); err != nil {
+		return v, err
 	}
 	return v, nil
 }
 
-// SetRate changes the sending rate of the operator's current mailbox.
-func (s *Store) SetRate(ctx context.Context, ownerID string, rate int) error {
-	if rate < 1 || rate > 30 {
-		return errors.New("sending rate must be an integer from 1 through 30")
+// SetSettings saves the mailbox's concurrency and pacing together. Both values
+// must be valid before anything changes: a refused or failed save keeps the
+// previous pair, the pacing history and any active cooldown.
+func (s *Store) SetSettings(ctx context.Context, ownerID string, concurrency, rate int) error {
+	if err := ValidateConcurrency(concurrency); err != nil {
+		return err
+	}
+	if err := ValidateRate(rate); err != nil {
+		return err
 	}
 	connection, err := s.currentConnection(ownerID)
+	if errors.Is(err, mailbox.ErrNotConnected) {
+		return errors.New("connect a mailbox before changing its sending settings")
+	}
 	if err != nil {
 		return err
 	}
@@ -95,6 +107,7 @@ func (s *Store) SetRate(ctx context.Context, ownerID string, rate int) error {
 		if e != nil {
 			return e
 		}
+		r.Set("concurrency", concurrency)
 		r.Set("rate", rate)
 		return app.Save(r)
 	})

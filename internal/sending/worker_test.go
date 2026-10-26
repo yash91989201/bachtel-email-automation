@@ -191,7 +191,7 @@ const (
 )
 
 func newWorkerFixture(n int) *workerFixture {
-	f := &workerFixture{now: time.Now().UTC(), settings: Settings{Rate: 30}}
+	f := &workerFixture{now: time.Now().UTC(), settings: Settings{Rate: 30, Concurrency: DefaultConcurrency}}
 	for i := range n {
 		f.queue = append(f.queue, &Work{Kind: KindTest, OwnerID: fixtureOwner, ConnectionID: fixtureConnection, Recipient: fmt.Sprintf("%d@example.com", i), Subject: "frozen", Body: "<p>body</p>"})
 	}
@@ -353,7 +353,7 @@ func eventually(t *testing.T, p func() bool) {
 	t.Fatal("condition never reached")
 }
 
-func TestWorkerFourSlotsAndShutdownDrainsIndependentRequests(t *testing.T) {
+func TestWorkerConfiguredCapacityAndShutdownDrainsIndependentRequests(t *testing.T) {
 	f := newWorkerFixture(10)
 	entered := make(chan context.Context, 10)
 	release := make(chan struct{})
@@ -362,16 +362,16 @@ func TestWorkerFourSlotsAndShutdownDrainsIndependentRequests(t *testing.T) {
 		<-release
 		return SendResult{Kind: OutcomeSubmitted}
 	}))
-	for range 4 {
+	for range DefaultConcurrency {
 		select {
 		case <-entered:
 		case <-time.After(time.Second):
-			t.Fatal("four requests did not start")
+			t.Fatalf("the default %d requests did not start", DefaultConcurrency)
 		}
 	}
 	select {
 	case <-entered:
-		t.Fatal("fifth request exceeded capacity")
+		t.Fatalf("request %d exceeded the default capacity", DefaultConcurrency+1)
 	case <-time.After(10 * time.Millisecond):
 	}
 	f.mu.Lock()
@@ -398,7 +398,7 @@ func TestWorkerFourSlotsAndShutdownDrainsIndependentRequests(t *testing.T) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.results != 4 || f.intents != 4 {
+	if f.results != DefaultConcurrency || f.intents != DefaultConcurrency {
 		t.Fatalf("intents=%d outcomes=%d", f.intents, f.results)
 	}
 }
@@ -463,9 +463,17 @@ func TestWorkerIntentFailureSendsNothingAndCannotWakePastStorageBarrier(t *testi
 		return SendResult{Kind: OutcomeSubmitted}
 	}))
 	eventually(t, func() bool { d.mu.Lock(); defer d.mu.Unlock(); return d.fatalStorage })
-	f.mu.Lock()
-	f.intentError = false
-	f.mu.Unlock()
+	// A saved settings change is not a recovery action: it cannot clear the
+	// shared storage barrier even after more capacity is configured.
+	if err := d.Synchronize(func() error {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.intentError = false
+		f.settings.Concurrency = 10
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	d.Wake()
 	select {
 	case <-called:
@@ -551,11 +559,11 @@ func TestWorkerSaturatedMailboxesWaitWithoutRescanning(t *testing.T) {
 		<-release
 		return SendResult{Kind: OutcomeSubmitted}
 	}))
-	for range 8 {
+	for range 2 * DefaultConcurrency {
 		select {
 		case <-entered:
 		case <-time.After(time.Second):
-			t.Fatal("both mailboxes did not fill their four slots")
+			t.Fatal("both mailboxes did not fill their configured slots")
 		}
 	}
 	time.Sleep(30 * time.Millisecond)
@@ -641,7 +649,7 @@ func (s blockingWorkerTokens) AccessToken(ctx context.Context) (string, error) {
 
 func TestWorkerShutdownDrainsRequestsUnderBoundedDeadline(t *testing.T) {
 	f := newWorkerFixture(8)
-	entered := make(chan struct{}, 4)
+	entered := make(chan struct{}, DefaultConcurrency)
 	d := NewDispatcher(f, fixedResolver(workerSender(func(ctx context.Context, _ Message) SendResult {
 		entered <- struct{}{}
 		<-ctx.Done()
@@ -650,7 +658,7 @@ func TestWorkerShutdownDrainsRequestsUnderBoundedDeadline(t *testing.T) {
 	if err := d.Start(); err != nil {
 		t.Fatal(err)
 	}
-	for range 4 {
+	for range DefaultConcurrency {
 		select {
 		case <-entered:
 		case <-time.After(time.Second):
@@ -664,7 +672,7 @@ func TestWorkerShutdownDrainsRequestsUnderBoundedDeadline(t *testing.T) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.intents != 4 || f.results != 4 {
+	if f.intents != DefaultConcurrency || f.results != DefaultConcurrency {
 		t.Fatalf("intents/outcomes = %d/%d", f.intents, f.results)
 	}
 }
@@ -961,4 +969,222 @@ func TestWorkerCopyDoesNotBlockAnotherMailbox(t *testing.T) {
 		count, err := d.InFlightFor(context.Background(), fixtureOwner)
 		return err == nil && count == 0
 	})
+}
+
+// Explicit saved limits bound the same mailbox for every kind of work: the
+// boundary values 1 and 10 start exactly their configured number of requests
+// and no more, with no application-wide cap.
+func TestWorkerUsesConfiguredConcurrencyBounds(t *testing.T) {
+	for _, concurrency := range []int{1, 10} {
+		t.Run(fmt.Sprint(concurrency), func(t *testing.T) {
+			f := newWorkerFixture(concurrency + 3)
+			f.mu.Lock()
+			f.settings.Concurrency = concurrency
+			f.mu.Unlock()
+			release := make(chan struct{}, concurrency+3)
+			var started atomic.Int32
+			startedCh := make(chan struct{}, concurrency+3)
+			startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+				started.Add(1)
+				startedCh <- struct{}{}
+				<-release
+				return SendResult{Kind: OutcomeSubmitted}
+			}))
+			defer func() {
+				for range concurrency + 3 {
+					release <- struct{}{}
+				}
+			}()
+			for range concurrency {
+				select {
+				case <-startedCh:
+				case <-time.After(time.Second):
+					t.Fatalf("concurrency %d did not start %d requests", concurrency, concurrency)
+				}
+			}
+			select {
+			case <-startedCh:
+				t.Fatalf("concurrency %d started a request beyond its limit", concurrency)
+			case <-time.After(20 * time.Millisecond):
+			}
+			if got := started.Load(); got != int32(concurrency) {
+				t.Fatalf("started %d requests at concurrency %d", got, concurrency)
+			}
+		})
+	}
+}
+
+// A lowered limit drains the requests already in flight: none of them is
+// cancelled, and no new request starts until the count is strictly below the
+// new limit.
+func TestWorkerLoweringConcurrencyDrainsInFlightRequests(t *testing.T) {
+	f := newWorkerFixture(6)
+	f.mu.Lock()
+	f.settings.Concurrency = 4
+	f.mu.Unlock()
+	release := make(chan struct{}, 16)
+	startedCh := make(chan struct{}, 8)
+	d := startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		startedCh <- struct{}{}
+		<-release
+		return SendResult{Kind: OutcomeSubmitted}
+	}))
+	defer func() {
+		for range 16 {
+			select {
+			case release <- struct{}{}:
+			default:
+			}
+		}
+	}()
+	for range 4 {
+		select {
+		case <-startedCh:
+		case <-time.After(time.Second):
+			t.Fatal("the saved limit did not start four requests")
+		}
+	}
+	if err := d.Synchronize(func() error {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.settings.Concurrency = 2
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	if len(startedCh) != 0 {
+		t.Fatalf("lowering the limit started %d more requests", len(startedCh))
+	}
+	release <- struct{}{} // 4 -> 3 in flight
+	time.Sleep(20 * time.Millisecond)
+	release <- struct{}{} // 3 -> 2 in flight
+	time.Sleep(20 * time.Millisecond)
+	if len(startedCh) != 0 {
+		t.Fatal("a request launched at the lowered limit")
+	}
+	release <- struct{}{} // 2 -> 1 in flight
+	select {
+	case <-startedCh:
+	case <-time.After(time.Second):
+		t.Fatal("no request started below the lowered limit")
+	}
+}
+
+// A raised limit admits additional work without a restart, still under pacing
+// and the same mailbox's other controls.
+func TestWorkerRaisingConcurrencyAdmitsPacedWork(t *testing.T) {
+	f := newWorkerFixture(3)
+	f.mu.Lock()
+	f.settings.Concurrency = 1
+	f.mu.Unlock()
+	release := make(chan struct{}, 8)
+	startedCh := make(chan struct{}, 4)
+	d := startFixture(t, f, workerSender(func(context.Context, Message) SendResult {
+		startedCh <- struct{}{}
+		<-release
+		return SendResult{Kind: OutcomeSubmitted}
+	}))
+	defer func() {
+		for range 8 {
+			select {
+			case release <- struct{}{}:
+			default:
+			}
+		}
+	}()
+	select {
+	case <-startedCh:
+	case <-time.After(time.Second):
+		t.Fatal("the initial limit did not start one request")
+	}
+	time.Sleep(30 * time.Millisecond)
+	if len(startedCh) != 0 {
+		t.Fatal("one-slot mailbox started a second request")
+	}
+	if err := d.Synchronize(func() error {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.settings.Concurrency = 2
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-startedCh:
+	case <-time.After(time.Second):
+		t.Fatal("raising the limit did not admit paced work")
+	}
+}
+
+// preparingWorkerSender blocks the second authorization so a settings save can
+// race it, and holds every send open so in-flight accounting stays observable.
+type preparingWorkerSender struct {
+	prepares       atomic.Int32
+	prepareEntered chan struct{}
+	prepareRelease chan struct{}
+	sends          chan struct{}
+	hold           <-chan struct{}
+}
+
+func (s *preparingWorkerSender) Prepare(ctx context.Context) Sender {
+	if s.prepares.Add(1) == 1 {
+		return s
+	}
+	select {
+	case s.prepareEntered <- struct{}{}:
+	default:
+	}
+	select {
+	case <-s.prepareRelease:
+	case <-ctx.Done():
+	}
+	return s
+}
+
+func (s *preparingWorkerSender) Send(context.Context, Message) SendResult {
+	s.sends <- struct{}{}
+	<-s.hold
+	return SendResult{Kind: OutcomeSubmitted}
+}
+
+// A sender whose authorization began before a settings save must satisfy the
+// saved limit before transmission starts.
+func TestWorkerPreparationRechecksSavedConcurrency(t *testing.T) {
+	f := newWorkerFixture(4)
+	hold := make(chan struct{})
+	sender := &preparingWorkerSender{
+		prepareEntered: make(chan struct{}, 1),
+		prepareRelease: make(chan struct{}),
+		sends:          make(chan struct{}, 4),
+		hold:           hold,
+	}
+	d := startFixture(t, f, sender)
+	select {
+	case <-sender.sends:
+	case <-time.After(time.Second):
+		t.Fatal("the first request did not start")
+	}
+	select {
+	case <-sender.prepareEntered:
+	case <-time.After(time.Second):
+		t.Fatal("the second authorization did not begin")
+	}
+	// One request is in flight; authorization for the next one is outside the
+	// start barrier.
+	if err := d.Synchronize(func() error {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.settings.Concurrency = 1
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	close(sender.prepareRelease)
+	select {
+	case <-sender.sends:
+		t.Fatal("a prepared request ignored the saved limit")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(hold)
 }

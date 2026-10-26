@@ -38,7 +38,23 @@
     }
   }
 
+  // An accordion can render open on the server (a refused settings save reopens
+  // it) without firing a change event. Seed the remembered values from the
+  // rendered items so the first polling swap keeps it open.
+  function seedAccordionState() {
+    for (const root of document.querySelectorAll(`${PERSIST}[data-slot="accordion"]`)) {
+      if (!root.id || accordionState.has(root.id)) continue;
+      const values = [];
+      for (const item of root.querySelectorAll('[data-slot="accordion-item"][data-open]')) {
+        const value = item.getAttribute("data-templ-value");
+        if (value) values.push(value);
+      }
+      if (values.length) accordionState.set(root.id, values);
+    }
+  }
+
   function restoreAll() {
+    seedAccordionState();
     restoreCollapsibles();
     restoreAccordions();
   }

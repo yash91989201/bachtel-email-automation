@@ -385,6 +385,47 @@ func TestTaskSendingLiveFragmentKeepsIdentity(t *testing.T) {
 	}
 }
 
+// A live progress refresh must preserve both settings drafts and focus: the
+// form keeps one stable id independent of progress counts and is marked for
+// htmx preservation, while the disclosure keeps its persisted state.
+func TestSendingSettingsFormSurvivesProgressRefresh(t *testing.T) {
+	base := TaskPageData{CampaignID: "camp", TaskID: "task", StoredStatus: "running", Rate: 25, Concurrency: 4, RateDraft: "12", ConcurrencyDraft: "3"}
+	render := func(data TaskPageData) *html.Node {
+		t.Helper()
+		doc, err := html.Parse(strings.NewReader(renderWorkspace(t, TaskSendingLive(data))))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return doc
+	}
+	before := workspaceNode(render(base), "id", "sending-settings-form")
+	if before == nil || !hasWorkspaceAttr(before, "hx-preserve") {
+		t.Fatal("the settings form must be preserved across a polling swap")
+	}
+	refreshed := base
+	refreshed.Submitted, refreshed.Remaining, refreshed.InFlight = 3, 7, 2
+	doc := render(refreshed)
+	after := workspaceNode(doc, "id", "sending-settings-form")
+	if after == nil || !hasWorkspaceAttr(after, "hx-preserve") {
+		t.Fatal("a progress refresh dropped the preserved settings form")
+	}
+	if workspaceAttr(after, "id") != workspaceAttr(before, "id") {
+		t.Fatal("the settings form id changed with progress counts")
+	}
+	// The preserved form re-renders the same drafts, so htmx has one element to
+	// keep while the operator types.
+	if node := workspaceNode(after, "id", "sending-rate"); workspaceAttr(node, "value") != "12" {
+		t.Fatalf("pacing draft changed across a progress refresh: %#v", node)
+	}
+	if node := workspaceNode(after, "id", "sending-concurrency"); workspaceAttr(node, "value") != "3" {
+		t.Fatalf("concurrency draft changed across a progress refresh: %#v", node)
+	}
+	root := workspaceNode(doc, "id", "sending-settings")
+	if root == nil || !hasWorkspaceAttr(root, "data-workspace-persist") {
+		t.Fatal("the settings disclosure must keep its persisted expansion state")
+	}
+}
+
 func TestTaskSendingLivePollsOnlyActiveWork(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -860,7 +901,7 @@ func TestConnectedMailboxProviderSetupIsExplicit(t *testing.T) {
 }
 
 func TestSendingSettingsUsesAccordion(t *testing.T) {
-	doc, err := html.Parse(strings.NewReader(renderWorkspace(t, taskPacing(TaskPageData{Rate: 25}))))
+	doc, err := html.Parse(strings.NewReader(renderWorkspace(t, taskPacing(TaskPageData{Rate: 25, Concurrency: 4}))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -875,8 +916,75 @@ func TestSendingSettingsUsesAccordion(t *testing.T) {
 	if workspaceNode(trigger, "data-slot", "accordion-trigger-icon") == nil {
 		t.Fatal("accordion needs its disclosure indicator")
 	}
-	if workspaceNode(root, "id", "sending-rate") == nil {
-		t.Fatal("pacing control missing from accordion")
+	// The summary shows both saved values instead of a fixed capacity.
+	if node := workspaceNode(root, "id", "sending-current-concurrency"); node == nil || viewText(node) != "4" {
+		t.Fatal("the concurrency summary must reflect the saved limit")
+	}
+	if node := workspaceNode(root, "id", "sending-current-rate"); node == nil || viewText(node) != "25" {
+		t.Fatal("the pacing summary must reflect the saved rate")
+	}
+	// Both labeled controls submit through one action.
+	form := workspaceNode(root, "id", "sending-settings-form")
+	if form == nil || workspaceAttr(form, "method") != "post" || !strings.HasSuffix(workspaceAttr(form, "action"), "/sending/rate") {
+		t.Fatal("both settings must submit through the existing rate form")
+	}
+	concurrency := workspaceNode(form, "id", "sending-concurrency")
+	if concurrency == nil || workspaceAttr(concurrency, "name") != "concurrency" || workspaceAttr(concurrency, "value") != "4" ||
+		workspaceAttr(concurrency, "min") != "1" || workspaceAttr(concurrency, "max") != "10" || workspaceAttr(concurrency, "step") != "1" || !hasWorkspaceAttr(concurrency, "required") {
+		t.Fatalf("concurrency control = %#v", concurrency)
+	}
+	rate := workspaceNode(form, "id", "sending-rate")
+	if rate == nil || workspaceAttr(rate, "name") != "rate" || workspaceAttr(rate, "value") != "25" ||
+		workspaceAttr(rate, "min") != "1" || workspaceAttr(rate, "max") != "30" || workspaceAttr(rate, "step") != "1" || !hasWorkspaceAttr(rate, "required") {
+		t.Fatalf("pacing control = %#v", rate)
+	}
+	for _, tc := range []struct{ id, label string }{{"sending-concurrency", "Concurrent emails"}, {"sending-rate", "Pacing"}} {
+		label := workspaceNode(root, "for", tc.id)
+		if label == nil || !strings.Contains(viewText(label), tc.label) {
+			t.Fatalf("%s control lacks an associated label", tc.label)
+		}
+		described := workspaceAttr(workspaceNode(root, "id", tc.id), "aria-describedby")
+		if described == "" || workspaceNode(root, "id", described) == nil {
+			t.Fatalf("%s control lacks its range help", tc.label)
+		}
+	}
+	text := viewText(root)
+	for _, want := range []string{
+		"1–10", "Default: 2", "1–30", "Default: 15", "emails per minute",
+		"shared by all tasks, formatting tests and retries using this mailbox",
+		"Concurrency limits how many emails may be in flight; pacing limits how often emails start.",
+		"Update sending settings",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("settings missing %q", want)
+		}
+	}
+}
+
+// A refused save reopens the disclosure and renders the submitted drafts while
+// the saved pair stays visible and distinct.
+func TestSendingSettingsRefusalKeepsDraftsAndSavedSummary(t *testing.T) {
+	data := TaskPageData{Rate: 25, Concurrency: 4, RateDraft: "18", ConcurrencyDraft: "12", SettingsOpen: true}
+	doc, err := html.Parse(strings.NewReader(renderWorkspace(t, taskPacing(data))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := workspaceNode(doc, "id", "sending-settings")
+	trigger := workspaceNode(root, "data-slot", "accordion-trigger")
+	if trigger == nil || workspaceAttr(trigger, "aria-expanded") != "true" {
+		t.Fatal("a refused save must open Sending settings")
+	}
+	if node := workspaceNode(root, "id", "sending-current-concurrency"); viewText(node) != "4" {
+		t.Fatal("the summary must keep the saved concurrency")
+	}
+	if node := workspaceNode(root, "id", "sending-current-rate"); viewText(node) != "25" {
+		t.Fatal("the summary must keep the saved pacing")
+	}
+	if node := workspaceNode(root, "id", "sending-concurrency"); workspaceAttr(node, "value") != "12" {
+		t.Fatalf("submitted concurrency draft lost: %#v", node)
+	}
+	if node := workspaceNode(root, "id", "sending-rate"); workspaceAttr(node, "value") != "18" {
+		t.Fatalf("submitted pacing draft lost: %#v", node)
 	}
 }
 

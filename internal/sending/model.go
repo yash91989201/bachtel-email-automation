@@ -94,7 +94,10 @@ type Outcome struct {
 	PauseMailbox bool
 }
 type Settings struct {
-	Rate                        int
+	Rate int
+	// Concurrency is the mailbox's saved submission capacity: how many of its
+	// emails may be in flight at once.
+	Concurrency                 int
 	Starts                      []time.Time
 	NextEligible, CooldownUntil time.Time
 	Reason                      string

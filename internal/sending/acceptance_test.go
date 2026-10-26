@@ -366,10 +366,10 @@ func TestAcceptanceCandidatePipelineAndReplay(t *testing.T) {
 			}
 		}
 		started := a.GetDateTime("started_at").Time()
-		if i > 0 && started.Sub(attempts[i-1].GetDateTime("started_at").Time()) < time.Minute/25 {
+		if i > 0 && started.Sub(attempts[i-1].GetDateTime("started_at").Time()) < time.Minute/15 {
 			t.Fatalf("starts %d and %d violated default spacing", i-1, i)
 		}
-		if i >= 25 && started.Sub(attempts[i-25].GetDateTime("started_at").Time()) < time.Minute {
+		if i >= 15 && started.Sub(attempts[i-15].GetDateTime("started_at").Time()) < time.Minute {
 			t.Fatalf("rolling allowance exceeded at %d", i)
 		}
 	}
@@ -379,8 +379,8 @@ func TestAcceptanceCandidatePipelineAndReplay(t *testing.T) {
 	mailbox.mu.Lock()
 	max := mailbox.maxActive
 	mailbox.mu.Unlock()
-	if max > 4 {
-		t.Fatalf("max in flight=%d", max)
+	if max > 2 {
+		t.Fatalf("max in flight=%d, want the default limit of 2", max)
 	}
 }
 
@@ -404,7 +404,7 @@ func TestAcceptanceSharedCapacityCrossTaskClaimsAndStop(t *testing.T) {
 		t.Fatal("overlapping task claimed reserved recipients")
 	}
 	d.Wake()
-	acceptanceEventually(t, func() bool { return mailbox.count() == 5 }) // one prior test plus four held sends
+	acceptanceEventually(t, func() bool { return mailbox.count() == 3 }) // one prior test plus the default two held sends
 	if err := d.Synchronize(func() error {
 		_, err := f.store.Act(context.Background(), f.ownerID, sending.ActionRequest{ActionID: "stop-shared", TaskID: first, Kind: "stop"})
 		return err
@@ -418,8 +418,8 @@ func TestAcceptanceSharedCapacityCrossTaskClaimsAndStop(t *testing.T) {
 	}
 	d.Wake()
 	time.Sleep(20 * time.Millisecond)
-	if mailbox.count() != 5 {
-		t.Fatalf("fifth active request bypassed shared capacity: %d requests", mailbox.count())
+	if mailbox.count() != 3 {
+		t.Fatalf("request bypassed the saturated mailbox: %d requests", mailbox.count())
 	}
 	close(gate)
 	acceptanceEventually(t, func() bool {
@@ -428,18 +428,18 @@ func TestAcceptanceSharedCapacityCrossTaskClaimsAndStop(t *testing.T) {
 	})
 	acceptanceEventually(t, func() bool {
 		p, e := f.store.Preview(context.Background(), f.ownerID, first)
-		return e == nil && p.Status == "stopped" && p.Submitted == 4 && p.Remaining == 8
+		return e == nil && p.Status == "stopped" && p.Submitted == 2 && p.Remaining == 10
 	})
-	if mailbox.count() != 6 {
+	if mailbox.count() != 4 {
 		t.Fatalf("stop launched additional candidates: %d requests", mailbox.count())
 	}
 	mailbox.mu.Lock()
 	max := mailbox.maxActive
 	mailbox.mu.Unlock()
-	if max != 4 {
-		t.Fatalf("max in flight=%d, want 4", max)
+	if max != 2 {
+		t.Fatalf("max in flight=%d, want the default limit of 2", max)
 	}
-	f.act(t, first, "resume", "resume-shared", 8)
+	f.act(t, first, "resume", "resume-shared", 10)
 	d.Wake()
 	acceptanceEventually(t, func() bool {
 		p, e := f.store.Preview(context.Background(), f.ownerID, first)
@@ -484,7 +484,7 @@ func TestAcceptancePerMailboxCapacityIsIndependent(t *testing.T) {
 
 	actFor(t, f, f.ownerID, taskA, "start", "capacity-a", 12)
 	d.Wake()
-	acceptanceEventually(t, func() bool { return mailboxA.count() == 5 }) // one approved test plus four held sends
+	acceptanceEventually(t, func() bool { return mailboxA.count() == 3 }) // one approved test plus two held sends
 
 	actFor(t, f, ownerB, taskB, "start", "capacity-b", 12)
 	d.Wake()
@@ -494,11 +494,11 @@ func TestAcceptancePerMailboxCapacityIsIndependent(t *testing.T) {
 	mailboxA.mu.Lock()
 	activeA, maxA := mailboxA.active, mailboxA.maxActive
 	mailboxA.mu.Unlock()
-	if activeA != 4 || maxA != 4 {
-		t.Fatalf("first mailbox active=%d max=%d when the second mailbox sent, want 4/4", activeA, maxA)
+	if activeA != 2 || maxA != 2 {
+		t.Fatalf("first mailbox active=%d max=%d when the second mailbox sent, want 2/2", activeA, maxA)
 	}
-	// B fills its own four slots while A keeps holding its four.
-	acceptanceEventually(t, func() bool { return mailboxB.count() >= 4 })
+	// B fills its own slots while A keeps holding its own.
+	acceptanceEventually(t, func() bool { return mailboxB.count() >= 2 })
 }
 
 // TestAcceptanceMailboxPauseDoesNotStallAnotherOperator proves an uncertain
@@ -529,9 +529,9 @@ func TestAcceptanceMailboxPauseDoesNotStallAnotherOperator(t *testing.T) {
 		r, err := f.app.FindRecordById("send_tasks", taskA)
 		return err == nil && r.GetString("status") == "paused"
 	})
-	// Operator B's first four requests waited only on this test's gate. Releasing
-	// it must let the coordinator launch the rest of B's task without any
-	// operator action.
+	// Operator B's first requests waited only on this test's gate. Releasing it
+	// must let the coordinator launch the rest of B's task without any operator
+	// action.
 	close(releaseB)
 	acceptanceEventually(t, func() bool {
 		p, err := f.store.Preview(ctx, ownerB, taskB)

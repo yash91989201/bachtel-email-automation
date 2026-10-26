@@ -128,36 +128,53 @@ func TestSendingPacingAndTaskOwnership(t *testing.T) {
 	dispatcher := &recordingSendingDispatcher{}
 	handler = wrapWithPocketBase(t, app, NewHandler(app, cfg, testServices(t, app, cfg, dispatcher)))
 	base := "/campaigns/" + id + "/tasks/" + taskID + "/sending"
-	for _, invalid := range []string{"0", "31", "1.5"} {
-		rec := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-invalid-123456"}, "rate": {invalid}}, withCookie(cookie))
+	// A stale rate-only form is refused and cannot reset concurrency.
+	stale := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-stale-123456"}, "rate": {"20"}}, withCookie(cookie))
+	if stale.Code != http.StatusBadRequest || !strings.Contains(stale.Body.String(), "Enter both Concurrent emails and Pacing") {
+		t.Fatalf("stale rate-only form: %d %.300s", stale.Code, stale.Body.String())
+	}
+	if dispatcher.synchronizationCalls != 0 {
+		t.Fatalf("stale form acquired dispatch barrier %d times", dispatcher.synchronizationCalls)
+	}
+	for _, invalid := range []struct{ rate, concurrency string }{{"0", "2"}, {"31", "2"}, {"1.5", "2"}, {"15", "0"}, {"15", "11"}, {"15", "2.5"}, {"", "2"}, {"15", ""}} {
+		rec := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-invalid-123456"}, "rate": {invalid.rate}, "concurrency": {invalid.concurrency}}, withCookie(cookie))
 		if rec.Code != http.StatusBadRequest {
-			t.Errorf("rate %s: %d", invalid, rec.Code)
+			t.Errorf("settings %v: %d", invalid, rec.Code)
 		}
 	}
 	if dispatcher.synchronizationCalls != 0 {
-		t.Fatalf("invalid rates acquired dispatch barrier %d times", dispatcher.synchronizationCalls)
+		t.Fatalf("invalid settings acquired dispatch barrier %d times", dispatcher.synchronizationCalls)
 	}
-	// Each valid update must serialize with launches, including a sharp reduction.
-	for index, rate := range []string{"30", "1"} {
-		rec := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-barrier-123456"}, "rate": {rate}}, withCookie(cookie))
-		if rec.Code != http.StatusSeeOther || dispatcher.synchronizationCalls != index+1 {
-			t.Fatalf("rate %s: status=%d barrier calls=%d", rate, rec.Code, dispatcher.synchronizationCalls)
+	// A refused save reopens Sending settings and keeps both readable drafts
+	// while the summary still shows the saved pair.
+	refused := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-draft-123456"}, "rate": {"18"}, "concurrency": {"12"}}, withCookie(cookie))
+	body := refused.Body.String()
+	for _, want := range []string{`value="18"`, `value="12"`, `id="sending-settings"`, `aria-expanded="true"`, `id="sending-current-rate">15<`, `id="sending-current-concurrency">2<`} {
+		if refused.Code != http.StatusBadRequest || !strings.Contains(body, want) {
+			t.Fatalf("refused save missing %q: %d", want, refused.Code)
 		}
 	}
-	rec := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-valid-123456"}, "rate": {"17"}}, withCookie(cookie))
+	// Each valid pair must serialize with launches, including a sharp reduction.
+	for index, pair := range []struct{ rate, concurrency string }{{"30", "10"}, {"1", "1"}} {
+		rec := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-barrier-123456"}, "rate": {pair.rate}, "concurrency": {pair.concurrency}}, withCookie(cookie))
+		if rec.Code != http.StatusSeeOther || dispatcher.synchronizationCalls != index+1 {
+			t.Fatalf("settings %v: status=%d barrier calls=%d", pair, rec.Code, dispatcher.synchronizationCalls)
+		}
+	}
+	rec := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-valid-123456"}, "rate": {"17"}, "concurrency": {"3"}}, withCookie(cookie))
 	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("valid rate: %d", rec.Code)
+		t.Fatalf("valid settings: %d", rec.Code)
 	}
 	if dispatcher.synchronizationCalls != 3 {
-		t.Fatalf("valid rate skipped dispatch barrier: calls=%d", dispatcher.synchronizationCalls)
+		t.Fatalf("valid settings skipped dispatch barrier: calls=%d", dispatcher.synchronizationCalls)
 	}
 	settings, err := sending.NewStore(app, sending.StoreOptions{}).DispatcherState(context.Background(), connection.ID, operatorID(t, app))
-	if err != nil || settings.Rate != 17 {
-		t.Fatalf("persisted pacing: %+v %v", settings, err)
+	if err != nil || settings.Rate != 17 || settings.Concurrency != 3 {
+		t.Fatalf("persisted settings: %+v %v", settings, err)
 	}
 	page := do(t, handler, http.MethodGet, base+"/progress", nil, withCookie(cookie))
-	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `id="sending-current-rate">17`) {
-		t.Fatalf("pacing poll: %d", page.Code)
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `id="sending-current-rate">17`) || !strings.Contains(page.Body.String(), `id="sending-current-concurrency">3`) {
+		t.Fatalf("settings poll: %d", page.Code)
 	}
 	// The task overview shows the operator's own mailbox and its state.
 	full := do(t, handler, http.MethodGet, "/campaigns/"+id+"/tasks/"+taskID+"/overview", nil, withCookie(cookie))
@@ -177,13 +194,24 @@ func TestSendingPacingAndTaskOwnership(t *testing.T) {
 	if other.Code != http.StatusNotFound {
 		t.Fatalf("cross-operator task access: %d", other.Code)
 	}
-	mutation := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-cross-operator-1"}, "rate": {"5"}}, withCookie(otherCookie))
+	mutation := do(t, handler, http.MethodPost, base+"/rate", url.Values{"action_id": {"pacing-cross-operator-1"}, "rate": {"5"}, "concurrency": {"1"}}, withCookie(otherCookie))
 	if mutation.Code != http.StatusNotFound {
-		t.Fatalf("cross-operator rate mutation: %d", mutation.Code)
+		t.Fatalf("cross-operator settings mutation: %d", mutation.Code)
 	}
 	settings, err = sending.NewStore(app, sending.StoreOptions{}).DispatcherState(context.Background(), connection.ID, operatorID(t, app))
-	if err != nil || settings.Rate != 17 {
-		t.Fatalf("cross-operator rate changed state: %+v %v", settings, err)
+	if err != nil || settings.Rate != 17 || settings.Concurrency != 3 {
+		t.Fatalf("cross-operator settings changed state: %+v %v", settings, err)
+	}
+
+	// Another task sharing the mailbox shows the same saved pair.
+	sibling := stageTask(t, handler, cookie, id, mixedWorkbook(t))
+	siblingBase := "/campaigns/" + id + "/tasks/" + sibling + "/sending"
+	siblingPage := do(t, handler, http.MethodGet, siblingBase, nil, withCookie(cookie))
+	siblingBody := siblingPage.Body.String()
+	for _, want := range []string{`id="sending-current-rate">17`, `id="sending-current-concurrency">3`, `name="concurrency"`, `name="rate"`} {
+		if siblingPage.Code != http.StatusOK || !strings.Contains(siblingBody, want) {
+			t.Fatalf("sibling task settings missing %q: %d", want, siblingPage.Code)
+		}
 	}
 }
 

@@ -53,12 +53,12 @@ func TestTwoOperatorWorkflow(t *testing.T) {
 	}
 	approveFor(t, f, ownerB, taskB)
 
-	// Per-mailbox pacing: each operator chooses its own valid rate and reads
+	// Per-mailbox settings: each operator chooses its own valid pair and reads
 	// only its own rolling state.
-	if err := f.store.SetRate(ctx, ownerA, 30); err != nil {
+	if err := f.store.SetSettings(ctx, ownerA, 10, 30); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.store.SetRate(ctx, ownerB, 25); err != nil {
+	if err := f.store.SetSettings(ctx, ownerB, 1, 25); err != nil {
 		t.Fatal(err)
 	}
 	stateA, err := f.store.DispatcherState(ctx, f.connectionID, ownerA)
@@ -69,8 +69,8 @@ func TestTwoOperatorWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stateA.Rate != 30 || stateB.Rate != 25 {
-		t.Fatalf("pacing rates = %d/%d, want independent 30/25", stateA.Rate, stateB.Rate)
+	if stateA.Rate != 30 || stateB.Rate != 25 || stateA.Concurrency != 10 || stateB.Concurrency != 1 {
+		t.Fatalf("mailbox settings = %+v / %+v, want independent 10@30 and 1@25", stateA, stateB)
 	}
 
 	startFor(t, f, ownerA, taskA, "workflow-start-a")

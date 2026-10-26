@@ -621,13 +621,19 @@ func TestStoreStaleConfiguration(t *testing.T) {
 func TestStoreInvalidStoredRateAndActionQueryFailure(t *testing.T) {
 	f := newAcceptanceFixture(t)
 	task := f.task(t, 1)
-	if e := f.store.SetRate(storeCtx, f.ownerID, 0); e == nil {
+	if e := f.store.SetSettings(storeCtx, f.ownerID, 2, 0); e == nil {
 		t.Fatal("zero rate accepted")
 	}
-	if e := f.store.SetRate(storeCtx, f.ownerID, 31); e == nil {
+	if e := f.store.SetSettings(storeCtx, f.ownerID, 2, 31); e == nil {
 		t.Fatal("excess rate accepted")
 	}
-	// Create the per-connection pacing row, then store a fractional rate.
+	if e := f.store.SetSettings(storeCtx, f.ownerID, 0, 15); e == nil {
+		t.Fatal("zero concurrency accepted")
+	}
+	if e := f.store.SetSettings(storeCtx, f.ownerID, 11, 15); e == nil {
+		t.Fatal("excess concurrency accepted")
+	}
+	// Create the per-connection settings row, then store a fractional rate.
 	if _, e := f.store.DispatcherState(storeCtx, f.connectionID, f.ownerID); e != nil {
 		t.Fatal(e)
 	}
@@ -637,6 +643,12 @@ func TestStoreInvalidStoredRateAndActionQueryFailure(t *testing.T) {
 	if _, e := f.store.DispatcherState(storeCtx, f.connectionID, f.ownerID); e == nil {
 		t.Fatal("fractional stored rate accepted")
 	}
+	if _, e := f.app.DB().NewQuery("UPDATE dispatcher_state SET rate=25, concurrency=2.5 WHERE connection={:conn}").Bind(dbx.Params{"conn": f.connectionID}).Execute(); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := f.store.DispatcherState(storeCtx, f.connectionID, f.ownerID); e == nil {
+		t.Fatal("fractional stored concurrency accepted")
+	}
 	if _, e := f.app.DB().NewQuery("DROP TABLE sending_actions").Execute(); e != nil {
 		t.Fatal(e)
 	}
@@ -645,6 +657,165 @@ func TestStoreInvalidStoredRateAndActionQueryFailure(t *testing.T) {
 	}
 	if p := storeRecord(t, f, intake.TasksCollection, task); p.GetBool("result_generation_needed") {
 		t.Fatal("mutation escaped failed action lookup")
+	}
+}
+
+// TestStoreSavesSendingSettingsPairAtomically covers the mailbox settings pair:
+// valid boundaries change both values together, an invalid value changes
+// neither, a save failure rolls back, and other mailboxes and the pacing
+// history are untouched.
+func TestStoreSavesSendingSettingsPairAtomically(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	ctx := storeCtx
+	initial, err := f.store.DispatcherState(ctx, f.connectionID, f.ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if initial.Concurrency != sending.DefaultConcurrency || initial.Rate != sending.DefaultRate {
+		t.Fatalf("defaults = %+v, want %d concurrent at %d per minute", initial, sending.DefaultConcurrency, sending.DefaultRate)
+	}
+	start := f.clock.Now().Add(-30 * time.Second)
+	until := f.clock.Now().Add(5 * time.Minute)
+	if err = f.store.SetCooldown(ctx, f.connectionID, f.ownerID, until, "provider throttle"); err != nil {
+		t.Fatal(err)
+	}
+	seeded, err := f.app.FindFirstRecordByFilter("dispatcher_state", "connection={:conn}", dbx.Params{"conn": f.connectionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seeded.Set("starts", []time.Time{start})
+	if err = f.app.Save(seeded); err != nil {
+		t.Fatal(err)
+	}
+
+	// Both boundary pairs save and read back exactly.
+	for _, want := range []struct{ concurrency, rate int }{{1, 1}, {10, 30}, {3, 12}} {
+		if err = f.store.SetSettings(ctx, f.ownerID, want.concurrency, want.rate); err != nil {
+			t.Fatalf("save %+v: %v", want, err)
+		}
+		saved, e := f.store.DispatcherState(ctx, f.connectionID, f.ownerID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if saved.Concurrency != want.concurrency || saved.Rate != want.rate {
+			t.Fatalf("saved pair = %+v, want %+v", saved, want)
+		}
+		if !saved.CooldownUntil.Equal(until) || len(saved.Starts) != 1 || !saved.Starts[0].Equal(start) {
+			t.Fatalf("settings save lost history or cooldown: %+v", saved)
+		}
+	}
+
+	// A save failure leaves the previous pair authoritative.
+	if _, err = f.app.DB().NewQuery("CREATE TRIGGER reject_sending_settings BEFORE UPDATE OF rate ON dispatcher_state BEGIN SELECT RAISE(ABORT, 'simulated write failure'); END").Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.store.SetSettings(ctx, f.ownerID, 5, 20); err == nil {
+		t.Fatal("failed save reported success")
+	}
+	if _, err = f.app.DB().NewQuery("DROP TRIGGER reject_sending_settings").Execute(); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := f.store.DispatcherState(ctx, f.connectionID, f.ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Concurrency != 3 || saved.Rate != 12 {
+		t.Fatalf("failed save changed the pair: %+v", saved)
+	}
+	// A restart reads the same saved pair and its pacing evidence.
+	restarted := sending.NewStore(f.app, sending.Options{Now: f.clock.Now})
+	reloaded, err := restarted.DispatcherState(ctx, f.connectionID, f.ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Concurrency != 3 || reloaded.Rate != 12 || !reloaded.CooldownUntil.Equal(until) || len(reloaded.Starts) != 1 {
+		t.Fatalf("restart lost the saved settings: %+v", reloaded)
+	}
+
+	// Another operator's mailbox keeps its own defaults.
+	otherOwner, otherConnection := f.addOperator(t, "second@example.invalid", "second@example.invalid")
+	theirs, err := f.store.DispatcherState(ctx, otherConnection, otherOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if theirs.Concurrency != sending.DefaultConcurrency || theirs.Rate != sending.DefaultRate {
+		t.Fatalf("another mailbox changed: %+v", theirs)
+	}
+}
+
+// A save without a current mailbox is refused and assigns nothing elsewhere.
+func TestStoreSendingSettingsRequireACurrentMailbox(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	lonely := provisionOperator(t, f.app, "no-mailbox@example.invalid")
+	if err := f.store.SetSettings(storeCtx, lonely, 3, 12); err == nil || !strings.Contains(err.Error(), "connect a mailbox") {
+		t.Fatalf("save without a mailbox = %v", err)
+	}
+	rows, err := f.app.FindAllRecords("dispatcher_state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if row.GetString("owner") == lonely {
+			t.Fatal("settings assigned to an operator with no connection")
+		}
+	}
+}
+
+// Saving sending limits is not a sending authorization: a paused task stays
+// paused, its unfinished intent stays in flight, and no attempt or approval is
+// created by the save alone.
+func TestStoreSendingSettingsSaveDoesNotAuthorizeSending(t *testing.T) {
+	f := newAcceptanceFixture(t)
+	ctx := storeCtx
+	task := f.task(t, 3)
+	storeApprove(t, f, task)
+	storeAct(t, f, task, "start", "settings-start", 3)
+	intent := storeBegin(t, f)
+	if err := f.store.PauseTask(ctx, f.ownerID, task, "paused with active send"); err != nil {
+		t.Fatal(err)
+	}
+	attemptsBefore, err := f.app.FindAllRecords(sending.AttemptsCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvalsBefore, err := f.app.FindAllRecords("test_approvals")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = f.store.SetSettings(ctx, f.ownerID, 6, 5); err != nil {
+		t.Fatal(err)
+	}
+
+	if record := storeRecord(t, f, intake.TasksCollection, task); record.GetString("status") != "paused" {
+		t.Fatalf("settings save changed the task status to %q", record.GetString("status"))
+	}
+	if held := storeRecord(t, f, sending.AttemptsCollection, intent.ID); held.GetString("state") != sending.AttemptInFlight {
+		t.Fatalf("settings save changed an unfinished intent to %q", held.GetString("state"))
+	}
+	if work, e := f.store.NextWork(ctx); e != nil || work != nil {
+		t.Fatalf("settings save selected work for a paused task: %+v %v", work, e)
+	}
+	attemptsAfter, err := f.app.FindAllRecords(sending.AttemptsCollection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(attemptsAfter) != len(attemptsBefore) {
+		t.Fatalf("settings save created %d attempts", len(attemptsAfter)-len(attemptsBefore))
+	}
+	approvalsAfter, err := f.app.FindAllRecords("test_approvals")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(approvalsAfter) != len(approvalsBefore) {
+		t.Fatalf("settings save created %d approvals", len(approvalsAfter)-len(approvalsBefore))
+	}
+	saved, err := f.store.DispatcherState(ctx, f.connectionID, f.ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Concurrency != 6 || saved.Rate != 5 {
+		t.Fatalf("saved pair = %+v, want 6 at 5 per minute", saved)
 	}
 }
 

@@ -97,6 +97,19 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 			return
 		}
 		actor := recordFromContext(r).Id
+		// A refused form keeps the operator's submitted, non-secret input and
+		// reopens the settings disclosure so the error is actionable.
+		retainDrafts := func(data *views.TaskPageData) {
+			switch kind {
+			case "schedule":
+				data.ScheduleDraftDate = r.FormValue("schedule_date")
+				data.ScheduleDraftTime = r.FormValue("schedule_time")
+			case "rate":
+				data.SettingsOpen = true
+				data.RateDraft = strings.TrimSpace(r.FormValue("rate"))
+				data.ConcurrencyDraft = strings.TrimSpace(r.FormValue("concurrency"))
+			}
+		}
 		var err error
 		switch kind {
 		case "test":
@@ -118,16 +131,28 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 			}
 			err = s.sending.Approve(r.Context(), actor, task.ID, r.FormValue("attempt_id"), actor, id)
 		case "rate":
-			rate, e := strconv.Atoi(r.FormValue("rate"))
-			if e != nil || rate < 1 || rate > 30 {
-				http.Error(w, "Rate must be a whole number from 1 to 30", http.StatusBadRequest)
+			// Both saved settings are submitted together. A stale rate-only form
+			// cannot silently reset the mailbox's concurrency.
+			rate, rateErr := strconv.Atoi(strings.TrimSpace(r.FormValue("rate")))
+			concurrency, concurrencyErr := strconv.Atoi(strings.TrimSpace(r.FormValue("concurrency")))
+			var message string
+			switch {
+			case r.FormValue("rate") == "" || r.FormValue("concurrency") == "":
+				message = "Enter both Concurrent emails and Pacing, then update sending settings."
+			case rateErr != nil || sending.ValidateRate(rate) != nil:
+				message = "Pacing must be a whole number from 1 to 30."
+			case concurrencyErr != nil || sending.ValidateConcurrency(concurrency) != nil:
+				message = "Concurrent emails must be a whole number from 1 to 10."
+			}
+			if message != "" {
+				s.renderTaskMessageWith(w, r, task, sendingSection(kind), message, http.StatusBadRequest, retainDrafts)
 				return
 			}
-			setRate := func() error { return s.sending.SetRate(r.Context(), actor, rate) }
+			setSettings := func() error { return s.sending.SetSettings(r.Context(), actor, concurrency, rate) }
 			if s.dispatcher != nil {
-				err = s.dispatcher.Synchronize(setRate)
+				err = s.dispatcher.Synchronize(setSettings)
 			} else {
-				err = setRate()
+				err = setSettings()
 			}
 		case "schedule":
 			var request sending.ScheduleRequest
@@ -181,14 +206,7 @@ func (s *server) handleSendingMutation(kind string) http.HandlerFunc {
 		if err != nil {
 			s.app.Logger().Warn("sending action rejected", "kind", kind, "task", task.ID, "error", err)
 			message := s.sendingRefusalMessage(err)
-			adjust := func(data *views.TaskPageData) {
-				if kind != "schedule" {
-					return
-				}
-				data.ScheduleDraftDate = r.FormValue("schedule_date")
-				data.ScheduleDraftTime = r.FormValue("schedule_time")
-			}
-			s.renderTaskMessageWith(w, r, task, sendingSection(kind), message, http.StatusBadRequest, adjust)
+			s.renderTaskMessageWith(w, r, task, sendingSection(kind), message, http.StatusBadRequest, retainDrafts)
 			return
 		}
 		if kind == "artifacts" {
@@ -216,6 +234,7 @@ var knownSendingMessages = map[string]struct{}{
 	"explicit confirmation is required":                                                   {},
 	"validate the task before sending":                                                    {},
 	"connect a usable sending mailbox before starting, retrying or resending":             {},
+	"connect a mailbox before changing its sending settings":                              {},
 	"approve a successfully submitted formatting test first":                              {},
 	"the configuration changed; revalidate this task":                                     {},
 	"use resume or retry for an existing task":                                            {},
