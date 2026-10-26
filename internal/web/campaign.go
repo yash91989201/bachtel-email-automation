@@ -39,6 +39,7 @@ func (s *server) registerCampaignRoutes(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("POST /campaigns/{id}/revisions", s.requireOperator(s.handleCampaignRevision))
 	mux.HandleFunc("POST /campaigns/{id}/labels", s.requireOperator(s.handleCampaignLabels))
+	mux.HandleFunc("POST /campaigns/{id}/name", s.requireOperator(s.handleCampaignName))
 	mux.HandleFunc("POST /campaigns/{id}/preview", s.requireOperator(s.handleCampaignPreview))
 	mux.HandleFunc("POST /campaigns/{id}/exports", s.requireOperator(s.handleCampaignExportsGenerate))
 	mux.HandleFunc("POST /campaigns/{id}/exports/delete", s.requireOperator(s.handleCampaignExportsDelete))
@@ -135,6 +136,9 @@ func (s *server) handleCampaignSection(section string) http.HandlerFunc {
 		if err != nil {
 			s.campaignLoadFailure(w, r, err)
 			return
+		}
+		if section == views.CampaignSectionSettings && r.URL.Query().Get("saved") == "1" {
+			data.NameSaved = true
 		}
 		s.renderWithStatus(w, r, http.StatusOK, views.CampaignPage(data))
 	}
@@ -372,6 +376,42 @@ func (s *server) handleCampaignLabels(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, views.CampaignSectionPath(page.ID, views.CampaignSectionSettings), http.StatusSeeOther)
 }
 
+// handleCampaignName saves the campaign name from Settings. The form is
+// bounded, ownership is rechecked in the campaign transaction, and success uses
+// POST/Redirect/GET so a refresh cannot replay the save. A refused save keeps
+// the submitted text; the shared heading still shows the saved name.
+func (s *server) handleCampaignName(w http.ResponseWriter, r *http.Request) {
+	page, err := s.campaignPageData(r, r.PathValue("id"), views.CampaignSectionSettings, nil)
+	if err != nil {
+		s.campaignLoadFailure(w, r, err)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid campaign name form", http.StatusBadRequest)
+		return
+	}
+	draft := r.PostForm.Get("name")
+	if err = s.campaigns.RenameCampaign(r.Context(), recordFromContext(r).Id, page.ID, draft); err != nil {
+		if errors.Is(err, campaign.ErrCampaignNameRequired) || errors.Is(err, campaign.ErrCampaignNameTooLong) {
+			page.NameError = err.Error()
+			page.NameDraft = draft
+			s.renderWithStatus(w, r, http.StatusBadRequest, views.CampaignPage(page))
+			return
+		}
+		if errors.Is(err, campaign.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		s.app.Logger().Error("rename campaign", "campaign", page.ID, "error", err)
+		page.NameError = "The campaign name could not be saved; check the name and try again."
+		page.NameDraft = draft
+		s.renderWithStatus(w, r, http.StatusInternalServerError, views.CampaignPage(page))
+		return
+	}
+	http.Redirect(w, r, views.CampaignSectionPath(page.ID, views.CampaignSectionSettings)+"?saved=1", http.StatusSeeOther)
+}
+
 // handleCampaignPreview renders one in-memory sample row through the current
 // revision. It stores nothing and creates no sending attempt: the typed render
 // failures (missing required value, subject control character) are shown in
@@ -445,6 +485,7 @@ func (s *server) campaignPageData(r *http.Request, id, section string, warnings 
 		return data, err
 	}
 	data.Name = overview.Campaign.Name
+	data.NameDraft = overview.Campaign.Name
 	data.SourceHeaders = strings.Join(overview.Campaign.SourceHeaders, ", ")
 	data.ResultLabels = strings.Join(overview.Campaign.ResultLabels, ", ")
 	data.HasRevision = overview.HasRevision

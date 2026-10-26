@@ -197,6 +197,11 @@ type CampaignPageData struct {
 	Name          string
 	SourceHeaders string
 	ResultLabels  string
+	// NameDraft is the editable Settings value: the saved name on a plain
+	// load and the submitted text after a refused save.
+	NameDraft string
+	// NameSaved reports the POST/Redirect/GET save feedback.
+	NameSaved bool
 	// MappingDraft pre-fills the revision form while the campaign has no
 	// content revision. Once a revision exists the form starts empty.
 	MappingDraft string
@@ -222,6 +227,7 @@ type CampaignPageData struct {
 	Section string
 
 	RevisionError string
+	NameError     string
 	LabelsError   string
 	DeleteError   string
 	ExportError   string
@@ -331,6 +337,11 @@ templ CampaignPage(data CampaignPageData) {
 			if data.LabelsError != "" {
 				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
 					{ data.LabelsError }
+				}
+			}
+			if data.NameError != "" {
+				@alert.Alert(alert.Props{Variant: alert.VariantDestructive}) {
+					{ data.NameError }
 				}
 			}
 			if data.DeleteError != "" {
@@ -844,6 +855,37 @@ templ campaignActivity(data CampaignPageData) {
 templ campaignSettings(data CampaignPageData) {
 	<section class="space-y-4" id="campaign-settings-workspace">
 		<h2 class="font-bold text-[1.2rem] tracking-[-.02em]">Settings</h2>
+		if data.NameSaved {
+			@alert.Alert(alert.Props{Class: "status-success"}) {
+				@alert.Title(alert.TitleProps{}) {
+					Campaign name saved
+				}
+				@alert.Description(alert.DescriptionProps{}) {
+					<p>The new name appears in campaign lists, headings and breadcrumbs. Renaming changes no tasks, approvals, schedules or history.</p>
+				}
+			}
+		}
+		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "campaign-name-heading"}}) {
+			@card.Content(card.ContentProps{Class: "gap-4"}) {
+				<h3 id="campaign-name-heading" class="cn-card-title">General</h3>
+				<form method="post" action={ "/campaigns/" + data.ID + "/name" } class="space-y-4">
+					@field.Field(field.Props{}) {
+						@field.Label(field.LabelProps{For: "campaign-name-input"}) {
+							Campaign name
+						}
+						@input.Input(input.Props{ID: "campaign-name-input", Name: "name", Type: "text", Value: data.NameDraft, Required: true, Attributes: templ.Attributes{"aria-describedby": "campaign-name-help"}})
+						@field.Description(field.DescriptionProps{ID: "campaign-name-help"}) {
+							Required. Up to 200 characters. Another campaign may share this name.
+						}
+					}
+					<div class="app-card-actions">
+						@button.Button(button.Props{Type: button.TypeSubmit, Variant: button.VariantDefault, Size: button.SizeDefault}) {
+							Save name
+						}
+					</div>
+				</form>
+			}
+		}
 		@card.Card(card.Props{Attributes: templ.Attributes{"role": "region", "aria-labelledby": "labels-heading"}}) {
 			@card.Content(card.ContentProps{Class: "gap-4"}) {
 				<h3 id="labels-heading" class="cn-card-title">Result column labels</h3>
@@ -920,7 +962,7 @@ func campaignInitialSection(data CampaignPageData) string {
 	switch {
 	case data.RevisionError != "":
 		return CampaignSectionTemplate
-	case data.LabelsError != "" || data.DeleteError != "":
+	case data.LabelsError != "" || data.DeleteError != "" || data.NameError != "":
 		return CampaignSectionSettings
 	case data.ExportError != "":
 		return CampaignSectionActivity

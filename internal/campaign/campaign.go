@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -29,6 +30,9 @@ const (
 	MaxDocumentBytes = 10 << 20
 	// MaxSubjectLength is the practical limit for a single-line subject.
 	MaxSubjectLength = 998
+	// MaxCampaignNameLength is the stored campaign-name bound, measured in
+	// Unicode code points like the collection field it mirrors.
+	MaxCampaignNameLength = 200
 )
 
 // DefaultResultLabels are the downloadable column labels a task snapshots when
@@ -143,6 +147,11 @@ var (
 	ErrNoBody = errors.New("a DOCX body document is required")
 	// ErrSubjectEmpty reports a subject that is empty after trimming.
 	ErrSubjectEmpty = errors.New("a subject is required")
+	// ErrCampaignNameRequired reports a campaign name that is empty after
+	// trimming. Like a task, a campaign has no default name.
+	ErrCampaignNameRequired = errors.New("a campaign name is required")
+	// ErrCampaignNameTooLong reports a campaign name beyond the stored bound.
+	ErrCampaignNameTooLong = fmt.Errorf("a campaign name can be at most %d characters", MaxCampaignNameLength)
 )
 
 var (
@@ -150,6 +159,21 @@ var (
 	// controlPattern matches characters that must never reach a mail header.
 	controlPattern = regexp.MustCompile(`[\x00-\x1f\x7f]`)
 )
+
+// NormalizeCampaignName returns the trimmed campaign name or a fixed
+// validation error. The bound counts Unicode code points so a name the browser
+// measured in UTF-16 units still fits; duplicates stay valid because campaign
+// identity is the record id.
+func NormalizeCampaignName(raw string) (string, error) {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return "", ErrCampaignNameRequired
+	}
+	if utf8.RuneCountInString(name) > MaxCampaignNameLength {
+		return "", ErrCampaignNameTooLong
+	}
+	return name, nil
+}
 
 // ValidateSubject rejects an empty subject and any header control character so
 // a candidate value can never inject a header. The subject is a plain text

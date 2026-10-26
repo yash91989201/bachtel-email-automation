@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
+	"github.com/pocketbase/pocketbase/tools/types"
 
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
 )
@@ -71,9 +72,9 @@ func (s *Service) CreateCampaign(ctx context.Context, ownerID string, input Crea
 	if strings.TrimSpace(ownerID) == "" {
 		return nil, ErrNotFound
 	}
-	name := strings.TrimSpace(input.Name)
-	if name == "" {
-		return nil, errors.New("a campaign name is required")
+	name, err := NormalizeCampaignName(input.Name)
+	if err != nil {
+		return nil, err
 	}
 	sourceHeaders := make([]string, 0, len(input.SourceHeaders))
 	for _, header := range input.SourceHeaders {
@@ -102,6 +103,42 @@ func (s *Service) CreateCampaign(ctx context.Context, ownerID string, input Crea
 		return nil, err
 	}
 	return s.campaignFromRecord(record), nil
+}
+
+// RenameCampaign changes only a campaign's name metadata, in every task
+// lifecycle state. The owner-scoped lookup and the column-scoped update run in
+// one short transaction, so a concurrent revision pointer, result-label or task
+// update is never overwritten by a stale whole-record save. Nothing here
+// creates a revision, invalidates approval or touches processing state.
+func (s *Service) RenameCampaign(ctx context.Context, ownerID, campaignID, name string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	resolved, err := NormalizeCampaignName(name)
+	if err != nil {
+		return err
+	}
+	return s.app.RunInTransaction(func(txApp core.App) error {
+		record, err := txApp.FindFirstRecordByFilter(
+			CampaignsCollection,
+			"id = {:id} && owner = {:owner}",
+			dbx.Params{"id": campaignID, "owner": ownerID},
+		)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrNotFound
+			}
+			return err
+		}
+		_, err = txApp.DB().NewQuery("UPDATE campaigns SET name = {:name}, updated = {:updated} WHERE id = {:id}").
+			Bind(dbx.Params{
+				"name":    resolved,
+				"updated": types.NowDateTime().String(),
+				"id":      record.Id,
+			}).
+			Execute()
+		return err
+	})
 }
 
 // RevisionInput is the operator input for one content revision.
