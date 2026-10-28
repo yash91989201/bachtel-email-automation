@@ -65,7 +65,7 @@ The system SHALL validate the exact proposed endpoint and model against the norm
 - **AND** a format change is treated as a configuration switch subject to the existing task lock
 
 ### Requirement: Confirmed model is the only runtime model
-Each normalization run SHALL record and use the operator's confirmed provider, endpoint, model and inference settings. Retries SHALL retain that selection. The system SHALL NOT silently choose a fallback provider/model or use deployment-wide credentials. Unavailable configuration SHALL block AI preparation with a setup or repair remedy.
+Each task normalization run SHALL record and use the operator's confirmed provider, endpoint, model and inference settings. Explicit AI sample normalization SHALL use that owner-scoped selection and show its identity in the temporary result without persisting run evidence. Retries SHALL retain the selection. The system SHALL NOT silently choose a fallback provider/model or use deployment-wide credentials. Unavailable configuration SHALL block AI preparation with a setup or repair remedy.
 
 #### Scenario: Model is unavailable during preparation
 - **WHEN** the confirmed model fails, is unavailable or is removed by its provider
@@ -76,7 +76,19 @@ Each normalization run SHALL record and use the operator's confirmed provider, e
 - **WHEN** the operator confirms another model after the account lock is released
 - **THEN** future runs use the newly confirmed selection
 - **AND** earlier outputs, run provenance, final snapshots and applicable formatting approvals remain unchanged
-- **AND** final-sheet upload, preview, download and sending still do not call AI
+- **AND** final-sheet upload, task preview, direct sample rendering, download and sending still do not call AI
+
+#### Scenario: Temporary sample uses the confirmed selection
+- **WHEN** the owner explicitly normalizes a sample
+- **THEN** the call uses their confirmed provider, endpoint, API format, exact model and application inference settings
+- **AND** no discovery, compatibility probing, alternate model or deployment-wide credential is used
+- **AND** absent or unreadable credentials block only the AI sample action with an Account settings remedy
+
+#### Scenario: Connection changes during sample processing
+- **WHEN** the connection configuration or credential generation changes before the sample result is returned
+- **THEN** the action reports that settings changed and discards the result
+- **AND** it does not combine a captured endpoint with credentials from a different configuration or automatically rerun the sample
+- **AND** existing task-switch locks and credential-repair rules remain in force
 
 ### Requirement: Supported providers share the connection contract
 The system SHALL support OpenCode Go and Xiaomi MiMo presets with editable endpoints, selectable discovered models and API-format selection established by validation. Custom compatible connections SHALL expose endpoint, supported API format, exact model ID and API key explicitly. Every confirmed configuration SHALL record its validated format and retain the same private validation, fixed-selection and pending-task-lock behavior.
@@ -135,6 +147,13 @@ The system SHALL use certificate-verified encrypted connections to permitted end
 - **WHEN** a confirmed connection processes a workbook
 - **THEN** only the mapped values and necessary preparation metadata are sent to that configured provider
 - **AND** Account settings identifies the external processing destination and known provider data-handling limitations
+
+#### Scenario: Sample data boundary
+- **WHEN** the owner explicitly requests AI sample preparation
+- **THEN** only mapped sample values, mapped field metadata and necessary normalization instructions are sent to the confirmed provider
+- **AND** the template subject/body, uploaded document and unrelated task/workbook data are excluded
+- **AND** endpoint restrictions, transport security, request/response bounds and safe error handling apply to the sample request
+- **AND** the sample form identifies the external processing destination and possible provider usage charges before submission
 
 ### Requirement: Discover supported provider models without activation
 The system SHALL fetch models for the selected supported provider using the owner's supplied key and editable endpoint. Every syntactically valid returned model ID SHALL be selectable without a compiled eligibility list. Discovery SHALL NOT assert compatibility, validate normalization, stage or activate settings, start task work or send email. Missing discovery support or an invalid response SHALL leave the confirmed connection and task data unchanged.
