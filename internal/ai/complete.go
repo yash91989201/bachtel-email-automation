@@ -102,3 +102,11 @@ func (s *Store) CompleteFor(ctx context.Context, ownerID string, cfg Config, req
 	}
 	return Complete(ctx, s.opts, cfg, apiKey, request)
 }
+
+// CompleteWith sends one bounded inference request over the exact captured
+// configuration and credential using the store's request bounds. It is the
+// temporary-sample boundary: the credential came from the same read as the
+// configuration, so no request pairs one endpoint with another's key.
+func (s *Store) CompleteWith(ctx context.Context, cfg Config, apiKey string, request InferenceRequest) (string, error) {
+	return Complete(ctx, s.opts, cfg, apiKey, request)
+}

@@ -668,6 +668,14 @@ func TestPreparationFixtureScenarios(t *testing.T) {
 	if completed.Output == nil {
 		t.Fatal("no output")
 	}
+	// Five rows at a batch size of two: every batch is requested and only the
+	// complete set is published.
+	if completed.BatchTotal != 3 || completed.BatchDone != 3 {
+		t.Fatalf("batches = %d/%d, want 3/3", completed.BatchDone, completed.BatchTotal)
+	}
+	if len(completed.Output.Rows) != 5 {
+		t.Fatalf("published rows = %d, want all five batch rows", len(completed.Output.Rows))
+	}
 
 	entries := map[int][]preparation.Entry{}
 	for _, entry := range completed.Output.Entries {

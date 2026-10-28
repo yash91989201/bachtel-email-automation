@@ -289,6 +289,7 @@ type fakeModel struct {
 	payloads        []preparation.RequestPayload
 	models          []string
 	maxOutputTokens []int
+	auths           []string
 	respond         func(payload preparation.RequestPayload) (string, int)
 	respondRaw      func(payload preparation.RequestPayload, maxOutputTokens int) (string, int)
 	block           chan struct{}
@@ -335,6 +336,7 @@ func newFakeModel(t *testing.T) *fakeModel {
 			t.Errorf("decode preparation payload: %v", err)
 		}
 		fake.mu.Lock()
+		fake.auths = append(fake.auths, r.Header.Get("Authorization"))
 		fake.systems = append(fake.systems, system)
 		fake.payloads = append(fake.payloads, payload)
 		fake.models = append(fake.models, body.Model)
@@ -404,6 +406,12 @@ func (f *fakeModel) snapshot() ([]string, []preparation.RequestPayload, []string
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.systems...), append([]preparation.RequestPayload(nil), f.payloads...), append([]string(nil), f.models...)
+}
+
+func (f *fakeModel) authSnapshot() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.auths...)
 }
 
 func (f *fakeModel) requestSnapshot() ([]preparation.RequestPayload, []string, []int) {

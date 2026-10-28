@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pocketbase/dbx"
@@ -32,17 +33,24 @@ type Service struct {
 	options   Options
 	wake      chan struct{}
 	settled   Settled
+
+	// sampleMu guards the in-memory admission guard of explicit AI samples:
+	// one active sample per owner and MaxConcurrentSamples across the process.
+	sampleMu     sync.Mutex
+	sampleOwners map[string]struct{}
+	sampleActive int
 }
 
 // NewService returns the preparation service bound to one application.
 func NewService(app core.App, tasks *intake.Service, campaigns *campaign.Service, aiStore *ai.Store) *Service {
 	return &Service{
-		app:       app,
-		tasks:     tasks,
-		campaigns: campaigns,
-		ai:        aiStore,
-		options:   DefaultOptions(),
-		wake:      make(chan struct{}, 1),
+		app:          app,
+		tasks:        tasks,
+		campaigns:    campaigns,
+		ai:           aiStore,
+		options:      DefaultOptions(),
+		wake:         make(chan struct{}, 1),
+		sampleOwners: make(map[string]struct{}),
 	}
 }
 

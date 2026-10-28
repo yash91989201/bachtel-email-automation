@@ -79,6 +79,55 @@ next to the normalized value in the preview.
 - Every mapped column must still be present in the worksheet header row, even
   when the variable is optional.
 
+## Sample preview and AI normalization
+
+The campaign Template tab renders one sample row without creating a task. Two
+explicit actions exist, and neither sends email or authorizes a start:
+
+- **Render preview** stays backend-only. It shows the To recipient, subject and
+  body from the supplied values exactly as the revision would render them, plus
+  each variable's raw and effective value. It never calls AI.
+- **Normalize with AI & preview** sends the single sample row to the confirmed
+  AI connection, validates the model's answer, and renders the validated values
+  through the same revision rules. It needs a confirmed connection; without one
+  the card links to Account settings and direct rendering still works.
+
+The AI action shows the destination endpoint, the exact model, the base-policy
+version with the policy text available for inspection, and a table of original,
+AI-prepared and effective values. Resolved corrections are listed separately
+from unresolved findings. Any unresolved finding — including one in an optional
+field — labels the sample **Needs review**. If the prepared values cannot be
+rendered (a missing required value, an invalid recipient, or a subject that
+gained a line break), the card shows that error beside the comparison instead of
+a preview.
+
+The AI sample uses only the campaign mappings and the current base policy: task
+instructions, the template subject, the body document and unrelated workbook
+data are never sent. It is illustrative, not predictive — a workbook row under a
+task's own instructions can produce different text. Final task preview, test and
+sending keep using the accepted final snapshot, and a sample never supplies a
+received-format approval, a test selection or start authorization.
+
+Both actions are temporary. The app stores no sample input, prepared value,
+correction, finding, run, job, artifact or browser state; responses are marked
+`no-store`, and the result disappears when the inputs change, the card is closed,
+the page is reloaded or you navigate away. Editing any input clears the result
+and abandons the pending request. One AI sample runs at a time per operator and
+at most four run across the server; a busy refusal makes no provider request and
+queues nothing. Each action makes exactly one provider request with a 30-second
+overall bound and no automatic retry, and a connection change during the request
+discards the result.
+
+The provider still receives the mapped sample values: it may charge for the
+request and may retain what it processes under its own policy. Application
+non-retention therefore does not guarantee provider non-retention. The sample
+form states the destination and this limit before the AI action, and Account
+settings describes the provider's data handling.
+
+AI samples are separate from task preparation. A task's preparation runs remain
+durable, retryable evidence with their own history; a sample creates no run
+record and never appears in task preparation history.
+
 ## Recipients
 
 Select the sending address explicitly in the mapping textarea:

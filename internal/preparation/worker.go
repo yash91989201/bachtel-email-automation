@@ -240,7 +240,16 @@ func (s *Service) execute(ctx context.Context, jobID string, run *core.Record, t
 	if options.MaxTokens <= 0 {
 		options.MaxTokens = ai.DefaultMaxTokens
 	}
-	session := newToken()
+	op := operation{
+		inference: func(ctx context.Context, config ai.Config, request ai.InferenceRequest) (string, error) {
+			return s.ai.CompleteFor(ctx, ownerID, config, request)
+		},
+		config:       captured,
+		prompt:       run.GetString("base_prompt"),
+		instructions: run.GetString("instructions"),
+		options:      options,
+		session:      newToken(),
+	}
 	results := make([]RowResult, 0, len(input.Rows))
 	batches := chunkRows(input.Rows, options.BatchSize)
 	for index, batch := range batches {
@@ -251,30 +260,17 @@ func (s *Service) execute(ctx context.Context, jobID string, run *core.Record, t
 		if err != nil || stopped {
 			return err
 		}
-		batchInput := input
-		batchInput.Rows = batch
-		payload, err := MarshalPayload(input, run.GetString("instructions"), batch)
-		if err != nil {
-			return s.finishFailure(ctx, jobID, run.Id, attempt, taskID, ErrInvalidResponse.Error(), err)
-		}
-		text, err := s.ai.CompleteFor(ctx, ownerID, captured, ai.InferenceRequest{
-			System:      run.GetString("base_prompt"),
-			User:        payload,
-			MaxTokens:   options.MaxTokens,
-			Temperature: options.Temperature,
-			Session:     session,
-		})
+		parsed, err := op.normalize(ctx, input, batch)
 		if err != nil {
 			if ctx.Err() != nil {
 				return err
 			}
+			if errors.Is(err, ErrInvalidResponse) {
+				s.app.Logger().Warn("preparation response rejected", "run", run.Id, "batch", index+1, "reason", InvalidReason(err))
+				return s.finishFailure(ctx, jobID, run.Id, attempt, taskID, ErrInvalidResponse.Error(), err)
+			}
 			s.app.Logger().Warn("preparation request failed", "run", run.Id, "batch", index+1, "error", err)
 			return s.finishFailure(ctx, jobID, run.Id, attempt, taskID, failureText(err), err)
-		}
-		parsed, err := ParseResponse(text, batchInput)
-		if err != nil {
-			s.app.Logger().Warn("preparation response rejected", "run", run.Id, "batch", index+1, "reason", InvalidReason(err))
-			return s.finishFailure(ctx, jobID, run.Id, attempt, taskID, ErrInvalidResponse.Error(), err)
 		}
 		results = append(results, parsed...)
 		if err := s.markProgress(ctx, jobID, attempt, index+1); err != nil {

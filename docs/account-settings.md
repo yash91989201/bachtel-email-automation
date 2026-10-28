@@ -152,6 +152,18 @@ Prepared values and findings are review evidence only: no candidate, attempt or
 schedule record is written, and sending keeps using the validated task snapshot
 until the later review/finalization workflow is installed.
 
+### Temporary campaign samples
+
+The campaign Template tab also offers **Normalize with AI & preview** for one
+sample row. It uses this same confirmed selection and base policy without task
+instructions, captures the configuration and its credential from one read, and
+sends exactly one bounded request under a 30-second deadline with no retry and
+no fallback model. A connection or credential change during the request
+discards the result and asks for a new explicit action; it never combines a
+captured endpoint with another configuration's key. The sample creates no run
+record, so it has no permanent history, and merely reopening or rendering a
+sample never calls AI. See `docs/campaign-templates.md` for the operator view.
+
 ## Validation, activation and repair
 
 1. Submit the provider credentials. A preset asks for API root and API key,

@@ -254,7 +254,7 @@ func TestCampaignActivityAndSettingsHaveDistinctPurposes(t *testing.T) {
 }
 
 // The sample preview shows its result only after the operator renders one, and
-// the render button stays disabled while a required sample value is missing.
+// both actions stay disabled while a required sample value is missing.
 func TestCampaignSamplePreviewGatesOnRequiredValues(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
@@ -267,19 +267,27 @@ func TestCampaignSamplePreviewGatesOnRequiredValues(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := parseView(t, CampaignPage(CampaignPageData{
-				ID: "camp1", Name: "Test campaign", HasRevision: true, Variables: tc.variables, Section: CampaignSectionTemplate,
+				ID: "camp1", Name: "Test campaign", HasRevision: true, Revision: 2,
+				AIReady: true, AIEndpoint: "https://ai.example.test/v1", AIModel: "exact-model",
+				PromptVersion: 1, Prompt: "Normalize the supplied mapped values.",
+				Variables: tc.variables, Section: CampaignSectionTemplate,
 			}))
-			form := workspaceNode(doc, "action", "/campaigns/camp1/preview")
+			scope := workspaceNode(doc, "x-data", sampleFormState)
+			if scope == nil || workspaceAttr(scope, "x-init") != "sync()" {
+				t.Fatal("the sample preview lost its Alpine state scope")
+			}
+			form := workspaceNode(scope, "action", "/campaigns/camp1/preview")
 			if form == nil || form.Data != "form" {
 				t.Fatal("the campaign page has no sample preview form")
 			}
-			if workspaceAttr(form, "x-data") != previewReadyState || workspaceAttr(form, "x-init") != "sync()" || workspaceAttr(form, "x-on:input") != "sync()" {
-				t.Errorf("preview form lost its required-value gate: x-data=%q x-init=%q input=%q", workspaceAttr(form, "x-data"), workspaceAttr(form, "x-init"), workspaceAttr(form, "x-on:input"))
+			if workspaceAttr(form, "x-on:submit") != "submit($event)" || workspaceAttr(form, "x-on:input") != "sync(); invalidate()" {
+				t.Errorf("preview form lost its submit/gate wiring: submit=%q input=%q", workspaceAttr(form, "x-on:submit"), workspaceAttr(form, "x-on:input"))
 			}
-			if workspaceAttr(form, "hx-target") != "#preview-result" || workspaceAttr(form, "hx-swap") != "innerHTML" {
-				t.Error("the preview must stay an in-place swap into its own result region")
+			revision := workspaceNode(form, "name", "revision")
+			if revision == nil || workspaceAttr(revision, "value") != "2" {
+				t.Fatalf("the form does not pin the revision identity it was filled for: %+v", revision)
 			}
-			result := workspaceNode(doc, "id", "preview-result")
+			result := workspaceNode(scope, "id", "preview-result")
 			if result == nil {
 				t.Fatal("preview result region is missing")
 			}
@@ -302,19 +310,56 @@ func TestCampaignSamplePreviewGatesOnRequiredValues(t *testing.T) {
 					t.Errorf("label %q does not name the variable", label)
 				}
 			}
-			render := findViewNode(form, func(n *html.Node) bool {
-				return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Render preview"
-			})
-			if render == nil || workspaceAttr(render, "type") != "submit" {
-				t.Fatal("missing the render preview submit button")
+			for _, action := range []struct{ label, formaction string }{
+				{label: "Render preview", formaction: ""},
+				{label: "Normalize with AI & preview", formaction: "/campaigns/camp1/preview/normalize"},
+			} {
+				button := findViewNode(form, func(n *html.Node) bool {
+					return n.Data == "button" && strings.TrimSpace(viewText(n)) == action.label
+				})
+				if button == nil || workspaceAttr(button, "type") != "submit" {
+					t.Fatalf("missing the %q submit button", action.label)
+				}
+				if got := workspaceAttr(button, "formaction"); got != action.formaction {
+					t.Errorf("%q formaction = %q, want %q", action.label, got, action.formaction)
+				}
+				if got := workspaceAttr(button, "x-bind:disabled"); got != "busy || !ready" {
+					t.Errorf("%q x-bind:disabled = %q", action.label, got)
+				}
+				if got := hasViewAttr(button, "disabled"); got != tc.wantDisabled {
+					t.Errorf("%q disabled=%t, want %t", action.label, got, tc.wantDisabled)
+				}
 			}
-			if got := workspaceAttr(render, "x-bind:disabled"); got != "!ready" {
-				t.Errorf("render button x-bind:disabled = %q, want %q", got, "!ready")
-			}
-			if got := hasViewAttr(render, "disabled"); got != tc.wantDisabled {
-				t.Errorf("render button disabled=%t, want %t", got, tc.wantDisabled)
+			// The AI action discloses its destination and exposes the policy.
+			text := viewText(doc)
+			for _, want := range []string{"https://ai.example.test/v1", "exact-model", "version 1", "Normalize the supplied mapped values."} {
+				if !strings.Contains(text, want) {
+					t.Errorf("sample disclosure is missing %q", want)
+				}
 			}
 		})
+	}
+}
+
+// Without a confirmed AI connection the AI action is absent and the remedy
+// points at Account settings, while direct rendering stays usable.
+func TestCampaignSamplePreviewOffersAISetupRemedy(t *testing.T) {
+	doc := parseView(t, CampaignPage(CampaignPageData{
+		ID: "camp1", Name: "Test campaign", HasRevision: true, Revision: 1,
+		Variables: []PreviewVariable{{Name: "nickname"}}, Section: CampaignSectionTemplate,
+	}))
+	if findViewNode(doc, func(n *html.Node) bool { return n.Data == "a" && workspaceAttr(n, "href") == "/account/ai" }) == nil {
+		t.Fatal("an unconfigured campaign sample form must offer the Account settings remedy")
+	}
+	if findViewNode(doc, func(n *html.Node) bool {
+		return n.Data == "button" && workspaceAttr(n, "formaction") == "/campaigns/camp1/preview/normalize"
+	}) != nil {
+		t.Fatal("the AI sample action must be absent without a confirmed connection")
+	}
+	if findViewNode(doc, func(n *html.Node) bool {
+		return n.Data == "button" && strings.TrimSpace(viewText(n)) == "Render preview"
+	}) == nil {
+		t.Fatal("direct rendering must stay usable without AI")
 	}
 }
 
@@ -344,6 +389,73 @@ func TestPreviewResultCanBeClosed(t *testing.T) {
 	for _, want := range []string{"Preview result", "candidate@example.com", "Hello", "Hi there"} {
 		if !strings.Contains(viewText(card), want) {
 			t.Errorf("preview card is missing %q", want)
+		}
+	}
+}
+
+// An AI-prepared sample identifies its provenance, labels the result as
+// illustrative, and separates corrections from unresolved findings.
+func TestPreviewResultShowsAIProvenanceAndReview(t *testing.T) {
+	doc := parseView(t, PreviewResult(PreviewData{
+		HasRevision: true, Revision: 4, ContentHash: "hash-4",
+		AIPrepared: true, Provider: "Custom compatible endpoint",
+		Endpoint: "https://ai.example.test/v1", Model: "exact-model", PromptVersion: 2,
+		NeedsReview: true, Findings: []string{"Department (address 1): ambiguous value"},
+		Corrections: []string{"Applicant Full Name: restored spacing"},
+		Recipient:   "ada@example.com", Subject: "Hi Ada", Body: "<p>Hello</p>",
+		Values: []PreviewValue{{
+			Variable: "candidate_name", Header: "Applicant Full Name",
+			Raw: "ada   lovelace ", Prepared: "Ada Lovelace", Normalized: "Ada Lovelace",
+		}},
+	}))
+	text := viewText(doc)
+	for _, want := range []string{
+		"AI-prepared sample",
+		"Custom compatible endpoint",
+		"https://ai.example.test/v1",
+		"exact-model",
+		"version 2",
+		"Illustrative only",
+		"Needs review",
+		"Department (address 1): ambiguous value",
+		"Corrections applied",
+		"Applicant Full Name: restored spacing",
+		"Original",
+		"AI-prepared",
+		"Effective",
+		"ada   lovelace",
+		"Ada Lovelace",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("AI sample result is missing %q", want)
+		}
+	}
+	if strings.Contains(text, "Preview result") {
+		t.Error("an AI-prepared sample must not present itself as a plain preview result")
+	}
+}
+
+// A refused render keeps the validated comparison visible and never claims a
+// successful email preview.
+func TestPreviewResultKeepsAIComparisonWhenRenderingRefuses(t *testing.T) {
+	doc := parseView(t, PreviewResult(PreviewData{
+		AIPrepared: true, NeedsReview: false,
+		Error: "missing required value(s): candidate_name",
+		Values: []PreviewValue{{
+			Variable: "candidate_name", Header: "Applicant Full Name",
+			Raw: "", Prepared: "",
+		}},
+	}))
+	text := viewText(doc)
+	if !strings.Contains(text, "missing required value(s): candidate_name") {
+		t.Fatal("the backend validation error is not shown")
+	}
+	if !strings.Contains(text, "candidate_name") || !strings.Contains(text, "Effective") {
+		t.Fatal("the validated comparison must stay visible beside a refused render")
+	}
+	for _, absent := range []string{"Hi Ada", "ada@example.com"} {
+		if strings.Contains(text, absent) {
+			t.Errorf("a refused render showed %q as if it were a rendered email", absent)
 		}
 	}
 }

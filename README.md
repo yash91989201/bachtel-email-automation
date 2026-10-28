@@ -70,7 +70,7 @@ are committed; edit the `.templ` sources instead.
 | `POST /logout` | Operator session |
 | `GET /` | Operator session (dashboard) |
 | `GET /status` | Operator session (HTML fragment) |
-| `GET /campaigns`, `POST /campaigns`, `POST /campaigns/{id}/…` | Operator session; campaign authoring (create, revision upload, labels, sample preview) |
+| `GET /campaigns`, `POST /campaigns`, `POST /campaigns/{id}/…` | Operator session; campaign authoring (create, revision upload, labels, direct and explicit AI sample preview) |
 | `GET /campaigns/{id}/tasks…`, `POST /campaigns/{id}/tasks/{task}/…` | Operator session; task intake (upload, validation, review, duplicate and exclusion downloads) |
 | `GET /connection`, `POST /connection/microsoft/connect`, `GET /connection/callback`, `POST /connection/titan`, `POST /connection/disconnect`, `GET /connection/replace`, `POST /connection/replace/confirm`, `POST /connection/replace/cancel` | Operator session; only the signed-in operator's own mailbox can be connected, reconnected, disconnected or replaced (the Microsoft callback must match an in-flight authorization attempt) |
 | `GET /static/`, `GET /robots.txt` | Public assets; `robots.txt` disallows everything |
@@ -235,6 +235,13 @@ immutable snapshot of the eligible rows or fails with an actionable reason.
   siblings. Preparation is durable evidence only: it never writes candidates or
   attempts, never authorizes sending, and later review/finalization is a
   separate stage.
+- The campaign Template tab keeps **Render preview** backend-only and adds
+  **Normalize with AI & preview** for one sample row. The AI action sends only
+  the mapped sample values and the current base policy to the confirmed
+  connection, makes one bounded request with no retry, and stores nothing; it
+  shows original, AI-prepared and effective values with corrections, findings
+  and the model/policy identity. It is illustrative only and never becomes a
+  final snapshot, test approval or sending authorization.
 - The upload screen shows the workbook constraints (supported format, size,
   expanded-archive limits and the 1,000-recipient-entry bound after comma
   splitting) and reports every rejection inline.
@@ -319,7 +326,7 @@ internal/
     session.go                  Operator session cookie creation/validation and authorization middleware
     login.go                    GET /login, POST /login, POST /logout
     connection.go               Mailbox handlers: Microsoft connect/callback, Titan connect, disconnect, replacement
-    campaign.go                 /campaigns pages: create, revision upload, labels, sample preview
+    campaign.go                 /campaigns pages: create, revision upload, labels, direct and explicit AI sample preview
     task.go                     Task intake pages: upload, worksheet selection, review, downloads
     preparation.go              Preparation actions: prepare, retry, rerun, select and instruction drafts
     sending.go                  Sending and recovery pages and actions

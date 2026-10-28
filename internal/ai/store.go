@@ -58,6 +58,26 @@ func connection(app core.App, ownerID string) (*Connection, error) {
 	return connectionFromRecord(record), nil
 }
 
+// Capture returns the confirmed connection together with the credential sealed
+// under that exact record and generation. One read supplies both, so a caller
+// can never pair a captured endpoint with credentials from another
+// configuration.
+func (s *Store) Capture(ctx context.Context, ownerID string) (*Connection, string, error) {
+	record, err := findConnection(s.app, ownerID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, "", ErrNotConfigured
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	active := connectionFromRecord(record)
+	apiKey, err := s.openKey(ownerID, active.CredentialGeneration, record.GetString("credential"))
+	if err != nil {
+		return nil, "", err
+	}
+	return active, apiKey, nil
+}
+
 func findConnection(app core.App, ownerID string) (*core.Record, error) {
 	return app.FindFirstRecordByFilter(ConnectionsCollection, "owner = {:owner}", dbx.Params{"owner": ownerID})
 }

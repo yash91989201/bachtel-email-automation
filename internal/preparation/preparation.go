@@ -160,12 +160,21 @@ type Options struct {
 	MaxTokens   int
 	Temperature float64
 	Now         func() time.Time
+	// SampleDeadline bounds one explicit AI sample. Production uses
+	// SampleDeadline; tests may lower it.
+	SampleDeadline time.Duration
 }
 
 // DefaultOptions returns the production bounds. Whole-row batches need room for
 // model reasoning as well as the normalized values, corrections and findings.
 func DefaultOptions() Options {
-	return Options{BatchSize: DefaultBatchSize, MaxTokens: ai.MaxTokens, Temperature: 0, Now: time.Now}
+	return Options{
+		BatchSize:      DefaultBatchSize,
+		MaxTokens:      ai.MaxTokens,
+		Temperature:    0,
+		Now:            time.Now,
+		SampleDeadline: SampleDeadline,
+	}
 }
 
 // normalize substitutes the defaults for unusable values and enforces the
@@ -185,6 +194,9 @@ func (o Options) normalize() Options {
 	}
 	if o.Now == nil {
 		o.Now = time.Now
+	}
+	if o.SampleDeadline <= 0 {
+		o.SampleDeadline = SampleDeadline
 	}
 	return o
 }

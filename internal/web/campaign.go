@@ -13,14 +13,18 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/a-h/templ"
 	"github.com/pocketbase/dbx"
+	"github.com/yash91989201/bachtel-email-automation/internal/ai"
 	"github.com/yash91989201/bachtel-email-automation/internal/campaign"
 	"github.com/yash91989201/bachtel-email-automation/internal/convert"
 	"github.com/yash91989201/bachtel-email-automation/internal/exports"
 	"github.com/yash91989201/bachtel-email-automation/internal/intake"
+	"github.com/yash91989201/bachtel-email-automation/internal/preparation"
 	"github.com/yash91989201/bachtel-email-automation/internal/presentation"
 	"github.com/yash91989201/bachtel-email-automation/internal/retention"
 	"github.com/yash91989201/bachtel-email-automation/internal/sending"
@@ -41,6 +45,7 @@ func (s *server) registerCampaignRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /campaigns/{id}/labels", s.requireOperator(s.handleCampaignLabels))
 	mux.HandleFunc("POST /campaigns/{id}/name", s.requireOperator(s.handleCampaignName))
 	mux.HandleFunc("POST /campaigns/{id}/preview", s.requireOperator(s.handleCampaignPreview))
+	mux.HandleFunc("POST /campaigns/{id}/preview/normalize", s.requireOperator(s.handleCampaignAIPreview))
 	mux.HandleFunc("POST /campaigns/{id}/exports", s.requireOperator(s.handleCampaignExportsGenerate))
 	mux.HandleFunc("POST /campaigns/{id}/exports/delete", s.requireOperator(s.handleCampaignExportsDelete))
 	mux.HandleFunc("GET /campaigns/{id}/exports/report.xlsx", s.requireOperator(s.handleCampaignReportDownload))
@@ -471,6 +476,174 @@ func (s *server) handleCampaignPreview(w http.ResponseWriter, r *http.Request) {
 	s.renderWithStatus(w, r, http.StatusOK, views.PreviewResult(data))
 }
 
+// sampleFormBytes bounds the sample form body. Each mapped value is bounded
+// separately by the preparation cell limit.
+const sampleFormBytes = 1 << 20
+
+// sampleRevisionChanged is the fixed refusal for a form or a pending result
+// that no longer belongs to the campaign's current revision.
+const sampleRevisionChanged = "this campaign revision changed while the sample was open; reload the page and try again"
+
+// handleCampaignAIPreview normalizes one sample row with the owner's confirmed
+// AI connection and renders the validated result. It stores nothing: the input,
+// prepared values, corrections and findings live only in this request and the
+// returned markup.
+func (s *server) handleCampaignAIPreview(w http.ResponseWriter, r *http.Request) {
+	if s.preparation == nil {
+		http.Error(w, "AI sample preparation is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, sampleFormBytes)
+	if err := r.ParseForm(); err != nil {
+		s.renderWithStatus(w, r, http.StatusBadRequest, views.PreviewResult(views.PreviewData{
+			Error: "the sample form could not be read; shorten the values and try again",
+		}))
+		return
+	}
+	id := r.PathValue("id")
+	ctx := r.Context()
+	ownerID := recordFromContext(r).Id
+	loaded, err := s.campaigns.LoadCampaign(ctx, ownerID, id)
+	if err != nil {
+		s.campaignLoadFailure(w, r, err)
+		return
+	}
+	if loaded.CurrentRevisionID == "" {
+		s.renderWithStatus(w, r, http.StatusOK, views.PreviewResult(views.PreviewData{
+			Error: "this campaign has no content revision yet; upload a body document first",
+		}))
+		return
+	}
+	configuration, err := s.campaigns.LoadConfiguration(ctx, ownerID, loaded.CurrentRevisionID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			s.campaignLoadFailure(w, r, err)
+			return
+		}
+		s.app.Logger().Error("load revision for AI sample", "campaign", loaded.ID, "error", err)
+		s.renderWithStatus(w, r, http.StatusOK, views.PreviewResult(views.PreviewData{
+			Error: "the stored revision could not be loaded for the sample",
+		}))
+		return
+	}
+	data := views.PreviewData{
+		HasRevision: true,
+		Revision:    configuration.Revision,
+		ContentHash: configuration.ContentHash,
+		Approved:    configuration.ApprovalCurrent(),
+	}
+	// A form filled against another revision is never silently re-targeted.
+	if strings.TrimSpace(r.FormValue("revision")) != strconv.Itoa(configuration.Revision) {
+		data.Error = sampleRevisionChanged
+		s.renderWithStatus(w, r, http.StatusConflict, views.PreviewResult(data))
+		return
+	}
+	values, message := sampleFormValues(configuration, r)
+	if message != "" {
+		data.Error = message
+		s.renderWithStatus(w, r, http.StatusBadRequest, views.PreviewResult(data))
+		return
+	}
+	result, err := s.preparation.Sample(ctx, ownerID, configuration, values)
+	if err != nil {
+		if ctx.Err() != nil {
+			// The browser abandoned the request; there is nobody to answer.
+			return
+		}
+		s.app.Logger().Warn("AI sample rejected", "campaign", loaded.ID, "error", err)
+		data.Error = preparation.SampleFailureText(err)
+		status := http.StatusBadRequest
+		if errors.Is(err, preparation.ErrSampleBusy) || errors.Is(err, preparation.ErrSampleChanged) {
+			status = http.StatusConflict
+		}
+		s.renderWithStatus(w, r, status, views.PreviewResult(data))
+		return
+	}
+	// Recheck the revision before returning: a sample prepared against a
+	// replaced revision must never look current.
+	current, err := s.campaigns.LoadCampaign(ctx, ownerID, id)
+	if err != nil {
+		s.campaignLoadFailure(w, r, err)
+		return
+	}
+	if current.CurrentRevisionID != configuration.ID {
+		data.Error = sampleRevisionChanged
+		s.renderWithStatus(w, r, http.StatusConflict, views.PreviewResult(data))
+		return
+	}
+
+	data.AIPrepared = true
+	data.Provider = result.Provider.Label()
+	data.Endpoint = result.APIRoot
+	data.Model = result.Model
+	data.PromptVersion = result.PromptVersion
+	data.Prompt = result.Prompt
+	var prepared map[string]string
+	if len(result.Output.Rows) == 1 {
+		row := result.Output.Rows[0]
+		prepared = row.Values
+		for _, correction := range row.Corrections {
+			data.Corrections = append(data.Corrections, preparation.CorrectionReason(correction))
+		}
+		for _, finding := range row.Findings {
+			data.Findings = append(data.Findings, preparation.FindingReason(finding))
+		}
+	}
+	// Any unresolved finding, including one in an optional field, labels the
+	// sample Needs review. Corrections alone do not.
+	data.NeedsReview = len(data.Findings) > 0
+	rendered, renderErr := configuration.Compiled.Render(prepared)
+	if renderErr != nil {
+		data.Error = s.previewErrorMessage(renderErr)
+	} else {
+		data.Recipient = rendered.Recipient
+		data.Subject = rendered.Subject
+		data.Body = rendered.Body
+	}
+	effective := make(map[string]string, len(rendered.Values))
+	for _, value := range rendered.Values {
+		effective[value.Variable] = value.Normalized
+	}
+	for _, mapping := range configuration.Mappings {
+		data.Values = append(data.Values, views.PreviewValue{
+			Variable:   mapping.Variable,
+			Header:     mapping.Header,
+			Raw:        r.FormValue(mapping.Variable),
+			Prepared:   prepared[mapping.Variable],
+			Normalized: effective[mapping.Variable],
+		})
+	}
+	s.renderWithStatus(w, r, http.StatusOK, views.PreviewResult(data))
+}
+
+// sampleFormValues reads only the declared mapping values, bounds each cell and
+// refuses input that cannot become one valid recipient before any provider
+// usage. Original strings are returned unchanged: the AI payload and the
+// comparison use exactly what was submitted.
+func sampleFormValues(configuration *campaign.Configuration, r *http.Request) (map[string]string, string) {
+	values := make(map[string]string, len(configuration.Mappings))
+	var missing []string
+	for _, mapping := range configuration.Mappings {
+		value := r.FormValue(mapping.Variable)
+		if len(value) > preparation.MaxValueLength {
+			return nil, "the sample value for " + mapping.Variable + " is longer than the accepted cell size; shorten it and try again"
+		}
+		if mapping.Required && strings.TrimSpace(value) == "" {
+			missing = append(missing, mapping.Variable)
+		} else if mapping.Recipient {
+			if _, err := campaign.NormalizeRecipient(value); err != nil {
+				return nil, err.Error()
+			}
+		}
+		values[mapping.Variable] = value
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return nil, "missing required value(s): " + strings.Join(missing, ", ")
+	}
+	return values, ""
+}
+
 // campaignPageData builds the safe view model for one campaign workspace:
 // header, the current revision, the four sections and their forms, and the
 // immutable history. Warnings are the fixed inspection messages of the last
@@ -495,6 +668,19 @@ func (s *server) campaignPageData(r *http.Request, id, section string, warnings 
 	// The help's worked example follows this campaign's own headers, so it never
 	// teaches a variable name the draft spells differently.
 	data.ExampleVariable, data.ExampleHeader = exampleMapping(overview.Campaign.SourceHeaders)
+	// The explicit AI sample action needs the confirmed destination and the
+	// current base policy for its disclosure; direct rendering never does.
+	data.PromptVersion = preparation.BasePromptVersion
+	data.Prompt = preparation.CurrentBasePrompt()
+	if s.ai != nil {
+		if connection, err := s.ai.Connection(ctx, ownerID); err == nil {
+			data.AIReady = true
+			data.AIEndpoint = connection.Config.APIRoot
+			data.AIModel = connection.Config.Model
+		} else if !errors.Is(err, ai.ErrNotConfigured) {
+			s.app.Logger().Warn("load AI connection for the sample form", "campaign", id, "error", err)
+		}
+	}
 
 	// One revision query supplies both the revision history and each task's
 	// saved revision number.
